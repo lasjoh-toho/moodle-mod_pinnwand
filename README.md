@@ -14,7 +14,7 @@ konfigurierbares Maximum an Bildern pro Lernender/m.
 2. Als Admin einloggen → Website-Administration → Benachrichtigungen,
    Installation bestätigen (legt die Tabellen `pinnwand` und
    `pinnwand_photos` an).
-3. Aktivität "Bildaufnahme" ist danach in jedem Kurs hinzufügbar.
+3. Aktivität "Pinnwand" ist danach in jedem Kurs hinzufügbar.
 
 ## Technische Hinweise
 
@@ -126,7 +126,7 @@ geht über den Stift. Bei Bedarf portiere ich das noch nach.
   Lehrkraft/Managerin) - alle anderen können weiterhin nur ihre eigenen
   Fotos löschen (`mod_pinnwand_delete_photo` prüft das serverseitig).
 - **Getrennte Admin-Obergrenzen** (`settings.php`, Website-Administration →
-  Plugins → Aktivitäten → Bildaufnahme): eine Obergrenze für Lernende
+  Plugins → Aktivitäten → Pinnwand): eine Obergrenze für Lernende
   (wirkt zusätzlich zur Aktivitätseinstellung, kleinerer Wert gewinnt) und
   eine eigenständige Obergrenze für Lehrkräfte (unabhängig von der
   Lernenden-Einstellung; Lehrkräfte haben jetzt ebenfalls `submit`-Recht,

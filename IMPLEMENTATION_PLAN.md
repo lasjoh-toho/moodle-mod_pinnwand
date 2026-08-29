@@ -14,14 +14,29 @@ Status-Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` erledigt
 
 ---
 
-## Phase 0 — Housekeeping & Rebranding
+## Phase 0 — Housekeeping & Rebranding ✅
 *Kein neues Feature, aber Voraussetzung für alles Weitere.*
 
-- [ ] `LICENSE`-Datei mit obigem Lizenztext anlegen
-- [ ] Umbenennung "Bildaufnahme" → "Pinnwand" durchgängig:
-  `lang/de/pinnwand.php`, `lang/en/pinnwand.php`, `mod_form.php`, `README.md`
-- [ ] **Bugfix Klassenansicht**: doppelte Filter-Begriffe in den Filterbuttons
-  beheben + fehlende Icons ergänzen (`js/app.js`, Klassenansicht-Toolbar)
+- [x] `LICENSE`-Datei mit obigem Lizenztext anlegen
+- [x] Umbenennung "Bildaufnahme" → "Pinnwand" durchgängig:
+  `lang/de/pinnwand.php`, `README.md` (Modulname war bereits "Pinnwand")
+- [x] **Bugfix Klassenansicht**: Tooltip (`title`) der Sortier-/Filterbuttons
+  folgte nicht dem aktuell sichtbaren Label und zeigte beim Hovern einen
+  veralteten, abweichenden Begriff — jetzt immer synchron. Icons für alle
+  Filter/Sortier-Buttons waren tatsächlich bereits vorhanden (`person`,
+  `calendar`, `upload`, `brush`, `pin`).
+- [x] **Backup/Restore-Grundgerüst ergänzt** (`backup/moodle2/*`) — fehlte
+  komplett, obwohl `lib.php` `FEATURE_BACKUP_MOODLE2` meldet; ohne diese
+  Dateien wäre die Kurssicherung für diese Aktivität fehlgeschlagen bzw.
+  stillschweigend übersprungen worden. Bekannte Einschränkung: Hintergrundbild
+  -Dateien (`filearea='background'`, itemid = Nutzer-ID) werden ohne
+  ID-Remapping wiederhergestellt — funktioniert nur korrekt, wenn Nutzer-IDs
+  zwischen Quelle und Ziel gleich bleiben.
+- [x] **Download-Infrastruktur**: `.github/workflows/release.yml` baut bei
+  jedem Push auf `main` automatisch `pinnwand.zip` und veröffentlicht es unter
+  dem stabilen Release-Tag `latest`; `docs/index.html` bietet eine Download-
+  Seite mit direktem Link auf `.../releases/latest/download/pinnwand.zip`
+  (GitHub Pages muss einmalig manuell aktiviert werden, siehe Hinweis unten).
 
 ---
 

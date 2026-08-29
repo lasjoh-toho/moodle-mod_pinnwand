@@ -1153,10 +1153,10 @@
     var sortButtons = {};
     sortOptions.forEach(function (opt) {
       var b = toolBtn(opt[1], opt[2]);
-      b.title = opt[2];
       var span = b.querySelector('span');
       function refresh() {
         span.textContent = opt[2] + (sortMode === opt[0] ? (sortDir === 1 ? ' \u2191' : ' \u2193') : '');
+        b.title = span.textContent;
         b.classList.toggle('active', sortMode === opt[0]);
       }
       b.addEventListener('click', function () {
@@ -1172,22 +1172,22 @@
     });
 
     var ownBtn = toolBtn('brush', S.filter_own);
-    ownBtn.title = S.filter_own;
     var ownSpan = ownBtn.querySelector('span');
     function refreshOwnBtn() {
       ownBtn.classList.toggle('active', filterOwn !== 0);
       ownSpan.textContent = filterOwn === 1 ? S.filter_own_mine : filterOwn === 2 ? S.filter_own_others : S.filter_own;
+      ownBtn.title = ownSpan.textContent;
     }
     ownBtn.addEventListener('click', function () { filterOwn = (filterOwn + 1) % 3; refreshOwnBtn(); renderList(); });
     refreshOwnBtn();
     toolbar.appendChild(ownBtn);
 
     var boardBtn = toolBtn('pin', S.filter_board);
-    boardBtn.title = S.filter_board;
     var boardSpan = boardBtn.querySelector('span');
     function refreshBoardBtn() {
       boardBtn.classList.toggle('active', filterBoard !== 0);
       boardSpan.textContent = filterBoard === 1 ? S.filter_board_on : filterBoard === 2 ? S.filter_board_off : S.filter_board;
+      boardBtn.title = boardSpan.textContent;
     }
     boardBtn.addEventListener('click', function () { filterBoard = (filterBoard + 1) % 3; refreshBoardBtn(); renderList(); });
     refreshBoardBtn();

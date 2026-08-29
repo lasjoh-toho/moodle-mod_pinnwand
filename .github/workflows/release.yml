@@ -1,0 +1,48 @@
+name: Build & Release latest
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Plugin-Version auslesen
+        id: ver
+        run: |
+          VERSION=$(grep -oP "(?<=plugin->version\s{3}= )\d+" version.php)
+          RELEASE=$(grep -oP "(?<=plugin->release\s{3}= ')[^']+" version.php)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Plugin-ZIP bauen
+        run: |
+          mkdir -p build/pinnwand
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='build' \
+            --exclude='docs' \
+            --exclude='IMPLEMENTATION_PLAN.md' \
+            ./ build/pinnwand/
+          cd build
+          zip -r ../pinnwand.zip pinnwand
+
+      - name: Release veröffentlichen (stabiler 'latest'-Link)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Neueste Version (${{ steps.ver.outputs.release }}, Build ${{ steps.ver.outputs.version }})"
+          body: |
+            Automatisch erzeugter Build vom neuesten `main`-Stand.
+            Commit: ${{ github.sha }}
+          files: pinnwand.zip
+          make_latest: true

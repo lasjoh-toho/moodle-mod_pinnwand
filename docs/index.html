@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mod_pinnwand – Download</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 640px;
+    margin: 4rem auto;
+    padding: 0 1.5rem;
+    line-height: 1.5;
+  }
+  h1 { font-size: 1.6rem; }
+  .btn {
+    display: inline-block;
+    margin: 1.5rem 0;
+    padding: 0.9rem 1.6rem;
+    background: #1a7f37;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+  }
+  .btn:hover { background: #146c2e; }
+  code { background: rgba(127,127,127,0.15); padding: 0.15em 0.4em; border-radius: 4px; }
+  footer { margin-top: 3rem; font-size: 0.85rem; opacity: 0.75; }
+</style>
+</head>
+<body>
+  <h1>mod_pinnwand – Moodle-Aktivitätsplugin "Pinnwand"</h1>
+  <p>
+    Dieser Link führt immer zur jeweils <strong>neuesten Version</strong>
+    des Plugins – bei jedem Push auf <code>main</code> wird automatisch ein
+    neues Release-Paket erzeugt.
+  </p>
+  <a class="btn" href="https://github.com/lasjoh-toho/moodle-mod_pinnwand/releases/latest/download/pinnwand.zip">
+    Neueste Version herunterladen (.zip)
+  </a>
+  <h2>Installation</h2>
+  <ol>
+    <li>ZIP herunterladen und entpacken (ergibt einen Ordner <code>pinnwand</code>).</li>
+    <li>Ordner nach <code>&lt;moodle&gt;/mod/</code> kopieren
+      (Ergebnis: <code>&lt;moodle&gt;/mod/pinnwand/version.php</code>).</li>
+    <li>Als Admin einloggen → Website-Administration → Benachrichtigungen,
+      Installation/Update bestätigen.</li>
+  </ol>
+  <p>
+    Details, Änderungsprotokoll und aktueller Implementierungsstand:
+    <a href="https://github.com/lasjoh-toho/moodle-mod_pinnwand">Repository</a>
+    ·
+    <a href="https://github.com/lasjoh-toho/moodle-mod_pinnwand/blob/main/IMPLEMENTATION_PLAN.md">Implementation Plan</a>
+  </p>
+  <footer>
+    Nicht frei für kommerzielle Nutzung – siehe
+    <a href="https://github.com/lasjoh-toho/moodle-mod_pinnwand/blob/main/LICENSE">LICENSE</a>.
+  </footer>
+</body>
+</html>
