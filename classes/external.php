@@ -1,0 +1,900 @@
+<?php
+defined('MOODLE_INTERNAL') || die();
+
+require_once($CFG->libdir . '/externallib.php');
+
+class mod_pinnwand_external extends external_api {
+
+    // ---------------------------------------------------------------
+    // Hilfsfunktion: Kontext/Instanz/Capability aus cmid ableiten.
+    // ---------------------------------------------------------------
+    protected static function get_context_instance($cmid, $capability) {
+        $cm = get_coursemodule_from_id('pinnwand', $cmid, 0, false, MUST_EXIST);
+        $context = context_module::instance($cm->id);
+        self::validate_context($context);
+        require_capability($capability, $context);
+        global $DB;
+        $instance = $DB->get_record('pinnwand', ['id' => $cm->instance], '*', MUST_EXIST);
+        return [$cm, $context, $instance];
+    }
+
+    /**
+     * Effektive Höchstzahl an Bildern für die aktuelle Person in dieser
+     * Aktivität. Lehrkräfte (erkannt an mod/pinnwand:viewall) haben ein
+     * eigenes, von der Aktivitätseinstellung unabhängiges Admin-Limit.
+     * Für Lernende gilt das kleinere von Aktivitätseinstellung und
+     * Admin-Obergrenze (0 = jeweils "kein Limit an dieser Stelle").
+     */
+    protected static function get_effective_max($instance, $context) {
+        $isteacherlike = has_capability('mod/pinnwand:viewall', $context);
+        if ($isteacherlike) {
+            $adminmax = (int) get_config('mod_pinnwand', 'adminmaxteacher');
+            return max(0, $adminmax);
+        }
+        $activitymax = (int) $instance->maxpictures;
+        $adminmax = (int) get_config('mod_pinnwand', 'adminmaxstudent');
+        $candidates = array_filter([$activitymax, $adminmax], function ($v) { return $v > 0; });
+        return empty($candidates) ? 0 : min($candidates);
+    }
+
+    // ---------------------------------------------------------------
+    // save_photo
+    // ---------------------------------------------------------------
+    public static function save_photo_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'imagedata' => new external_value(PARAM_RAW, 'Data-URL (base64) des fertig bearbeiteten Fotos (ohne Raster)'),
+            'gridtype' => new external_value(PARAM_ALPHA, 'none|square|fixed', VALUE_DEFAULT, 'none'),
+            'gridvalue' => new external_value(PARAM_INT, 'Zellgröße bzw. Anzahl Unterteilungen', VALUE_DEFAULT, 0),
+            'consent' => new external_value(PARAM_BOOL, 'Einwilligung zur Verwendung auf der Schulwebseite', VALUE_DEFAULT, false),
+            'sourcetitle' => new external_value(PARAM_TEXT, 'Titel', VALUE_DEFAULT, ''),
+            'sourceauthor' => new external_value(PARAM_TEXT, 'Autor*in', VALUE_DEFAULT, ''),
+            'sourceyear' => new external_value(PARAM_TEXT, 'Jahr', VALUE_DEFAULT, ''),
+            'sourceepoch' => new external_value(PARAM_TEXT, 'Epoche', VALUE_DEFAULT, ''),
+            'sourceplace' => new external_value(PARAM_TEXT, 'Ort', VALUE_DEFAULT, ''),
+            'sourceorigauthor' => new external_value(PARAM_TEXT, 'Autor*in der Vorlage', VALUE_DEFAULT, ''),
+        ]);
+    }
+
+    public static function save_photo($cmid, $imagedata, $gridtype, $gridvalue, $consent,
+            $sourcetitle, $sourceauthor, $sourceyear, $sourceepoch, $sourceplace, $sourceorigauthor) {
+        global $DB, $USER;
+
+        $params = self::validate_parameters(self::save_photo_parameters(), [
+            'cmid' => $cmid, 'imagedata' => $imagedata, 'gridtype' => $gridtype,
+            'gridvalue' => $gridvalue, 'consent' => $consent, 'sourcetitle' => $sourcetitle,
+            'sourceauthor' => $sourceauthor, 'sourceyear' => $sourceyear, 'sourceepoch' => $sourceepoch,
+            'sourceplace' => $sourceplace, 'sourceorigauthor' => $sourceorigauthor,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        // Limit prüfen (Aktivitätseinstellung kombiniert mit getrennten
+        // Admin-Obergrenzen für Lernende bzw. Lehrkräfte).
+        $existing = $DB->count_records('pinnwand_photos', [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id,
+        ]);
+        $effectivemax = self::get_effective_max($instance, $context);
+        if ($effectivemax > 0 && $existing >= $effectivemax) {
+            throw new moodle_exception('maxreached', 'pinnwand');
+        }
+
+        if (!in_array($params['gridtype'], ['none', 'square', 'fixed'], true)) {
+            $params['gridtype'] = 'none';
+        }
+
+        // Bilddaten aus Data-URL extrahieren.
+        if (!preg_match('#^data:image/(png|jpeg|jpg);base64,(.+)$#', $params['imagedata'], $m)) {
+            throw new moodle_exception('error_save', 'pinnwand');
+        }
+        $ext = $m[1] === 'png' ? 'png' : 'jpg';
+        $binary = base64_decode($m[2]);
+        if ($binary === false || strlen($binary) < 100) {
+            throw new moodle_exception('error_save', 'pinnwand');
+        }
+
+        $record = new stdClass();
+        $record->pinnwandid = $instance->id;
+        $record->userid = $USER->id;
+        $record->sortorder = $existing;
+        $record->gridtype = $params['gridtype'];
+        $record->gridvalue = (int) $params['gridvalue'];
+        $record->consent = !empty($params['consent']) ? 1 : 0;
+        $record->hiddenfromboard = empty($instance->boarddefault) ? 1 : 0;
+        $record->annotationonboard = 1;
+        $record->sourcetitle = clean_param($params['sourcetitle'], PARAM_TEXT);
+        $record->sourceauthor = clean_param($params['sourceauthor'], PARAM_TEXT);
+        $record->sourceyear = clean_param($params['sourceyear'], PARAM_TEXT);
+        $record->sourceepoch = clean_param($params['sourceepoch'], PARAM_TEXT);
+        $record->sourceplace = clean_param($params['sourceplace'], PARAM_TEXT);
+        $record->sourceorigauthor = clean_param($params['sourceorigauthor'], PARAM_TEXT);
+        $record->canvasx = 20 + ($existing % 5) * 30;
+        $record->canvasy = 20 + intdiv($existing, 5) * 30;
+        $record->canvasw = 220;
+        $record->canvasrot = 0;
+        $record->canvasz = $existing;
+        $record->timecreated = time();
+        $record->id = $DB->insert_record('pinnwand_photos', $record);
+
+        $fs = get_file_storage();
+        $filerecord = [
+            'contextid' => $context->id,
+            'component' => 'mod_pinnwand',
+            'filearea'  => 'photo',
+            'itemid'    => $record->id,
+            'filepath'  => '/',
+            'filename'  => 'photo_' . $record->id . '.' . $ext,
+        ];
+        $fs->create_file_from_string($filerecord, $binary);
+
+        $newcount = $existing + 1;
+        return [
+            'photoid' => $record->id,
+            'count' => $newcount,
+            'max' => $effectivemax,
+            'maxreached' => ($effectivemax > 0 && $newcount >= $effectivemax),
+            'hiddenfromboard' => (bool) $record->hiddenfromboard,
+            'url' => (string) moodle_url::make_pluginfile_url(
+                $context->id, 'mod_pinnwand', 'photo', $record->id, '/', $filerecord['filename']
+            ),
+        ];
+    }
+
+    public static function save_photo_returns() {
+        return new external_single_structure([
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+            'count' => new external_value(PARAM_INT, 'Anzahl bisheriger Fotos'),
+            'max' => new external_value(PARAM_INT, 'Maximum (0 = unbegrenzt)'),
+            'maxreached' => new external_value(PARAM_BOOL, 'Limit erreicht'),
+            'hiddenfromboard' => new external_value(PARAM_BOOL, 'Von der Pinnwand ausgeblendet'),
+            'url' => new external_value(PARAM_RAW, 'Bild-URL'),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // get_photos
+    // ---------------------------------------------------------------
+    public static function get_photos_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    public static function get_photos($cmid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::get_photos_parameters(), ['cmid' => $cmid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+
+        $records = $DB->get_records('pinnwand_photos', [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id,
+        ], 'sortorder ASC');
+
+        $fs = get_file_storage();
+        $out = [];
+        foreach ($records as $r) {
+            $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $r->id, 'filename', false);
+            $file = reset($files);
+            if (!$file) {
+                continue;
+            }
+            $out[] = [
+                'id' => (int) $r->id,
+                'url' => (string) moodle_url::make_pluginfile_url(
+                    $context->id, 'mod_pinnwand', 'photo', $r->id, '/', $file->get_filename()
+                ),
+                'annotationdata' => $r->annotationdata !== null ? (string) $r->annotationdata : '[]',
+                'gridtype' => $r->gridtype,
+                'gridvalue' => (int) $r->gridvalue,
+                'gridcolor' => $r->gridcolor ?: '#ff3c3c',
+                'consent' => (bool) $r->consent,
+                'hiddenfromboard' => (bool) $r->hiddenfromboard,
+                'annotationonboard' => (bool) $r->annotationonboard,
+                'sourcetitle' => (string) $r->sourcetitle,
+                'sourceauthor' => (string) $r->sourceauthor,
+                'sourceyear' => (string) $r->sourceyear,
+                'sourceepoch' => (string) $r->sourceepoch,
+                'sourceplace' => (string) $r->sourceplace,
+                'sourceorigauthor' => (string) $r->sourceorigauthor,
+                'timecreated' => (int) $r->timecreated,
+                'canvasx' => (float) $r->canvasx,
+                'canvasy' => (float) $r->canvasy,
+                'canvasw' => (float) $r->canvasw,
+                'canvasrot' => (float) $r->canvasrot,
+                'canvasz' => (int) $r->canvasz,
+            ];
+        }
+        return [
+            'photos' => $out,
+            'max' => self::get_effective_max($instance, $context),
+            'background' => self::get_background_data($instance, $context),
+            'candelete' => has_capability('mod/pinnwand:manage', $context),
+            'canmoderate' => self::can_view_class($instance, $context),
+            'studentcansend' => (bool) $instance->studentcansend,
+            'teachercansend' => (bool) $instance->teachercansend,
+        ];
+    }
+
+    protected static function get_background_data($instance, $context) {
+        global $USER;
+        $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100];
+        $raw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
+        if (!$raw) {
+            return $default;
+        }
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return $default;
+        }
+        $bg = $default;
+        $type = $decoded['type'] ?? 'color';
+        $bg['type'] = in_array($type, ['image', 'url', 'upload'], true) ? $type : 'color';
+        $bg['color'] = clean_param($decoded['color'] ?? $default['color'], PARAM_TEXT);
+        $bg['brightness'] = max(20, min(180, (int) ($decoded['brightness'] ?? 100)));
+        $bg['saturation'] = max(0, min(200, (int) ($decoded['saturation'] ?? 100)));
+        if ($bg['type'] === 'image' && !empty($decoded['photoid'])) {
+            global $DB;
+            $photo = $DB->get_record('pinnwand_photos', [
+                'id' => (int) $decoded['photoid'], 'pinnwandid' => $instance->id, 'userid' => $USER->id,
+            ]);
+            if ($photo) {
+                $fs = get_file_storage();
+                $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id, 'filename', false);
+                $file = reset($files);
+                if ($file) {
+                    $bg['url'] = (string) moodle_url::make_pluginfile_url(
+                        $context->id, 'mod_pinnwand', 'photo', $photo->id, '/', $file->get_filename()
+                    );
+                }
+            }
+            if (!$bg['url']) {
+                $bg['type'] = 'color';
+            }
+        } else if ($bg['type'] === 'url') {
+            $url = clean_param($decoded['url'] ?? '', PARAM_URL);
+            $bg['url'] = $url !== '' ? $url : null;
+            if (!$bg['url']) {
+                $bg['type'] = 'color';
+            }
+        } else if ($bg['type'] === 'upload') {
+            $fs = get_file_storage();
+            $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'background', $USER->id, 'filename', false);
+            $file = reset($files);
+            if ($file) {
+                $bg['url'] = (string) moodle_url::make_pluginfile_url(
+                    $context->id, 'mod_pinnwand', 'background', $USER->id, '/', $file->get_filename()
+                );
+            }
+            if (!$bg['url']) {
+                $bg['type'] = 'color';
+            }
+        }
+        return $bg;
+    }
+
+    public static function get_photos_returns() {
+        return new external_single_structure([
+            'max' => new external_value(PARAM_INT, 'Maximum'),
+            'candelete' => new external_value(PARAM_BOOL, 'Darf fremde Fotos löschen (Bereinigen)'),
+            'canmoderate' => new external_value(PARAM_BOOL, 'Darf Klassenansicht sehen'),
+            'studentcansend' => new external_value(PARAM_BOOL, 'Lernende dürfen eigene Fotos zur Pinnwand senden/entfernen'),
+            'teachercansend' => new external_value(PARAM_BOOL, 'Lehrkräfte dürfen beliebige Fotos zur Pinnwand senden/entfernen'),
+            'background' => new external_single_structure([
+                'type' => new external_value(PARAM_ALPHA, 'color|image|url|upload'),
+                'color' => new external_value(PARAM_TEXT, 'Hintergrundfarbe'),
+                'url' => new external_value(PARAM_RAW, 'Hintergrundbild-URL', VALUE_DEFAULT, null, NULL_ALLOWED),
+                'brightness' => new external_value(PARAM_INT, 'Helligkeit in %'),
+                'saturation' => new external_value(PARAM_INT, 'Sättigung in %'),
+            ]),
+            'photos' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'ID'),
+                'url' => new external_value(PARAM_RAW, 'URL'),
+                'annotationdata' => new external_value(PARAM_RAW, 'JSON-Array der Zeichen-/Schreib-Striche'),
+                'gridtype' => new external_value(PARAM_ALPHA, 'Rastertyp'),
+                'gridvalue' => new external_value(PARAM_INT, 'Rasterwert'),
+                'gridcolor' => new external_value(PARAM_TEXT, 'Rasterfarbe (Hex)'),
+                'consent' => new external_value(PARAM_BOOL, 'Einwilligung'),
+                'hiddenfromboard' => new external_value(PARAM_BOOL, 'Von der Pinnwand ausgeblendet'),
+                'annotationonboard' => new external_value(PARAM_BOOL, 'Zeichen-Ebene auf der Pinnwand zeigen'),
+                'sourcetitle' => new external_value(PARAM_TEXT, 'Titel'),
+                'sourceauthor' => new external_value(PARAM_TEXT, 'Autor*in'),
+                'sourceyear' => new external_value(PARAM_TEXT, 'Jahr'),
+                'sourceepoch' => new external_value(PARAM_TEXT, 'Epoche'),
+                'sourceplace' => new external_value(PARAM_TEXT, 'Ort'),
+                'sourceorigauthor' => new external_value(PARAM_TEXT, 'Autor*in der Vorlage'),
+                'timecreated' => new external_value(PARAM_INT, 'Hochgeladen am (Unix-Zeitstempel)'),
+                'canvasx' => new external_value(PARAM_FLOAT, 'x'),
+                'canvasy' => new external_value(PARAM_FLOAT, 'y'),
+                'canvasw' => new external_value(PARAM_FLOAT, 'Breite'),
+                'canvasrot' => new external_value(PARAM_FLOAT, 'Rotation'),
+                'canvasz' => new external_value(PARAM_INT, 'Ebene'),
+            ])),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // save_annotation: speichert/überschreibt die Zeichen-/Schreib-Ebene
+    // eines Fotos (transparentes PNG, exakt auf das Foto gemappt).
+    // ---------------------------------------------------------------
+    public static function save_annotation_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+            'strokes' => new external_value(PARAM_RAW, 'JSON-Array der Striche (vektoriell, normalisierte Koordinaten)'),
+        ]);
+    }
+
+    /**
+     * Striche werden als Vektordaten gespeichert (Punkte, Farbe, Breite,
+     * Radierer-Flag) - nicht als gerastertes Bild. So lässt sich die Ebene
+     * verlustfrei bei jeder Anzeigegröße neu zeichnen, einzelne Striche
+     * bleiben löschbar, und dieselben Daten reichen für Galerie- UND
+     * Anordnungs-Ansicht.
+     */
+    public static function save_annotation($cmid, $photoid, $strokes) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::save_annotation_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'strokes' => $strokes,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->userid != $USER->id || $photo->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'save_annotation');
+        }
+
+        $decoded = json_decode($params['strokes'], true);
+        if (!is_array($decoded)) {
+            throw new moodle_exception('error_save', 'pinnwand');
+        }
+        // Grobe Validierung/Bereinigung - nur erwartete Felder, harte Obergrenzen
+        // gegen übermäßig große Payloads. Zwei Elementtypen: Freihand-Striche
+        // (mit "points") und Text-Elemente (type "text", mit x/y/text).
+        $clean = [];
+        foreach (array_slice($decoded, 0, 500) as $stroke) {
+            if (!is_array($stroke)) {
+                continue;
+            }
+            $color = preg_match('/^#[0-9a-fA-F]{6}$/', $stroke['color'] ?? '') ? $stroke['color'] : '#ef4444';
+            $id = clean_param((string) ($stroke['id'] ?? ''), PARAM_ALPHANUMEXT);
+
+            if (($stroke['type'] ?? '') === 'text') {
+                $text = clean_param((string) ($stroke['text'] ?? ''), PARAM_TEXT);
+                if ($text === '' || !isset($stroke['x'], $stroke['y'])) {
+                    continue;
+                }
+                $clean[] = [
+                    'id' => $id,
+                    'type' => 'text',
+                    'x' => (float) $stroke['x'],
+                    'y' => (float) $stroke['y'],
+                    'text' => mb_substr($text, 0, 300),
+                    'color' => $color,
+                    'size' => (float) ($stroke['size'] ?? 20),
+                ];
+                continue;
+            }
+
+            if (empty($stroke['points']) || !is_array($stroke['points'])) {
+                continue;
+            }
+            $points = [];
+            foreach (array_slice($stroke['points'], 0, 2000) as $pt) {
+                if (!isset($pt['x'], $pt['y'])) {
+                    continue;
+                }
+                $points[] = ['x' => (float) $pt['x'], 'y' => (float) $pt['y']];
+            }
+            if (empty($points)) {
+                continue;
+            }
+            $clean[] = [
+                'id' => $id,
+                'points' => $points,
+                'color' => $color,
+                'width' => (float) ($stroke['width'] ?? 0.01),
+                'erase' => !empty($stroke['erase']),
+            ];
+        }
+
+        $photo->annotationdata = json_encode($clean);
+        $DB->update_record('pinnwand_photos', $photo);
+
+        return ['success' => true, 'annotationdata' => $photo->annotationdata];
+    }
+
+    public static function save_annotation_returns() {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'OK'),
+            'annotationdata' => new external_value(PARAM_RAW, 'Gespeicherte, bereinigte Strichdaten (JSON)'),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // save_background: Hintergrund der Anordnungs-Leinwand (pro Nutzer*in
+    // und Aktivität), entweder Farbe oder eines der eigenen Fotos als Bild.
+    // ---------------------------------------------------------------
+    public static function save_background_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'type' => new external_value(PARAM_ALPHA, 'color|image|url|upload'),
+            'color' => new external_value(PARAM_TEXT, 'Hex-Farbe', VALUE_DEFAULT, '#2b2d33'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID als Hintergrundbild', VALUE_DEFAULT, 0),
+            'url' => new external_value(PARAM_RAW, 'Externe Bild-URL', VALUE_DEFAULT, ''),
+            'imagedata' => new external_value(PARAM_RAW, 'Data-URL (base64) für hochgeladenes Hintergrundbild', VALUE_DEFAULT, ''),
+            'brightness' => new external_value(PARAM_INT, 'Helligkeit in % (20-180)', VALUE_DEFAULT, 100),
+            'saturation' => new external_value(PARAM_INT, 'Sättigung in % (0-200)', VALUE_DEFAULT, 100),
+        ]);
+    }
+
+    public static function save_background($cmid, $type, $color, $photoid, $url, $imagedata, $brightness, $saturation) {
+        global $USER;
+        $params = self::validate_parameters(self::save_background_parameters(), [
+            'cmid' => $cmid, 'type' => $type, 'color' => $color, 'photoid' => $photoid, 'url' => $url,
+            'imagedata' => $imagedata, 'brightness' => $brightness, 'saturation' => $saturation,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $type = in_array($params['type'], ['image', 'url', 'upload'], true) ? $params['type'] : 'color';
+
+        // Nur eine echte Datei schreiben, wenn tatsächlich neue Bilddaten
+        // mitgeschickt wurden (sonst ist es z.B. nur eine Helligkeits-/
+        // Sättigungsänderung an einem bereits hochgeladenen Bild).
+        if ($type === 'upload' && $params['imagedata'] !== '') {
+            if (!preg_match('#^data:image/(png|jpeg|jpg);base64,(.+)$#', $params['imagedata'], $m)) {
+                throw new moodle_exception('error_save', 'pinnwand');
+            }
+            $ext = $m[1] === 'png' ? 'png' : 'jpg';
+            $binary = base64_decode($m[2]);
+            if ($binary === false || strlen($binary) < 50) {
+                throw new moodle_exception('error_save', 'pinnwand');
+            }
+            $fs = get_file_storage();
+            $fs->delete_area_files($context->id, 'mod_pinnwand', 'background', $USER->id);
+            $fs->create_file_from_string([
+                'contextid' => $context->id,
+                'component' => 'mod_pinnwand',
+                'filearea'  => 'background',
+                'itemid'    => $USER->id,
+                'filepath'  => '/',
+                'filename'  => 'bg_' . $USER->id . '.' . $ext,
+            ], $binary);
+        }
+
+        $payload = [
+            'type' => $type,
+            'color' => clean_param($params['color'], PARAM_TEXT),
+            'photoid' => (int) $params['photoid'],
+            'url' => clean_param($params['url'], PARAM_URL),
+            'brightness' => max(20, min(180, (int) $params['brightness'])),
+            'saturation' => max(0, min(200, (int) $params['saturation'])),
+        ];
+        set_user_preference('mod_pinnwand_bg_' . $instance->id, json_encode($payload), $USER->id);
+
+        return ['background' => self::get_background_data($instance, $context)];
+    }
+
+    public static function save_background_returns() {
+        return new external_single_structure([
+            'background' => new external_single_structure([
+                'type' => new external_value(PARAM_ALPHA, 'color|image|url|upload'),
+                'color' => new external_value(PARAM_TEXT, 'Hintergrundfarbe'),
+                'url' => new external_value(PARAM_RAW, 'Hintergrundbild-URL', VALUE_DEFAULT, null, NULL_ALLOWED),
+                'brightness' => new external_value(PARAM_INT, 'Helligkeit in %'),
+                'saturation' => new external_value(PARAM_INT, 'Sättigung in %'),
+            ]),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // update_layout
+    // ---------------------------------------------------------------
+    public static function update_layout_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+            'x' => new external_value(PARAM_FLOAT, 'x'),
+            'y' => new external_value(PARAM_FLOAT, 'y'),
+            'w' => new external_value(PARAM_FLOAT, 'Breite'),
+            'rot' => new external_value(PARAM_FLOAT, 'Rotation'),
+            'z' => new external_value(PARAM_INT, 'Ebene'),
+        ]);
+    }
+
+    public static function update_layout($cmid, $photoid, $x, $y, $w, $rot, $z) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::update_layout_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'x' => $x, 'y' => $y, 'w' => $w, 'rot' => $rot, 'z' => $z,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->userid != $USER->id || $photo->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'update_layout');
+        }
+        $photo->canvasx = $params['x'];
+        $photo->canvasy = $params['y'];
+        $photo->canvasw = max(40, $params['w']);
+        $photo->canvasrot = $params['rot'];
+        $photo->canvasz = $params['z'];
+        $DB->update_record('pinnwand_photos', $photo);
+
+        return ['success' => true];
+    }
+
+    public static function update_layout_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    // ---------------------------------------------------------------
+    // update_grid: Raster wird erst hier, in der Galerieansicht, pro
+    // Foto festgelegt (nicht mehr während der Aufnahme).
+    // ---------------------------------------------------------------
+    public static function update_grid_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+            'gridtype' => new external_value(PARAM_ALPHA, 'none|square|fixed'),
+            'gridvalue' => new external_value(PARAM_INT, 'Zellgröße bzw. Anzahl Unterteilungen', VALUE_DEFAULT, 0),
+            'gridcolor' => new external_value(PARAM_TEXT, 'Hex-Farbe des Rasters', VALUE_DEFAULT, '#ff3c3c'),
+        ]);
+    }
+
+    public static function update_grid($cmid, $photoid, $gridtype, $gridvalue, $gridcolor) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::update_grid_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'gridtype' => $gridtype, 'gridvalue' => $gridvalue,
+            'gridcolor' => $gridcolor,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->userid != $USER->id || $photo->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'update_grid');
+        }
+        $gridtype = in_array($params['gridtype'], ['none', 'square', 'fixed'], true) ? $params['gridtype'] : 'none';
+        $photo->gridtype = $gridtype;
+        $photo->gridvalue = (int) $params['gridvalue'];
+        $photo->gridcolor = preg_match('/^#[0-9a-fA-F]{6}$/', $params['gridcolor']) ? $params['gridcolor'] : '#ff3c3c';
+        $DB->update_record('pinnwand_photos', $photo);
+
+        return ['success' => true];
+    }
+
+    public static function update_grid_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    // ---------------------------------------------------------------
+    // update_source: Quellenangaben nachträglich bearbeiten. Eigene Fotos
+    // mit submit-Recht, fremde nur mit manage-Recht (Lehrkraft-Ansicht).
+    // ---------------------------------------------------------------
+    public static function update_source_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+            'sourcetitle' => new external_value(PARAM_TEXT, 'Titel', VALUE_DEFAULT, ''),
+            'sourceauthor' => new external_value(PARAM_TEXT, 'Autor*in', VALUE_DEFAULT, ''),
+            'sourceyear' => new external_value(PARAM_TEXT, 'Jahr', VALUE_DEFAULT, ''),
+            'sourceepoch' => new external_value(PARAM_TEXT, 'Epoche', VALUE_DEFAULT, ''),
+            'sourceplace' => new external_value(PARAM_TEXT, 'Ort', VALUE_DEFAULT, ''),
+            'sourceorigauthor' => new external_value(PARAM_TEXT, 'Autor*in der Vorlage', VALUE_DEFAULT, ''),
+        ]);
+    }
+
+    public static function update_source($cmid, $photoid, $sourcetitle, $sourceauthor, $sourceyear,
+            $sourceepoch, $sourceplace, $sourceorigauthor) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::update_source_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'sourcetitle' => $sourcetitle, 'sourceauthor' => $sourceauthor,
+            'sourceyear' => $sourceyear, 'sourceepoch' => $sourceepoch, 'sourceplace' => $sourceplace,
+            'sourceorigauthor' => $sourceorigauthor,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'update_source');
+        }
+        $isown = $photo->userid == $USER->id;
+        $canmanage = has_capability('mod/pinnwand:manage', $context);
+        $ok = $canmanage || ($isown && has_capability('mod/pinnwand:submit', $context));
+        if (!$ok) {
+            throw new moodle_exception('nopermissions', 'error', '', 'update_source');
+        }
+
+        $photo->sourcetitle = clean_param($params['sourcetitle'], PARAM_TEXT);
+        $photo->sourceauthor = clean_param($params['sourceauthor'], PARAM_TEXT);
+        $photo->sourceyear = clean_param($params['sourceyear'], PARAM_TEXT);
+        $photo->sourceepoch = clean_param($params['sourceepoch'], PARAM_TEXT);
+        $photo->sourceplace = clean_param($params['sourceplace'], PARAM_TEXT);
+        $photo->sourceorigauthor = clean_param($params['sourceorigauthor'], PARAM_TEXT);
+        $DB->update_record('pinnwand_photos', $photo);
+
+        return ['success' => true];
+    }
+
+    public static function update_source_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    // ---------------------------------------------------------------
+    // delete_photo
+    // ---------------------------------------------------------------
+    public static function delete_photo_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+        ]);
+    }
+
+    public static function delete_photo($cmid, $photoid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::delete_photo_parameters(), ['cmid' => $cmid, 'photoid' => $photoid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'delete_photo');
+        }
+        // Eigene Fotos darf man mit submit-Recht löschen; fremde Fotos nur
+        // mit manage-Recht (Lehrkraft-Bereinigungsmodus).
+        $isown = $photo->userid == $USER->id;
+        $canmanage = has_capability('mod/pinnwand:manage', $context);
+        $ok = $canmanage || ($isown && has_capability('mod/pinnwand:submit', $context));
+        if (!$ok) {
+            throw new moodle_exception('nopermissions', 'error', '', 'delete_photo');
+        }
+        $fs = get_file_storage();
+        $fs->delete_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id);
+        $DB->delete_records('pinnwand_photos', ['id' => $photo->id]);
+
+        return ['success' => true];
+    }
+
+    public static function delete_photo_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    // ---------------------------------------------------------------
+    // get_all_photos: Klassenansicht für die Lehrkraft - alle eingereichten
+    // Fotos, gruppiert nach Nutzer*in (untereinander pro Lernender/m).
+    // ---------------------------------------------------------------
+    public static function get_all_photos_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+        ]);
+    }
+
+    /**
+     * Klassenansicht: Lehrkräfte (viewall) dürfen immer; Lernende nur, wenn
+     * die Aktivitätseinstellung "studentclassview" das erlaubt - dann aber
+     * nur lesend (candelete/canedit bleiben an das manage-Recht gebunden).
+     */
+    protected static function can_view_class($instance, $context) {
+        return has_capability('mod/pinnwand:viewall', $context)
+            || (!empty($instance->studentclassview) && has_capability('mod/pinnwand:view', $context));
+    }
+
+    public static function get_all_photos($cmid) {
+        global $DB;
+        $params = self::validate_parameters(self::get_all_photos_parameters(), ['cmid' => $cmid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+        if (!self::can_view_class($instance, $context)) {
+            throw new moodle_exception('nopermissions', 'error', '', 'get_all_photos');
+        }
+
+        $sql = "SELECT p.*, u.firstname, u.lastname
+                  FROM {pinnwand_photos} p
+                  JOIN {user} u ON u.id = p.userid
+                 WHERE p.pinnwandid = :icid
+              ORDER BY u.lastname, u.firstname, p.sortorder";
+        $records = $DB->get_records_sql($sql, ['icid' => $instance->id]);
+
+        $fs = get_file_storage();
+        $out = [];
+        foreach ($records as $r) {
+            $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $r->id, 'filename', false);
+            $file = reset($files);
+            if (!$file) {
+                continue;
+            }
+            $out[] = [
+                'id' => (int) $r->id,
+                'userid' => (int) $r->userid,
+                'userfullname' => fullname($r),
+                'url' => (string) moodle_url::make_pluginfile_url(
+                    $context->id, 'mod_pinnwand', 'photo', $r->id, '/', $file->get_filename()
+                ),
+                'sourcetitle' => (string) $r->sourcetitle,
+                'sourceauthor' => (string) $r->sourceauthor,
+                'sourceyear' => (string) $r->sourceyear,
+                'sourceepoch' => (string) $r->sourceepoch,
+                'sourceplace' => (string) $r->sourceplace,
+                'sourceorigauthor' => (string) $r->sourceorigauthor,
+                'consent' => (bool) $r->consent,
+                'hiddenfromboard' => (bool) $r->hiddenfromboard,
+                'timecreated' => (int) $r->timecreated,
+            ];
+        }
+        return [
+            'photos' => $out,
+            'candelete' => has_capability('mod/pinnwand:manage', $context),
+            'canedit' => has_capability('mod/pinnwand:manage', $context),
+        ];
+    }
+
+    public static function get_all_photos_returns() {
+        return new external_single_structure([
+            'candelete' => new external_value(PARAM_BOOL, 'Darf löschen'),
+            'canedit' => new external_value(PARAM_BOOL, 'Darf Angaben bearbeiten'),
+            'photos' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'ID'),
+                'userid' => new external_value(PARAM_INT, 'Nutzer-ID'),
+                'userfullname' => new external_value(PARAM_TEXT, 'Voller Name'),
+                'url' => new external_value(PARAM_RAW, 'URL'),
+                'sourcetitle' => new external_value(PARAM_TEXT, 'Titel'),
+                'sourceauthor' => new external_value(PARAM_TEXT, 'Autor*in'),
+                'sourceyear' => new external_value(PARAM_TEXT, 'Jahr'),
+                'sourceepoch' => new external_value(PARAM_TEXT, 'Epoche'),
+                'sourceplace' => new external_value(PARAM_TEXT, 'Ort'),
+                'sourceorigauthor' => new external_value(PARAM_TEXT, 'Autor*in der Vorlage'),
+                'consent' => new external_value(PARAM_BOOL, 'Einwilligung'),
+                'hiddenfromboard' => new external_value(PARAM_BOOL, 'Von der Pinnwand ausgeblendet'),
+                'timecreated' => new external_value(PARAM_INT, 'Hochgeladen am'),
+            ])),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // set_photo_hidden: einzelnes Foto von der Pinnwand aus-/einblenden.
+    // Eigene Fotos mit submit-Recht, sofern "Lernende können senden"
+    // aktiviert ist (oder man ohnehin manage-Recht hat). Fremde Fotos nur
+    // mit manage-Recht, sofern "Lehrkräfte können senden" aktiviert ist.
+    // ---------------------------------------------------------------
+    public static function set_photo_hidden_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+            'hidden' => new external_value(PARAM_BOOL, 'Von der Pinnwand ausgeblendet'),
+        ]);
+    }
+
+    public static function set_photo_hidden($cmid, $photoid, $hidden) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_photo_hidden_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'hidden' => $hidden,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'set_photo_hidden');
+        }
+        $isown = $photo->userid == $USER->id;
+        $canmanage = has_capability('mod/pinnwand:manage', $context);
+        if ($isown) {
+            $ok = has_capability('mod/pinnwand:submit', $context) && ($canmanage || !empty($instance->studentcansend));
+        } else {
+            $ok = $canmanage && !empty($instance->teachercansend);
+        }
+        if (!$ok) {
+            throw new moodle_exception('nopermissions', 'error', '', 'set_photo_hidden');
+        }
+
+        $photo->hiddenfromboard = !empty($params['hidden']) ? 1 : 0;
+        $DB->update_record('pinnwand_photos', $photo);
+
+        return ['success' => true, 'hiddenfromboard' => (bool) $photo->hiddenfromboard];
+    }
+
+    public static function set_photo_hidden_returns() {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'OK'),
+            'hiddenfromboard' => new external_value(PARAM_BOOL, 'Neuer Zustand'),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // set_annotation_onboard: eigenes Foto - steuert, ob die Zeichen-/
+    // Schreib-Ebene dieses Fotos auch auf der Pinnwand sichtbar ist
+    // (unabhängig davon, ob sie in der Galerie gezeigt wird).
+    // ---------------------------------------------------------------
+    public static function set_annotation_onboard_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+            'onboard' => new external_value(PARAM_BOOL, 'Auf der Pinnwand zeigen'),
+        ]);
+    }
+
+    public static function set_annotation_onboard($cmid, $photoid, $onboard) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_annotation_onboard_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'onboard' => $onboard,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->userid != $USER->id || $photo->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'set_annotation_onboard');
+        }
+        $photo->annotationonboard = !empty($params['onboard']) ? 1 : 0;
+        $DB->update_record('pinnwand_photos', $photo);
+
+        return ['success' => true, 'annotationonboard' => (bool) $photo->annotationonboard];
+    }
+
+    public static function set_annotation_onboard_returns() {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'OK'),
+            'annotationonboard' => new external_value(PARAM_BOOL, 'Neuer Zustand'),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // update_photo: ein bereits gespeichertes Foto erneut bearbeiten
+    // (Entzerren/Zuschneiden/Farbe) und das Bild darunter ersetzen, ohne
+    // einen neuen Datensatz anzulegen - Quellenangaben, Raster, Position
+    // auf der Pinnwand usw. bleiben unverändert erhalten.
+    // ---------------------------------------------------------------
+    public static function update_photo_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+            'imagedata' => new external_value(PARAM_RAW, 'Data-URL (base64) des neu bearbeiteten Fotos'),
+        ]);
+    }
+
+    public static function update_photo($cmid, $photoid, $imagedata) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::update_photo_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'imagedata' => $imagedata,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'update_photo');
+        }
+        $isown = $photo->userid == $USER->id;
+        $canmanage = has_capability('mod/pinnwand:manage', $context);
+        $ok = $canmanage || ($isown && has_capability('mod/pinnwand:submit', $context));
+        if (!$ok) {
+            throw new moodle_exception('nopermissions', 'error', '', 'update_photo');
+        }
+
+        if (!preg_match('#^data:image/(png|jpeg|jpg);base64,(.+)$#', $params['imagedata'], $m)) {
+            throw new moodle_exception('error_save', 'pinnwand');
+        }
+        $ext = $m[1] === 'png' ? 'png' : 'jpg';
+        $binary = base64_decode($m[2]);
+        if ($binary === false || strlen($binary) < 100) {
+            throw new moodle_exception('error_save', 'pinnwand');
+        }
+
+        $fs = get_file_storage();
+        $fs->delete_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id);
+        $filerecord = [
+            'contextid' => $context->id,
+            'component' => 'mod_pinnwand',
+            'filearea'  => 'photo',
+            'itemid'    => $photo->id,
+            'filepath'  => '/',
+            'filename'  => 'photo_' . $photo->id . '_' . time() . '.' . $ext,
+        ];
+        $fs->create_file_from_string($filerecord, $binary);
+
+        return [
+            'success' => true,
+            'url' => (string) moodle_url::make_pluginfile_url(
+                $context->id, 'mod_pinnwand', 'photo', $photo->id, '/', $filerecord['filename']
+            ),
+        ];
+    }
+
+    public static function update_photo_returns() {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'OK'),
+            'url' => new external_value(PARAM_RAW, 'Neue Bild-URL'),
+        ]);
+    }
+}

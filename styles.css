@@ -1,0 +1,386 @@
+/* Bildaufnahme-App: eigenständiges, mobiltaugliches Layout */
+.pinnwand-app, .pinnwand-app * { box-sizing: border-box; }
+.pinnwand-app {
+  --ic-bg: #101114;
+  --ic-panel: #1b1d22;
+  --ic-accent: #4f8cff;
+  --ic-accent-dark: #2f6fe0;
+  --ic-danger: #e0503f;
+  --ic-text: #f2f3f5;
+  --ic-muted: #9aa0ab;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--ic-bg);
+  color: var(--ic-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ic-screen-header {
+  position: absolute; top: env(safe-area-inset-top, 0); left: 0; right: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  height: 48px; pointer-events: none; background: linear-gradient(rgba(16,17,20,.85), rgba(16,17,20,0));
+}
+.ic-screen-title {
+  font-size: .95rem; font-weight: 600; margin: 0; color: var(--ic-text);
+  max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ic-screen-close {
+  position: absolute; top: env(safe-area-inset-top, 8px); right: 8px; z-index: 21;
+  width: 34px; height: 34px; border-radius: 50%; border: none;
+  background: rgba(20,21,24,.55); color: var(--ic-text); font-size: .85rem;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.ic-body.has-header { padding-top: 48px; }
+.ic-count-line { text-align: center; font-size: .78rem; color: var(--ic-muted); margin: 2px 0 8px; }
+.ic-body {
+  flex: 1 1 auto;
+  min-height: 0; /* wichtig: sonst wächst der Body über den sichtbaren Bereich hinaus */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.ic-stage {
+  flex: 1 1 auto;
+  min-height: 0; /* dito, für den verschachtelten Flex-Container */
+  position: relative; /* Bezugsrahmen für SVG-Overlay, Hinweistext, Zeichenebene */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  overflow: visible; /* Ecken-Greifer dürfen leicht über den Bildrand hinausragen */
+  touch-action: none;
+}
+.ic-stage video, .ic-stage canvas.ic-view { max-width: 100%; max-height: 100%; display: block; }
+.ic-stage-hint {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: rgba(0,0,0,.6); color: #fff; padding: 8px 16px; border-radius: 20px;
+  font-size: .8rem; text-align: center; max-width: 82%; pointer-events: none; z-index: 4;
+}
+.ic-actionbar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--ic-panel);
+}
+.ic-btn {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 10px;
+  font-size: .95rem;
+  font-weight: 600;
+  background: #2a2d34;
+  color: var(--ic-text);
+}
+.ic-btn:active { transform: scale(.97); }
+.ic-btn-primary { background: var(--ic-accent); color: #fff; }
+.ic-btn-primary:active { background: var(--ic-accent-dark); }
+.ic-btn-danger { background: var(--ic-danger); color: #fff; }
+.ic-btn-ghost { background: transparent; border: 1px solid #3a3d44; }
+.ic-btn[disabled] { opacity: .4; }
+.ic-hint {
+  text-align: center;
+  font-size: .8rem;
+  color: var(--ic-muted);
+  padding: 8px 16px 0;
+}
+.ic-url-row { display: none; gap: 8px; padding: 0 14px 8px; }
+.ic-url-row.open { display: flex; }
+.ic-url-row input {
+  flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #3a3d44;
+  background: #101114; color: var(--ic-text); font-size: .9rem;
+}
+.ic-crop-tools { display: flex; gap: 8px; justify-content: center; padding: 6px 14px 0; }
+.ic-crop-tools .ic-btn { flex: 0 0 auto; padding: 8px 14px; display: flex; align-items: center; gap: 6px; }
+.ic-steps { display: flex; gap: 4px; padding: 8px 12px 0; }
+.ic-steps span { flex: 1; height: 3px; border-radius: 2px; background: #33363d; }
+.ic-steps span.done { background: var(--ic-accent); }
+
+/* Home / Galerie */
+.ic-home { padding: 14px; }
+.ic-menu-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 14px; }
+.ic-menu-row .ic-btn { flex: 1 1 auto; min-width: 100px; }
+.ic-menu-row .ic-btn-icon { flex: 0 0 auto; min-width: 0; width: 52px; height: 52px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.ic-menu-row .ic-btn-icon.active { background: var(--ic-accent); }
+.ic-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.ic-gallery .ic-thumb {
+  position: relative;
+  aspect-ratio: 3/4;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #222;
+}
+.ic-gallery .ic-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.ic-gallery .ic-thumb .ic-del {
+  position: absolute; top: 4px; right: 4px;
+  background: rgba(0,0,0,.6); color: #fff; border: none;
+  width: 26px; height: 26px; border-radius: 50%; font-size: .9rem; line-height: 1;
+}
+.ic-gallery .ic-thumb .ic-pin {
+  position: absolute; top: 4px; left: 4px;
+  background: rgba(0,0,0,.6); color: #888; border: none;
+  width: 26px; height: 26px; border-radius: 50%; font-size: .85rem; line-height: 1;
+}
+.ic-gallery .ic-thumb .ic-pin.active { color: var(--ic-accent); }
+
+/* Slider-Panel (Farbe/Raster) */
+.ic-panel {
+  background: var(--ic-panel);
+  padding: 10px 16px 4px;
+  flex: 0 0 auto;
+}
+.ic-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.ic-row label { width: 92px; font-size: .85rem; color: var(--ic-muted); }
+.ic-row input[type=range] { flex: 1; }
+.ic-seg { display: flex; gap: 6px; padding: 4px 0 10px; flex-wrap: wrap; }
+.ic-seg button {
+  flex: 1; min-width: 90px;
+  padding: 8px; border-radius: 10px; border: 1px solid #3a3d44;
+  background: transparent; color: var(--ic-text); font-size: .82rem;
+}
+.ic-seg button.active { background: var(--ic-accent); border-color: var(--ic-accent); color: #fff; }
+
+/* Anordnungs-Canvas */
+.ic-canvas-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  overflow: auto;
+}
+.ic-canvas-bg {
+  /* inset:0 füllt zunächst genau den sichtbaren Bereich; min-width/-height
+     stellt sicher, dass mindestens die Pinnwand-Koordinatenfläche (1000x1400)
+     abgedeckt ist. So deckt die gewählte Farbe/das Bild IMMER die komplette
+     Fläche ab, egal ob der Bildschirm größer oder kleiner als 1000x1400 ist. */
+  position: absolute; inset: 0; min-width: 1000px; min-height: 1400px; z-index: 0;
+  background-color: #2b2d33;
+}
+/* Schwebende runde Icon-Buttons, alle in einer Zeile unter der Pinnwand
+   (oben ist jetzt die einheitliche Kopfzeile mit Titel + Schließen-Button). */
+.ic-fab-row {
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 15; display: flex; gap: 10px;
+}
+.ic-fab {
+  width: 46px; height: 46px; border-radius: 50%;
+  border: none; background: rgba(20,21,24,.8); color: #fff; font-size: 1.15rem;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.ic-fab.active { background: var(--ic-accent); }
+.ic-fab-primary { background: var(--ic-accent); }
+.ic-fab[disabled] { opacity: .4; }
+.ic-bg-panel {
+  position: fixed; left: 12px; right: 12px; bottom: 70px; z-index: 30;
+  background: var(--ic-panel); border-radius: 12px; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.5);
+}
+.ic-bg-panel label { font-size: .78rem; color: var(--ic-muted); }
+.ic-bg-panel input[type=color] { width: 100%; height: 36px; border: none; border-radius: 8px; background: transparent; }
+.ic-bg-panel input[type=range] { width: 100%; }
+.ic-bg-thumbs { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
+.ic-bg-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; flex: 0 0 auto; border: 2px solid transparent; }
+.ic-bg-thumb:active { border-color: var(--ic-accent); }
+.ic-arrange-canvas { position: relative; z-index: 1; width: 1000px; height: 1400px; max-width: none; }
+.ic-arrange-item { position: absolute; touch-action: none; }
+.ic-arrange-item img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+.ic-arrange-item .ic-resize {
+  position: absolute; right: -10px; bottom: -10px; width: 26px; height: 26px;
+  background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff;
+}
+.ic-arrange-item .ic-rotate-handle {
+  position: absolute; left: 50%; top: -28px; transform: translateX(-50%);
+  width: 22px; height: 22px; background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff;
+}
+.ic-arrange-item .ic-rotate-handle::after {
+  content: ''; position: absolute; left: 50%; top: 100%; width: 1px; height: 14px;
+  background: rgba(255,255,255,.6); transform: translateX(-50%);
+}
+.ic-arrange-item canvas.ic-annot-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* Lightbox / Galeriemodus - viel Platz + Zoom */
+.ic-lightbox {
+  position: fixed; inset: 0; background: rgba(0,0,0,.96); z-index: 10050;
+  display: flex; align-items: center; justify-content: center; flex-direction: column;
+  touch-action: none; overflow: hidden;
+}
+.ic-lb-viewport {
+  flex: 1 1 auto; width: 100%; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; position: relative; min-height: 0;
+}
+.ic-lb-transform { position: relative; transform-origin: center center; touch-action: none; }
+.ic-lb-transform img { display: block; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+.ic-lightbox .ic-lb-nav { display: flex; gap: 16px; padding: 10px 0 calc(8px + env(safe-area-inset-bottom, 0px)); flex: 0 0 auto; flex-wrap: wrap; justify-content: center; }
+.ic-lightbox .ic-lb-nav .ic-btn { flex: 0 0 auto; min-width: 52px; padding: 10px 14px; }
+.ic-lightbox .ic-lb-close { position: absolute; top: 14px; right: 14px; z-index: 5; }
+.ic-lb-left-dock {
+  position: absolute; top: 14px; left: 14px; z-index: 12;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* Zeichen-/Schreib-Ebene: exakt auf das Foto gemappt, unabhängig vom Raster
+   auch im Anordnungsmodus sichtbar. */
+.ic-annot-layer { position: absolute; inset: 0; pointer-events: none; }
+.ic-annot-layer.ic-annot-editing { touch-action: none; pointer-events: all; }
+.ic-icon { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+.ic-icon svg { display: block; }
+.ic-text-input {
+  position: absolute; z-index: 20; min-width: 60px; max-width: 80%;
+  background: transparent; border: 1px dashed rgba(255,255,255,.6); border-radius: 4px;
+  padding: 2px 4px; font-family: inherit; line-height: 1.2; resize: none;
+  outline: none; overflow: hidden;
+}
+.ic-ink-swatch {
+  width: 28px; height: 28px; border-radius: 50%; padding: 0;
+  border: 2px solid rgba(255,255,255,.35); /* sonst ist Schwarz auf dunklem Grund unsichtbar */
+}
+.ic-ink-swatch.active { border-color: #fff; box-shadow: 0 0 0 2px var(--ic-accent); }
+.ic-ink-size {
+  width: 34px; height: 34px; border-radius: 8px; border: 1px solid #3a3d44; background: transparent;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.ic-ink-size.active { border-color: var(--ic-accent); background: rgba(79,140,255,.15); }
+.ic-ink-size span { display: block; border-radius: 50%; background: #fff; border: 1.5px solid rgba(255,255,255,.5); }
+
+/* Author "ich"-Kurzwahl */
+.ic-field-inline { display: flex; align-items: center; gap: 8px; }
+.ic-field-inline input[type=text] { flex: 1; }
+.ic-me-check { display: flex; align-items: center; gap: 5px; font-size: .78rem; color: var(--ic-muted); white-space: nowrap; }
+.ic-me-check input { width: 18px; height: 18px; }
+@media (min-width: 600px) {
+  /* Auf größeren Bildschirmen ist die "ich"-Kurzwahl leicht zu übersehen -
+     deutlicher als eigene, klar erkennbare Pille statt kleiner Checkbox+Text. */
+  .ic-me-check {
+    font-size: .95rem; font-weight: 600; color: var(--ic-text);
+    padding: 6px 14px 6px 10px; border-radius: 20px; border: 1px solid #3a3d44;
+  }
+  .ic-me-check:has(input:checked), .ic-me-check.checked { background: var(--ic-accent); border-color: var(--ic-accent); color: #fff; }
+  .ic-me-check input { width: 20px; height: 20px; }
+}
+
+
+/* Zuschneide-/Entzerr-Overlay */
+.ic-overlay-svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; overflow: visible; }
+.ic-handle-hit { cursor: grab; }
+.ic-handle-dot { fill: var(--ic-accent); stroke: #fff; stroke-width: 2; pointer-events: none; }
+
+.ic-consent-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 16px; background: var(--ic-panel); }
+.ic-consent-row input { margin-top: 3px; width: 20px; height: 20px; }
+.ic-consent-row label { font-size: .82rem; color: var(--ic-muted); }
+
+.pinnwand-manage-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+.pinnwand-manage-item { width: 160px; }
+.pinnwand-manage-item img { width: 100%; border-radius: 6px; }
+/* Zeichenwerkzeuge: senkrecht am linken Rand gestapelt, ein-/ausblendbar
+   über den Stylus-Knopf unten links (siehe .ic-stylus-btn). */
+.ic-ink-dock {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%); z-index: 12;
+  display: flex; flex-direction: column; gap: 8px;
+  background: rgba(20,21,24,.78); padding: 10px 8px; border-radius: 16px;
+  max-height: 80vh; overflow-y: auto;
+}
+.ic-ink-dock .ic-btn { width: 100%; padding: 8px 6px; font-size: .78rem; }
+.ic-ink-dock-row { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.ic-stylus-btn {
+  position: absolute; bottom: 14px; left: 14px; z-index: 15;
+  width: 46px; height: 46px; border-radius: 50%; border: none;
+  background: rgba(20,21,24,.7); color: #fff; font-size: 1.2rem;
+}
+.ic-stylus-btn.active { background: var(--ic-accent); }
+.ic-consent-yes { color: #2e7d32; font-size: .8rem; }
+.ic-consent-no { color: #999; font-size: .8rem; }
+
+/* Klassenansicht (Bereinigen) */
+.ic-moderate { padding: 0 14px 14px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.ic-moderate-list { padding-top: 10px; }
+.ic-moderate-toolbar {
+  flex: 0 0 auto; display: flex; gap: 4px; overflow-x: auto;
+  padding: 8px 8px; background: var(--ic-panel); border-bottom: 1px solid #2c2e34;
+}
+.ic-moderate-toolbar .ic-btn-iconlabel {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
+  padding: 8px 10px; font-size: .74rem; white-space: nowrap;
+}
+.ic-moderate-toolbar .ic-btn-iconlabel .ic-btn-label { display: none; }
+@media (min-width: 700px) {
+  .ic-moderate-toolbar .ic-btn-iconlabel .ic-btn-label { display: inline; }
+}
+.ic-moderate-title { font-size: 1.05rem; margin: 0 0 10px; }
+.ic-moderate-group { margin-bottom: 18px; }
+.ic-moderate-user { font-size: .85rem; color: var(--ic-muted); margin: 0 0 8px; border-bottom: 1px solid #2c2e34; padding-bottom: 4px; }
+.ic-moderate-row {
+  display: flex; align-items: center; gap: 10px; padding: 6px 0;
+}
+.ic-moderate-thumb { position: relative; flex: 0 0 auto; }
+.ic-moderate-thumb img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; display: block; }
+.ic-thumb-btn {
+  position: absolute; width: 22px; height: 22px; border-radius: 50%; border: none;
+  background: rgba(20,21,24,.8); color: #fff; font-size: .75rem; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.ic-thumb-btn-pin { top: 3px; left: 3px; color: #999; }
+.ic-thumb-btn-pin.active { color: var(--ic-accent); }
+.ic-thumb-btn-del { top: 3px; right: 3px; }
+.ic-moderate-meta { flex: 1; font-size: .82rem; min-width: 0; }
+.ic-moderate-sub { color: var(--ic-muted); font-size: .75rem; }
+.ic-moderate-row .ic-btn-danger, .ic-moderate-row .ic-btn { flex: 0 0 auto; padding: 8px 12px; }
+.ic-moderate-fields { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; align-items: stretch; }
+.ic-moderate-input {
+  flex: 1 1 100px; min-width: 70px; padding: 5px 7px; font-size: .78rem;
+  border-radius: 6px; border: 1px solid #3a3d44; background: #101114; color: var(--ic-text);
+  height: 30px; box-sizing: border-box;
+}
+.ic-moderate-input-narrow { flex: 0 1 62px; min-width: 52px; }
+.ic-moderate-input-wide { flex: 2 1 160px; }
+.ic-moderate-input:disabled { opacity: .6; }
+.ic-moderate-fields .ic-field-inline {
+  display: flex; align-items: center; gap: 6px; height: 30px;
+}
+.ic-moderate-fields .ic-field-inline .ic-moderate-input { height: 100%; }
+.ic-moderate-fields .ic-me-check { font-size: .68rem; padding: 3px 8px; white-space: nowrap; }
+
+/* Unter 900px: kompakte Overlay-Buttons direkt auf dem Thumbnail statt der
+   ausführlichen Checkbox/Löschen-Button-Reihe (spart Platz für die Felder). */
+.ic-wide-only { display: none; }
+@media (min-width: 900px) {
+  .ic-moderate-thumb img { width: 110px; height: 110px; }
+  .ic-thumb-btn { display: none; }
+  .ic-wide-only { display: inline-flex; }
+}
+
+/* Anordnung: Metadaten-Overlay ("Daten anzeigen") */
+.ic-item-caption {
+  position: absolute; left: 0; right: 0; bottom: 0; transform: translateY(100%);
+  background: rgba(0,0,0,.72); color: #fff; font-size: .68rem; line-height: 1.3;
+  padding: 4px 6px; border-radius: 0 0 4px 4px; pointer-events: none;
+}
+
+/* Raster-Overlay: reines CSS, prozentual -> skaliert automatisch mit
+   der Anzeigegröße, unabhängig von der tatsächlichen Bildauflösung. */
+.ic-grid-overlay { position: absolute; inset: 0; pointer-events: none; }
+
+/* Wrapper, damit Overlay exakt die Bildbox trifft (Thumbnails/Lightbox/Anordnung) */
+.ic-imgbox { position: relative; display: inline-block; line-height: 0; }
+.ic-imgbox img { display: block; }
+
+/* Quellenangaben-Formular */
+.ic-source-form { padding: 10px 16px; background: var(--ic-panel); }
+.ic-source-form .ic-field { margin-bottom: 10px; }
+.ic-source-form label { display: block; font-size: .78rem; color: var(--ic-muted); margin-bottom: 4px; }
+.ic-source-form input {
+  width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #3a3d44;
+  background: #101114; color: var(--ic-text); font-size: .9rem;
+}
+.ic-caption { font-size: .78rem; color: var(--ic-muted); text-align: center; padding: 6px 16px 0; }
+

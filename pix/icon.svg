@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- Tafel (Rahmen + Fuß) -->
+  <line x1="7" y1="19.5" x2="5" y2="16" stroke="#7a4a26" stroke-width="1.4" stroke-linecap="round"/>
+  <line x1="17" y1="19.5" x2="19" y2="16" stroke="#7a4a26" stroke-width="1.4" stroke-linecap="round"/>
+  <rect x="2" y="3" width="20" height="13.5" rx="1.5" fill="#8a5a30"/>
+  <rect x="3.3" y="4.3" width="17.4" height="10.9" rx="0.8" fill="#161616"/>
+
+  <!-- Zauberstab (diagonal über die Tafel, Spitze oben rechts) -->
+  <line x1="6" y1="14.5" x2="14.3" y2="6.2" stroke="#4a2c14" stroke-width="1.6" stroke-linecap="round"/>
+  <rect x="13.4" y="5.3" width="2" height="2" rx="0.4" transform="rotate(45 14.4 6.3)" fill="#e8a93a"/>
+
+  <!-- Kringel: offene Spirale, wie ein Kreide-Schwung von der Stabspitze -->
+  <path d="M15.2 5.6 C17.4 3.2 21 4.3 20.3 7.2 C19.8 9.4 16.7 9.2 16.6 7.1 C16.5 5.7 18.2 5.1 18.8 6.2"
+        stroke="#f5f2ea" stroke-width="1.15" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
