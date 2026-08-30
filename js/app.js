@@ -127,6 +127,7 @@
       case 'crop': renderCrop(body); break;
       case 'color': renderColor(body); break;
       case 'source': renderSource(body); break;
+      case 'textframe': renderTextFrame(body); break;
       case 'arrange': renderArrange(body); break;
       case 'moderate': renderModerate(body); break;
     }
@@ -138,11 +139,11 @@
   var VIEW_LABELS = {
     home: S.mygallery, arrange: S.pinboard, moderate: S.moderate_mode,
     capture: S.step_capture, perspective: S.step_perspective, crop: S.step_crop,
-    color: S.step_color, source: S.step_source
+    color: S.step_color, source: S.step_source, textframe: S.textframe_title
   };
   // Diese Schritte gehören zum Hinzufügen-Assistenten - der "Hinzufügen"-
   // Navigationsbutton gilt hier ebenfalls als aktiv.
-  var ADD_WIZARD_STEPS = { capture: 1, perspective: 1, crop: 1, color: 1, source: 1 };
+  var ADD_WIZARD_STEPS = { capture: 1, perspective: 1, crop: 1, color: 1, source: 1, textframe: 1 };
 
   function goToView(step) {
     return function () {
@@ -312,6 +313,12 @@
       urlRow.classList.toggle('open');
       urlBtn.classList.toggle('ic-btn-primary', urlRow.classList.contains('open'));
     });
+    var textFrameBtn = el('button', { class: 'ic-btn' }, [S.addtextframe]);
+    textFrameBtn.addEventListener('click', function () {
+      state.textFrame = null; // frisch beginnen
+      state.step = 'textframe';
+      render();
+    });
     var shootBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.takephoto]);
     shootBtn.addEventListener('click', function () {
       if (!state.stream) { fileInput.click(); return; }
@@ -322,7 +329,7 @@
       img.onload = function () { loadCapturedImage(img); };
       img.src = c.toDataURL('image/jpeg', 0.92);
     });
-    bar.appendChild(backBtn); bar.appendChild(uploadBtn); bar.appendChild(urlBtn); bar.appendChild(shootBtn);
+    bar.appendChild(backBtn); bar.appendChild(uploadBtn); bar.appendChild(urlBtn); bar.appendChild(textFrameBtn); bar.appendChild(shootBtn);
     body.appendChild(bar);
 
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -382,6 +389,11 @@
         { x: canvas.width * (1 - m), y: canvas.height * (1 - m) },
         { x: canvas.width * m, y: canvas.height * (1 - m) }
       ];
+      state.cornersCanvasW = canvas.width; state.cornersCanvasH = canvas.height;
+    } else if (state.cornersCanvasW !== canvas.width || state.cornersCanvasH !== canvas.height) {
+      var crx = canvas.width / state.cornersCanvasW, cry = canvas.height / state.cornersCanvasH;
+      state.corners = state.corners.map(function (p) { return { x: p.x * crx, y: p.y * cry }; });
+      state.cornersCanvasW = canvas.width; state.cornersCanvasH = canvas.height;
     }
     makeDragOverlay(stage, canvas, state.corners, true);
     stageHint(stage, S.perspective_hint);
@@ -389,7 +401,7 @@
     var bar = el('div', { class: 'ic-actionbar' });
     var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.back]);
     backBtn.addEventListener('click', function () { state.step = 'capture'; render(); });
-    var nextBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.next]);
+    var nextBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.next, 'aria-label': S.next }, [icon('arrowright')]);
     nextBtn.addEventListener('click', function () {
       var scaledCorners = state.corners.map(function (p) {
         return { x: p.x / fitScale, y: p.y / fitScale };
@@ -410,7 +422,10 @@
     var HANDLE_MARGIN = 32;
     var availW = Math.max(200, (rect.width || root.clientWidth) - HANDLE_MARGIN);
     var availH = Math.max(200, (rect.height || (root.clientHeight - 160)) - HANDLE_MARGIN);
-    var scale = Math.min(availW / iw, availH / ih, 1);
+    // Bewusst ohne Obergrenze bei 1 (Originalgröße): das Bild soll immer
+    // vollständig sichtbar sein UND in einer Richtung die verfügbare
+    // Fläche zu 100% ausfüllen - auch wenn das kleine Bilder hochskaliert.
+    var scale = Math.min(availW / iw, availH / ih);
     canvas.width = Math.round(iw * scale);
     canvas.height = Math.round(ih * scale);
     canvas.style.width = canvas.width + 'px';
@@ -620,6 +635,11 @@
         { x: canvas.width * (1 - m), y: canvas.height * (1 - m) },
         { x: canvas.width * m, y: canvas.height * (1 - m) }
       ];
+      state.cropRectCanvasW = canvas.width; state.cropRectCanvasH = canvas.height;
+    } else if (state.cropRectCanvasW !== canvas.width || state.cropRectCanvasH !== canvas.height) {
+      var crx2 = canvas.width / state.cropRectCanvasW, cry2 = canvas.height / state.cropRectCanvasH;
+      state.cropRect = state.cropRect.map(function (p) { return { x: p.x * crx2, y: p.y * cry2 }; });
+      state.cropRectCanvasW = canvas.width; state.cropRectCanvasH = canvas.height;
     }
     makeDragOverlay(stage, canvas, state.cropRect, true);
     stageHint(stage, S.crop_hint);
@@ -645,7 +665,7 @@
     var bar = el('div', { class: 'ic-actionbar' });
     var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.back]);
     backBtn.addEventListener('click', function () { state.step = 'perspective'; render(); });
-    var nextBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.next]);
+    var nextBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.next, 'aria-label': S.next }, [icon('arrowright')]);
     nextBtn.addEventListener('click', function () {
       var pts = state.cropRect.map(function (p) { return { x: p.x / fitScale, y: p.y / fitScale }; });
       var minX = Math.min(pts[0].x, pts[3].x), maxX = Math.max(pts[1].x, pts[2].x);
@@ -722,7 +742,10 @@
     var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.back]);
     backBtn.addEventListener('click', function () { state.step = 'crop'; render(); });
     var isEditingExisting = !!state.editingPhotoId;
-    var nextBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [isEditingExisting ? S.savephoto : S.next]);
+    var nextBtn = el('button', {
+      class: 'ic-btn ic-btn-primary ic-btn-icon',
+      title: isEditingExisting ? S.savephoto : S.next, 'aria-label': isEditingExisting ? S.savephoto : S.next
+    }, [icon(isEditingExisting ? 'check' : 'arrowright')]);
     nextBtn.addEventListener('click', function () {
       // Ergebnis fest in finalCanvas übernehmen.
       state.finalCanvas = canvas;
@@ -850,7 +873,7 @@
     var bar = el('div', { class: 'ic-actionbar' });
     var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.back]);
     backBtn.addEventListener('click', function () { state.step = 'color'; render(); });
-    var saveBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.savephoto]);
+    var saveBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.savephoto, 'aria-label': S.savephoto }, [icon('check')]);
     saveBtn.addEventListener('click', function () {
       saveBtn.disabled = true;
       // Das Raster wird hier bewusst noch NICHT festgelegt - das passiert
@@ -867,7 +890,8 @@
         sourceyear: info.sourceyear,
         sourceepoch: info.sourceepoch,
         sourceplace: info.sourceplace,
-        sourceorigauthor: info.sourceorigauthor
+        sourceorigauthor: info.sourceorigauthor,
+        boardid: state.currentBoard || 0
       }).then(function (res) {
         state.photos.push({
           id: res.photoid, url: res.url, gridtype: 'none', gridvalue: 0, gridcolor: '#ff3c3c',
@@ -877,7 +901,8 @@
           sourceauthor: info.sourceauthor, sourceyear: info.sourceyear, sourceepoch: info.sourceepoch,
           sourceplace: info.sourceplace, sourceorigauthor: info.sourceorigauthor,
           timecreated: Math.floor(Date.now() / 1000),
-          canvasx: 20, canvasy: 20, canvasw: 220, canvasrot: 0, canvasz: state.photos.length
+          canvasx: 20, canvasy: 20, canvasw: 220, canvasrot: 0, canvasz: state.photos.length,
+          boardid: state.currentBoard || 0
         });
         state.maxpictures = res.max;
         resetCaptureState();
@@ -899,6 +924,244 @@
     state.cropRect = null;
     state.finalCanvas = null;
     state.editingPhotoId = null;
+    state.textFrame = null;
+  }
+
+  // ==================================================================
+  // WORTFELD (Textrahmen): Rahmen mit Hintergrund-Preset + einem oder
+  // mehreren frei positionierbaren Text-Objekten. Wird beim Speichern zu
+  // einem PNG gerendert und über die bestehende Foto-Pipeline gespeichert -
+  // dadurch funktionieren Ziehen/Größe/Rotation/Annotieren/Faden usw. ohne
+  // jede Sonderbehandlung, wie bei jedem anderen Bild auf der Pinnwand.
+  // Scoping: Text-Objekte sind verschiebbar, aber (anders als Fotos) nicht
+  // einzeln drehbar - das hätte den Rahmen dieser Phase gesprengt.
+  // ==================================================================
+  var TEXTFRAME_FONTS = [
+    { id: 'sans', label: 'Sans', css: '-apple-system, Roboto, Arial, sans-serif' },
+    { id: 'serif', label: 'Serif', css: 'Georgia, "Times New Roman", serif' },
+    { id: 'mono', label: 'Mono', css: '"Courier New", monospace' },
+    { id: 'hand', label: 'Handschrift', css: '"Caveat", cursive', webfont: 'Caveat:wght@600' }
+  ];
+  var TEXTFRAME_PALETTE = ['#e0503f', '#4f8cff', '#3fcf8e', '#e0b23f', '#b06fe0', '#ffffff', '#111111'];
+  var TEXTFRAME_PRESETS = [
+    { id: 'none', bg: null, text: '#f2f3f5', shadow: false },
+    { id: 'paper', bg: '#ffffff', text: '#111111', shadow: true },
+    { id: 'dark', bg: '#111111', text: '#e0503f', shadow: false },
+    { id: 'light', bg: '#000000', text: '#ffffff', shadow: false }
+  ];
+  var textframeFontsLoaded = {};
+  function ensureWebfont(spec) {
+    if (!spec || textframeFontsLoaded[spec]) { return; }
+    textframeFontsLoaded[spec] = true;
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=' + spec + '&display=swap';
+    document.head.appendChild(link);
+  }
+
+  function newTextFrame() {
+    return {
+      w: 320, h: 220, preset: 'paper',
+      texts: [{ id: 1, text: '', font: 'sans', size: 32, x: 0.5, y: 0.5 }]
+    };
+  }
+
+  // Schrumpft die Schriftgröße, bis der Text (einzeilig) in maxWidth passt -
+  // eigene, einfache Umsetzung der pretextjs "fit-text-to-container"-Idee.
+  var fitCtx = document.createElement('canvas').getContext('2d');
+  function autoFitFontSize(text, fontCss, maxWidth, startSize) {
+    var size = startSize;
+    if (!text) { return size; }
+    while (size > 10) {
+      fitCtx.font = size + 'px ' + fontCss;
+      if (fitCtx.measureText(text).width <= maxWidth) { break; }
+      size -= 2;
+    }
+    return size;
+  }
+
+  function renderTextFrameToCanvas(tf) {
+    var SCALE = 3;
+    var c = document.createElement('canvas');
+    c.width = tf.w * SCALE; c.height = tf.h * SCALE;
+    var ctx = c.getContext('2d');
+    var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
+    if (preset.bg) {
+      if (preset.shadow) { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 14 * SCALE; ctx.shadowOffsetY = 4 * SCALE; }
+      ctx.fillStyle = preset.bg;
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+    }
+    tf.texts.forEach(function (t) {
+      var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
+      var fitted = autoFitFontSize(t.text, fontDef.css, c.width * 0.9, t.size * SCALE);
+      ctx.font = fitted + 'px ' + fontDef.css;
+      ctx.fillStyle = t.color || preset.text;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t.text, t.x * c.width, t.y * c.height);
+    });
+    return c;
+  }
+
+  function renderTextFrame(body) {
+    if (!state.textFrame) { state.textFrame = newTextFrame(); }
+    var tf = state.textFrame;
+    TEXTFRAME_FONTS.forEach(function (f) { if (f.webfont) { ensureWebfont(f.webfont); } });
+
+    var stage = el('div', { class: 'ic-stage' });
+    var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0];
+    var frame = el('div', {
+      class: 'ic-textframe-preview',
+      style: 'width:' + tf.w + 'px;height:' + tf.h + 'px;' +
+        (preset.bg ? 'background:' + preset.bg + (preset.shadow ? ';box-shadow:0 8px 24px rgba(0,0,0,.4)' : '') : 'background:transparent;border:2px dashed rgba(255,255,255,.3)')
+    });
+    stage.appendChild(frame);
+    body.appendChild(stage);
+
+    var activeId = tf.texts[0] && tf.texts[0].id;
+
+    function textEl(t) {
+      var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
+      var el2 = el('div', {
+        class: 'ic-textframe-obj' + (t.id === activeId ? ' active' : ''),
+        contenteditable: 'true',
+        style: 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;font-family:' + fontDef.css + ';' +
+          'font-size:' + t.size + 'px;color:' + (t.color || preset.text)
+      }, [t.text || '']);
+      if (!t.text) { el2.setAttribute('data-placeholder', S.textframe_placeholder); }
+      el2.addEventListener('focus', function () { activeId = t.id; render(); });
+      el2.addEventListener('input', function () { t.text = el2.textContent; });
+      el2.addEventListener('blur', function () { t.text = el2.textContent; });
+      makeTextObjectMovable(el2, frame, t);
+      return el2;
+    }
+    tf.texts.forEach(function (t) { frame.appendChild(textEl(t)); });
+
+    // Presets
+    var presetRow = el('div', { class: 'ic-textframe-presets' });
+    TEXTFRAME_PRESETS.forEach(function (p) {
+      var label = p.id === 'none' ? S.preset_none : p.id === 'paper' ? S.preset_paper : p.id === 'dark' ? S.preset_dark : S.preset_light;
+      var b = el('button', { class: 'ic-btn ic-btn-ghost' + (tf.preset === p.id ? ' ic-btn-primary' : '') }, [label]);
+      b.addEventListener('click', function () { tf.preset = p.id; render(); });
+      presetRow.appendChild(b);
+    });
+    body.appendChild(presetRow);
+
+    // Aktives Textobjekt bearbeiten: Font, Größe, Farbe (Palette + eigene Farbe)
+    var active = tf.texts.filter(function (t) { return t.id === activeId; })[0];
+    if (active) {
+      var editRow = el('div', { class: 'ic-textframe-edit' });
+      var fontSel = el('select', { class: 'ic-textframe-select' });
+      TEXTFRAME_FONTS.forEach(function (f) {
+        fontSel.appendChild(el('option', { value: f.id, selected: f.id === active.font ? 'selected' : null }, [f.label]));
+      });
+      fontSel.addEventListener('change', function () { active.font = fontSel.value; render(); });
+      editRow.appendChild(fontSel);
+
+      var sizeInput = el('input', { type: 'range', min: '14', max: '96', value: String(active.size) });
+      sizeInput.addEventListener('input', function () { active.size = parseInt(sizeInput.value, 10); render(); });
+      editRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontsize]));
+      editRow.appendChild(sizeInput);
+      body.appendChild(editRow);
+
+      var paletteRow = el('div', { class: 'ic-textframe-palette' });
+      TEXTFRAME_PALETTE.forEach(function (color) {
+        var sw = el('button', {
+          class: 'ic-color-swatch' + ((active.color || preset.text) === color ? ' active' : ''),
+          style: 'background:' + color
+        });
+        sw.addEventListener('click', function () { active.color = color; render(); });
+        paletteRow.appendChild(sw);
+      });
+      var customColor = el('input', { type: 'color', value: active.color || preset.text, class: 'ic-textframe-custom-color' });
+      customColor.addEventListener('input', function () { active.color = customColor.value; render(); });
+      paletteRow.appendChild(customColor);
+      body.appendChild(paletteRow);
+
+      if (tf.texts.length > 1) {
+        var rmBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.removetextobject]);
+        rmBtn.addEventListener('click', function () {
+          tf.texts = tf.texts.filter(function (t) { return t.id !== active.id; });
+          render();
+        });
+        body.appendChild(rmBtn);
+      }
+    }
+
+    var addTextBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.addtextobject]);
+    addTextBtn.addEventListener('click', function () {
+      var nextId = Math.max.apply(null, tf.texts.map(function (t) { return t.id; })) + 1;
+      tf.texts.push({ id: nextId, text: '', font: 'sans', size: 32, x: 0.5, y: 0.5 });
+      render();
+    });
+    body.appendChild(addTextBtn);
+
+    var bar = el('div', { class: 'ic-actionbar' });
+    var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.back]);
+    backBtn.addEventListener('click', function () { resetCaptureState(); state.step = 'capture'; render(); });
+    var saveBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.savephoto, 'aria-label': S.savephoto }, [icon('check')]);
+    saveBtn.addEventListener('click', function () {
+      saveBtn.disabled = true;
+      var outCanvas = renderTextFrameToCanvas(tf);
+      var dataUrl = outCanvas.toDataURL('image/png');
+      var label = tf.texts.map(function (t) { return t.text; }).filter(Boolean).join(' ');
+      callAjax('mod_pinnwand_save_photo', {
+        cmid: cfg.cmid, imagedata: dataUrl, gridtype: 'none', gridvalue: 0, consent: false,
+        sourcetitle: label, sourceauthor: '', sourceyear: '', sourceepoch: '', sourceplace: '', sourceorigauthor: '',
+        boardid: state.currentBoard || 0
+      }).then(function (res) {
+        state.photos.push({
+          id: res.photoid, url: res.url, gridtype: 'none', gridvalue: 0, gridcolor: '#ff3c3c',
+          consent: false, annotationdata: '[]', hiddenfromboard: !!res.hiddenfromboard, annotationonboard: true,
+          sourcetitle: label, sourceauthor: '', sourceyear: '', sourceepoch: '', sourceplace: '', sourceorigauthor: '',
+          timecreated: Math.floor(Date.now() / 1000),
+          canvasx: 20, canvasy: 20, canvasw: 220, canvasrot: 0, canvasz: state.photos.length,
+          boardid: state.currentBoard || 0
+        });
+        state.maxpictures = res.max;
+        resetCaptureState();
+        state.step = res.maxreached ? 'arrange' : 'home';
+        render();
+      }).catch(function (e) {
+        alert(S.error_save + ' (' + e.message + ')');
+        saveBtn.disabled = false;
+      });
+    });
+    bar.appendChild(backBtn); bar.appendChild(saveBtn);
+    body.appendChild(bar);
+  }
+
+  // Leichtgewichtiges Verschieben eines Textobjekts innerhalb des Rahmens
+  // (normalisierte 0..1-Koordinaten, kein Resize/Rotate wie bei Fotos).
+  // Erst ab einer Mindestbewegung wird tatsächlich verschoben, damit ein
+  // normaler Klick weiterhin den Textcursor im contenteditable setzt.
+  function makeTextObjectMovable(el2, frame, t) {
+    var dragging = false, startX = 0, startY = 0, totalDelta = 0;
+    function point(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
+    function down(ev) {
+      dragging = true; totalDelta = 0;
+      var p = point(ev); startX = p.x; startY = p.y;
+    }
+    function move(ev) {
+      if (!dragging) { return; }
+      var p = point(ev);
+      totalDelta += Math.abs(p.x - startX) + Math.abs(p.y - startY);
+      if (totalDelta < 6) { return; }
+      var rect = frame.getBoundingClientRect();
+      var nx = (p.x - rect.left) / rect.width, ny = (p.y - rect.top) / rect.height;
+      t.x = Math.max(0.05, Math.min(0.95, nx));
+      t.y = Math.max(0.05, Math.min(0.95, ny));
+      el2.style.left = (t.x * 100) + '%'; el2.style.top = (t.y * 100) + '%';
+      ev.preventDefault();
+    }
+    function up() { dragging = false; }
+    el2.addEventListener('mousedown', down);
+    el2.addEventListener('touchstart', down, { passive: true });
+    window.addEventListener('mousemove', move);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('mouseup', up);
+    window.addEventListener('touchend', up);
   }
 
   // ------------------------------------------------------------------
@@ -975,6 +1238,8 @@
     thumbtack: '<svg viewBox="0 0 1502 1502" width="16" height="16" fill="currentColor"><path d="M887.379 265.37c-71.92 39.67-90.783 153.676-73.858 220.443 25.373 89.642 120.263 184.87 208.333 223.115 88.825 39.357 213.79 19.878 236.138-70.095 17.062-70.586-14.408-161.368-105.1-252.481-51.592-61.787-195.222-150.364-265.514-120.983zm230.112 132.709c146.728 158.437 175.269 364.057-102.498 170.535-34.831-24.267-35.33-25.11-63.176-61.653-180.218-260.581 36.104-234.896 165.675-108.882zm-427.136 211.52c-30.14 129.742 141.096 224.808 206.885 226.635l115.713-114.768s-15.115-7.428-22.352-9.622c-95.305-35.201-153.483-115.01-186.185-198.223zM485.279 724.858c11.704 135.014 160.179 270.964 278.146 298.044 94.23 22.034 149.97-90.424 137.659-165.743-124.499-1.779-264.574-142.482-229.575-240.563-75.865-20.138-185.011 41.747-186.23 108.261zm-183.466 469.254c-10.709 15.142 2.074 28.789 19.1 14.38l288.835-244.45c-32.143-18.286-42.019-27.02-60.405-61.83 0 0-161.602 197.241-247.53 291.9z"/></svg>',
     hand: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v7"/><path d="M10 10.5V6a2 2 0 0 0-4 0v10"/><path d="M6 14l-1.5-1.8a1.8 1.8 0 0 0-2.7 2.3L6 21h9a4 4 0 0 0 4-4v-5a2 2 0 0 0-4 0"/></svg>',
     thread: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#e0503f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="6" r="1.6" fill="#e0503f"/><circle cx="20" cy="18" r="1.6" fill="#e0503f"/><path d="M4 6c4 0 2 6 6 6s2-6 6-6 2 6 4 6"/></svg>',
+    arrowright: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>',
+    check: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
     stream: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>'
   };
   function icon(name) {
@@ -1118,8 +1383,12 @@
 
     // Nur Fotos zeigen, die nicht ausgeblendet sind UND zum aktuell
     // gewählten Board gehören (Mehrfach-Boards, siehe Board-Leiste unten).
+    // Als Rückseite verknüpfte Fotos erscheinen NICHT als eigene Karte -
+    // sie werden über ihre Vorderseite per Doppelklick eingeblendet.
+    var backsideIds = {};
+    state.photos.forEach(function (p) { if (p.backphotoid) { backsideIds[p.backphotoid] = true; } });
     var visible = state.photos.filter(function (p) {
-      return !p.hiddenfromboard && (p.boardid || 0) === state.currentBoard;
+      return !p.hiddenfromboard && (p.boardid || 0) === state.currentBoard && !backsideIds[p.id];
     });
 
     visible.forEach(function (p) {
@@ -1129,8 +1398,18 @@
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
       item.style.zIndex = p.canvasz || 0;
-      var img = el('img', { src: p.url, alt: '' });
+      var backPhoto = p.backphotoid ? state.photos.filter(function (o) { return o.id === p.backphotoid; })[0] : null;
+      var img = el('img', { src: (p.showingback && backPhoto) ? backPhoto.url : p.url, alt: '' });
       item.appendChild(img);
+      if (backPhoto) {
+        item.addEventListener('dblclick', function (ev) {
+          ev.stopPropagation();
+          callAjax('mod_pinnwand_toggle_backside', { cmid: cfg.cmid, photoid: p.id }).then(function (res) {
+            p.showingback = res.showingback;
+            render();
+          });
+        });
+      }
 
       // Pin/Unpin direkt auf dem Board (Vorgabe-Icon) - von der Pinnwand
       // entfernen blendet das Foto hier sofort aus (bleibt in "Meine Bilder").
@@ -2195,6 +2474,7 @@
     function closeAllPanels(except) {
       if (except !== 'grid') { var gp = document.getElementById('ic-grid-panel'); if (gp) { gp.remove(); } }
       if (except !== 'data') { var dp = document.getElementById('ic-data-panel'); if (dp) { dp.remove(); } }
+      if (except !== 'back') { var bp = document.getElementById('ic-back-panel'); if (bp) { bp.remove(); } }
       if (except !== 'draw' && drawing) { exitDrawing(true); }
     }
 
@@ -2217,7 +2497,9 @@
       img.onerror = function () { alert(S.url_load_error); };
       img.src = p.url;
     });
-    leftDock.appendChild(gridBtn); leftDock.appendChild(dataBtn); leftDock.appendChild(editBtn);
+    var backsideBtn = el('button', { class: 'ic-fab', title: S.backside }, [icon('rotate')]);
+    backsideBtn.addEventListener('click', function () { closeAllPanels('back'); toggleBackPanel(); });
+    leftDock.appendChild(gridBtn); leftDock.appendChild(dataBtn); leftDock.appendChild(editBtn); leftDock.appendChild(backsideBtn);
 
     // Stylus-Knopf unten links: einziger Schalter für die Zeichenwerkzeuge
     // (senkrecht am linken Rand gestapelt, siehe enterDrawing()).
@@ -2372,6 +2654,48 @@
       var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost', style: 'margin-top:10px' }, [S.draw_done]);
       closeBtn.addEventListener('click', function () { panel.remove(); });
       panel.appendChild(closeBtn);
+
+      lb.appendChild(panel);
+    }
+
+    function toggleBackPanel() {
+      var existing = document.getElementById('ic-back-panel');
+      if (existing) { existing.remove(); return; }
+
+      var p = state.photos[state.lightboxIndex];
+      var panel = el('div', { class: 'ic-bg-panel', id: 'ic-back-panel' });
+      panel.appendChild(el('p', { class: 'ic-hint' }, [S.backside_hint]));
+
+      var thumbs = el('div', { class: 'ic-bg-thumbs' });
+      state.photos.forEach(function (other) {
+        if (other.id === p.id) { return; }
+        var thumb = el('img', {
+          class: 'ic-bg-thumb' + (p.backphotoid === other.id ? ' active' : ''), src: other.url, alt: ''
+        });
+        thumb.addEventListener('click', function () {
+          callAjax('mod_pinnwand_set_backside', { cmid: cfg.cmid, photoid: p.id, backphotoid: other.id }).then(function () {
+            p.backphotoid = other.id; p.showingback = false;
+            panel.remove(); toggleBackPanel();
+          });
+        });
+        thumbs.appendChild(thumb);
+      });
+      panel.appendChild(thumbs);
+
+      if (p.backphotoid) {
+        var unlinkBtn = el('button', { class: 'ic-btn ic-btn-ghost', style: 'margin-top:8px' }, [S.unlinkbackside]);
+        unlinkBtn.addEventListener('click', function () {
+          callAjax('mod_pinnwand_set_backside', { cmid: cfg.cmid, photoid: p.id, backphotoid: 0 }).then(function () {
+            p.backphotoid = 0; p.showingback = false;
+            panel.remove(); toggleBackPanel();
+          });
+        });
+        panel.appendChild(unlinkBtn);
+      }
+
+      var closeBtn2 = el('button', { class: 'ic-btn ic-btn-ghost', style: 'margin-top:10px' }, [S.draw_done]);
+      closeBtn2.addEventListener('click', function () { panel.remove(); });
+      panel.appendChild(closeBtn2);
 
       lb.appendChild(panel);
     }

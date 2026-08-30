@@ -154,4 +154,20 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:viewall',
     ],
+    'mod_pinnwand_set_backside' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'set_backside',
+        'description' => 'Verknüpft (oder trennt) die Rückseite eines eigenen Fotos mit einem anderen eigenen Foto',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:submit',
+    ],
+    'mod_pinnwand_toggle_backside' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'toggle_backside',
+        'description' => 'Blättert zwischen Vorder- und Rückseite eines Fotos um',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:submit',
+    ],
 ];

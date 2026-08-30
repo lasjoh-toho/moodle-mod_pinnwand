@@ -196,26 +196,53 @@ stillschweigend auf 0 zurückgesetzt. Behoben.
 
 ---
 
-## Phase 6 — Hinzufügen/Bearbeiten: Editor-Erweiterungen
+## Phase 6 — Hinzufügen/Bearbeiten: Editor-Erweiterungen ✅
 
 Betrifft: `js/app.js` (Editor-Pipeline), `classes/external.php` (neue
 Felder/Endpunkte), `db/install.xml` + `upgrade.php`
 
-- [ ] Bildgröße im Editor: immer vollständig sichtbar, in einer Richtung
-  100 % Füllung (Fix bestehender Lightbox-Messlogik auf Editor übertragen)
-- [ ] Zuschneide-Rahmen exakt auf Bildkoordinaten gemappt (Koordinaten-Fix)
-- [ ] Editor-Schritte als Buttons: Pfeil rechts = weiter, Haken = speichern
-  (bestehende Schritt-Navigation umbauen)
-- [ ] **Textrahmen ("Wortfeld")**: Rahmen mit/ohne Hintergrund, Presets
-  (Schwarz/Weiß+Schatten "virtueller Zettel", Schwarz/Farbe, Weiß/Schwarz),
-  Farbwähler mit Palette, einbindbare Fonts, mehrere Text-Objekte in einem
-  Rahmen anordenbar, Auto-Fit der Textgröße (Logik analog
-  [pretextjs fit-text-to-container](https://pretextjs.dev/fit-text-to-container)
-  in eigener JS-Umsetzung, keine externe Abhängigkeit nötig)
-- [ ] **Rückseiten-Beschriftung**: Doppelklick zum Umblättern, Festlegen
-  welche Seite oben liegt (z-order-Feld pro Foto)
-- [ ] Bild-Import per URL: bereits vorhanden — an neue Editor-Pipeline
-  anpassen, CORS-Hinweis/Quellenangabe beibehalten
+- [x] Bildgröße im Editor: Obergrenze bei Originalgröße entfernt
+  (`fitImageToStage`) - Bild füllt jetzt immer eine Richtung zu 100 %,
+  auch bei kleinen Bildern (Hochskalieren)
+- [x] **Bugfix** Zuschneide-/Perspektiv-Rahmen: Eckpunkte wurden bei
+  geänderter Canvas-Größe zwischen zwei Renders (Fenster-Resize, Rotation)
+  nicht umgerechnet und drifteten vom Bild weg - jetzt proportional
+  angepasst (`cornersCanvasW/H`, `cropRectCanvasW/H`)
+- [x] Editor-Schritte als Buttons: "Weiter" (Pfeil) und "Speichern" (Haken)
+  als Icons in Perspektive-, Zuschnitt-, Farbe- und Quelle-Schritt
+- [x] **Textrahmen ("Wortfeld")**: neuer Schritt `textframe` - 4
+  Hintergrund-Presets (kein Hintergrund, virtueller Zettel mit Schatten,
+  Schwarz auf Farbe, Weiß auf Schwarz), Farbpalette + eigene Farbe,
+  mehrere frei verschiebbare Textobjekte, 4 Schriftarten (inkl. einer
+  über Google Fonts eingebundenen Handschrift), eigene Auto-Fit-Umsetzung
+  (Canvas-`measureText`, schrittweises Verkleinern). Wird beim Speichern
+  zu einem PNG gerendert und läuft über die bestehende Foto-Pipeline -
+  Ziehen/Größe/Rotation/Annotieren/Faden funktionieren dadurch ohne jede
+  Sonderbehandlung mit.
+- [x] **Rückseiten-Beschriftung**: neue Felder `backphotoid`/`showingback`,
+  Verknüpfung über einen neuen Dock-Button in der Lightbox (Foto-Auswahl
+  aus den eigenen Bildern), Doppelklick auf der Pinnwand blättert um; die
+  verknüpfte Rückseite erscheint nicht mehr als eigene Karte
+- [x] Bild-Import per URL: bereits vorhanden, funktioniert unverändert mit
+  der bestehenden Pipeline - keine Anpassung nötig
+
+**Nebenbei gefundene/behobene Inkonsistenz:** `boardid` fehlte auch beim
+Neuanlegen eines Fotos (`save_photo`) - landete immer auf Board 0 statt dem
+gerade aktiven Board. Ergänzt (Client + `save_photo`-Endpunkt).
+
+**Scoping-Hinweise:**
+- Textobjekte im Wortfeld sind verschiebbar, aber (anders als Fotos) nicht
+  einzeln drehbar.
+- Auto-Fit ist einzeilig (kein automatischer Zeilenumbruch) - für die
+  kurzen Beschriftungen, die ein Wortfeld typischerweise trägt, ausreichend.
+- `backphotoid`/`sourcephotoid` werden beim Restore nicht auf neue IDs
+  umgemappt (bleiben roh erhalten) - rein informationelle Felder ohne
+  Auswirkung auf Anzeige/Berechtigungen, siehe bereits dokumentierte
+  Einschränkung bei `sourcephotoid` (Phase 4).
+- Ein Doppelklick auf eine Karte mit Rückseite blättert um **und** öffnet
+  zusätzlich kurz die Galerie-Ansicht (da ein Doppelklick technisch aus
+  zwei Einzelklicks besteht, die jeweils auch den normalen Klick-Handler
+  auslösen) - kosmetisch, aber nicht weiter vertieft.
 
 ---
 

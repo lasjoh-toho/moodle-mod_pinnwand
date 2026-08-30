@@ -27,7 +27,8 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
             'sourceauthor', 'sourceyear', 'sourceepoch', 'sourceplace',
             'sourceorigauthor', 'sourcetitle', 'gridcolor', 'hiddenfromboard',
             'annotationonboard', 'annotationdata', 'canvasx', 'canvasy',
-            'canvasw', 'canvasrot', 'canvasz', 'boardid', 'sourcephotoid', 'timecreated',
+            'canvasw', 'canvasrot', 'canvasz', 'boardid', 'sourcephotoid',
+            'backphotoid', 'showingback', 'timecreated',
         ]);
 
         // Rote Fäden - ebenfalls personenbezogen (ein Faden pro Person).

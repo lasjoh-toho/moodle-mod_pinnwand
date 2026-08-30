@@ -53,18 +53,19 @@ class mod_pinnwand_external extends external_api {
             'sourceepoch' => new external_value(PARAM_TEXT, 'Epoche', VALUE_DEFAULT, ''),
             'sourceplace' => new external_value(PARAM_TEXT, 'Ort', VALUE_DEFAULT, ''),
             'sourceorigauthor' => new external_value(PARAM_TEXT, 'Autor*in der Vorlage', VALUE_DEFAULT, ''),
+            'boardid' => new external_value(PARAM_INT, 'Board-ID', VALUE_DEFAULT, 0),
         ]);
     }
 
     public static function save_photo($cmid, $imagedata, $gridtype, $gridvalue, $consent,
-            $sourcetitle, $sourceauthor, $sourceyear, $sourceepoch, $sourceplace, $sourceorigauthor) {
+            $sourcetitle, $sourceauthor, $sourceyear, $sourceepoch, $sourceplace, $sourceorigauthor, $boardid = 0) {
         global $DB, $USER;
 
         $params = self::validate_parameters(self::save_photo_parameters(), [
             'cmid' => $cmid, 'imagedata' => $imagedata, 'gridtype' => $gridtype,
             'gridvalue' => $gridvalue, 'consent' => $consent, 'sourcetitle' => $sourcetitle,
             'sourceauthor' => $sourceauthor, 'sourceyear' => $sourceyear, 'sourceepoch' => $sourceepoch,
-            'sourceplace' => $sourceplace, 'sourceorigauthor' => $sourceorigauthor,
+            'sourceplace' => $sourceplace, 'sourceorigauthor' => $sourceorigauthor, 'boardid' => $boardid,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
 
@@ -112,6 +113,7 @@ class mod_pinnwand_external extends external_api {
         $record->canvasw = 220;
         $record->canvasrot = 0;
         $record->canvasz = $existing;
+        $record->boardid = $params['boardid'];
         $record->timecreated = time();
         $record->id = $DB->insert_record('pinnwand_photos', $record);
 
@@ -201,6 +203,8 @@ class mod_pinnwand_external extends external_api {
                 'canvasrot' => (float) $r->canvasrot,
                 'canvasz' => (int) $r->canvasz,
                 'boardid' => (int) $r->boardid,
+                'backphotoid' => $r->backphotoid !== null ? (int) $r->backphotoid : 0,
+                'showingback' => (bool) $r->showingback,
             ];
         }
         return [
@@ -308,6 +312,8 @@ class mod_pinnwand_external extends external_api {
                 'canvasrot' => new external_value(PARAM_FLOAT, 'Rotation'),
                 'canvasz' => new external_value(PARAM_INT, 'Ebene'),
                 'boardid' => new external_value(PARAM_INT, 'Board-ID (0 = erstes/Standard-Board)'),
+                'backphotoid' => new external_value(PARAM_INT, 'Verknüpfte Rückseite (0 = keine)'),
+                'showingback' => new external_value(PARAM_BOOL, 'Rückseite zeigt gerade nach oben'),
             ])),
         ]);
     }
@@ -1283,5 +1289,79 @@ class mod_pinnwand_external extends external_api {
             'id' => new external_value(PARAM_INT, 'ID der neuen Kopie'),
             'url' => new external_value(PARAM_RAW, 'Bild-URL der Kopie'),
         ]);
+    }
+
+    // ---------------------------------------------------------------
+    // Rückseiten-Beschriftung: ein eigenes Foto kann eine Rückseite (ein
+    // anderes eigenes Foto) zugewiesen bekommen. Per Doppelklick auf der
+    // Pinnwand wird zwischen Vorder- und Rückseite umgeblättert
+    // (showingback). Die als Rückseite verknüpfte Aufnahme wird dadurch
+    // NICHT selbst zu einer weiteren, separaten Karte auf dem Board (siehe
+    // Filter in renderArrange auf JS-Seite).
+    // ---------------------------------------------------------------
+    public static function set_backside_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Vorderseiten-Foto-ID'),
+            'backphotoid' => new external_value(PARAM_INT, 'Rückseiten-Foto-ID (0 = Verknüpfung aufheben)'),
+        ]);
+    }
+
+    public static function set_backside($cmid, $photoid, $backphotoid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_backside_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'backphotoid' => $backphotoid,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->userid != $USER->id || $photo->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'set_backside');
+        }
+
+        if ($params['backphotoid'] > 0) {
+            if ($params['backphotoid'] == $photo->id) {
+                throw new moodle_exception('invalidparameter', 'debug');
+            }
+            $back = $DB->get_record('pinnwand_photos', ['id' => $params['backphotoid']], '*', MUST_EXIST);
+            if ($back->userid != $USER->id || $back->pinnwandid != $instance->id) {
+                throw new moodle_exception('nopermissions', 'error', '', 'set_backside');
+            }
+            $photo->backphotoid = $back->id;
+        } else {
+            $photo->backphotoid = null;
+            $photo->showingback = 0;
+        }
+        $DB->update_record('pinnwand_photos', $photo);
+        return ['success' => true];
+    }
+
+    public static function set_backside_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function toggle_backside_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Vorderseiten-Foto-ID'),
+        ]);
+    }
+
+    public static function toggle_backside($cmid, $photoid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::toggle_backside_parameters(), ['cmid' => $cmid, 'photoid' => $photoid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->userid != $USER->id || $photo->pinnwandid != $instance->id || empty($photo->backphotoid)) {
+            throw new moodle_exception('nopermissions', 'error', '', 'toggle_backside');
+        }
+        $photo->showingback = $photo->showingback ? 0 : 1;
+        $DB->update_record('pinnwand_photos', $photo);
+        return ['showingback' => (bool) $photo->showingback];
+    }
+
+    public static function toggle_backside_returns() {
+        return new external_single_structure(['showingback' => new external_value(PARAM_BOOL, 'Rückseite zeigt jetzt nach oben')]);
     }
 }

@@ -191,5 +191,19 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083002, 'pinnwand');
     }
 
+    if ($oldversion < 2026083004) {
+        // Phase 6: Rückseiten-Beschriftung (per Doppelklick umblätterbar).
+        $table = new xmldb_table('pinnwand_photos');
+        $field = new xmldb_field('backphotoid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'sourcephotoid');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field2 = new xmldb_field('showingback', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'backphotoid');
+        if (!$dbman->field_exists($table, $field2)) {
+            $dbman->add_field($table, $field2);
+        }
+        upgrade_mod_savepoint(true, 2026083004, 'pinnwand');
+    }
+
     return true;
 }
