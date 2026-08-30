@@ -412,6 +412,23 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Seitenleisten-Buttons (Faden/Post-Stream/Layer) jetzt unten rechts statt
   in der unteren Fab-Leiste.
 
+### Fünfzehnte Überarbeitung — impress.js-Root-Bugfix, Wortfeld-Texteingabe-Bugfix
+
+- **Kern-Bugfix impress.js**: `#pinnwand-impress` hatte eigenes CSS
+  (`inset: 0`), das mit den von impress.js selbst gesetzten Inline-Styles
+  (`top:50%;left:50%`) kollidierte und die Präsentations-Wurzel auf ein
+  Viertel der Fläche zusammenquetschte - Ursache für "funktioniert nicht",
+  "verkehrt herum" und "zu schwach gezoomt" zugleich. Behoben.
+- Sidebar-Buttons (Faden/Post-Stream/Layer) jetzt nebeneinander statt
+  untereinander, über den Panels statt dahinter.
+- Roter Faden rendert jetzt live neu, wenn ein enthaltenes Foto oder ein
+  Leerrahmen verschoben/skaliert wird.
+- **Kern-Bugfix Wortfeld-Texteingabe**: Anklicken eines Textobjekts löste
+  bisher einen vollen Re-Render aus, der den gerade gesetzten Fokus sofort
+  wieder zerstörte - Texteingabe war dadurch praktisch unmöglich. Behoben.
+- Hauptrahmen des Wortfelds jetzt per Eck-Handle skalierbar, Textobjekte
+  zusätzlich per eigenem Handle in der Schriftgröße skalierbar.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

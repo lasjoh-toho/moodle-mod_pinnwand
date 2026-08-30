@@ -220,8 +220,8 @@
 .ic-home-add-fab.disabled { opacity: .4; }
 .ic-fab[disabled] { opacity: .4; }
 .ic-sidebar-toggle-bar {
-  position: absolute; bottom: 14px; right: 8px; z-index: 16;
-  display: flex; flex-direction: column-reverse; gap: 6px;
+  position: absolute; bottom: 14px; right: 8px; z-index: 30;
+  display: flex; flex-direction: row; gap: 6px;
 }
 .ic-board-bar {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 15;
@@ -314,8 +314,12 @@
 .ic-stream-card.collapsed .ic-stream-pin-btn { display: none; }
 
 /* Präsentationsmodus (impress.js) */
-.ic-present-overlay { position: fixed; inset: 0; z-index: 10000; background: #0b0c0e; }
-#pinnwand-impress { position: absolute; inset: 0; }
+.ic-present-overlay { position: fixed; inset: 0; z-index: 10000; background: #0b0c0e; overflow: hidden; }
+/* #pinnwand-impress bekommt KEIN eigenes position/top/left/right/bottom -
+   impress.js setzt das selbst per Inline-Style (top:50%;left:50%). Eigenes
+   CSS mit z.B. inset:0 würde mit diesen Inline-Styles kollidieren (right:0
+   + bottom:0 aus inset:0 bleiben zusammen mit top:50%;left:50% aktiv und
+   quetschen die Wurzel auf ein Viertel der Fläche zusammen). */
 .ic-present-bg {
   position: absolute; left: 0; top: 0; width: 1000px; height: 1400px; z-index: -1;
 }
@@ -348,6 +352,17 @@
 }
 .ic-textframe-obj.active { outline: 1px dashed rgba(255,255,255,.5); }
 .ic-textframe-obj:empty::before { content: attr(data-placeholder); opacity: .5; }
+.ic-textframe-preview > .ic-resize {
+  position: absolute; right: -10px; bottom: -10px; width: 26px; height: 26px;
+  background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: nwse-resize;
+}
+.ic-textframe-size-handle {
+  position: absolute; right: -9px; bottom: -9px; width: 18px; height: 18px;
+  background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: nwse-resize;
+  opacity: 0; transition: opacity .15s;
+}
+.ic-textframe-obj:hover .ic-textframe-size-handle, .ic-textframe-obj.active .ic-textframe-size-handle { opacity: 1; }
+.ic-textframe-controls:empty { display: none; }
 .ic-textframe-presets { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
 .ic-textframe-edit { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
 .ic-textframe-select {

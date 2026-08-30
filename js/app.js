@@ -1090,21 +1090,68 @@
     stage.appendChild(frame);
     body.appendChild(stage);
 
+    // Hauptrahmen selbst skalierbar (Eck-Handle unten rechts) - die
+    // Textobjekte sind an ihn gebunden (normalisierte 0..1-Koordinaten),
+    // sie passen sich beim Skalieren automatisch proportional mit an.
+    var frameResizeHandle = el('div', { class: 'ic-resize' });
+    frame.appendChild(frameResizeHandle);
+    (function () {
+      var dragging = false, startX = 0, startY = 0, startW = 0, startH = 0;
+      function pt(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
+      function down(ev) {
+        dragging = true; var p = pt(ev);
+        startX = p.x; startY = p.y; startW = tf.w; startH = tf.h;
+        ev.stopPropagation(); ev.preventDefault();
+      }
+      function move(ev) {
+        if (!dragging) { return; }
+        var p = pt(ev);
+        tf.w = Math.max(120, startW + (p.x - startX));
+        tf.h = Math.max(80, startH + (p.y - startY));
+        frame.style.width = tf.w + 'px'; frame.style.height = tf.h + 'px';
+        ev.preventDefault();
+      }
+      function up() { dragging = false; }
+      frameResizeHandle.addEventListener('mousedown', down);
+      frameResizeHandle.addEventListener('touchstart', down, { passive: false });
+      window.addEventListener('mousemove', move);
+      window.addEventListener('touchmove', move, { passive: false });
+      window.addEventListener('mouseup', up);
+      window.addEventListener('touchend', up);
+    })();
+
     var activeId = tf.texts[0] && tf.texts[0].id;
+    var controlsBox = el('div', { class: 'ic-textframe-controls' });
+
+    function selectText(id) {
+      activeId = id;
+      frame.querySelectorAll('.ic-textframe-obj').forEach(function (o) {
+        o.classList.toggle('active', o.dataset.textid === String(id));
+      });
+      refreshControls();
+    }
 
     function textEl(t) {
       var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
       var el2 = el('div', {
         class: 'ic-textframe-obj' + (t.id === activeId ? ' active' : ''),
+        'data-textid': String(t.id),
         contenteditable: 'true',
         style: 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;font-family:' + fontDef.css + ';' +
           'font-size:' + t.size + 'px;color:' + (t.color || preset.text)
       }, [t.text || '']);
       if (!t.text) { el2.setAttribute('data-placeholder', S.textframe_placeholder); }
-      el2.addEventListener('focus', function () { activeId = t.id; render(); });
+      // Wichtig: hier KEIN render() aufrufen - das würde das gerade fokussierte
+      // contenteditable-Element sofort zerstören und den Cursor verlieren,
+      // noch bevor überhaupt etwas eingegeben werden kann. Stattdessen wird
+      // nur die aktive Markierung + das Steuerelemente-Panel isoliert
+      // aktualisiert (siehe selectText/refreshControls).
+      el2.addEventListener('focus', function () { selectText(t.id); });
       el2.addEventListener('input', function () { t.text = el2.textContent; });
-      el2.addEventListener('blur', function () { t.text = el2.textContent; });
-      makeTextObjectMovable(el2, frame, t);
+      var sizeHandle = el('div', { class: 'ic-textframe-size-handle', title: S.fontsize });
+      el2.appendChild(sizeHandle);
+      makeTextObjectMovable(el2, frame, t, sizeHandle);
+      sizeHandle.addEventListener('mousedown', function () { selectText(t.id); });
       return el2;
     }
     tf.texts.forEach(function (t) { frame.appendChild(textEl(t)); });
@@ -1119,36 +1166,57 @@
     });
     body.appendChild(presetRow);
 
-    // Aktives Textobjekt bearbeiten: Font, Größe, Farbe (Palette + eigene Farbe)
-    var active = tf.texts.filter(function (t) { return t.id === activeId; })[0];
-    if (active) {
+    // Steuerelemente des aktiven Textobjekts (Font, Größe, Farbe) - werden
+    // isoliert neu aufgebaut (refreshControls), NIE über ein volles render(),
+    // damit ein fokussiertes contenteditable-Feld nie mitten in der
+    // Bearbeitung zerstört wird.
+    body.appendChild(controlsBox);
+    function refreshControls() {
+      controlsBox.innerHTML = '';
+      var active = tf.texts.filter(function (t) { return t.id === activeId; })[0];
+      if (!active) { return; }
+
       var editRow = el('div', { class: 'ic-textframe-edit' });
       var fontSel = el('select', { class: 'ic-textframe-select' });
       TEXTFRAME_FONTS.forEach(function (f) {
         fontSel.appendChild(el('option', { value: f.id, selected: f.id === active.font ? 'selected' : null }, [f.label]));
       });
-      fontSel.addEventListener('change', function () { active.font = fontSel.value; render(); });
+      fontSel.addEventListener('change', function () {
+        active.font = fontSel.value;
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.fontFamily = (TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]).css; }
+      });
       editRow.appendChild(fontSel);
 
-      var sizeInput = el('input', { type: 'range', min: '14', max: '96', value: String(active.size) });
-      sizeInput.addEventListener('input', function () { active.size = parseInt(sizeInput.value, 10); render(); });
+      var sizeInput = el('input', { type: 'range', min: '14', max: '160', value: String(active.size) });
+      sizeInput.addEventListener('input', function () {
+        active.size = parseInt(sizeInput.value, 10);
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.fontSize = active.size + 'px'; }
+      });
       editRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontsize]));
       editRow.appendChild(sizeInput);
-      body.appendChild(editRow);
+      controlsBox.appendChild(editRow);
 
       var paletteRow = el('div', { class: 'ic-textframe-palette' });
+      function applyColor(color) {
+        active.color = color;
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.color = color; }
+        refreshControls();
+      }
       TEXTFRAME_PALETTE.forEach(function (color) {
         var sw = el('button', {
           class: 'ic-color-swatch' + ((active.color || preset.text) === color ? ' active' : ''),
           style: 'background:' + color
         });
-        sw.addEventListener('click', function () { active.color = color; render(); });
+        sw.addEventListener('click', function () { applyColor(color); });
         paletteRow.appendChild(sw);
       });
       var customColor = el('input', { type: 'color', value: active.color || preset.text, class: 'ic-textframe-custom-color' });
-      customColor.addEventListener('input', function () { active.color = customColor.value; render(); });
+      customColor.addEventListener('input', function () { applyColor(customColor.value); });
       paletteRow.appendChild(customColor);
-      body.appendChild(paletteRow);
+      controlsBox.appendChild(paletteRow);
 
       if (tf.texts.length > 1) {
         var rmBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.removetextobject]);
@@ -1156,9 +1224,10 @@
           tf.texts = tf.texts.filter(function (t) { return t.id !== active.id; });
           render();
         });
-        body.appendChild(rmBtn);
+        controlsBox.appendChild(rmBtn);
       }
     }
+    refreshControls();
 
     var addTextBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.addtextobject]);
     addTextBtn.addEventListener('click', function () {
@@ -1196,14 +1265,17 @@
     body.appendChild(bar);
   }
 
-  // Leichtgewichtiges Verschieben eines Textobjekts innerhalb des Rahmens
-  // (normalisierte 0..1-Koordinaten, kein Resize/Rotate wie bei Fotos).
-  // Erst ab einer Mindestbewegung wird tatsächlich verschoben, damit ein
-  // normaler Klick weiterhin den Textcursor im contenteditable setzt.
-  function makeTextObjectMovable(el2, frame, t) {
+  // Leichtgewichtiges Verschieben (+ per Eck-Handle skalieren der
+  // Schriftgröße) eines Textobjekts innerhalb des Rahmens - normalisierte
+  // 0..1-Koordinaten, damit ein späteres Skalieren des Hauptrahmens die
+  // Textobjekte automatisch proportional mitverschiebt. Erst ab einer
+  // Mindestbewegung wird tatsächlich verschoben, damit ein normaler Klick
+  // weiterhin den Textcursor im contenteditable setzt.
+  function makeTextObjectMovable(el2, frame, t, sizeHandle) {
     var dragging = false, startX = 0, startY = 0, totalDelta = 0;
     function point(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
     function down(ev) {
+      if (ev.target === sizeHandle) { return; }
       dragging = true; totalDelta = 0;
       var p = point(ev); startX = p.x; startY = p.y;
     }
@@ -1226,6 +1298,28 @@
     window.addEventListener('touchmove', move, { passive: false });
     window.addEventListener('mouseup', up);
     window.addEventListener('touchend', up);
+
+    // Eck-Handle: Ziehen ändert die Schriftgröße (das ist bei einem
+    // Textobjekt die sinnvolle Entsprechung zu "skalieren").
+    var sDragging = false, sStartX = 0, sStartSize = t.size;
+    function sDown(ev) {
+      sDragging = true; sStartX = point(ev).x; sStartSize = t.size;
+      ev.stopPropagation(); ev.preventDefault();
+    }
+    function sMove(ev) {
+      if (!sDragging) { return; }
+      var dx = point(ev).x - sStartX;
+      t.size = Math.max(12, Math.min(200, Math.round(sStartSize + dx / 2)));
+      el2.style.fontSize = t.size + 'px';
+      ev.preventDefault();
+    }
+    function sUp() { sDragging = false; }
+    sizeHandle.addEventListener('mousedown', sDown);
+    sizeHandle.addEventListener('touchstart', sDown, { passive: false });
+    window.addEventListener('mousemove', sMove);
+    window.addEventListener('touchmove', sMove, { passive: false });
+    window.addEventListener('mouseup', sUp);
+    window.addEventListener('touchend', sUp);
   }
 
   // ------------------------------------------------------------------
@@ -1553,16 +1647,23 @@
       makeMovable(item, canvas, function (x, y) {
         p.canvasx = x; p.canvasy = y; moved = true;
       }, function () {
-        if (moved) { persistLayout(p); moved = false; }
+        if (moved) {
+          persistLayout(p); moved = false;
+          // Der Rote Faden (rote Rahmen + Verbindungslinie) muss neu
+          // gezeichnet werden, sobald sich die Position eines enthaltenen
+          // Fotos ändert - sonst "hinkt" die Linie der neuen Position
+          // hinterher, bis irgendein anderer Grund einen Re-Render auslöst.
+          if (state.threadPanelOpen) { render(); }
+        }
         else if (state.boardDrawMode) { openLightbox(state.photos.indexOf(p), true); }
         else { openLightbox(state.photos.indexOf(p)); }
       });
       makeResizable(resize, item, function (w) {
         p.canvasw = w;
-      }, function () { persistLayout(p); });
+      }, function () { persistLayout(p); if (state.threadPanelOpen) { render(); } });
       makeRotatable(rotateHandle, item, function (deg) {
         p.canvasrot = deg;
-      }, function () { persistLayout(p); });
+      }, function () { persistLayout(p); if (state.threadPanelOpen) { render(); } });
     });
 
     // Roter Faden auf dem Board: gesetzte Leerrahmen anzeigen + eine Linie,
@@ -1594,7 +1695,7 @@
           }
           makeMovable(frameEl, canvas, function (x, y) {
             it.framex = x; it.framey = y;
-          }, function (moved) { if (moved) { persistFrame(); } });
+          }, function (moved) { if (moved) { persistFrame(); render(); } });
 
           var frameResize = el('div', { class: 'ic-resize' });
           frameEl.appendChild(frameResize);
@@ -1621,7 +1722,7 @@
           }
           window.addEventListener('mousemove', frMove);
           window.addEventListener('touchmove', frMove, { passive: false });
-          function frUp() { if (frDragging) { frDragging = false; persistFrame(); } }
+          function frUp() { if (frDragging) { frDragging = false; persistFrame(); render(); } }
           window.addEventListener('mouseup', frUp);
           window.addEventListener('touchend', frUp);
         });

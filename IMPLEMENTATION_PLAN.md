@@ -393,3 +393,48 @@ Endpunkt `update_thread_frame`), neue Instanzeinstellungen
 ist (auf der gerade zuvor gezeigten Pinnwand fast immer der Fall) - sonst
 eine grobe 4:3-Näherung. Ein vollständig asynchrones Vorladen aller Bilder
 vor Präsentationsstart wurde aus Aufwandsgründen nicht umgesetzt.
+
+---
+
+## Phase 11 — impress.js-Root-Bug, Faden-Live-Update, Wortfeld-Editor-Bugfix ✅
+
+Vierter Feedback-Durchgang. Betrifft: `styles.css` (impress.js-Root-CSS),
+`js/app.js` (Faden-Re-Render, Wortfeld-Editor komplett überarbeitet).
+
+- [x] **Sidebar-Buttons**: nebeneinander statt untereinander, z-index über
+  den Panels (30 statt 16), damit sie beim geöffneten Panel weiter
+  klickbar bleiben.
+- [x] **Kern-Bugfix impress.js**: `#pinnwand-impress` hatte ein eigenes
+  CSS-Regel (`inset: 0` → setzt auch `right:0;bottom:0`), das mit den von
+  impress.js selbst per Inline-Style gesetzten `top:50%;left:50%`
+  kollidierte. Ein Element mit gleichzeitig `top:50%` UND `bottom:0`
+  (bzw. `left:50%` UND `right:0`) bekommt seine Box-Größe aus dieser
+  Spanne vorgegeben - dadurch wurde die impress-Wurzel auf ein Viertel
+  der Fläche in der unteren rechten Bildschirmecke zusammengequetscht,
+  was die gesamte Präsentation unbrauchbar/falsch positioniert erscheinen
+  ließ ("funktioniert nicht", "verkehrt herum", "zu schwach gezoomt" waren
+  alles Symptome dieser einen Ursache). Fix: kein eigenes position/inset
+  mehr auf `#pinnwand-impress` - impress.js verwaltet das komplett selbst.
+- [x] **Faden-Live-Update**: Verschieben/Skalieren eines Fotos oder
+  Leerrahmens auf dem Board löst jetzt (nur wenn das Faden-Panel offen
+  ist) sofort ein Re-Render aus, damit rote Rahmen und Verbindungslinie
+  live mitwandern statt erst nach einem anderen auslösenden Ereignis.
+- [x] **Wortfeld-Editor - Kern-Bugfix Texteingabe**: der `focus`-Handler
+  eines Textobjekts löste bisher ein volles `render()` aus, das das
+  gerade fokussierte `contenteditable`-Element sofort zerstörte und neu
+  aufbaute - der Fokus (und damit jede Eingabemöglichkeit) ging dadurch
+  im selben Moment wieder verloren, in dem man hineinklickte. Jetzt wird
+  bei Auswahl nur die Markierung + das Steuerelemente-Panel isoliert
+  aktualisiert, nie der ganze Editor.
+- [x] **Hauptrahmen jetzt skalierbar** (Eck-Handle), Textobjekte zusätzlich
+  per eigenem kleinen Eck-Handle in der Schriftgröße skalierbar (nicht nur
+  über den Schieberegler) - Textobjekt-Koordinaten sind normalisiert
+  (0..1), passen sich beim Skalieren des Hauptrahmens automatisch an.
+
+**Scoping-Hinweis:** "Hauptrahmen bewegt sich auf der Pinnwand, andere
+Rahmen sind daran gebunden" ist architektonisch bereits durch das
+Flach-Rendern zu einem PNG beim Speichern gelöst (das gesamte Wortfeld
+wird EIN Foto und bewegt sich dadurch zwangsläufig als eine Einheit) -
+ein vollständig strukturiertes, weiterhin live editierbares Textobjekt
+direkt auf dem Board (statt eines flachen Bildes) wäre ein deutlich
+größerer Umbau und wurde nicht umgesetzt.
