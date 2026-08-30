@@ -62,10 +62,13 @@
     threads: [],           // vom Server geladene Rote Fäden (eigener + ggf. der Lehrkraft)
     canusethreads: false,  // darf eigenen Faden anlegen/bearbeiten
     threadPanelOpen: false, // Faden-Seitenpanel ein-/ausgeblendet
-    streamPhotos: [],      // Post-Stream: neue Einreichungen anderer Lernender (nur Lehrkraft)
+    streamPhotos: [],      // Post-Stream: eigene unplatzierte Fotos + (Lehrkraft) fremde Einreichungen
     streamPanelOpen: false,
     streamFilter: '',
-    streamWidth: 220
+    streamWidth: 220,
+    canusepoststream: true, // darf den Post-Stream nutzen (Instanzeinstellung)
+    canuselayers: false,    // darf das Schichtung-Panel nutzen (Instanzeinstellung)
+    layerPanelOpen: false
   };
 
   // ------------------------------------------------------------------
@@ -1300,6 +1303,7 @@
     thumbtack: '<svg viewBox="0 0 1502 1502" width="16" height="16" fill="currentColor"><path d="M887.379 265.37c-71.92 39.67-90.783 153.676-73.858 220.443 25.373 89.642 120.263 184.87 208.333 223.115 88.825 39.357 213.79 19.878 236.138-70.095 17.062-70.586-14.408-161.368-105.1-252.481-51.592-61.787-195.222-150.364-265.514-120.983zm230.112 132.709c146.728 158.437 175.269 364.057-102.498 170.535-34.831-24.267-35.33-25.11-63.176-61.653-180.218-260.581 36.104-234.896 165.675-108.882zm-427.136 211.52c-30.14 129.742 141.096 224.808 206.885 226.635l115.713-114.768s-15.115-7.428-22.352-9.622c-95.305-35.201-153.483-115.01-186.185-198.223zM485.279 724.858c11.704 135.014 160.179 270.964 278.146 298.044 94.23 22.034 149.97-90.424 137.659-165.743-124.499-1.779-264.574-142.482-229.575-240.563-75.865-20.138-185.011 41.747-186.23 108.261zm-183.466 469.254c-10.709 15.142 2.074 28.789 19.1 14.38l288.835-244.45c-32.143-18.286-42.019-27.02-60.405-61.83 0 0-161.602 197.241-247.53 291.9z"/></svg>',
     hand: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v7"/><path d="M10 10.5V6a2 2 0 0 0-4 0v10"/><path d="M6 14l-1.5-1.8a1.8 1.8 0 0 0-2.7 2.3L6 21h9a4 4 0 0 0 4-4v-5a2 2 0 0 0-4 0"/></svg>',
     thread: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#e0503f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="6" r="1.6" fill="#e0503f"/><circle cx="20" cy="18" r="1.6" fill="#e0503f"/><path d="M4 6c4 0 2 6 6 6s2-6 6-6 2 6 4 6"/></svg>',
+    layers: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
     arrowright: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>',
     check: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
     stream: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>'
@@ -1570,15 +1574,56 @@
       if (threadForCanvas) {
         var boardItems = threadForCanvas.items.filter(function (it) { return (it.boardid || 0) === state.currentBoard; });
 
-        // Leerrahmen als sichtbare, gestrichelte Rechtecke.
+        // Leerrahmen als sichtbare, gestrichelte Rechtecke - verschiebbar
+        // und skalierbar (nur im eigenen, bearbeitbaren Faden).
         boardItems.forEach(function (it) {
           if (it.itemtype !== 'frame') { return; }
           var frameEl = el('div', {
-            class: 'ic-thread-frame-onboard',
+            class: 'ic-thread-frame-onboard' + (threadForCanvas.isown ? ' editable' : ''),
             style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;'
           });
           if (it.framelabel) { frameEl.appendChild(el('span', {}, [it.framelabel])); }
           canvas.appendChild(frameEl);
+
+          if (!threadForCanvas.isown) { return; }
+
+          function persistFrame() {
+            callAjax('mod_pinnwand_update_thread_frame', {
+              cmid: cfg.cmid, itemid: it.id, framex: it.framex, framey: it.framey, framew: it.framew, frameh: it.frameh
+            });
+          }
+          makeMovable(frameEl, canvas, function (x, y) {
+            it.framex = x; it.framey = y;
+          }, function (moved) { if (moved) { persistFrame(); } });
+
+          var frameResize = el('div', { class: 'ic-resize' });
+          frameEl.appendChild(frameResize);
+          var frDragging = false, frStartX = 0, frStartY = 0, frStartW = 0, frStartH = 0;
+          function frPoint(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
+          frameResize.addEventListener('mousedown', function (ev) {
+            frDragging = true; var p = frPoint(ev);
+            frStartX = p.x; frStartY = p.y; frStartW = it.framew; frStartH = it.frameh;
+            ev.stopPropagation(); ev.preventDefault();
+          });
+          frameResize.addEventListener('touchstart', function (ev) {
+            frDragging = true; var p = frPoint(ev);
+            frStartX = p.x; frStartY = p.y; frStartW = it.framew; frStartH = it.frameh;
+            ev.stopPropagation();
+          }, { passive: true });
+          function frMove(ev) {
+            if (!frDragging) { return; }
+            var p = frPoint(ev);
+            var z = state.boardZoom || 1;
+            it.framew = Math.max(60, frStartW + (p.x - frStartX) / z);
+            it.frameh = Math.max(60, frStartH + (p.y - frStartY) / z);
+            frameEl.style.width = it.framew + 'px'; frameEl.style.height = it.frameh + 'px';
+            ev.preventDefault();
+          }
+          window.addEventListener('mousemove', frMove);
+          window.addEventListener('touchmove', frMove, { passive: false });
+          function frUp() { if (frDragging) { frDragging = false; persistFrame(); } }
+          window.addEventListener('mouseup', frUp);
+          window.addEventListener('touchend', frUp);
         });
 
         // Verbindungslinie zwischen den Mittelpunkten aufeinanderfolgender
@@ -1698,31 +1743,35 @@
     drawBtn.addEventListener('click', function () { state.boardDrawMode = !state.boardDrawMode; render(); });
     fabRow.appendChild(drawBtn);
 
-    // Roter Faden: Seitenpanel rechts (siehe renderThreadPanel) ein-/ausblenden.
-    if (state.canusethreads || state.threads.length > 0) {
-      var threadBtn = el('button', { class: 'ic-fab' + (state.threadPanelOpen ? ' active' : ''), title: S.thread }, [icon('thread')]);
-      threadBtn.addEventListener('click', function () {
-        state.threadPanelOpen = !state.threadPanelOpen;
-        if (state.threadPanelOpen) { state.streamPanelOpen = false; }
-        render();
-      });
-      fabRow.appendChild(threadBtn);
-    }
-
-    // Post-Stream: neue Einreichungen anderer Lernender, nur für die
-    // Lehrkraft. Teilt sich den rechten Rand mit dem Faden-Panel (siehe
-    // gegenseitiges Schließen oben/unten) - beide gemeinsam offen wäre auf
-    // den meisten Bildschirmen zu eng.
-    var streamBtn = el('button', { class: 'ic-fab' + (state.streamPanelOpen ? ' active' : ''), title: S.poststream }, [icon('stream')]);
-    streamBtn.addEventListener('click', function () {
-      state.streamPanelOpen = !state.streamPanelOpen;
-      if (state.streamPanelOpen) {
-        state.threadPanelOpen = false;
-        loadStreamPhotos();
-      }
+    // Seitenleisten-Buttons (Roter Faden / Post-Stream / Schichtung) in der
+    // oberen rechten Ecke der Pinnwand - schließen sich gegenseitig, da sie
+    // sich denselben rechten Rand teilen.
+    var SIDEBAR_PANELS = ['threadPanelOpen', 'streamPanelOpen', 'layerPanelOpen'];
+    function openSidebar(key) {
+      SIDEBAR_PANELS.forEach(function (k) { state[k] = (k === key); });
+      if (key === 'streamPanelOpen') { loadStreamPhotos(); }
       render();
-    });
-    fabRow.appendChild(streamBtn);
+    }
+    function toggleSidebar(key) {
+      if (state[key]) { state[key] = false; render(); } else { openSidebar(key); }
+    }
+    var sidebarBar = el('div', { class: 'ic-sidebar-toggle-bar' });
+    if (state.canusethreads || state.threads.length > 0) {
+      var threadBtn = el('button', { class: 'ic-icon-btn' + (state.threadPanelOpen ? ' active' : ''), title: S.thread }, [icon('thread')]);
+      threadBtn.addEventListener('click', function () { toggleSidebar('threadPanelOpen'); });
+      sidebarBar.appendChild(threadBtn);
+    }
+    if (state.canusepoststream) {
+      var streamBtn = el('button', { class: 'ic-icon-btn' + (state.streamPanelOpen ? ' active' : ''), title: S.poststream }, [icon('stream')]);
+      streamBtn.addEventListener('click', function () { toggleSidebar('streamPanelOpen'); });
+      sidebarBar.appendChild(streamBtn);
+    }
+    if (state.canuselayers) {
+      var layerBtn = el('button', { class: 'ic-icon-btn' + (state.layerPanelOpen ? ' active' : ''), title: S.layers }, [icon('layers')]);
+      layerBtn.addEventListener('click', function () { toggleSidebar('layerPanelOpen'); });
+      sidebarBar.appendChild(layerBtn);
+    }
+    body.appendChild(sidebarBar);
 
     var maxreached = state.maxpictures > 0 && state.photos.length >= state.maxpictures;
     var addBtn = el('button', { class: 'ic-fab ic-fab-primary', title: S.addphoto, disabled: maxreached ? 'disabled' : null }, ['+']);
@@ -1733,6 +1782,7 @@
 
     if (state.threadPanelOpen) { body.appendChild(renderThreadPanel()); }
     if (state.streamPanelOpen) { body.appendChild(renderStreamPanel()); }
+    if (state.layerPanelOpen) { body.appendChild(renderLayerPanel()); }
 
     // Drop-Zone: Karte aus dem Post-Stream auf das Board ziehen = Kopie
     // anlegen (siehe renderStreamPanel/adopt_photo_to_board).
@@ -1895,6 +1945,57 @@
   }
 
   // ------------------------------------------------------------------
+  // SCHICHTUNG: Reihenfolge (Z-Ebene) der platzierten Fotos auf dem
+  // aktuellen Board - oben in der Liste = ganz vorne (höchstes canvasz).
+  // ------------------------------------------------------------------
+  function renderLayerPanel() {
+    var panel = el('div', { class: 'ic-thread-panel' });
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.layers]));
+
+    var items = state.photos.filter(function (p) {
+      return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === state.currentBoard;
+    }).sort(function (a, b) { return (b.canvasz || 0) - (a.canvasz || 0); });
+
+    var list = el('div', { class: 'ic-thread-list' });
+    if (items.length === 0) {
+      list.appendChild(el('p', { class: 'ic-hint' }, [S.layers_empty]));
+      panel.appendChild(list);
+      return panel;
+    }
+
+    var dragFromIdx = null;
+    items.forEach(function (p, idx) {
+      var row = el('div', { class: 'ic-thread-item', draggable: 'true' });
+      row.appendChild(el('img', { src: p.url, alt: '' }));
+      row.appendChild(el('span', { class: 'ic-thread-item-label' }, [p.sourcetitle || itemCaptionText(p)]));
+
+      row.addEventListener('dragstart', function () { dragFromIdx = idx; row.classList.add('dragging'); });
+      row.addEventListener('dragend', function () { row.classList.remove('dragging'); });
+      row.addEventListener('dragover', function (ev) { ev.preventDefault(); });
+      row.addEventListener('drop', function (ev) {
+        ev.preventDefault();
+        if (dragFromIdx === null || dragFromIdx === idx) { return; }
+        var moved = items.splice(dragFromIdx, 1)[0];
+        items.splice(idx, 0, moved);
+        dragFromIdx = null;
+        // Oben in der Liste = vorne -> höchstes canvasz zuerst vergeben.
+        var total = items.length;
+        items.forEach(function (it, i) {
+          it.canvasz = total - i;
+          callAjax('mod_pinnwand_update_layout', {
+            cmid: cfg.cmid, photoid: it.id, x: it.canvasx, y: it.canvasy, w: it.canvasw,
+            rot: it.canvasrot || 0, z: it.canvasz, boardid: it.boardid || 0
+          });
+        });
+        render();
+      });
+      list.appendChild(row);
+    });
+    panel.appendChild(list);
+    return panel;
+  }
+
+  // ------------------------------------------------------------------
   // ROTER FADEN: Seitenpanel mit den Stationen des eigenen Fadens
   // (Fotos + Leerrahmen), per Drag umsortierbar, plus - falls vorhanden -
   // schreibgeschützte Ansicht des Fadens der Lehrkraft.
@@ -2043,32 +2144,79 @@
     if (window.innerWidth < 900) { alert(S.present_smallscreen); return; }
     loadImpress().then(function () {
       var overlay = el('div', { class: 'ic-present-overlay' });
-      var impressRoot = el('div', { id: 'pinnwand-impress' });
-      var canvasEl = el('div', { class: 'step', id: 'ic-present-start', 'data-x': '0', 'data-y': '0' });
-      impressRoot.appendChild(canvasEl);
+      // data-width/data-height auf die aktuelle Fenstergröße setzen, damit
+      // impress.js' eingebauter "windowScale"-Faktor (Verhältnis Fenster zu
+      // Referenzgröße) genau 1 ergibt - unsere eigenen data-scale-Werte
+      // entsprechen dann direkt dem gewünschten Kamera-Zoom, ohne
+      // zusätzliche, verwirrende Umrechnung (siehe computeWindowScale in
+      // impress.js). data-max-scale/-min-scale großzügig, damit auch sehr
+      // kleine bzw. sehr große Rahmen korrekt gefüllt werden.
+      var impressRoot = el('div', {
+        id: 'pinnwand-impress',
+        'data-width': String(window.innerWidth), 'data-height': String(window.innerHeight),
+        'data-max-scale': '30', 'data-min-scale': '0.03'
+      });
 
-      thread.items.forEach(function (item, idx) {
-        var x, y, w;
-        if (item.itemtype === 'frame') {
-          x = item.framex; y = item.framey; w = item.framew;
-        } else {
-          var photo = state.photos.filter(function (p) { return p.id === item.photoid; })[0];
-          if (!photo) { return; }
-          x = photo.canvasx; y = photo.canvasy; w = photo.canvasw;
-        }
-        var scale = Math.max(0.4, Math.min(2.5, w / 400));
-        var step = el('div', {
-          class: 'step', id: 'ic-present-step-' + idx,
-          'data-x': String(x + w / 2), 'data-y': String(y + (w * 0.7) / 2), 'data-scale': String(scale)
+      // Alle Stationen müssen vom selben Board stammen, um gemeinsam
+      // dargestellt zu werden - Referenz ist das Board der ersten Station
+      // (siehe Scoping-Hinweis: Board-übergreifende Fäden sind ein
+      // Sonderfall und werden hier nicht gemischt dargestellt).
+      var firstBoardId = thread.items.length ? (thread.items[0].boardid || 0) : 0;
+
+      // Hintergrund des Boards - während der ganzen Präsentation sichtbar.
+      var bgLayer = el('div', { class: 'ic-present-bg' });
+      applyBackground(bgLayer);
+      impressRoot.appendChild(bgLayer);
+
+      // Alle auf diesem Board platzierten Fotos zeigen (nicht nur die des
+      // Fadens) - Textrahmen (Wortfeld) sind technisch auch nur Fotos und
+      // erscheinen dadurch automatisch mit.
+      var boardPhotos = state.photos.filter(function (p) {
+        return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === firstBoardId;
+      });
+      var photoRecs = {};
+      boardPhotos.forEach(function (p) {
+        var pEl = el('div', {
+          class: 'ic-present-photo',
+          style: 'left:' + p.canvasx + 'px;top:' + p.canvasy + 'px;width:' + p.canvasw + 'px;' +
+            'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
         });
-        if (item.itemtype === 'frame') {
-          step.classList.add('ic-present-frame');
-          if (item.framelabel) { step.appendChild(el('div', { class: 'ic-present-frame-label' }, [item.framelabel])); }
+        pEl.style.zIndex = p.canvasz || 0;
+        pEl.appendChild(el('img', { src: p.url, alt: '' }));
+        impressRoot.appendChild(pEl);
+        photoRecs[p.id] = { el: pEl, z: p.canvasz || 0 };
+      });
+
+      // Kamera-Zoom je Station: die Station soll vollständig sichtbar sein
+      // UND den Bildschirm in einer Richtung (horizontal oder vertikal)
+      // ganz ausfüllen - also die kleinere der beiden Füll-Verhältnisse
+      // (klassisches "contain"-Fitting, keine Beschneidung).
+      var boardItems = thread.items.filter(function (it) { return (it.boardid || 0) === firstBoardId; });
+      boardItems.forEach(function (it) {
+        if (it.itemtype === 'frame') {
+          var fEl = el('div', {
+            class: 'step ic-present-step-frame',
+            style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;'
+          });
+          if (it.framelabel) { fEl.appendChild(el('span', {}, [it.framelabel])); }
+          fEl.setAttribute('data-x', String(it.framex + it.framew / 2));
+          fEl.setAttribute('data-y', String(it.framey + it.frameh / 2));
+          fEl.setAttribute('data-scale', String(Math.min(window.innerWidth / it.framew, window.innerHeight / it.frameh)));
+          impressRoot.appendChild(fEl);
         } else {
-          var photo2 = state.photos.filter(function (p) { return p.id === item.photoid; })[0];
-          step.appendChild(el('img', { src: photo2.url, alt: '' }));
+          var rec = photoRecs[it.photoid];
+          if (!rec) { return; }
+          var img = rec.el.querySelector('img');
+          var natW = parseFloat(rec.el.style.width) || 200;
+          // Echtes Seitenverhältnis, falls das Bild schon geladen/gecacht
+          // ist (auf der gerade eben gezeigten Pinnwand meist der Fall) -
+          // sonst grobe Näherung (4:3).
+          var natH = (img.naturalWidth && img.naturalHeight) ? natW * (img.naturalHeight / img.naturalWidth) : natW * 0.75;
+          rec.el.classList.add('step');
+          rec.el.setAttribute('data-x', String(parseFloat(rec.el.style.left) + natW / 2));
+          rec.el.setAttribute('data-y', String(parseFloat(rec.el.style.top) + natH / 2));
+          rec.el.setAttribute('data-scale', String(Math.min(window.innerWidth / natW, window.innerHeight / natH)));
         }
-        impressRoot.appendChild(step);
       });
 
       var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-present-close', title: S.exitpresent }, ['\u2715']);
@@ -2083,6 +2231,28 @@
 
       var api = window.impress('pinnwand-impress');
       api.init();
+
+      // Occlusion: nur Fotos, die den gerade aktiven Rahmen vom Z-Level her
+      // überlappend verdecken würden, werden ausgeblendet - alle anderen
+      // (auch Hintergrund und andere, nicht überlappende Fotos) bleiben
+      // durchgehend sichtbar.
+      function updateOcclusion() {
+        var activeEl = impressRoot.querySelector('.step.active');
+        if (!activeEl) { return; }
+        var activeRect = activeEl.getBoundingClientRect();
+        var activeZ = parseInt(activeEl.style.zIndex || '0', 10);
+        Object.keys(photoRecs).forEach(function (pid) {
+          var rec = photoRecs[pid];
+          if (rec.el === activeEl) { rec.el.classList.remove('ic-present-occluded'); return; }
+          var r = rec.el.getBoundingClientRect();
+          var overlaps = !(r.right < activeRect.left || r.left > activeRect.right ||
+            r.bottom < activeRect.top || r.top > activeRect.bottom);
+          rec.el.classList.toggle('ic-present-occluded', overlaps && rec.z > activeZ);
+        });
+      }
+      impressRoot.addEventListener('impress:stepenter', updateOcclusion);
+      updateOcclusion();
+
       prevBtn.addEventListener('click', function () { api.prev(); });
       nextBtn.addEventListener('click', function () { api.next(); });
       closeBtn.addEventListener('click', function () {
@@ -3311,6 +3481,8 @@
     state.canmoderate = !!res.canmoderate;
     state.studentcansend = !!res.studentcansend;
     state.teachercansend = !!res.teachercansend;
+    state.canusepoststream = state.canmoderate || !!cfg.studentpoststream;
+    state.canuselayers = state.canmoderate || !!cfg.studentlayers;
 
     // Lehrkräfte landen direkt in der für die Bildschirmgröße passenden
     // Übersicht - große Bildschirme in der Pinnwand, kleine (mobile) in der

@@ -396,6 +396,22 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Bestandsfotos bleiben nach dem Update unverändert sichtbar
   (Migrationslogik markiert sie als bereits platziert).
 
+### Vierzehnte Überarbeitung — Rahmen verschiebbar, Präsentations-Zoom-Fix, Layer-Panel
+
+- Rote Rahmen jetzt direkt auf dem Board verschieb- und skalierbar.
+- **Bugfix Präsentation**: Kamera-Zoom war unabhängig von der Fenstergröße
+  berechnet und wirkte dadurch "verkehrt herum" - jetzt korrekt als
+  Verhältnis Fenstergröße zu Rahmengröße (Rahmen bleibt vollständig
+  sichtbar und füllt den Bildschirm in einer Richtung ganz aus, wie in der
+  offiziellen impress.js-Demo).
+- Präsentation zeigt jetzt den ganzen Board-Inhalt (Hintergrund + alle
+  platzierten Fotos) durchgehend; nur Fotos, die den aktuellen Rahmen vom
+  Z-Level her überlappend verdecken würden, werden ausgeblendet.
+- Neues Schichtung-Panel (Z-Reihenfolge der Fotos, per Drag umsortierbar).
+- Neue Einstellungen `studentpoststream`/`studentlayers` (wer darf was).
+- Seitenleisten-Buttons (Faden/Post-Stream/Layer) jetzt unten rechts statt
+  in der unteren Fab-Leiste.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

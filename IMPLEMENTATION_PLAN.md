@@ -351,3 +351,45 @@ vermerkt) weiterhin nicht direkt verschiebbar/skalierbar - nur über das
 Faden-Panel neu anlegbar. Die Verbindungslinie überspringt Segmente
 zwischen Stationen auf unterschiedlichen Boards (kein Board-übergreifendes
 Zeichnen).
+
+---
+
+## Phase 10 — Rahmen verschiebbar, Präsentations-Zoom-Fix, Layer-Panel, Seitenleisten-Ecke ✅
+
+Dritter Feedback-Durchgang. Betrifft: `js/app.js` (Präsentation komplett
+neu, Rahmen-Interaktion, Layer-Panel), `classes/external.php` (neuer
+Endpunkt `update_thread_frame`), neue Instanzeinstellungen
+`studentpoststream`/`studentlayers`.
+
+- [x] **Rote Rahmen jetzt verschieb- und skalierbar** direkt auf dem Board
+  (eigener Resize, unabhängig in Breite/Höhe, da Rahmen nicht wie Fotos
+  seitenverhältnis-gebunden sind); neuer Endpunkt `update_thread_frame`
+  persistiert Position/Größe.
+- [x] **Präsentations-Zoom korrigiert**: `data-width`/`data-height` des
+  impress.js-Root werden auf die aktuelle Fenstergröße gesetzt, damit
+  impress' eingebauter "windowScale"-Faktor genau 1 ergibt - die eigene
+  `data-scale`-Berechnung (`min(Fensterbreite/Rahmenbreite,
+  Fensterhöhe/Rahmenhöhe)`) wirkt dadurch direkt als Kamera-Zoom, ohne
+  verwirrende zusätzliche Umrechnung. Vorher wurde eine von der
+  Fenstergröße unabhängige, letztlich willkürliche Formel (`Breite/400`)
+  verwendet - das war die Ursache der "verkehrt herum" wirkenden Kamera.
+- [x] **Präsentation zeigt jetzt den ganzen Board-Inhalt**: Hintergrund und
+  alle platzierten Fotos (nicht nur die Faden-Stationen) bleiben während
+  der gesamten Präsentation sichtbar; nur Fotos, die den aktuell aktiven
+  Rahmen vom Z-Level her überlappend verdecken würden, werden ausgeblendet
+  (`impress:stepenter`-Event + eigene Overlap-Prüfung per
+  `getBoundingClientRect`).
+- [x] **Neues Schichtung-Panel** (Layer): zeigt platzierte Fotos des
+  aktuellen Boards nach Z-Reihenfolge, per Drag umsortierbar.
+- [x] **Berechtigungs-Einstellungen** `studentpoststream` (Standard: an)
+  und `studentlayers` (Standard: aus) - Lehrkraft steuert in den
+  Aktivitätseinstellungen, wer den Post-Stream bzw. das Schichtung-Panel
+  nutzen darf; serverseitig in `get_stream_photos` durchgesetzt.
+- [x] Seitenleisten-Buttons (Roter Faden/Post-Stream/Layer) aus der unteren
+  Fab-Leiste in eine eigene Ecke unten rechts verschoben.
+
+**Scoping-Hinweis:** Die reale Bildhöhe für den Präsentations-Zoom wird aus
+`img.naturalWidth/naturalHeight` gelesen, falls das Bild bereits geladen
+ist (auf der gerade zuvor gezeigten Pinnwand fast immer der Fall) - sonst
+eine grobe 4:3-Näherung. Ein vollständig asynchrones Vorladen aller Bilder
+vor Präsentationsstart wurde aus Aufwandsgründen nicht umgesetzt.

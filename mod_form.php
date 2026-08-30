@@ -59,6 +59,14 @@ class mod_pinnwand_mod_form extends moodleform_mod {
         $mform->setDefault('studentthreads', 0);
         $mform->addHelpButton('studentthreads', 'studentthreads', 'pinnwand');
 
+        $mform->addElement('advcheckbox', 'studentpoststream', get_string('studentpoststream', 'pinnwand'));
+        $mform->setDefault('studentpoststream', 1);
+        $mform->addHelpButton('studentpoststream', 'studentpoststream', 'pinnwand');
+
+        $mform->addElement('advcheckbox', 'studentlayers', get_string('studentlayers', 'pinnwand'));
+        $mform->setDefault('studentlayers', 0);
+        $mform->addHelpButton('studentlayers', 'studentlayers', 'pinnwand');
+
         $this->standard_coursemodule_elements();
         $this->add_action_buttons();
     }

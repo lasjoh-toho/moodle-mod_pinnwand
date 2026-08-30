@@ -130,6 +130,14 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:submit',
     ],
+    'mod_pinnwand_update_thread_frame' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'update_thread_frame',
+        'description' => 'Speichert Position/Größe eines auf der Pinnwand verschobenen/skalierten Leerrahmens',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:submit',
+    ],
     'mod_pinnwand_delete_thread' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'delete_thread',

@@ -1182,6 +1182,48 @@ class mod_pinnwand_external extends external_api {
         return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
     }
 
+    public static function update_thread_frame_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'itemid' => new external_value(PARAM_INT, 'Item-ID (Leerrahmen)'),
+            'framex' => new external_value(PARAM_FLOAT, 'x'),
+            'framey' => new external_value(PARAM_FLOAT, 'y'),
+            'framew' => new external_value(PARAM_FLOAT, 'Breite'),
+            'frameh' => new external_value(PARAM_FLOAT, 'Höhe'),
+        ]);
+    }
+
+    /**
+     * Speichert Position/Größe eines Leerrahmens, nachdem er auf der
+     * Pinnwand verschoben oder skaliert wurde (siehe renderArrange, roter
+     * Faden auf dem Board).
+     */
+    public static function update_thread_frame($cmid, $itemid, $framex, $framey, $framew, $frameh) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::update_thread_frame_parameters(), [
+            'cmid' => $cmid, 'itemid' => $itemid, 'framex' => $framex, 'framey' => $framey,
+            'framew' => $framew, 'frameh' => $frameh,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $item = $DB->get_record('pinnwand_thread_items', ['id' => $params['itemid'], 'itemtype' => 'frame'], '*', MUST_EXIST);
+        $thread = $DB->get_record('pinnwand_threads', ['id' => $item->threadid], '*', MUST_EXIST);
+        if ($thread->userid != $USER->id || $thread->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'update_thread_frame');
+        }
+        $item->framex = $params['framex'];
+        $item->framey = $params['framey'];
+        $item->framew = max(40, $params['framew']);
+        $item->frameh = max(40, $params['frameh']);
+        $DB->update_record('pinnwand_thread_items', $item);
+
+        return ['success' => true];
+    }
+
+    public static function update_thread_frame_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
     public static function delete_thread_parameters() {
         return new external_function_parameters(['cmid' => new external_value(PARAM_INT, 'Course module id')]);
     }
@@ -1240,11 +1282,13 @@ class mod_pinnwand_external extends external_api {
         };
 
         // Eigene, gepinnte aber noch nicht auf dem Board platzierte Fotos -
-        // der "Warteraum" vor der eigentlichen Leinwand, für alle Personen.
-        $own = $DB->get_records_select(
+        // der "Warteraum" vor der eigentlichen Leinwand. Lehrkraft immer,
+        // Lernende nur mit der Instanzeinstellung "studentpoststream".
+        $canusepoststream = has_capability('mod/pinnwand:viewall', $context) || !empty($instance->studentpoststream);
+        $own = $canusepoststream ? $DB->get_records_select(
             'pinnwand_photos', 'pinnwandid = ? AND userid = ? AND hiddenfromboard = 0 AND boardplaced = 0',
             [$instance->id, $USER->id], 'timecreated DESC', '*', 0, 100
-        );
+        ) : [];
         foreach ($own as $r) {
             $r->firstname = $USER->firstname; $r->lastname = $USER->lastname;
             $export($r, true);

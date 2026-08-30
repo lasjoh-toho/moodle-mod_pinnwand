@@ -222,5 +222,20 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083007, 'pinnwand');
     }
 
+    if ($oldversion < 2026083008) {
+        // Feedback-Durchgang: Berechtigungs-Einstellungen für Post-Stream
+        // und Schichtung-Panel (analog zu studentthreads).
+        $table = new xmldb_table('pinnwand');
+        $field = new xmldb_field('studentpoststream', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'studentthreads');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field2 = new xmldb_field('studentlayers', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'studentpoststream');
+        if (!$dbman->field_exists($table, $field2)) {
+            $dbman->add_field($table, $field2);
+        }
+        upgrade_mod_savepoint(true, 2026083008, 'pinnwand');
+    }
+
     return true;
 }
