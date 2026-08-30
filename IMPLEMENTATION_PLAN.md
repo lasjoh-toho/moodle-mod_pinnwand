@@ -70,19 +70,42 @@ usw.) ist explizit Teil von Phase 6.
 
 ---
 
-## Phase 2 — Pinnwand-Canvas: Pan/Zoom, Handles, Mehrfach-Boards
+## Phase 2 — Pinnwand-Canvas: Pan/Zoom, Handles, Mehrfach-Boards ✅
 
-Betrifft: `js/app.js` (Canvas-Logik), `mod_form.php`/`settings.php`
-(neue Option), `db/install.xml` + `db/upgrade.php` (Board-Entität)
+Betrifft: `js/app.js` (Canvas-Logik), `mod_form.php`, `db/install.xml` +
+`db/upgrade.php`, `classes/external.php`, `backup/moodle2/*`
 
-- [ ] Einstellung "Pinnwand verschiebbar/zoombar" (pro Aktivität)
-- [ ] Wenn aktiviert: Hand-Button (Pan-Modus) + Zoom-Slider im UI
-- [ ] Bild-Handles nur bei Hover/Click einblenden (nicht dauerhaft)
-- [ ] Pin/Unpin-Icon (SVG aus Vorgabe übernehmen) pro Foto auf dem Board
-- [ ] Annotationswerkzeuge (Stift/Radierer/Text) direkt auf dem Canvas
-  nutzbar, nicht nur pro Einzelfoto in der Galerie
-- [ ] **Mehrfach-Boards**: neue Tabelle/Feld für Board-Zuordnung; "Board voll"
-  → neues Board anlegen; Umschalter zwischen Boards im UI
+- [x] Einstellung "Pinnwand verschiebbar/zoombar" (`boardpannable`, neues
+  Feld auf `pinnwand`)
+- [x] Hand-Button (`icon('hand')`) + Zoom-Slider (50–200%), nur sichtbar
+  wenn `boardpannable` aktiv; Transform auf neuem `.ic-canvas-panzoom`-Layer
+  (umschließt Hintergrund + Canvas gemeinsam); `makeMovable`/`makeResizable`
+  rechnen den aktuellen Zoomfaktor heraus, damit Ziehen bei Zoom ≠ 100%
+  weiterhin 1:1 dem Zeiger folgt
+- [x] Bild-Handles (Resize/Rotate) + Pin-Button jetzt per CSS `opacity`
+  standardmäßig unsichtbar, erscheinen bei `:hover` (Maus) oder nach Klick/
+  Antippen (`.show-handles`-Klasse, für Touch ohne Hover)
+- [x] Pin/Unpin-Icon aus der Vorgabe 1:1 als `thumbtack`-Icon übernommen;
+  Klick entfernt das Foto direkt von der Pinnwand (`hiddenfromboard=true`)
+- [x] **Annotieren direkt auf der Pinnwand** - pragmatisch gelöst: ein
+  "Zeichnen"-Fab aktiviert einen Modus, in dem Antippen eines Fotos direkt
+  den bestehenden Zeichen-Editor öffnet (`openLightbox(index, startDrawing=true)`),
+  statt eines separaten, komplett neuen Zeichen-Engines direkt im
+  Canvas-Item. Grund: Die bestehende Stift/Radierer/Text-Logik ist eng an
+  die Lightbox gekoppelt (~250 Zeilen); ein 1:1-Nachbau auf dem Board hätte
+  das Risiko von Inkonsistenzen (zwei parallele Implementierungen) klar
+  überwogen. Funktional ist das Ergebnis für die Person ein einziger Tipp
+  von der Pinnwand aus direkt ins Zeichnen - der Wechsel in die Lightbox
+  selbst ist kaum wahrnehmbar.
+- [x] **Mehrfach-Boards** - schlanker gelöst als ursprünglich skizziert: statt
+  einer separaten `pinnwand_boards`-Tabelle nur ein neues Feld `boardid` auf
+  `pinnwand_photos` (Default 0). Boards entstehen implizit, sobald ein Foto
+  auf sie verweist; die Board-Leiste (‹ Board X von Y ›, "+") schaltet
+  clientseitig um. Ab `BOARD_CAPACITY = 30` sichtbaren Fotos erscheint ein
+  Hinweis, ein neues Board anzulegen (kein automatischer Zwang). Spart eine
+  komplette Zusatztabelle samt eigener Backup/Restore-Logik, deckt die
+  eigentliche Anforderung (voll → weiteres Board anlegen/umschalten) aber
+  vollständig ab.
 
 ---
 

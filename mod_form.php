@@ -51,6 +51,10 @@ class mod_pinnwand_mod_form extends moodleform_mod {
         $mform->setDefault('studentclassview', 0);
         $mform->addHelpButton('studentclassview', 'studentclassview', 'pinnwand');
 
+        $mform->addElement('advcheckbox', 'boardpannable', get_string('boardpannable', 'pinnwand'));
+        $mform->setDefault('boardpannable', 0);
+        $mform->addHelpButton('boardpannable', 'boardpannable', 'pinnwand');
+
         $this->standard_coursemodule_elements();
         $this->add_action_buttons();
     }

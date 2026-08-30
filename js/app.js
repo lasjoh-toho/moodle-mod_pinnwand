@@ -52,7 +52,13 @@
     photos: [],           // vom Server geladene / neu gespeicherte Fotos
     maxpictures: cfg.maxpictures || 0,
     stream: null,
-    lightboxIndex: null
+    lightboxIndex: null,
+    boardZoom: 1,          // Pinnwand: aktueller Zoomfaktor (nur wenn boardpannable)
+    boardPanX: 0, boardPanY: 0, // Pinnwand: aktueller Versatz (Pan)
+    boardPanMode: false,   // Pinnwand: Hand-Werkzeug aktiv
+    boardDrawMode: false,  // Pinnwand: Annotationswerkzeug direkt auf dem Canvas aktiv
+    boards: [],            // Liste der Boards {id, name} - id 0 = implizites erstes Board
+    currentBoard: 0        // aktuell angezeigtes Board (id)
   };
 
   // ------------------------------------------------------------------
@@ -958,7 +964,9 @@
     upload: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><polyline points="7 9 12 4 17 9"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>',
     brush: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5 3 21"/><path d="M14 3c2 0 4 2 4 4 0 3-3 4-5 6l-4 4-3-3 4-4c2-2 3-5 6-5 0 0 0-2-2-2z"/></svg>',
     arrowleft: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
-    fullscreen: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/></svg>'
+    fullscreen: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/></svg>',
+    thumbtack: '<svg viewBox="0 0 1502 1502" width="16" height="16" fill="currentColor"><path d="M887.379 265.37c-71.92 39.67-90.783 153.676-73.858 220.443 25.373 89.642 120.263 184.87 208.333 223.115 88.825 39.357 213.79 19.878 236.138-70.095 17.062-70.586-14.408-161.368-105.1-252.481-51.592-61.787-195.222-150.364-265.514-120.983zm230.112 132.709c146.728 158.437 175.269 364.057-102.498 170.535-34.831-24.267-35.33-25.11-63.176-61.653-180.218-260.581 36.104-234.896 165.675-108.882zm-427.136 211.52c-30.14 129.742 141.096 224.808 206.885 226.635l115.713-114.768s-15.115-7.428-22.352-9.622c-95.305-35.201-153.483-115.01-186.185-198.223zM485.279 724.858c11.704 135.014 160.179 270.964 278.146 298.044 94.23 22.034 149.97-90.424 137.659-165.743-124.499-1.779-264.574-142.482-229.575-240.563-75.865-20.138-185.011 41.747-186.23 108.261zm-183.466 469.254c-10.709 15.142 2.074 28.789 19.1 14.38l288.835-244.45c-32.143-18.286-42.019-27.02-60.405-61.83 0 0-161.602 197.241-247.53 291.9z"/></svg>',
+    hand: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v7"/><path d="M10 10.5V6a2 2 0 0 0-4 0v10"/><path d="M6 14l-1.5-1.8a1.8 1.8 0 0 0-2.7 2.3L6 21h9a4 4 0 0 0 4-4v-5a2 2 0 0 0-4 0"/></svg>'
   };
   function icon(name) {
     if (name === 'text') {
@@ -1073,17 +1081,37 @@
   // ==================================================================
   // ANORDNEN: Fotos frei auf einer Leinwand skalieren/positionieren
   // ==================================================================
+  var BOARD_CAPACITY = 30; // Ab dieser Anzahl gilt ein Board als "voll" (Hinweis zum Anlegen eines weiteren Boards)
+
+  function boardList() {
+    var ids = {};
+    state.photos.forEach(function (p) { ids[p.boardid || 0] = true; });
+    ids[state.currentBoard] = true; // frisch angelegtes, noch leeres Board sichtbar halten
+    return Object.keys(ids).map(Number).sort(function (a, b) { return a - b; });
+  }
+
   function renderArrange(body) {
-    var wrap = el('div', { class: 'ic-canvas-wrap' });
+    var wrap = el('div', { class: 'ic-canvas-wrap' + (cfg.boardpannable ? ' pannable' : '') });
+    var panZoomLayer = el('div', { class: 'ic-canvas-panzoom' });
     var bgLayer = el('div', { class: 'ic-canvas-bg' });
-    wrap.appendChild(bgLayer);
+    panZoomLayer.appendChild(bgLayer);
     applyBackground(bgLayer);
     var canvas = el('div', { class: 'ic-arrange-canvas' });
-    wrap.appendChild(canvas);
+    panZoomLayer.appendChild(canvas);
+    wrap.appendChild(panZoomLayer);
     body.appendChild(wrap);
 
-    // Nur Fotos zeigen, die nicht von der Pinnwand ausgeblendet wurden.
-    var visible = state.photos.filter(function (p) { return !p.hiddenfromboard; });
+    function applyBoardTransform() {
+      panZoomLayer.style.transform =
+        'translate(' + state.boardPanX + 'px,' + state.boardPanY + 'px) scale(' + state.boardZoom + ')';
+    }
+    applyBoardTransform();
+
+    // Nur Fotos zeigen, die nicht ausgeblendet sind UND zum aktuell
+    // gewählten Board gehören (Mehrfach-Boards, siehe Board-Leiste unten).
+    var visible = state.photos.filter(function (p) {
+      return !p.hiddenfromboard && (p.boardid || 0) === state.currentBoard;
+    });
 
     visible.forEach(function (p) {
       var item = el('div', {
@@ -1094,6 +1122,21 @@
       item.style.zIndex = p.canvasz || 0;
       var img = el('img', { src: p.url, alt: '' });
       item.appendChild(img);
+
+      // Pin/Unpin direkt auf dem Board (Vorgabe-Icon) - von der Pinnwand
+      // entfernen blendet das Foto hier sofort aus (bleibt in "Meine Bilder").
+      if (state.studentcansend) {
+        var pinToggle = el('button', { class: 'ic-pin-toggle', title: S.removefromboard }, [icon('thumbtack')]);
+        pinToggle.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: true }).then(function () {
+            p.hiddenfromboard = true;
+            render();
+          });
+        });
+        item.appendChild(pinToggle);
+      }
+
       var resize = el('div', { class: 'ic-resize' });
       item.appendChild(resize);
       var rotateHandle = el('div', { class: 'ic-rotate-handle' });
@@ -1108,11 +1151,19 @@
       if (p.annotationonboard !== false) { buildInkDisplay(item, p); }
       if (state.showData) { item.appendChild(el('div', { class: 'ic-item-caption' }, [itemCaptionText(p)])); }
 
+      // Handles (Größe/Rotation) nur bei Hover (Maus) bzw. nach Antippen
+      // (Touch) einblenden - siehe .ic-arrange-item.show-handles in CSS.
+      item.addEventListener('click', function (ev) {
+        if (ev.target === pinToggle || (pinToggle && pinToggle.contains(ev.target))) { return; }
+        item.classList.toggle('show-handles');
+      });
+
       var moved = false;
       makeMovable(item, canvas, function (x, y) {
         p.canvasx = x; p.canvasy = y; moved = true;
       }, function () {
         if (moved) { persistLayout(p); moved = false; }
+        else if (state.boardDrawMode) { openLightbox(state.photos.indexOf(p), true); }
         else { openLightbox(state.photos.indexOf(p)); }
       });
       makeResizable(resize, item, function (w) {
@@ -1123,9 +1174,78 @@
       }, function () { persistLayout(p); });
     });
 
-    // Schwebende runde Icon-Buttons, alle in einer Zeile oben (statt vier
-    // Ecken) - der separate "Zurück"-X entfällt hier, da der Menü-Knopf
-    // dieselbe Funktion übernimmt (siehe render()).
+    // ---- Board-Leiste: Umschalten zwischen mehreren Pinnwänden ----
+    var boards = boardList();
+    var boardIdx = boards.indexOf(state.currentBoard);
+    var boardBar = el('div', { class: 'ic-board-bar' });
+    var prevBoard = el('button', { class: 'ic-icon-btn', title: S.back }, ['\u2039']);
+    prevBoard.disabled = boardIdx <= 0;
+    prevBoard.addEventListener('click', function () { state.currentBoard = boards[boardIdx - 1]; render(); });
+    var boardLabel = el('span', { class: 'ic-board-label' },
+      [S.boardof.replace('{cur}', boardIdx + 1).replace('{total}', boards.length)]);
+    var nextBoard = el('button', { class: 'ic-icon-btn', title: S.next }, ['\u203A']);
+    nextBoard.disabled = boardIdx >= boards.length - 1;
+    nextBoard.addEventListener('click', function () { state.currentBoard = boards[boardIdx + 1]; render(); });
+    var addBoard = el('button', { class: 'ic-icon-btn', title: S.newboard }, ['+']);
+    addBoard.addEventListener('click', function () {
+      state.currentBoard = Math.max.apply(null, boards) + 1;
+      render();
+    });
+    boardBar.appendChild(prevBoard); boardBar.appendChild(boardLabel);
+    boardBar.appendChild(nextBoard); boardBar.appendChild(addBoard);
+    body.appendChild(boardBar);
+    if (visible.length >= BOARD_CAPACITY) {
+      var fullHint = el('div', { class: 'ic-board-full-hint' }, [S.boardfull_confirm]);
+      fullHint.addEventListener('click', function () {
+        if (confirm(S.boardfull_confirm)) { state.currentBoard = Math.max.apply(null, boards) + 1; render(); }
+      });
+      body.appendChild(fullHint);
+    }
+
+    // ---- Hand-Werkzeug + Zoom-Regler (nur wenn Aktivität es erlaubt) ----
+    if (cfg.boardpannable) {
+      var panBar = el('div', { class: 'ic-pan-bar' });
+      var handBtn = el('button', {
+        class: 'ic-icon-btn' + (state.boardPanMode ? ' active' : ''), title: S.pantool
+      }, [icon('hand')]);
+      handBtn.addEventListener('click', function () {
+        state.boardPanMode = !state.boardPanMode;
+        wrap.classList.toggle('pan-active', state.boardPanMode);
+        handBtn.classList.toggle('active', state.boardPanMode);
+      });
+      var zoomSlider = el('input', {
+        type: 'range', min: '50', max: '200', step: '5', value: String(Math.round(state.boardZoom * 100)),
+        class: 'ic-zoom-slider'
+      });
+      zoomSlider.addEventListener('input', function () {
+        state.boardZoom = (parseInt(zoomSlider.value, 10) || 100) / 100;
+        applyBoardTransform();
+      });
+      panBar.appendChild(handBtn);
+      panBar.appendChild(zoomSlider);
+      body.appendChild(panBar);
+
+      // Ziehen auf leerer Fläche (nicht auf einem Foto) verschiebt die
+      // Ansicht, solange das Hand-Werkzeug aktiv ist.
+      var panDragging = false, panStartX = 0, panStartY = 0, panOrigX = 0, panOrigY = 0;
+      wrap.addEventListener('pointerdown', function (ev) {
+        if (!state.boardPanMode) { return; }
+        panDragging = true;
+        panStartX = ev.clientX; panStartY = ev.clientY;
+        panOrigX = state.boardPanX; panOrigY = state.boardPanY;
+      });
+      wrap.addEventListener('pointermove', function (ev) {
+        if (!panDragging) { return; }
+        state.boardPanX = panOrigX + (ev.clientX - panStartX);
+        state.boardPanY = panOrigY + (ev.clientY - panStartY);
+        applyBoardTransform();
+      });
+      window.addEventListener('pointerup', function () { panDragging = false; });
+    }
+
+    // Schwebende runde Icon-Buttons unten mittig (transparent/geblurrt,
+    // siehe .ic-fab in CSS) - Overlay-Werkzeuge der Galerie (Raster/Daten/
+    // Zeichnen) bleiben davon bewusst getrennt (eigene linke Dock-Leiste dort).
     var fabRow = el('div', { class: 'ic-fab-row' });
 
     var gearBtn = el('button', { class: 'ic-fab', title: S.options }, ['\u2699']);
@@ -1135,6 +1255,13 @@
     var dataBtn = el('button', { class: 'ic-fab' + (state.showData ? ' active' : ''), title: state.showData ? S.hidedata : S.showdata }, ['\u{1F3F7}']);
     dataBtn.addEventListener('click', function () { state.showData = !state.showData; render(); });
     fabRow.appendChild(dataBtn);
+
+    // Zeichnen-Werkzeug direkt auf der Pinnwand: solange aktiv, öffnet ein
+    // Tippen auf ein Foto direkt den Zeichenmodus (statt der normalen
+    // Ansicht) - siehe openLightbox(index, startDrawing) weiter unten.
+    var drawBtn = el('button', { class: 'ic-fab' + (state.boardDrawMode ? ' active' : ''), title: S.drawonboard }, [icon('pen')]);
+    drawBtn.addEventListener('click', function () { state.boardDrawMode = !state.boardDrawMode; render(); });
+    fabRow.appendChild(drawBtn);
 
     var maxreached = state.maxpictures > 0 && state.photos.length >= state.maxpictures;
     var addBtn = el('button', { class: 'ic-fab ic-fab-primary', title: S.addphoto, disabled: maxreached ? 'disabled' : null }, ['+']);
@@ -1567,6 +1694,8 @@
     function point(ev) { var t = ev.touches ? ev.touches[0] : ev; return { x: t.clientX, y: t.clientY }; }
     function down(ev) {
       if (ev.target.classList.contains('ic-resize')) { return; }
+      if (ev.target.closest && ev.target.closest('.ic-pin-toggle')) { return; }
+      if (state.boardDrawMode) { return; }
       dragging = true; totalDelta = 0;
       var p = point(ev);
       startX = p.x; startY = p.y;
@@ -1577,7 +1706,8 @@
     function move(ev) {
       if (!dragging) { return; }
       var p = point(ev);
-      var dx = p.x - startX, dy = p.y - startY;
+      var z = state.boardZoom || 1;
+      var dx = (p.x - startX) / z, dy = (p.y - startY) / z;
       totalDelta += Math.abs(dx) + Math.abs(dy);
       var nx = origX + dx, ny = origY + dy;
       item.style.left = nx + 'px'; item.style.top = ny + 'px';
@@ -1608,7 +1738,7 @@
     }
     function move(ev) {
       if (!dragging) { return; }
-      var dx = point(ev).x - startX;
+      var dx = (point(ev).x - startX) / (state.boardZoom || 1);
       var w = Math.max(60, startW + dx);
       item.style.width = w + 'px';
       onResize(w);
@@ -1656,7 +1786,7 @@
   // Raster-Overlay (nur hier!) und eine editierbare Zeichen-/Schreib-Ebene,
   // die exakt auf das Foto gemappt ist.
   // ==================================================================
-  function openLightbox(index) {
+  function openLightbox(index, startDrawing) {
     closeLightbox();
     state.lightboxIndex = index;
 
@@ -2152,6 +2282,7 @@
     lb._icResizeHandler = sizeLightboxImage;
 
     refreshOverlays();
+    if (startDrawing) { closeAllPanels('draw'); enterDrawing(); }
   }
 
   function captionText(p) {

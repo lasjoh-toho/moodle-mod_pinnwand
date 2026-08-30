@@ -200,6 +200,7 @@ class mod_pinnwand_external extends external_api {
                 'canvasw' => (float) $r->canvasw,
                 'canvasrot' => (float) $r->canvasrot,
                 'canvasz' => (int) $r->canvasz,
+                'boardid' => (int) $r->boardid,
             ];
         }
         return [
@@ -306,6 +307,7 @@ class mod_pinnwand_external extends external_api {
                 'canvasw' => new external_value(PARAM_FLOAT, 'Breite'),
                 'canvasrot' => new external_value(PARAM_FLOAT, 'Rotation'),
                 'canvasz' => new external_value(PARAM_INT, 'Ebene'),
+                'boardid' => new external_value(PARAM_INT, 'Board-ID (0 = erstes/Standard-Board)'),
             ])),
         ]);
     }
@@ -496,13 +498,15 @@ class mod_pinnwand_external extends external_api {
             'w' => new external_value(PARAM_FLOAT, 'Breite'),
             'rot' => new external_value(PARAM_FLOAT, 'Rotation'),
             'z' => new external_value(PARAM_INT, 'Ebene'),
+            'boardid' => new external_value(PARAM_INT, 'Board-ID', VALUE_DEFAULT, 0),
         ]);
     }
 
-    public static function update_layout($cmid, $photoid, $x, $y, $w, $rot, $z) {
+    public static function update_layout($cmid, $photoid, $x, $y, $w, $rot, $z, $boardid = 0) {
         global $DB, $USER;
         $params = self::validate_parameters(self::update_layout_parameters(), [
             'cmid' => $cmid, 'photoid' => $photoid, 'x' => $x, 'y' => $y, 'w' => $w, 'rot' => $rot, 'z' => $z,
+            'boardid' => $boardid,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
 
@@ -515,6 +519,7 @@ class mod_pinnwand_external extends external_api {
         $photo->canvasw = max(40, $params['w']);
         $photo->canvasrot = $params['rot'];
         $photo->canvasz = $params['z'];
+        $photo->boardid = $params['boardid'];
         $DB->update_record('pinnwand_photos', $photo);
 
         return ['success' => true];

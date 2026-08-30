@@ -117,5 +117,23 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026082411, 'pinnwand');
     }
 
+    if ($oldversion < 2026083000) {
+        // Phase 2: Pinnwand verschiebbar/zoombar (Einstellung) + Mehrfach-Boards
+        // (Zuordnung einzelner Fotos zu einem von mehreren Boards).
+        $table = new xmldb_table('pinnwand');
+        $field = new xmldb_field('boardpannable', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'studentclassview');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $table = new xmldb_table('pinnwand_photos');
+        $field = new xmldb_field('boardid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'canvasz');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026083000, 'pinnwand');
+    }
+
     return true;
 }

@@ -16,7 +16,7 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
         $pinnwand = new backup_nested_element('pinnwand', ['id'], [
             'name', 'intro', 'introformat', 'maxpictures', 'allowconsent',
             'boarddefault', 'studentcansend', 'teachercansend', 'studentclassview',
-            'consenttext', 'timecreated', 'timemodified',
+            'boardpannable', 'consenttext', 'timecreated', 'timemodified',
         ]);
 
         // Fotos - personenbezogen, daher nur mit "userinfo" gesichert.
@@ -27,7 +27,7 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
             'sourceauthor', 'sourceyear', 'sourceepoch', 'sourceplace',
             'sourceorigauthor', 'sourcetitle', 'gridcolor', 'hiddenfromboard',
             'annotationonboard', 'annotationdata', 'canvasx', 'canvasy',
-            'canvasw', 'canvasrot', 'canvasz', 'timecreated',
+            'canvasw', 'canvasrot', 'canvasz', 'boardid', 'timecreated',
         ]);
 
         $pinnwand->add_child($photos);

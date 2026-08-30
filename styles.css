@@ -168,6 +168,10 @@
   position: relative;
   overflow: auto;
 }
+.ic-canvas-wrap.pannable { overflow: hidden; touch-action: none; }
+.ic-canvas-wrap.pan-active { cursor: grab; }
+.ic-canvas-wrap.pan-active:active { cursor: grabbing; }
+.ic-canvas-panzoom { transform-origin: 0 0; will-change: transform; }
 .ic-canvas-bg {
   /* inset:0 füllt zunächst genau den sichtbaren Bereich; min-width/-height
      stellt sicher, dass mindestens die Pinnwand-Koordinatenfläche (1000x1400)
@@ -191,6 +195,23 @@
 .ic-fab.active { background: var(--ic-accent); }
 .ic-fab-primary { background: var(--ic-accent); }
 .ic-fab[disabled] { opacity: .4; }
+.ic-board-bar {
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 15;
+  display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 20px;
+  background: rgba(20,21,24,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.ic-board-label { font-size: .8rem; color: var(--ic-text); min-width: 84px; text-align: center; }
+.ic-board-full-hint {
+  position: absolute; top: 100px; left: 50%; transform: translateX(-50%); z-index: 15;
+  max-width: 80%; padding: 8px 14px; border-radius: 10px; font-size: .8rem;
+  background: rgba(224,80,63,.85); color: #fff; text-align: center;
+}
+.ic-pan-bar {
+  position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%); z-index: 15;
+  display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 20px;
+  background: rgba(20,21,24,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.ic-zoom-slider { width: 120px; }
 .ic-bg-panel {
   position: fixed; left: 12px; right: 12px; bottom: 70px; z-index: 30;
   background: var(--ic-panel); border-radius: 12px; padding: 12px 14px;
@@ -209,14 +230,27 @@
 .ic-arrange-item .ic-resize {
   position: absolute; right: -10px; bottom: -10px; width: 26px; height: 26px;
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff;
+  opacity: 0; transition: opacity .15s;
 }
 .ic-arrange-item .ic-rotate-handle {
   position: absolute; left: 50%; top: -28px; transform: translateX(-50%);
   width: 22px; height: 22px; background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff;
+  opacity: 0; transition: opacity .15s;
 }
 .ic-arrange-item .ic-rotate-handle::after {
   content: ''; position: absolute; left: 50%; top: 100%; width: 1px; height: 14px;
-  background: rgba(255,255,255,.6); transform: translateX(-50%);
+  background: rgba(255,255,255,.6); transform: translateX(-50%); opacity: 0; transition: opacity .15s;
+}
+.ic-arrange-item:hover .ic-resize, .ic-arrange-item:hover .ic-rotate-handle, .ic-arrange-item:hover .ic-rotate-handle::after,
+.ic-arrange-item.show-handles .ic-resize, .ic-arrange-item.show-handles .ic-rotate-handle, .ic-arrange-item.show-handles .ic-rotate-handle::after,
+.ic-arrange-item:hover .ic-pin-toggle, .ic-arrange-item.show-handles .ic-pin-toggle {
+  opacity: 1;
+}
+.ic-pin-toggle {
+  position: absolute; left: -10px; top: -10px; width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid #fff; background: rgba(20,21,24,.85); color: #fff; padding: 0;
+  display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s;
+  z-index: 5;
 }
 .ic-arrange-item canvas.ic-annot-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
