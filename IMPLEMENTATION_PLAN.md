@@ -246,16 +246,27 @@ gerade aktiven Board. Ergänzt (Client + `save_photo`-Endpunkt).
 
 ---
 
-## Phase 7 — Galerie: Politur
+## Phase 7 — Galerie: Politur ✅
 
 Betrifft: `js/app.js` (Lightbox), `styles.css`
 
-- [ ] Zurück-Navigation per Klick auf schwarzen Hintergrund (nicht bei
-  aktiven Annotationen/Rahmen um das Bild, nicht in Button-Safezones)
-- [ ] Annotationen/Striche exakt gemappt (Koordinaten-Audit, ggf. gleicher
-  Fix wie Phase 6 Zuschneide-Rahmen)
-- [ ] Doppelklick auf Farbfeld → Farbe neu definieren, **nur für aktuelles
-  Bild** gültig
+- [x] **Audit** Zurück-Navigation per Klick auf schwarzen Hintergrund: bereits
+  korrekt implementiert (`viewport`-Klick nur wenn `ev.target === viewport`,
+  Zoom ≤ 1, nicht während des Zeichnens; Buttons/Dock liegen als Geschwister
+  außerhalb von `viewport`, Grid-Overlay hat `pointer-events: none`) - kein
+  Code-Änderungsbedarf, an dieser Stelle nur geprüft/bestätigt
+- [x] **Bugfix** Annotationen/Striche: die Zeichenebene (`inkCanvas`) wurde
+  bei einem Fenster-Resize **während des aktiven Zeichnens** nicht neu
+  skaliert - ihre CSS-Anzeigegröße folgte dem Bild (per `inset:0`), die
+  interne Pixelauflösung blieb aber auf dem alten Stand hängen, wodurch
+  Striche gegenüber dem Bild verzerrt/verschoben wirkten. Jetzt wird bei
+  Resize neu skaliert und neu gezeichnet (Cleanup beim Verlassen des
+  Zeichenmodus ergänzt, analog zum bestehenden `_icUpHandler`-Muster)
+- [x] Doppelklick auf ein Farbfeld öffnet einen nativen Farbwähler zur
+  Neudefinition - wirkt über eine pro Zeichensitzung kopierte Palette
+  (`sessionColors`) **nur für das aktuell bearbeitete Foto**; beim nächsten
+  Öffnen (anderes Foto oder erneutes Bearbeiten) gilt wieder die
+  Standardpalette
 
 ---
 

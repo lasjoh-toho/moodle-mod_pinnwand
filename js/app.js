@@ -2738,6 +2738,10 @@
 
       var p = state.photos[state.lightboxIndex];
       strokes = parseStrokes(p);
+      // Eigene Kopie der Farbpalette für diese Zeichensitzung - eine per
+      // Doppelklick neu definierte Farbe (siehe unten) wirkt dadurch nur
+      // für das aktuell bearbeitete Foto, nicht global/dauerhaft.
+      var sessionColors = INK_COLORS.slice();
       inkCanvas = document.createElement('canvas');
       inkCanvas.className = 'ic-annot-layer ic-annot-editing';
       imgbox.appendChild(inkCanvas);
@@ -2749,6 +2753,8 @@
         redraw();
       }
       sizeCanvas();
+      inkCanvas._icResizeHandler = sizeCanvas;
+      window.addEventListener('resize', sizeCanvas);
 
       var toolbar = el('div', { class: 'ic-ink-dock' });
       var penBtn = el('button', { class: 'ic-btn ic-btn-primary', title: S.draw_pen }, [icon('pen')]);
@@ -2772,15 +2778,31 @@
         textBtn.style.color = inkColor;
         toolbar.querySelectorAll('.ic-ink-size span').forEach(function (dot) { dot.style.background = inkColor; });
       }
-      INK_COLORS.forEach(function (c) {
+      INK_COLORS.forEach(function (c, colorIdx) {
         var sw = el('button', {
-          class: 'ic-ink-swatch' + (c === inkColor ? ' active' : ''), style: 'background:' + c
+          class: 'ic-ink-swatch' + (sessionColors[colorIdx] === inkColor ? ' active' : ''), style: 'background:' + sessionColors[colorIdx]
         });
         sw.addEventListener('click', function () {
-          inkColor = c;
+          inkColor = sessionColors[colorIdx];
           colorRow.querySelectorAll('.ic-ink-swatch').forEach(function (s) { s.classList.remove('active'); });
           sw.classList.add('active');
           updateToolColor();
+        });
+        // Doppelklick: diese Palettenfarbe neu definieren - gilt nur für
+        // die aktuelle Zeichensitzung/dieses Foto (sessionColors), nicht
+        // global für alle Fotos.
+        sw.addEventListener('dblclick', function (ev) {
+          ev.stopPropagation();
+          var picker = el('input', { type: 'color', value: sessionColors[colorIdx], style: 'position:absolute;opacity:0;pointer-events:none' });
+          document.body.appendChild(picker);
+          picker.addEventListener('input', function () {
+            sessionColors[colorIdx] = picker.value;
+            sw.style.background = picker.value;
+            if (inkColor === sw._icPrevColor) { inkColor = picker.value; updateToolColor(); }
+          });
+          picker.addEventListener('change', function () { picker.remove(); });
+          sw._icPrevColor = sessionColors[colorIdx];
+          picker.click();
         });
         colorRow.appendChild(sw);
       });
@@ -2917,6 +2939,7 @@
       }
       if (inkCanvas) {
         if (inkCanvas._icUpHandler) { window.removeEventListener('mouseup', inkCanvas._icUpHandler); }
+        if (inkCanvas._icResizeHandler) { window.removeEventListener('resize', inkCanvas._icResizeHandler); }
         inkCanvas.remove(); inkCanvas = null; inkCtx = null;
       }
       currentStroke = null;
