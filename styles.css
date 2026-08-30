@@ -454,6 +454,10 @@
   display: flex; align-items: center; gap: 10px; padding: 6px 0;
 }
 .ic-moderate-thumb { position: relative; flex: 0 0 auto; }
+.ic-thumb-cluster { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.ic-thumb-cluster-controls { display: none; flex-direction: column; gap: 6px; align-items: flex-start; }
+.ic-thumb-cluster-controls .ic-me-check { font-size: .7rem; padding: 3px 8px; white-space: nowrap; }
+.ic-thumb-cluster-controls .ic-btn-danger { padding: 6px 10px; }
 .ic-moderate-thumb img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; display: block; }
 .ic-thumb-btn {
   position: absolute; width: 22px; height: 22px; border-radius: 50%; border: none;

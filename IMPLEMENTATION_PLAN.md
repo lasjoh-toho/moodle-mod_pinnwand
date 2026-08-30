@@ -179,13 +179,20 @@ Betrifft: `classes/external.php` (neue Endpunkte + `sourcephotoid`-Feld),
 
 ---
 
-## Phase 5 — Klassenansicht: Layout-Feinschliff
+## Phase 5 — Klassenansicht: Layout-Feinschliff ✅
 
 Betrifft: `js/app.js` (Klassenansicht), `styles.css`
 *(Bugfix aus Phase 0 ist hier bereits enthalten/vorausgesetzt)*
 
-- [ ] Löschen-Button + Pinnwand-Checkbox pro Bild direkt neben dem Thumbnail;
-  auf kleinen Bildschirmen **im** Thumbnail platziert (Overlay)
+- [x] Löschen-Button + Pinnwand-Checkbox pro Bild direkt neben dem Thumbnail
+  (neues `.ic-thumb-cluster`) statt wie zuvor am Zeilenende bzw. in den
+  Metadaten verstreut; auf kleinen Bildschirmen weiterhin **im** Thumbnail
+  als Overlay (unverändert, war bereits korrekt)
+
+**Nebenbei gefundener Bugfix (Regression aus Phase 2):** `persistLayout()`
+übergab `boardid` nicht an `update_layout` - dadurch wurde beim Verschieben/
+Skalieren/Rotieren eines Fotos dessen Board-Zuordnung serverseitig
+stillschweigend auf 0 zurückgesetzt. Behoben.
 
 ---
 

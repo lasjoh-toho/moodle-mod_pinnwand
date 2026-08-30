@@ -1748,6 +1748,7 @@
     }
     function renderRow(container, p, canedit, candelete) {
       var row = el('div', { class: 'ic-moderate-row' });
+      var thumbCluster = el('div', { class: 'ic-thumb-cluster' });
       var thumbWrap = el('div', { class: 'ic-moderate-thumb' });
       var img = el('img', { src: p.url, alt: '' });
       thumbWrap.appendChild(img);
@@ -1781,7 +1782,38 @@
         });
         thumbWrap.appendChild(delOverlay);
       }
-      row.appendChild(thumbWrap);
+      thumbCluster.appendChild(thumbWrap);
+
+      // Auf breiten Bildschirmen: ausführliche Checkbox + Löschen-Button
+      // direkt neben (nicht mehr innerhalb der Metadaten-Zeile bzw. am
+      // Ende der Zeile) - siehe .ic-thumb-cluster-controls in CSS.
+      var wideControls = el('div', { class: 'ic-thumb-cluster-controls ic-wide-only' });
+      if (candelete && state.teachercansend) {
+        var pinLabel = el('label', { class: 'ic-me-check' });
+        var pinCheck = el('input', { type: 'checkbox' });
+        pinCheck.checked = !p.hiddenfromboard;
+        pinCheck.addEventListener('change', function () {
+          var newHidden = !pinCheck.checked;
+          callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: newHidden }).then(function () {
+            p.hiddenfromboard = newHidden;
+          }).catch(function () { pinCheck.checked = !pinCheck.checked; });
+        });
+        pinLabel.appendChild(pinCheck);
+        pinLabel.appendChild(document.createTextNode(S.pinboard));
+        wideControls.appendChild(pinLabel);
+      }
+      if (candelete) {
+        var del = el('button', { class: 'ic-btn ic-btn-danger' }, ['\u2715']);
+        del.addEventListener('click', function () {
+          if (!confirm(S.deletephoto_confirm_other)) { return; }
+          callAjax('mod_pinnwand_delete_photo', { cmid: cfg.cmid, photoid: p.id }).then(function () {
+            row.remove();
+          });
+        });
+        wideControls.appendChild(del);
+      }
+      thumbCluster.appendChild(wideControls);
+      row.appendChild(thumbCluster);
       var meta = el('div', { class: 'ic-moderate-meta' });
       if (sortMode !== 'user') {
         meta.appendChild(el('div', { class: 'ic-moderate-sub' }, [p.userfullname]));
@@ -1848,33 +1880,7 @@
       fieldsRow2.appendChild(editField('sourceorigauthor', 'sourceorigauthor', p.sourceorigauthor));
       meta.appendChild(fieldsRow2);
       meta.appendChild(el('div', { class: 'ic-moderate-sub' }, [S.uploaded_on + ': ' + formatDate(p.timecreated)]));
-
-      if (candelete && state.teachercansend) {
-        var pinLabel = el('label', { class: 'ic-me-check ic-wide-only' });
-        var pinCheck = el('input', { type: 'checkbox' });
-        pinCheck.checked = !p.hiddenfromboard;
-        pinCheck.addEventListener('change', function () {
-          var newHidden = !pinCheck.checked;
-          callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: newHidden }).then(function () {
-            p.hiddenfromboard = newHidden;
-          }).catch(function () { pinCheck.checked = !pinCheck.checked; });
-        });
-        pinLabel.appendChild(pinCheck);
-        pinLabel.appendChild(document.createTextNode(S.pinboard));
-        meta.appendChild(pinLabel);
-      }
       row.appendChild(meta);
-
-      if (candelete) {
-        var del = el('button', { class: 'ic-btn ic-btn-danger ic-wide-only' }, ['\u2715']);
-        del.addEventListener('click', function () {
-          if (!confirm(S.deletephoto_confirm_other)) { return; }
-          callAjax('mod_pinnwand_delete_photo', { cmid: cfg.cmid, photoid: p.id }).then(function () {
-            row.remove();
-          });
-        });
-        row.appendChild(del);
-      }
       container.appendChild(row);
     }
 
@@ -1935,7 +1941,8 @@
 
   function persistLayout(p) {
     callAjax('mod_pinnwand_update_layout', {
-      cmid: cfg.cmid, photoid: p.id, x: p.canvasx, y: p.canvasy, w: p.canvasw, rot: p.canvasrot || 0, z: p.canvasz || 0
+      cmid: cfg.cmid, photoid: p.id, x: p.canvasx, y: p.canvasy, w: p.canvasw, rot: p.canvasrot || 0, z: p.canvasz || 0,
+      boardid: p.boardid || 0
     }).catch(function () { /* still keep local state */ });
   }
 
