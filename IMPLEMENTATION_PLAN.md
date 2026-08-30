@@ -12,6 +12,12 @@ gegliedert, jede mit Bezug auf die betroffenen Dateien. Reihenfolge = Priorität
 
 Status-Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` erledigt
 
+> **Status: Alle Phasen (0–8) umgesetzt und gepusht.** Nächster sinnvoller
+> Schritt ist kein Code mehr, sondern das manuelle Durchspielen von
+> `TESTMATRIX.md` auf einer echten Testinstanz. Neue Feature-Wünsche bitte
+> als neue Phase am Ende dieses Dokuments anhängen statt bestehende
+> Abschnitte umzuschreiben.
+
 ---
 
 ## Phase 0 — Housekeeping & Rebranding ✅
@@ -270,21 +276,29 @@ Betrifft: `js/app.js` (Lightbox), `styles.css`
 
 ---
 
-## Phase 8 — Test & Rollout
+## Phase 8 — Test & Rollout ✅
 
-- [ ] `version.php` hochzählen, `db/upgrade.php`-Schritte für alle neuen
-  Felder/Tabellen ergänzen
-- [ ] Manuelle Testmatrix: großer Monitor/Lehrkraft, kleiner Monitor/
-  Lehrkraft, Lernender-Rolle, Mobilgerät (eine Zeile Buttons prüfen)
-- [ ] `README.md`: Änderungsprotokoll fortschreiben (bestehendes Format
-  "Überarbeitung" beibehalten)
+- [x] `version.php` hochgezählt, `db/upgrade.php`-Schritte für alle neuen
+  Felder/Tabellen ergänzt (lückenlose Savepoint-Kette geprüft)
+- [x] Manuelle Testmatrix als eigenes Dokument `TESTMATRIX.md` angelegt
+  (Rolle × Bildschirmgröße, plus Cross-Cutting-Checks wie Backup/Restore
+  und Release-Workflow) - Durchführung auf der echten Testinstanz steht
+  noch aus
+- [x] `README.md`: Änderungsprotokoll fortgeschrieben ("Elfte
+  Überarbeitung"), "Bekannte Grenzen" aktualisiert (u. a. veralteten
+  Hinweis zur Rotation entfernt, neue Scoping-Punkte aus Phasen 2–7
+  ergänzt)
 
 ---
 
-## Offene Rückfragen (vor Umsetzung klären)
+## Offene Rückfragen — inzwischen durch Umsetzung beantwortet
 
-- Post-Stream und Roter-Faden-Panel teilen sich laut Vorgabe denselben
-  Bereich rechts — sollen sie als Tabs/Umschalter im selben Slot koexistieren?
-- Mehrfach-Boards: pro Aktivität global oder pro Nutzer*in getrennt?
-- Impress.js-Präsentation: nur Lehrkraft startbar, oder auch Lernenden mit
-  Faden-Recht?
+- **Post-Stream/Faden-Panel im selben Bereich?** Ja - beide teilen sich den
+  rechten Rand und schließen sich gegenseitig beim Öffnen (kein Tab-UI,
+  einfacher Toggle). Siehe Phase 4.
+- **Mehrfach-Boards global oder pro Nutzer*in?** Pro Nutzer*in - jede Person
+  hat ihre eigenen Boards (`boardid` ist an `pinnwand_photos.userid`
+  gekoppelt, nicht instanzweit geteilt). Siehe Phase 2.
+- **Präsentation nur Lehrkraft oder auch berechtigte Lernende?** Wer einen
+  eigenen Faden anlegen darf (`studentthreads`), darf ihn auch präsentieren -
+  dieselbe Berechtigung deckt beides ab. Siehe Phase 3.

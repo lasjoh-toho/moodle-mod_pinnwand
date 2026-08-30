@@ -12,15 +12,17 @@ konfigurierbares Maximum an Bildern pro Lernender/m.
 1. Diesen Ordner als `pinnwand` nach `<moodle>/mod/` kopieren
    (Ergebnis: `<moodle>/mod/pinnwand/version.php` etc.).
 2. Als Admin einloggen → Website-Administration → Benachrichtigungen,
-   Installation bestätigen (legt die Tabellen `pinnwand` und
-   `pinnwand_photos` an).
+   Installation bestätigen (legt die Tabellen `pinnwand`, `pinnwand_photos`,
+   `pinnwand_threads` und `pinnwand_thread_items` an).
 3. Aktivität "Pinnwand" ist danach in jedem Kurs hinzufügbar.
 
 ## Technische Hinweise
 
-- **Kein Standard-Moodle-Layout**: `view.php` nutzt `$PAGE->set_pagelayout('embedded')`
-  und rendert eine eigenständige Vollbild-App (`styles.css` + `js/app.js`), damit
-  die Bedienung auf dem Smartphone nicht durch Navigation/Blöcke gestört wird.
+- **Layout**: `view.php` unterscheidet zwei Fälle - im Kurs-Bearbeiten-Modus
+  ein normaler Moodle-View (`incourse`, mit Zugriff auf die
+  Aktivitätseinstellungen), sonst direkt die eigenständige Vollbild-App
+  (`embedded`, `styles.css` + `js/app.js`), damit die Bedienung auf dem
+  Smartphone nicht durch Navigation/Blöcke gestört wird.
 - **Kein Build-Schritt**: `js/app.js` ist bewusst als einfaches, direkt
   eingebundenes Skript geschrieben (kein AMD/RequireJS), das über Moodles
   Standard-AJAX-Endpunkt (`lib/ajax/service.php`) mit den in
@@ -31,8 +33,14 @@ konfigurierbares Maximum an Bildern pro Lernender/m.
 - **Speicherung**: Bilder werden serverseitig aus dem vom Client gerenderten
   Canvas (inkl. Zuschnitt, Farbkorrektur und eingebranntem Raster) als JPEG
   über die Moodle File API gespeichert (`mod_pinnwand`/`photo`).
-- **Rechte**: `mod/pinnwand:submit` (Fotos aufnehmen), `mod/pinnwand:view`,
-  `mod/pinnwand:viewall` (Lehrkraft-Übersicht `manage.php`), `mod/pinnwand:manage`.
+- **Vendor-Bibliothek**: `js/vendor/impress.js` (MIT-lizenziert, unverändert
+  von github.com/impress/impress.js übernommen, siehe `thirdpartylibs.xml`)
+  für den Präsentationsmodus des Roten Fadens - wird nur bei Bedarf per
+  `<script>`-Tag nachgeladen, nicht bei jedem Seitenaufruf.
+- **Rechte**: `mod/pinnwand:submit` (Fotos aufnehmen, Faden-Stationen
+  hinzufügen), `mod/pinnwand:view`, `mod/pinnwand:viewall` (Lehrkraft-
+  Übersicht `manage.php`, Post-Stream, Fotos anderer auf eigenes Board
+  übernehmen), `mod/pinnwand:manage`.
 
 ## Änderungen in dieser Version
 
@@ -297,23 +305,61 @@ Aus Aufwandsgründen bewusst noch offen - gerne als nächsten Schritt:
 ### Weiterhin zurückgestellt
 
 - Galerie-Dateneingabe im gleichen kompakten Stil wie die Klassenansicht.
-- Eigenständige, board-weite Zeichenwerkzeuge direkt auf der Pinnwand
-  (nicht an ein einzelnes Foto gebunden).
-- Neues "Text im Rahmen"-Werkzeug (mehrzeilig, WYSIWYG) zusätzlich zum
-  bisherigen einzeiligen Text-Tool.
-- "Neu"-Button mit Auswahl Aufnehmen/Upload/URL + optionale
-  Bildbearbeitung nur bei Kamera-Fotos.
-- Gruppieren/Verknüpfen von Fotos auf der Pinnwand.
+- Gruppieren/Verknüpfen von Fotos auf der Pinnwand (über den Roten Faden
+  hinaus).
 
-## Bekannte Grenzen dieser ersten Version
+### Elfte Überarbeitung — Pinnwand-Redesign (Phasen 0–7)
+
+Umfangreichste Überarbeitung bisher, siehe `IMPLEMENTATION_PLAN.md` für alle
+Details und Scoping-Entscheidungen. In Kurzform:
+
+- **Lizenz** ergänzt (nicht frei für kommerzielle Nutzung), Umbenennung
+  "Bildaufnahme" → "Pinnwand" abgeschlossen, Backup/Restore-Grundgerüst
+  nachgerüstet (fehlte bisher komplett trotz `FEATURE_BACKUP_MOODLE2`).
+- **App-Shell**: persistente Kopfzeile (Titel/Ansicht mittig, 4
+  Navigations-Buttons rechts, Zurück/Vollbild links), responsive
+  Einstiegslogik (Bearbeiten-Modus → Moodle-View, sonst App-Vollbild).
+- **Pinnwand-Canvas**: optionales Hand-Werkzeug + Zoom-Slider, Handles nur
+  bei Hover/Klick, Pin/Unpin-Icon pro Foto, Zeichnen direkt auf dem Board,
+  Mehrfach-Boards pro Person.
+- **Roter Faden**: geordnete Foto-/Rahmen-Sequenz pro Person (Lehrkraft
+  immer, Lernende optional), Drag-Reorder-Panel, `impress.js`-Präsentation.
+- **Post-Stream**: gestapelte Karten mit neuen Einreichungen anderer
+  Lernender für die Lehrkraft, per Drag als Kopie aufs eigene Board.
+- **Klassenansicht**: Löschen/Pinnwand-Checkbox direkt neben dem Thumbnail
+  gruppiert.
+- **Editor**: Bild füllt immer eine Richtung zu 100 % (auch kleine Bilder),
+  Zuschneide-/Perspektiv-Rahmen bleibt bei Größenänderungen exakt am Bild,
+  Pfeil/Haken-Buttons statt Textlabels, neues Wortfeld-Werkzeug
+  (Textrahmen mit Presets/Palette/Schriftarten/Auto-Fit), Rückseiten-
+  Beschriftung (Doppelklick zum Umblättern).
+- **Galerie**: Zeichenebene bleibt bei Fenster-Resize während des Zeichnens
+  exakt am Bild (war zuvor nicht der Fall), Farbfelder per Doppelklick neu
+  definierbar (nur für das aktuelle Foto).
+- Nebenbei gefundene Regressions-Bugfixes: `boardid` fehlte in mehreren
+  Speicher-/Aktualisierungs-Aufrufen und wurde dadurch stillschweigend auf
+  0 zurückgesetzt.
+
+## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
-- Rotation der Fotos auf der Anordnungs-Leinwand ist im Datenmodell vorbereitet,
-  aber in der UI (noch) nicht per Touch-Geste bedienbar (nur Verschieben/Skalieren).
-- Die Leinwand hat eine feste Größe (1000×1400px); ein Export als Bild/PDF ist
-  nicht enthalten und wäre ein guter nächster Ausbauschritt.
+- Die Leinwand hat pro Board eine feste Größe (1000×1400px); ein Export als
+  Bild/PDF ist nicht enthalten und wäre ein guter nächster Ausbauschritt.
 - Kamera-Zugriff per `getUserMedia` benötigt HTTPS; auf `http://`-Testinstanzen
   greift automatisch der Datei-Upload-Fallback (`capture="environment"`).
-- Es wurde noch nicht gegen eine echte Moodle-Instanz getestet – vor
-  Produktiveinsatz bitte auf einer Testinstanz prüfen (insbesondere
-  Berechtigungen, Backup/Restore, Privacy-API-Vollständigkeit).
+- Persönliche Hintergrundbilder werden beim Kurs-Restore ohne Nutzer-ID-
+  Remapping wiederhergestellt (funktioniert nur korrekt, wenn Nutzer-IDs
+  zwischen Quelle und Ziel gleich bleiben) - siehe `backup/moodle2/*`.
+- `sourcephotoid` (Post-Stream-Herkunft) und `backphotoid` (Rückseite)
+  werden beim Restore ebenfalls nicht umgemappt - rein informationelle
+  Felder ohne Auswirkung auf Anzeige oder Berechtigungen.
+- Post-Stream ist ein 15-Sekunden-Poll, kein Echtzeit-Push.
+- Textobjekte im Wortfeld sind verschiebbar, aber nicht einzeln drehbar;
+  Auto-Fit der Textgröße ist einzeilig (kein automatischer Zeilenumbruch).
+- Eine Faden-Präsentation über mehrere Boards hinweg übernimmt deren
+  Koordinaten unverändert, was bei stark abweichenden Board-Layouts zu
+  großen Sprüngen führen kann.
+- Ausführliche manuelle Testmatrix vor Produktiveinsatz: siehe
+  `TESTMATRIX.md` (insbesondere Berechtigungen, Backup/Restore,
+  Privacy-API-Vollständigkeit wurden noch nicht gegen eine echte
+  Moodle-Instanz durchgespielt).
