@@ -144,19 +144,38 @@ vendored + `thirdpartylibs.xml`), `js/app.js` (Panel + Präsentation)
 
 ---
 
-## Phase 4 — Post-Stream (Einreichungs-Warteschlange)
+## Phase 4 — Post-Stream (Einreichungs-Warteschlange) ✅
 
-Betrifft: neues JS-UI-Modul (rechter Rand), CSS-Animationen, ggf. Polling/
-Subscription auf neue Einreichungen
+Betrifft: `classes/external.php` (neue Endpunkte + `sourcephotoid`-Feld),
+`js/app.js` (neues Panel), `styles.css`
 
-- [ ] Neue Einreichungen erscheinen als Karten am rechten Rand, Bewegung
-  von unten nach oben
-- [ ] Sticky-Stack-Verhalten am oberen Rand: ältere Karten stapeln sich,
-  bleiben als schmale Titelzeile sichtbar, bis sie ganz herausgeschoben
-  werden; **zwei** Karten am unteren Rand immer vollständig sichtbar
-- [ ] Karten-Breite per Drag änderbar
-- [ ] Schmaler Filter oben im Stream
-- [ ] Drag einer Karte auf das Board = Pin-Aktion (verbindet mit Phase 2)
+- [x] Neue Einreichungen anderer Lernender erscheinen als Karten am rechten
+  Rand der Lehrkraft-Pinnwand (`get_stream_photos`, gepollt alle 15s
+  solange das Panel offen ist - echtes Server-Push wäre eine
+  WebSocket/Long-Poll-Infrastruktur, die den Rahmen hier sprengen würde)
+- [x] Sticky-Stack: die zwei neuesten Karten immer vollständig sichtbar
+  (90px), ältere kollabieren zu einer 26px-Titelzeile, gestapelt mit
+  `z-index` absteigend nach Alter (älteste unten im Stapel-Level)
+- [x] Panel-Breite per Drag am linken Rand änderbar (`state.streamWidth`)
+- [x] Schmaler Filter oben im Panel (Freitext auf Name + Titel)
+- [x] Karte auf das Board ziehen (natives HTML5-Drag-and-Drop) legt eine
+  **Kopie** des fremden Fotos auf dem eigenen Board der Lehrkraft an
+  (`adopt_photo_to_board` - Datei + Metadaten werden dupliziert, das
+  Original bleibt beim einreichenden Lernenden unverändert); Tippen auf
+  eine Karte fügt sie ersatzweise mittig im sichtbaren Bereich ein
+  (Touch-Fallback, da natives Drag-and-Drop dort nicht zuverlässig
+  funktioniert)
+- [x] Faden-Panel und Post-Stream teilen sich den rechten Rand und
+  schließen sich gegenseitig (beantwortet die offene Rückfrage aus Phase 3)
+
+**Scoping-Hinweise:**
+- "Streaming" ist ein 15-Sekunden-Poll, kein Echtzeit-Push - für den
+  Klassenraum-Einsatz ausreichend reaktionsschnell, aber kein echtes Live-
+  Update.
+- Gestapelte Positionen werden analytisch aus fixen Konstanten berechnet
+  (90px/26px/6px Abstand), nicht aus tatsächlich gemessenen DOM-Höhen -
+  bei geänderter Kartenhöhe (z. B. via CSS) müssen die JS-Konstanten
+  mitgepflegt werden.
 
 ---
 

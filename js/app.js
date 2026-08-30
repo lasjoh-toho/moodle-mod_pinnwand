@@ -61,7 +61,11 @@
     currentBoard: 0,       // aktuell angezeigtes Board (id)
     threads: [],           // vom Server geladene Rote Fäden (eigener + ggf. der Lehrkraft)
     canusethreads: false,  // darf eigenen Faden anlegen/bearbeiten
-    threadPanelOpen: false // Faden-Seitenpanel ein-/ausgeblendet
+    threadPanelOpen: false, // Faden-Seitenpanel ein-/ausgeblendet
+    streamPhotos: [],      // Post-Stream: neue Einreichungen anderer Lernender (nur Lehrkraft)
+    streamPanelOpen: false,
+    streamFilter: '',
+    streamWidth: 220
   };
 
   // ------------------------------------------------------------------
@@ -970,7 +974,8 @@
     fullscreen: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/></svg>',
     thumbtack: '<svg viewBox="0 0 1502 1502" width="16" height="16" fill="currentColor"><path d="M887.379 265.37c-71.92 39.67-90.783 153.676-73.858 220.443 25.373 89.642 120.263 184.87 208.333 223.115 88.825 39.357 213.79 19.878 236.138-70.095 17.062-70.586-14.408-161.368-105.1-252.481-51.592-61.787-195.222-150.364-265.514-120.983zm230.112 132.709c146.728 158.437 175.269 364.057-102.498 170.535-34.831-24.267-35.33-25.11-63.176-61.653-180.218-260.581 36.104-234.896 165.675-108.882zm-427.136 211.52c-30.14 129.742 141.096 224.808 206.885 226.635l115.713-114.768s-15.115-7.428-22.352-9.622c-95.305-35.201-153.483-115.01-186.185-198.223zM485.279 724.858c11.704 135.014 160.179 270.964 278.146 298.044 94.23 22.034 149.97-90.424 137.659-165.743-124.499-1.779-264.574-142.482-229.575-240.563-75.865-20.138-185.011 41.747-186.23 108.261zm-183.466 469.254c-10.709 15.142 2.074 28.789 19.1 14.38l288.835-244.45c-32.143-18.286-42.019-27.02-60.405-61.83 0 0-161.602 197.241-247.53 291.9z"/></svg>',
     hand: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v7"/><path d="M10 10.5V6a2 2 0 0 0-4 0v10"/><path d="M6 14l-1.5-1.8a1.8 1.8 0 0 0-2.7 2.3L6 21h9a4 4 0 0 0 4-4v-5a2 2 0 0 0-4 0"/></svg>',
-    thread: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#e0503f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="6" r="1.6" fill="#e0503f"/><circle cx="20" cy="18" r="1.6" fill="#e0503f"/><path d="M4 6c4 0 2 6 6 6s2-6 6-6 2 6 4 6"/></svg>'
+    thread: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#e0503f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="6" r="1.6" fill="#e0503f"/><circle cx="20" cy="18" r="1.6" fill="#e0503f"/><path d="M4 6c4 0 2 6 6 6s2-6 6-6 2 6 4 6"/></svg>',
+    stream: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>'
   };
   function icon(name) {
     if (name === 'text') {
@@ -1295,8 +1300,29 @@
     // Roter Faden: Seitenpanel rechts (siehe renderThreadPanel) ein-/ausblenden.
     if (state.canusethreads || state.threads.length > 0) {
       var threadBtn = el('button', { class: 'ic-fab' + (state.threadPanelOpen ? ' active' : ''), title: S.thread }, [icon('thread')]);
-      threadBtn.addEventListener('click', function () { state.threadPanelOpen = !state.threadPanelOpen; render(); });
+      threadBtn.addEventListener('click', function () {
+        state.threadPanelOpen = !state.threadPanelOpen;
+        if (state.threadPanelOpen) { state.streamPanelOpen = false; }
+        render();
+      });
       fabRow.appendChild(threadBtn);
+    }
+
+    // Post-Stream: neue Einreichungen anderer Lernender, nur für die
+    // Lehrkraft. Teilt sich den rechten Rand mit dem Faden-Panel (siehe
+    // gegenseitiges Schließen oben/unten) - beide gemeinsam offen wäre auf
+    // den meisten Bildschirmen zu eng.
+    if (state.canmoderate) {
+      var streamBtn = el('button', { class: 'ic-fab' + (state.streamPanelOpen ? ' active' : ''), title: S.poststream }, [icon('stream')]);
+      streamBtn.addEventListener('click', function () {
+        state.streamPanelOpen = !state.streamPanelOpen;
+        if (state.streamPanelOpen) {
+          state.threadPanelOpen = false;
+          loadStreamPhotos();
+        }
+        render();
+      });
+      fabRow.appendChild(streamBtn);
     }
 
     var maxreached = state.maxpictures > 0 && state.photos.length >= state.maxpictures;
@@ -1307,6 +1333,135 @@
     body.appendChild(fabRow);
 
     if (state.threadPanelOpen) { body.appendChild(renderThreadPanel()); }
+    if (state.streamPanelOpen) { body.appendChild(renderStreamPanel()); }
+
+    // Drop-Zone: Karte aus dem Post-Stream auf das Board ziehen = Kopie
+    // anlegen (siehe renderStreamPanel/adopt_photo_to_board).
+    function screenToCanvas(clientX, clientY) {
+      var rect = wrap.getBoundingClientRect();
+      var offX = clientX - rect.left + wrap.scrollLeft;
+      var offY = clientY - rect.top + wrap.scrollTop;
+      return {
+        x: (offX - state.boardPanX) / (state.boardZoom || 1),
+        y: (offY - state.boardPanY) / (state.boardZoom || 1)
+      };
+    }
+    wrap.addEventListener('dragover', function (ev) { ev.preventDefault(); });
+    wrap.addEventListener('drop', function (ev) {
+      ev.preventDefault();
+      var photoid = parseInt(ev.dataTransfer.getData('text/pinnwand-stream-photoid'), 10);
+      if (!photoid) { return; }
+      var pt = screenToCanvas(ev.clientX, ev.clientY);
+      adoptStreamPhoto(photoid, pt.x - 100, pt.y - 100);
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // POST-STREAM: neue Einreichungen anderer Lernender für die Lehrkraft -
+  // Karten stapeln sich von unten (neu) nach oben (älter, kollabiert).
+  // ------------------------------------------------------------------
+  var streamPollTimer = null;
+  function loadStreamPhotos() {
+    callAjax('mod_pinnwand_get_stream_photos', { cmid: cfg.cmid }).then(function (res) {
+      state.streamPhotos = res.photos || [];
+      if (state.step === 'arrange' && state.streamPanelOpen) { render(); }
+    }).catch(function () { /* Stream bleibt leer, Board funktioniert trotzdem */ });
+    if (!streamPollTimer) {
+      streamPollTimer = setInterval(function () {
+        if (state.step === 'arrange' && state.streamPanelOpen) { loadStreamPhotos(); }
+        else { clearInterval(streamPollTimer); streamPollTimer = null; }
+      }, 15000);
+    }
+  }
+
+  function adoptStreamPhoto(photoid, x, y) {
+    callAjax('mod_pinnwand_adopt_photo_to_board', {
+      cmid: cfg.cmid, photoid: photoid, x: x, y: y, boardid: state.currentBoard
+    }).then(function (res) {
+      state.photos.push({
+        id: res.id, url: res.url, annotationdata: '[]', gridtype: 'none', gridvalue: 0,
+        gridcolor: '#ff3c3c', consent: false, hiddenfromboard: false, annotationonboard: true,
+        sourcetitle: '', sourceauthor: '', sourceyear: '', sourceepoch: '', sourceplace: '',
+        sourceorigauthor: '', timecreated: Math.floor(Date.now() / 1000),
+        canvasx: x, canvasy: y, canvasw: 200, canvasrot: 0, canvasz: 0, boardid: state.currentBoard
+      });
+      state.streamPhotos = state.streamPhotos.filter(function (p) { return p.id !== photoid; });
+      render();
+    });
+  }
+
+  function renderStreamPanel() {
+    var panel = el('div', { class: 'ic-stream-panel', style: 'width:' + state.streamWidth + 'px' });
+    var resizeHandle = el('div', { class: 'ic-stream-resize' });
+    panel.appendChild(resizeHandle);
+
+    var filterBar = el('input', {
+      type: 'text', class: 'ic-stream-filter', placeholder: S.stream_filter_placeholder, value: state.streamFilter
+    });
+    filterBar.addEventListener('input', function () { state.streamFilter = filterBar.value; renderCards(); });
+    panel.appendChild(filterBar);
+
+    var cardsWrap = el('div', { class: 'ic-stream-cards' });
+    panel.appendChild(cardsWrap);
+
+    function renderCards() {
+      cardsWrap.innerHTML = '';
+      var q = state.streamFilter.trim().toLowerCase();
+      var list = state.streamPhotos.filter(function (p) {
+        if (!q) { return true; }
+        return (p.userfullname + ' ' + p.sourcetitle).toLowerCase().indexOf(q) !== -1;
+      });
+      if (list.length === 0) {
+        cardsWrap.appendChild(el('p', { class: 'ic-hint' }, [S.stream_empty]));
+        return;
+      }
+      var FULL_H = 90, COLLAPSED_H = 26, GAP = 6;
+      list.forEach(function (p, idx) {
+        var collapsed = idx >= 2;
+        var card = el('div', {
+          class: 'ic-stream-card' + (collapsed ? ' collapsed' : ''),
+          draggable: 'true', title: S.stream_hint
+        });
+        card.style.zIndex = String(list.length - idx);
+        var bottomOffset;
+        if (idx === 0) { bottomOffset = 0; } else if (idx === 1) { bottomOffset = FULL_H + GAP; } else {
+          bottomOffset = FULL_H * 2 + GAP * 2 + (idx - 2) * (COLLAPSED_H + GAP);
+        }
+        card.style.bottom = bottomOffset + 'px';
+        card.appendChild(el('img', { src: p.url, alt: '' }));
+        card.appendChild(el('span', { class: 'ic-stream-card-label' }, [p.userfullname + (p.sourcetitle ? ' · ' + p.sourcetitle : '')]));
+
+        card.addEventListener('dragstart', function (ev) {
+          ev.dataTransfer.setData('text/pinnwand-stream-photoid', String(p.id));
+        });
+        card.addEventListener('click', function () {
+          var wrapEl = document.querySelector('.ic-canvas-wrap');
+          if (!wrapEl) { return; }
+          var rect = wrapEl.getBoundingClientRect();
+          var pt = {
+            x: (rect.width / 2 - state.boardPanX) / (state.boardZoom || 1) - 100,
+            y: (rect.height / 2 - state.boardPanY) / (state.boardZoom || 1) - 100
+          };
+          adoptStreamPhoto(p.id, pt.x, pt.y);
+        });
+        cardsWrap.appendChild(card);
+      });
+    }
+    renderCards();
+
+    // Breite per Drag am linken Rand des Panels änderbar.
+    var resizing = false, startX = 0, startW = 0;
+    resizeHandle.addEventListener('mousedown', function (ev) {
+      resizing = true; startX = ev.clientX; startW = state.streamWidth; ev.preventDefault();
+    });
+    window.addEventListener('mousemove', function (ev) {
+      if (!resizing) { return; }
+      state.streamWidth = Math.max(160, Math.min(420, startW - (ev.clientX - startX)));
+      panel.style.width = state.streamWidth + 'px';
+    });
+    window.addEventListener('mouseup', function () { resizing = false; });
+
+    return panel;
   }
 
   // ------------------------------------------------------------------

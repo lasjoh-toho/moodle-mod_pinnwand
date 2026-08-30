@@ -180,5 +180,16 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083001, 'pinnwand');
     }
 
+    if ($oldversion < 2026083002) {
+        // Phase 4: Post-Stream - Rückverfolgung, von welchem fremden Foto
+        // eine Board-Kopie stammt (siehe adopt_photo_to_board()).
+        $table = new xmldb_table('pinnwand_photos');
+        $field = new xmldb_field('sourcephotoid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'boardid');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026083002, 'pinnwand');
+    }
+
     return true;
 }

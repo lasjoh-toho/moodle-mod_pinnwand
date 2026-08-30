@@ -1163,4 +1163,125 @@ class mod_pinnwand_external extends external_api {
     public static function delete_thread_returns() {
         return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
     }
+
+    // ---------------------------------------------------------------
+    // Post-Stream: neue Einreichungen aller Lernenden (außer der eigenen)
+    // für die Lehrkraft, damit sie Kopien direkt aufs eigene Board ziehen
+    // kann. Nur mit mod/pinnwand:viewall (teacher-artig).
+    // ---------------------------------------------------------------
+    public static function get_stream_photos_parameters() {
+        return new external_function_parameters(['cmid' => new external_value(PARAM_INT, 'Course module id')]);
+    }
+
+    public static function get_stream_photos($cmid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::get_stream_photos_parameters(), ['cmid' => $cmid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:viewall');
+
+        $sql = "SELECT p.*, u.firstname, u.lastname
+                  FROM {pinnwand_photos} p
+                  JOIN {user} u ON u.id = p.userid
+                 WHERE p.pinnwandid = :icid AND p.userid <> :ownid
+              ORDER BY p.timecreated DESC";
+        $records = $DB->get_records_sql($sql, ['icid' => $instance->id, 'ownid' => $USER->id], 0, 100);
+
+        $fs = get_file_storage();
+        $out = [];
+        foreach ($records as $r) {
+            $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $r->id, 'filename', false);
+            $file = reset($files);
+            if (!$file) {
+                continue;
+            }
+            $out[] = [
+                'id' => (int) $r->id,
+                'userid' => (int) $r->userid,
+                'userfullname' => fullname($r),
+                'url' => (string) moodle_url::make_pluginfile_url(
+                    $context->id, 'mod_pinnwand', 'photo', $r->id, '/', $file->get_filename()
+                ),
+                'sourcetitle' => (string) $r->sourcetitle,
+                'timecreated' => (int) $r->timecreated,
+            ];
+        }
+        return ['photos' => $out];
+    }
+
+    public static function get_stream_photos_returns() {
+        return new external_single_structure([
+            'photos' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'ID'),
+                'userid' => new external_value(PARAM_INT, 'Nutzer-ID'),
+                'userfullname' => new external_value(PARAM_TEXT, 'Voller Name'),
+                'url' => new external_value(PARAM_RAW, 'URL'),
+                'sourcetitle' => new external_value(PARAM_TEXT, 'Titel'),
+                'timecreated' => new external_value(PARAM_INT, 'Eingereicht am'),
+            ])),
+        ]);
+    }
+
+    public static function adopt_photo_to_board_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'ID des fremden Fotos aus dem Post-Stream'),
+            'x' => new external_value(PARAM_FLOAT, 'x auf dem eigenen Board'),
+            'y' => new external_value(PARAM_FLOAT, 'y auf dem eigenen Board'),
+            'boardid' => new external_value(PARAM_INT, 'Eigenes Board', VALUE_DEFAULT, 0),
+        ]);
+    }
+
+    /**
+     * Kopiert ein fremdes Foto (aus dem Post-Stream) als eigenen, neuen
+     * Datensatz inkl. Bilddatei auf das eigene Board der Lehrkraft - das
+     * Original bleibt beim einreichenden Lernenden unverändert erhalten.
+     */
+    public static function adopt_photo_to_board($cmid, $photoid, $x, $y, $boardid = 0) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::adopt_photo_to_board_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'x' => $x, 'y' => $y, 'boardid' => $boardid,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:viewall');
+
+        $source = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($source->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'adopt_photo_to_board');
+        }
+
+        $copy = clone $source;
+        unset($copy->id);
+        $copy->userid = $USER->id;
+        $copy->boardid = $params['boardid'];
+        $copy->sourcephotoid = $source->id;
+        $copy->hiddenfromboard = 0;
+        $copy->canvasx = $params['x'];
+        $copy->canvasy = $params['y'];
+        $copy->canvasw = 200;
+        $copy->canvasrot = 0;
+        $copy->canvasz = 0;
+        $copy->timecreated = time();
+        $newid = $DB->insert_record('pinnwand_photos', $copy);
+
+        $fs = get_file_storage();
+        $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $source->id, 'filename', false);
+        $file = reset($files);
+        $url = null;
+        if ($file) {
+            $newfile = $fs->create_file_from_storedfile([
+                'contextid' => $context->id, 'component' => 'mod_pinnwand', 'filearea' => 'photo',
+                'itemid' => $newid, 'filepath' => '/', 'filename' => $file->get_filename(),
+            ], $file);
+            $url = (string) moodle_url::make_pluginfile_url(
+                $context->id, 'mod_pinnwand', 'photo', $newid, '/', $newfile->get_filename()
+            );
+        }
+
+        return ['id' => (int) $newid, 'url' => (string) $url];
+    }
+
+    public static function adopt_photo_to_board_returns() {
+        return new external_single_structure([
+            'id' => new external_value(PARAM_INT, 'ID der neuen Kopie'),
+            'url' => new external_value(PARAM_RAW, 'Bild-URL der Kopie'),
+        ]);
+    }
 }

@@ -138,4 +138,20 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:submit',
     ],
+    'mod_pinnwand_get_stream_photos' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'get_stream_photos',
+        'description' => 'Post-Stream: neue Einreichungen aller anderen Lernenden für die Lehrkraft',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:viewall',
+    ],
+    'mod_pinnwand_adopt_photo_to_board' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'adopt_photo_to_board',
+        'description' => 'Kopiert ein fremdes Foto aus dem Post-Stream auf das eigene Board',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:viewall',
+    ],
 ];
