@@ -438,3 +438,54 @@ wird EIN Foto und bewegt sich dadurch zwangsläufig als eine Einheit) -
 ein vollständig strukturiertes, weiterhin live editierbares Textobjekt
 direkt auf dem Board (statt eines flachen Bildes) wäre ein deutlich
 größerer Umbau und wurde nicht umgesetzt.
+
+---
+
+## Phase 12 — Wortfeld als SVG, Klassenansicht-Bugfix, Faden-Erweiterungen ✅
+
+Fünfter Feedback-Durchgang. Betrifft: `classes/external.php` (SVG-Unterstützung,
+`wordfielddata`), `js/app.js` (Wortfeld-SVG, Bearbeiten-Weiche, Faden-
+Objektliste, Auto-Pinnwand-Modus), `db/install.xml` + `upgrade.php`.
+
+- [x] **Wortfeld ist jetzt SVG statt PNG**: bleibt dadurch editierbarer Text
+  (scharf bei jeder Größe, deutlich kleinere Datei) statt zu einem Raster
+  gerastert zu werden. `save_photo`/`update_photo` akzeptieren jetzt zusätzlich
+  `image/svg+xml`-Data-URLs.
+- [x] **Bearbeiten öffnet bei Wortfeldern den Wortfeld-Editor** statt des
+  Bild-Editors: neues Feld `wordfielddata` speichert die strukturierten
+  Daten (Preset, Maße, Texte als JSON) zusätzlich zur SVG-Datei; der
+  Bearbeiten-Button in der Lightbox prüft darauf und öffnet entsprechend
+  entweder den Wortfeld- oder den Bild-Editor.
+- [x] **Kern-Bugfix Klassenansicht-Sortierbuttons** (der eigentliche, echte
+  Grund für "Icons fehlen, Name zweimal"): `b.querySelector('span')` traf
+  mangels Eingrenzung den ERSTEN Span im Button (das Icon-Span), nicht das
+  Label-Span - `refresh()` überschrieb dadurch das Icon mit Text, während
+  das ursprüngliche Label-Span unverändert stehen blieb. Auf
+  `.ic-btn-label` als eindeutigen Selektor umgestellt.
+- [x] **Präsentation komplett neu** ohne impress.js: eigene, direkt
+  nachprüfbare CSS-Transform-Kamera (translate+scale, klassisches
+  Contain-Fitting) - nachdem mehrere Versuche an impress.js-internen
+  Eigenheiten scheiterten, die ohne echten Browser nicht zuverlässig
+  nachvollziehbar waren. Hintergrund ist jetzt eine eigenständige, NICHT
+  mitgezoomte Ebene (bleibt bildschirmfüllend, wie auf der echten
+  Pinnwand). Klick auf ein noch nicht enthaltenes Foto/Textrahmen direkt
+  in der Präsentation hängt es ans Ende des Fadens an. Vendor-Datei
+  `js/vendor/impress.js` und `thirdpartylibs.xml` entfernt.
+- [x] **Faden-Panel**: neue Liste "Alle Objekte auf der Pinnwand" mit
+  Zuschalt-Checkbox pro Foto + Filter (Alle/Mit Faden/Ohne Faden) -
+  zusätzlich zur bestehenden Reihenfolge-Liste.
+- [x] **Faden lebt live nach**: Verschieben/Skalieren eines Fotos oder
+  Leerrahmens löst (nur bei geöffnetem Faden-Panel) sofort ein Re-Render
+  aus.
+- [x] **Rote Rahmen verschieb-/skalierbar** direkt auf dem Board.
+- [x] **Große Bildschirme starten jetzt für ALLE Rollen** direkt im
+  Pinnwand-Modus (vorher nur für die Lehrkraft).
+- [x] Sidebar-Buttons (Faden/Post-Stream/Layer) nebeneinander statt
+  untereinander, über den Panels statt dahinter.
+
+**Scoping-Hinweis:** Die eingebundene Google-Font ("Handschrift"-Option)
+wird im Editor korrekt live angezeigt, erscheint aber im exportierten SVG
+möglicherweise nicht (SVG als `<img>`-Quelle lädt keine extern
+referenzierten Web-Fonts nach - eine Browser-Sicherheitsbeschränkung).
+Einbetten der Font-Daten direkt ins SVG wäre möglich, wurde aber aus
+Aufwandsgründen nicht umgesetzt.

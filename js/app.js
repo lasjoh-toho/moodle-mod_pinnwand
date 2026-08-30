@@ -68,7 +68,8 @@
     streamWidth: 220,
     canusepoststream: true, // darf den Post-Stream nutzen (Instanzeinstellung)
     canuselayers: false,    // darf das Schichtung-Panel nutzen (Instanzeinstellung)
-    layerPanelOpen: false
+    layerPanelOpen: false,
+    threadObjectFilter: 'all'
   };
 
   // ------------------------------------------------------------------
@@ -1051,28 +1052,80 @@
     return size;
   }
 
-  function renderTextFrameToCanvas(tf) {
-    var SCALE = 3;
-    var c = document.createElement('canvas');
-    c.width = tf.w * SCALE; c.height = tf.h * SCALE;
-    var ctx = c.getContext('2d');
-    var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
-    if (preset.bg) {
-      if (preset.shadow) { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 14 * SCALE; ctx.shadowOffsetY = 4 * SCALE; }
-      ctx.fillStyle = preset.bg;
-      ctx.fillRect(0, 0, c.width, c.height);
-      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-    }
-    tf.texts.forEach(function (t) {
-      var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
-      var fitted = autoFitFontSize(t.text, fontDef.css, c.width * 0.9, t.size * SCALE);
-      ctx.font = fitted + 'px ' + fontDef.css;
-      ctx.fillStyle = t.color || preset.text;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(t.text, t.x * c.width, t.y * c.height);
+  function escapeXml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c];
     });
-    return c;
+  }
+
+  // UTF-8-sicheres Base64 (btoa allein kann keine Umlaute/Sonderzeichen).
+  function utf8ToBase64(str) {
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+
+  // Baut das Wortfeld als SVG-Markup - bleibt dadurch editierbarer Text
+  // (kein Raster-PNG): deutlich kleinere Datei, Schrift bleibt bei jeder
+  // Anzeigegröße scharf, und die Struktur (Preset/Texte/Maße) lässt sich
+  // beim erneuten Bearbeiten aus `wordfielddata` (separat mitgespeichertes
+  // JSON, siehe saveTextFrame) wieder exakt herstellen.
+  function buildTextFrameSVG(tf) {
+    var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
+    var defs = '';
+    var bgRect = '';
+    if (preset.bg) {
+      if (preset.shadow) {
+        defs = '<defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">' +
+          '<feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.35"/></filter></defs>';
+      }
+      bgRect = '<rect x="0" y="0" width="' + tf.w + '" height="' + tf.h + '" rx="6" fill="' + preset.bg + '"' +
+        (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
+    }
+    var textEls = tf.texts.map(function (t) {
+      if (!t.text) { return ''; }
+      var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
+      var fitted = autoFitFontSize(t.text, fontDef.css, tf.w * 0.9, t.size);
+      return '<text x="' + (t.x * tf.w) + '" y="' + (t.y * tf.h) + '" font-family="' + escapeXml(fontDef.css) +
+        '" font-size="' + fitted + '" fill="' + (t.color || preset.text) +
+        '" text-anchor="middle" dominant-baseline="middle">' + escapeXml(t.text) + '</text>';
+    }).join('');
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + tf.w + '" height="' + tf.h +
+      '" viewBox="0 0 ' + tf.w + ' ' + tf.h + '">' + defs + bgRect + textEls + '</svg>';
+  }
+
+  // Speichert das Wortfeld (neu oder erneutes Bearbeiten eines bestehenden)
+  // - läuft über dieselbe Foto-Pipeline (save_photo/update_photo), damit
+  // Ziehen/Größe/Rotation/Annotieren/Faden ohne Sonderbehandlung
+  // funktionieren; `wordfielddata` (JSON) wird zusätzlich mitgespeichert,
+  // damit "Bearbeiten" später wieder den Wortfeld-Editor öffnen kann.
+  function saveTextFrame(tf, saveBtn) {
+    saveBtn.disabled = true;
+    var svg = buildTextFrameSVG(tf);
+    var dataUrl = 'data:image/svg+xml;base64,' + utf8ToBase64(svg);
+    var label = tf.texts.map(function (t) { return t.text; }).filter(Boolean).join(' ');
+    var wordfielddata = JSON.stringify(tf);
+    var isEditingExisting = !!state.editingPhotoId;
+
+    var promise = isEditingExisting
+      ? callAjax('mod_pinnwand_update_photo', {
+        cmid: cfg.cmid, photoid: state.editingPhotoId, imagedata: dataUrl, wordfielddata: wordfielddata
+      })
+      : callAjax('mod_pinnwand_save_photo', {
+        cmid: cfg.cmid, imagedata: dataUrl, gridtype: 'none', gridvalue: 0, consent: false,
+        sourcetitle: label, sourceauthor: '', sourceyear: '', sourceepoch: '', sourceplace: '', sourceorigauthor: '',
+        boardid: state.currentBoard || 0, wordfielddata: wordfielddata
+      });
+
+    promise.then(function (res) {
+      var maxreached = !!res.maxreached;
+      refreshPhotos().then(function () {
+        resetCaptureState();
+        state.step = isEditingExisting ? 'arrange' : (maxreached ? 'arrange' : 'home');
+        render();
+      });
+    }).catch(function (e) {
+      alert(S.error_save + ' (' + e.message + ')');
+      saveBtn.disabled = false;
+    });
   }
 
   function renderTextFrame(body) {
@@ -1240,27 +1293,7 @@
     var bar = el('div', { class: 'ic-actionbar' });
     bar.appendChild(cancelWizardBtn());
     var saveBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.savephoto, 'aria-label': S.savephoto }, [icon('check')]);
-    saveBtn.addEventListener('click', function () {
-      saveBtn.disabled = true;
-      var outCanvas = renderTextFrameToCanvas(tf);
-      var dataUrl = outCanvas.toDataURL('image/png');
-      var label = tf.texts.map(function (t) { return t.text; }).filter(Boolean).join(' ');
-      callAjax('mod_pinnwand_save_photo', {
-        cmid: cfg.cmid, imagedata: dataUrl, gridtype: 'none', gridvalue: 0, consent: false,
-        sourcetitle: label, sourceauthor: '', sourceyear: '', sourceepoch: '', sourceplace: '', sourceorigauthor: '',
-        boardid: state.currentBoard || 0
-      }).then(function (res) {
-        var maxreached = !!res.maxreached;
-        refreshPhotos().then(function () {
-          resetCaptureState();
-          state.step = maxreached ? 'arrange' : 'home';
-          render();
-        });
-      }).catch(function (e) {
-        alert(S.error_save + ' (' + e.message + ')');
-        saveBtn.disabled = false;
-      });
-    });
+    saveBtn.addEventListener('click', function () { saveTextFrame(tf, saveBtn); });
     bar.appendChild(saveBtn);
     body.appendChild(bar);
   }
@@ -2164,6 +2197,75 @@
     return list;
   }
 
+  // Zeigt ALLE auf dem aktuellen Board platzierten Fotos mit einem
+  // Umschalter "im Faden" - plus Filter (alle/mit Faden/ohne Faden). Damit
+  // lässt sich der Faden direkt aus der Gesamtübersicht der Pinnwand heraus
+  // zusammenstellen, statt nur einzeln über den Board-Button pro Foto.
+  function renderThreadObjectList(own) {
+    var wrap = el('div', { class: 'ic-thread-objects' });
+    wrap.appendChild(el('h3', { class: 'ic-thread-panel-subtitle' }, [S.thread_all_objects]));
+
+    var filterRow = el('div', { class: 'ic-seg' });
+    var filterOptions = [['all', S.filter_all], ['in', S.filter_in_thread], ['out', S.filter_out_thread]];
+    var filterBtns = {};
+    filterOptions.forEach(function (opt) {
+      var b = el('button', { class: 'ic-btn ic-btn-ghost' + (state.threadObjectFilter === opt[0] ? ' ic-btn-primary' : '') }, [opt[1]]);
+      b.addEventListener('click', function () { state.threadObjectFilter = opt[0]; render(); });
+      filterBtns[opt[0]] = b;
+      filterRow.appendChild(b);
+    });
+    wrap.appendChild(filterRow);
+
+    var inThreadIds = {};
+    if (own) {
+      own.items.forEach(function (it) { if (it.itemtype === 'photo') { inThreadIds[it.photoid] = it.id; } });
+    }
+    var boardPhotos = state.photos.filter(function (p) {
+      return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === state.currentBoard;
+    });
+    var filter = state.threadObjectFilter || 'all';
+    var visible = boardPhotos.filter(function (p) {
+      if (filter === 'in') { return !!inThreadIds[p.id]; }
+      if (filter === 'out') { return !inThreadIds[p.id]; }
+      return true;
+    });
+
+    var list = el('div', { class: 'ic-thread-list' });
+    if (visible.length === 0) {
+      list.appendChild(el('p', { class: 'ic-hint' }, [S.thread_objects_empty]));
+    }
+    visible.forEach(function (p) {
+      var row = el('div', { class: 'ic-thread-item' });
+      row.appendChild(el('img', { src: p.url, alt: '' }));
+      row.appendChild(el('span', { class: 'ic-thread-item-label' }, [p.sourcetitle || itemCaptionText(p)]));
+      var toggle = el('label', { class: 'ic-me-check' });
+      var check = el('input', { type: 'checkbox' });
+      check.checked = !!inThreadIds[p.id];
+      check.addEventListener('change', function () {
+        if (check.checked) {
+          callAjax('mod_pinnwand_add_thread_item', {
+            cmid: cfg.cmid, itemtype: 'photo', photoid: p.id, boardid: state.currentBoard
+          }).then(function (res) {
+            state.threads = state.threads.filter(function (t) { return !t.isown; });
+            state.threads.push({ id: res.threadid, color: res.color, isown: true, items: res.items });
+            render();
+          });
+        } else {
+          var itemid = inThreadIds[p.id];
+          callAjax('mod_pinnwand_remove_thread_item', { cmid: cfg.cmid, itemid: itemid }).then(function () {
+            own.items = own.items.filter(function (it) { return it.id !== itemid; });
+            render();
+          });
+        }
+      });
+      toggle.appendChild(check);
+      row.appendChild(toggle);
+      list.appendChild(row);
+    });
+    wrap.appendChild(list);
+    return wrap;
+  }
+
   function renderThreadPanel() {
     var panel = el('div', { class: 'ic-thread-panel' });
     var own = ownThread();
@@ -2176,6 +2278,7 @@
       panel.appendChild(presentBtn);
     }
     panel.appendChild(renderThreadList(own, true));
+    if (state.canusethreads) { panel.appendChild(renderThreadObjectList(own)); }
 
     if (state.canusethreads) {
       var actions = el('div', { class: 'ic-thread-actions' });
@@ -2220,148 +2323,163 @@
     return panel;
   }
 
-  // ------------------------------------------------------------------
-  // PRÄSENTATION: verbundene Stationen eines Fadens als impress.js-Ablauf.
-  // Bewusst einfach gehalten: Position/Größe kommen direkt von den
-  // Board-Koordinaten (Fotos) bzw. den gespeicherten Rahmen-Koordinaten -
-  // kein separates Editieren der Kamerafahrt.
-  // ------------------------------------------------------------------
-  var impressScriptPromise = null;
-  function loadImpress() {
-    if (window.impress) { return Promise.resolve(); }
-    if (!impressScriptPromise) {
-      impressScriptPromise = new Promise(function (resolve, reject) {
-        var s = document.createElement('script');
-        s.src = cfg.impressurl;
-        s.onload = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
-      });
-    }
-    return impressScriptPromise;
-  }
-
   function openPresentation(thread) {
     if (window.innerWidth < 900) { alert(S.present_smallscreen); return; }
-    loadImpress().then(function () {
-      var overlay = el('div', { class: 'ic-present-overlay' });
-      // data-width/data-height auf die aktuelle Fenstergröße setzen, damit
-      // impress.js' eingebauter "windowScale"-Faktor (Verhältnis Fenster zu
-      // Referenzgröße) genau 1 ergibt - unsere eigenen data-scale-Werte
-      // entsprechen dann direkt dem gewünschten Kamera-Zoom, ohne
-      // zusätzliche, verwirrende Umrechnung (siehe computeWindowScale in
-      // impress.js). data-max-scale/-min-scale großzügig, damit auch sehr
-      // kleine bzw. sehr große Rahmen korrekt gefüllt werden.
-      var impressRoot = el('div', {
-        id: 'pinnwand-impress',
-        'data-width': String(window.innerWidth), 'data-height': String(window.innerHeight),
-        'data-max-scale': '30', 'data-min-scale': '0.03'
+    var overlay = el('div', { class: 'ic-present-overlay' });
+    var stageEl = el('div', { class: 'ic-present-stage' });
+    var bgLayer = el('div', { class: 'ic-present-bg' });
+    applyBackground(bgLayer);
+    stageEl.appendChild(bgLayer);
+    var canvasEl = el('div', { class: 'ic-present-canvas' });
+    stageEl.appendChild(canvasEl);
+    overlay.appendChild(stageEl);
+
+    // Alle Stationen müssen vom selben Board stammen, um gemeinsam
+    // dargestellt zu werden - Referenz ist das Board der ersten Station
+    // (siehe Scoping-Hinweis: Board-übergreifende Fäden sind ein
+    // Sonderfall und werden hier nicht gemischt dargestellt).
+    var firstBoardId = thread.items.length ? (thread.items[0].boardid || 0) : 0;
+
+    // Alle auf diesem Board platzierten Fotos zeigen (nicht nur die des
+    // Fadens) - Textrahmen (Wortfeld) sind technisch auch nur Fotos und
+    // erscheinen dadurch automatisch mit. Ein Klick auf ein noch nicht im
+    // Faden enthaltenes Foto hängt es direkt ans Ende des Fadens an.
+    var boardPhotos = state.photos.filter(function (p) {
+      return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === firstBoardId;
+    });
+    var photoRecs = {};
+    var inThreadIds = {};
+    thread.items.forEach(function (it) { if (it.itemtype === 'photo') { inThreadIds[it.photoid] = true; } });
+    boardPhotos.forEach(function (p) {
+      var pEl = el('div', {
+        class: 'ic-present-photo',
+        style: 'left:' + p.canvasx + 'px;top:' + p.canvasy + 'px;width:' + p.canvasw + 'px;' +
+          'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
-
-      // Alle Stationen müssen vom selben Board stammen, um gemeinsam
-      // dargestellt zu werden - Referenz ist das Board der ersten Station
-      // (siehe Scoping-Hinweis: Board-übergreifende Fäden sind ein
-      // Sonderfall und werden hier nicht gemischt dargestellt).
-      var firstBoardId = thread.items.length ? (thread.items[0].boardid || 0) : 0;
-
-      // Hintergrund des Boards - während der ganzen Präsentation sichtbar.
-      var bgLayer = el('div', { class: 'ic-present-bg' });
-      applyBackground(bgLayer);
-      impressRoot.appendChild(bgLayer);
-
-      // Alle auf diesem Board platzierten Fotos zeigen (nicht nur die des
-      // Fadens) - Textrahmen (Wortfeld) sind technisch auch nur Fotos und
-      // erscheinen dadurch automatisch mit.
-      var boardPhotos = state.photos.filter(function (p) {
-        return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === firstBoardId;
-      });
-      var photoRecs = {};
-      boardPhotos.forEach(function (p) {
-        var pEl = el('div', {
-          class: 'ic-present-photo',
-          style: 'left:' + p.canvasx + 'px;top:' + p.canvasy + 'px;width:' + p.canvasw + 'px;' +
-            'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
-        });
-        pEl.style.zIndex = p.canvasz || 0;
-        pEl.appendChild(el('img', { src: p.url, alt: '' }));
-        impressRoot.appendChild(pEl);
-        photoRecs[p.id] = { el: pEl, z: p.canvasz || 0 };
-      });
-
-      // Kamera-Zoom je Station: die Station soll vollständig sichtbar sein
-      // UND den Bildschirm in einer Richtung (horizontal oder vertikal)
-      // ganz ausfüllen - also die kleinere der beiden Füll-Verhältnisse
-      // (klassisches "contain"-Fitting, keine Beschneidung).
-      var boardItems = thread.items.filter(function (it) { return (it.boardid || 0) === firstBoardId; });
-      boardItems.forEach(function (it) {
-        if (it.itemtype === 'frame') {
-          var fEl = el('div', {
-            class: 'step ic-present-step-frame',
-            style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;'
+      pEl.style.zIndex = p.canvasz || 0;
+      pEl.appendChild(el('img', { src: p.url, alt: '' }));
+      if (!inThreadIds[p.id]) {
+        pEl.classList.add('ic-present-addable');
+        pEl.title = S.stream_pin_hint;
+        pEl.addEventListener('click', function () {
+          callAjax('mod_pinnwand_add_thread_item', {
+            cmid: cfg.cmid, itemtype: 'photo', photoid: p.id, boardid: firstBoardId
+          }).then(function (res) {
+            var newItem = res.items[res.items.length - 1];
+            thread.items.push(newItem);
+            inThreadIds[p.id] = true;
+            pEl.classList.remove('ic-present-addable');
+            steps.push(buildStep(newItem));
+            goToStep(steps.length - 1);
           });
-          if (it.framelabel) { fEl.appendChild(el('span', {}, [it.framelabel])); }
-          fEl.setAttribute('data-x', String(it.framex + it.framew / 2));
-          fEl.setAttribute('data-y', String(it.framey + it.frameh / 2));
-          fEl.setAttribute('data-scale', String(Math.min(window.innerWidth / it.framew, window.innerHeight / it.frameh)));
-          impressRoot.appendChild(fEl);
-        } else {
-          var rec = photoRecs[it.photoid];
-          if (!rec) { return; }
-          var img = rec.el.querySelector('img');
-          var natW = parseFloat(rec.el.style.width) || 200;
-          // Echtes Seitenverhältnis, falls das Bild schon geladen/gecacht
-          // ist (auf der gerade eben gezeigten Pinnwand meist der Fall) -
-          // sonst grobe Näherung (4:3).
-          var natH = (img.naturalWidth && img.naturalHeight) ? natW * (img.naturalHeight / img.naturalWidth) : natW * 0.75;
-          rec.el.classList.add('step');
-          rec.el.setAttribute('data-x', String(parseFloat(rec.el.style.left) + natW / 2));
-          rec.el.setAttribute('data-y', String(parseFloat(rec.el.style.top) + natH / 2));
-          rec.el.setAttribute('data-scale', String(Math.min(window.innerWidth / natW, window.innerHeight / natH)));
-        }
-      });
-
-      var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-present-close', title: S.exitpresent }, ['\u2715']);
-      var prevBtn = el('button', { class: 'ic-btn ic-present-nav ic-present-prev' }, ['\u2039']);
-      var nextBtn = el('button', { class: 'ic-btn ic-present-nav ic-present-next' }, ['\u203A']);
-
-      overlay.appendChild(impressRoot);
-      overlay.appendChild(closeBtn);
-      overlay.appendChild(prevBtn);
-      overlay.appendChild(nextBtn);
-      document.body.appendChild(overlay);
-
-      var api = window.impress('pinnwand-impress');
-      api.init();
-
-      // Occlusion: nur Fotos, die den gerade aktiven Rahmen vom Z-Level her
-      // überlappend verdecken würden, werden ausgeblendet - alle anderen
-      // (auch Hintergrund und andere, nicht überlappende Fotos) bleiben
-      // durchgehend sichtbar.
-      function updateOcclusion() {
-        var activeEl = impressRoot.querySelector('.step.active');
-        if (!activeEl) { return; }
-        var activeRect = activeEl.getBoundingClientRect();
-        var activeZ = parseInt(activeEl.style.zIndex || '0', 10);
-        Object.keys(photoRecs).forEach(function (pid) {
-          var rec = photoRecs[pid];
-          if (rec.el === activeEl) { rec.el.classList.remove('ic-present-occluded'); return; }
-          var r = rec.el.getBoundingClientRect();
-          var overlaps = !(r.right < activeRect.left || r.left > activeRect.right ||
-            r.bottom < activeRect.top || r.top > activeRect.bottom);
-          rec.el.classList.toggle('ic-present-occluded', overlaps && rec.z > activeZ);
         });
       }
-      impressRoot.addEventListener('impress:stepenter', updateOcclusion);
-      updateOcclusion();
-
-      prevBtn.addEventListener('click', function () { api.prev(); });
-      nextBtn.addEventListener('click', function () { api.next(); });
-      closeBtn.addEventListener('click', function () {
-        api.tear();
-        document.body.classList.remove('impress-enabled', 'impress-disabled', 'impress-supported', 'impress-not-supported');
-        overlay.remove();
-      });
+      canvasEl.appendChild(pEl);
+      photoRecs[p.id] = { el: pEl, z: p.canvasz || 0 };
     });
+
+    // Für jede Station (Foto oder Leerrahmen) Zielposition/-größe merken -
+    // Kamera-Transformation wird komplett selbst berechnet (siehe goToStep),
+    // ohne uns auf interne Skalierungs-Mechanik einer Bibliothek zu
+    // verlassen.
+    function buildStep(it) {
+      if (it.itemtype === 'frame') {
+        var fEl = el('div', {
+          class: 'ic-present-step-frame',
+          style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;'
+        });
+        if (it.framelabel) { fEl.appendChild(el('span', {}, [it.framelabel])); }
+        canvasEl.appendChild(fEl);
+        return { el: fEl, cx: it.framex + it.framew / 2, cy: it.framey + it.frameh / 2, w: it.framew, h: it.frameh };
+      }
+      var rec = photoRecs[it.photoid];
+      if (!rec) { return null; }
+      var natW = parseFloat(rec.el.style.width) || 200;
+      var img = rec.el.querySelector('img');
+      // Echtes Seitenverhältnis, sobald das Bild geladen ist - bis dahin
+      // eine grobe Näherung (4:3), damit der erste Zoom nicht völlig daneben
+      // liegt.
+      var natH = (img.naturalWidth && img.naturalHeight) ? natW * (img.naturalHeight / img.naturalWidth) : natW * 0.75;
+      var stepData = {
+        el: rec.el,
+        cx: parseFloat(rec.el.style.left) + natW / 2,
+        cy: parseFloat(rec.el.style.top) + natH / 2,
+        w: natW, h: natH, z: rec.z
+      };
+      if (!img.complete) {
+        img.addEventListener('load', function () {
+          stepData.h = natW * (img.naturalHeight / img.naturalWidth);
+          if (steps[currentIdx] === stepData) { goToStep(currentIdx, true); }
+        });
+      }
+      return stepData;
+    }
+
+    var steps = thread.items
+      .filter(function (it) { return (it.boardid || 0) === firstBoardId; })
+      .map(buildStep)
+      .filter(Boolean);
+
+    var currentIdx = 0;
+
+    // Kamera: verschiebt/skaliert canvasEl so, dass die Station vollständig
+    // sichtbar ist UND den Bildschirm in einer Richtung (horizontal oder
+    // vertikal) ganz ausfüllt ("contain"-Fitting, kleinerer der beiden
+    // Füllungsgrade, nie beschnitten). Komplett selbst berechnet - keine
+    // Bibliotheks-Fließkommas, die sich unserer Kontrolle entziehen.
+    function goToStep(idx, skipTransition) {
+      currentIdx = Math.max(0, Math.min(steps.length - 1, idx));
+      var s = steps[currentIdx];
+      if (!s) { return; }
+      var scale = Math.min(window.innerWidth / s.w, window.innerHeight / s.h);
+      var tx = window.innerWidth / 2 - scale * s.cx;
+      var ty = window.innerHeight / 2 - scale * s.cy;
+      canvasEl.style.transition = skipTransition ? 'none' : '';
+      canvasEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+      updateOcclusion();
+    }
+
+    // Occlusion: nur Fotos, die die aktive Station vom Z-Level her
+    // überlappend verdecken würden, werden ausgeblendet - alle anderen
+    // (auch Hintergrund und nicht überlappende Fotos) bleiben sichtbar.
+    function updateOcclusion() {
+      var active = steps[currentIdx];
+      if (!active || !active.el) { return; }
+      var activeRect = active.el.getBoundingClientRect();
+      var activeZ = active.z || 0;
+      Object.keys(photoRecs).forEach(function (pid) {
+        var rec = photoRecs[pid];
+        if (rec.el === active.el) { rec.el.classList.remove('ic-present-occluded'); return; }
+        var r = rec.el.getBoundingClientRect();
+        var overlaps = !(r.right < activeRect.left || r.left > activeRect.right ||
+          r.bottom < activeRect.top || r.top > activeRect.bottom);
+        rec.el.classList.toggle('ic-present-occluded', overlaps && rec.z > activeZ);
+      });
+    }
+
+    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-present-close', title: S.exitpresent }, ['\u2715']);
+    var prevBtn = el('button', { class: 'ic-btn ic-present-nav ic-present-prev' }, ['\u2039']);
+    var nextBtn = el('button', { class: 'ic-btn ic-present-nav ic-present-next' }, ['\u203A']);
+    prevBtn.addEventListener('click', function () { goToStep(currentIdx - 1); });
+    nextBtn.addEventListener('click', function () { goToStep(currentIdx + 1); });
+    closeBtn.addEventListener('click', function () {
+      document.removeEventListener('keydown', keyNav);
+      overlay.remove();
+    });
+    function keyNav(ev) {
+      if (ev.key === 'ArrowRight' || ev.key === ' ') { goToStep(currentIdx + 1); }
+      else if (ev.key === 'ArrowLeft') { goToStep(currentIdx - 1); }
+      else if (ev.key === 'Escape') { closeBtn.click(); }
+    }
+    document.addEventListener('keydown', keyNav);
+    overlay._icKeyHandler = keyNav;
+
+    overlay.appendChild(closeBtn);
+    overlay.appendChild(prevBtn);
+    overlay.appendChild(nextBtn);
+    document.body.appendChild(overlay);
+
+    if (steps.length > 0) { goToStep(0, true); }
   }
 
   // ==================================================================
@@ -2393,7 +2511,7 @@
     var sortButtons = {};
     sortOptions.forEach(function (opt) {
       var b = toolBtn(opt[1], opt[2]);
-      var span = b.querySelector('span');
+      var span = b.querySelector('.ic-btn-label');
       function refresh() {
         span.textContent = opt[2] + (sortMode === opt[0] ? (sortDir === 1 ? ' \u2191' : ' \u2193') : '');
         b.title = span.textContent;
@@ -2412,7 +2530,7 @@
     });
 
     var ownBtn = toolBtn('brush', S.filter_own);
-    var ownSpan = ownBtn.querySelector('span');
+    var ownSpan = ownBtn.querySelector('.ic-btn-label');
     function refreshOwnBtn() {
       ownBtn.classList.toggle('active', filterOwn !== 0);
       ownSpan.textContent = filterOwn === 1 ? S.filter_own_mine : filterOwn === 2 ? S.filter_own_others : S.filter_own;
@@ -2423,7 +2541,7 @@
     toolbar.appendChild(ownBtn);
 
     var boardBtn = toolBtn('pin', S.filter_board);
-    var boardSpan = boardBtn.querySelector('span');
+    var boardSpan = boardBtn.querySelector('.ic-btn-label');
     function refreshBoardBtn() {
       boardBtn.classList.toggle('active', filterBoard !== 0);
       boardSpan.textContent = filterBoard === 1 ? S.filter_board_on : filterBoard === 2 ? S.filter_board_off : S.filter_board;
@@ -2994,6 +3112,20 @@
       var p = state.photos[state.lightboxIndex];
       exitDrawing(true);
       closeLightbox();
+      if (p.wordfielddata) {
+        // Wortfeld: strukturierte Daten wiederherstellen und den
+        // Wortfeld-Editor öffnen statt den Bild-Editor mit dem
+        // gerenderten SVG als vermeintlichem "Foto".
+        try {
+          state.textFrame = JSON.parse(p.wordfielddata);
+        } catch (e) {
+          state.textFrame = null;
+        }
+        state.editingPhotoId = p.id;
+        state.step = 'textframe';
+        render();
+        return;
+      }
       var img = new Image();
       img.onload = function () {
         state.editingPhotoId = p.id;
@@ -3585,12 +3717,14 @@
     state.canusepoststream = state.canmoderate || !!cfg.studentpoststream;
     state.canuselayers = state.canmoderate || !!cfg.studentlayers;
 
-    // Lehrkräfte landen direkt in der für die Bildschirmgröße passenden
-    // Übersicht - große Bildschirme in der Pinnwand, kleine (mobile) in der
-    // Klassenansicht. Im Kurs-Bearbeiten-Modus bleibt es beim normalen Menü,
-    // damit die Aktivitätseinstellungen weiterhin erreichbar sind.
-    if (state.canmoderate && !cfg.isediting) {
-      state.step = window.innerWidth >= 900 ? 'arrange' : 'moderate';
+    // Auf großen Bildschirmen startet die Aktivität für ALLE Rollen direkt
+    // in der Pinnwand-Ansicht. Auf kleinen Bildschirmen landet nur die
+    // Lehrkraft automatisch in der Klassenansicht (Lernende bleiben in
+    // "Meine Bilder"). Im Kurs-Bearbeiten-Modus bleibt es beim normalen
+    // Menü, damit die Aktivitätseinstellungen weiterhin erreichbar sind.
+    if (!cfg.isediting) {
+      if (window.innerWidth >= 900) { state.step = 'arrange'; }
+      else if (state.canmoderate) { state.step = 'moderate'; }
     }
     render();
     callAjax('mod_pinnwand_get_threads', { cmid: cfg.cmid }).then(function (res) {

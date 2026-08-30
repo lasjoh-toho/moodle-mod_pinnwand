@@ -429,6 +429,22 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Hauptrahmen des Wortfelds jetzt per Eck-Handle skalierbar, Textobjekte
   zusätzlich per eigenem Handle in der Schriftgröße skalierbar.
 
+### Sechzehnte Überarbeitung — Wortfeld als SVG, impress.js entfernt, Klassenansicht-Bugfix
+
+- **Wortfeld ist jetzt SVG statt PNG**: bleibt editierbarer Text (scharf bei
+  jeder Größe, kleinere Datei); Bearbeiten öffnet dadurch wieder den
+  Wortfeld-Editor statt des Bild-Editors.
+- **Kern-Bugfix Klassenansicht**: `querySelector('span')` traf ungewollt
+  das Icon-Span statt das Label-Span - Ursache für "Icons fehlen, Name
+  erscheint zweimal". Behoben.
+- **Präsentation ohne impress.js neu gebaut** (eigene, direkt nachprüfbare
+  CSS-Transform-Kamera) - Hintergrund bleibt jetzt bildschirmfüllend,
+  Klick auf ein Foto/Textrahmen direkt in der Präsentation hängt es an den
+  Faden an.
+- Faden-Panel: neue Liste aller Board-Objekte mit Zuschalt-Checkbox + Filter.
+- Große Bildschirme starten jetzt für alle Rollen im Pinnwand-Modus.
+- Sidebar-Buttons nebeneinander statt untereinander.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
@@ -445,6 +461,10 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Post-Stream ist ein 15-Sekunden-Poll, kein Echtzeit-Push.
 - Textobjekte im Wortfeld sind verschiebbar, aber nicht einzeln drehbar;
   Auto-Fit der Textgröße ist einzeilig (kein automatischer Zeilenumbruch).
+- Die eingebundene Google-Font ("Handschrift") erscheint im exportierten
+  SVG möglicherweise nicht (SVG als `<img>`-Quelle lädt keine extern
+  referenzierten Web-Fonts nach) - im Editor selbst wird sie korrekt live
+  angezeigt.
 - Eine Faden-Präsentation über mehrere Boards hinweg übernimmt deren
   Koordinaten unverändert, was bei stark abweichenden Board-Layouts zu
   großen Sprüngen führen kann.

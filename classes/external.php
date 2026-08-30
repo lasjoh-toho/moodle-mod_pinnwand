@@ -54,11 +54,13 @@ class mod_pinnwand_external extends external_api {
             'sourceplace' => new external_value(PARAM_TEXT, 'Ort', VALUE_DEFAULT, ''),
             'sourceorigauthor' => new external_value(PARAM_TEXT, 'Autor*in der Vorlage', VALUE_DEFAULT, ''),
             'boardid' => new external_value(PARAM_INT, 'Board-ID', VALUE_DEFAULT, 0),
+            'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON), falls dieses Foto ein Wortfeld ist', VALUE_DEFAULT, ''),
         ]);
     }
 
     public static function save_photo($cmid, $imagedata, $gridtype, $gridvalue, $consent,
-            $sourcetitle, $sourceauthor, $sourceyear, $sourceepoch, $sourceplace, $sourceorigauthor, $boardid = 0) {
+            $sourcetitle, $sourceauthor, $sourceyear, $sourceepoch, $sourceplace, $sourceorigauthor, $boardid = 0,
+            $wordfielddata = '') {
         global $DB, $USER;
 
         $params = self::validate_parameters(self::save_photo_parameters(), [
@@ -66,6 +68,7 @@ class mod_pinnwand_external extends external_api {
             'gridvalue' => $gridvalue, 'consent' => $consent, 'sourcetitle' => $sourcetitle,
             'sourceauthor' => $sourceauthor, 'sourceyear' => $sourceyear, 'sourceepoch' => $sourceepoch,
             'sourceplace' => $sourceplace, 'sourceorigauthor' => $sourceorigauthor, 'boardid' => $boardid,
+            'wordfielddata' => $wordfielddata,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
 
@@ -83,13 +86,15 @@ class mod_pinnwand_external extends external_api {
             $params['gridtype'] = 'none';
         }
 
-        // Bilddaten aus Data-URL extrahieren.
-        if (!preg_match('#^data:image/(png|jpeg|jpg);base64,(.+)$#', $params['imagedata'], $m)) {
+        // Bilddaten aus Data-URL extrahieren. SVG (Wortfeld) bleibt als
+        // editierbarer Text erhalten statt gerastert zu werden - deutlich
+        // kleiner als ein PNG und die Schrift bleibt scharf bei jeder Größe.
+        if (!preg_match('#^data:image/(png|jpeg|jpg|svg\+xml);base64,(.+)$#', $params['imagedata'], $m)) {
             throw new moodle_exception('error_save', 'pinnwand');
         }
-        $ext = $m[1] === 'png' ? 'png' : 'jpg';
+        $ext = $m[1] === 'png' ? 'png' : ($m[1] === 'svg+xml' ? 'svg' : 'jpg');
         $binary = base64_decode($m[2]);
-        if ($binary === false || strlen($binary) < 100) {
+        if ($binary === false || strlen($binary) < 20) {
             throw new moodle_exception('error_save', 'pinnwand');
         }
 
@@ -114,6 +119,7 @@ class mod_pinnwand_external extends external_api {
         $record->canvasrot = 0;
         $record->canvasz = $existing;
         $record->boardid = $params['boardid'];
+        $record->wordfielddata = $params['wordfielddata'] !== '' ? $params['wordfielddata'] : null;
         $record->timecreated = time();
         $record->id = $DB->insert_record('pinnwand_photos', $record);
 
@@ -206,6 +212,7 @@ class mod_pinnwand_external extends external_api {
                 'backphotoid' => $r->backphotoid !== null ? (int) $r->backphotoid : 0,
                 'showingback' => (bool) $r->showingback,
                 'boardplaced' => (bool) $r->boardplaced,
+                'wordfielddata' => (string) ($r->wordfielddata ?? ''),
             ];
         }
         return [
@@ -323,6 +330,7 @@ class mod_pinnwand_external extends external_api {
                 'backphotoid' => new external_value(PARAM_INT, 'Verknüpfte Rückseite (0 = keine)'),
                 'showingback' => new external_value(PARAM_BOOL, 'Rückseite zeigt gerade nach oben'),
                 'boardplaced' => new external_value(PARAM_BOOL, 'Hat reale Board-Koordinaten (ist auf der Leinwand platziert)'),
+                'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON) oder leer'),
             ])),
         ]);
     }
@@ -885,13 +893,14 @@ class mod_pinnwand_external extends external_api {
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
             'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
             'imagedata' => new external_value(PARAM_RAW, 'Data-URL (base64) des neu bearbeiteten Fotos'),
+            'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON), falls Wortfeld', VALUE_DEFAULT, ''),
         ]);
     }
 
-    public static function update_photo($cmid, $photoid, $imagedata) {
+    public static function update_photo($cmid, $photoid, $imagedata, $wordfielddata = '') {
         global $DB, $USER;
         $params = self::validate_parameters(self::update_photo_parameters(), [
-            'cmid' => $cmid, 'photoid' => $photoid, 'imagedata' => $imagedata,
+            'cmid' => $cmid, 'photoid' => $photoid, 'imagedata' => $imagedata, 'wordfielddata' => $wordfielddata,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
 
@@ -906,14 +915,17 @@ class mod_pinnwand_external extends external_api {
             throw new moodle_exception('nopermissions', 'error', '', 'update_photo');
         }
 
-        if (!preg_match('#^data:image/(png|jpeg|jpg);base64,(.+)$#', $params['imagedata'], $m)) {
+        if (!preg_match('#^data:image/(png|jpeg|jpg|svg\+xml);base64,(.+)$#', $params['imagedata'], $m)) {
             throw new moodle_exception('error_save', 'pinnwand');
         }
-        $ext = $m[1] === 'png' ? 'png' : 'jpg';
+        $ext = $m[1] === 'png' ? 'png' : ($m[1] === 'svg+xml' ? 'svg' : 'jpg');
         $binary = base64_decode($m[2]);
-        if ($binary === false || strlen($binary) < 100) {
+        if ($binary === false || strlen($binary) < 20) {
             throw new moodle_exception('error_save', 'pinnwand');
         }
+
+        $photo->wordfielddata = $params['wordfielddata'] !== '' ? $params['wordfielddata'] : null;
+        $DB->update_record('pinnwand_photos', $photo);
 
         $fs = get_file_storage();
         $fs->delete_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id);

@@ -253,6 +253,8 @@
   padding: 12px; overflow-y: auto; box-shadow: -4px 0 16px rgba(0,0,0,.4);
 }
 .ic-thread-panel-title { font-size: .85rem; font-weight: 600; margin: 4px 0 8px; color: var(--ic-text); }
+.ic-thread-panel-subtitle { font-size: .78rem; font-weight: 600; margin: 12px 0 4px; color: var(--ic-muted); }
+.ic-thread-objects { margin-top: 6px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 6px; }
 .ic-thread-present-btn { width: 100%; margin-bottom: 10px; }
 .ic-thread-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .ic-thread-item {
@@ -313,21 +315,23 @@
 }
 .ic-stream-card.collapsed .ic-stream-pin-btn { display: none; }
 
-/* Präsentationsmodus (impress.js) */
+/* Präsentationsmodus (eigene Kamera-Transformation, kein impress.js mehr -
+   siehe openPresentation(): .ic-present-stage ist der feste Bildschirm-
+   Ausschnitt, .ic-present-bg eine eigenständige, NICHT mitgezoomte
+   Hintergrund-Ebene (bleibt dadurch immer bildschirmfüllend), und
+   .ic-present-canvas die per translate()+scale() bewegte/gezoomte
+   "Leinwand" mit allen Fotos/Rahmen. */
 .ic-present-overlay { position: fixed; inset: 0; z-index: 10000; background: #0b0c0e; overflow: hidden; }
-/* #pinnwand-impress bekommt KEIN eigenes position/top/left/right/bottom -
-   impress.js setzt das selbst per Inline-Style (top:50%;left:50%). Eigenes
-   CSS mit z.B. inset:0 würde mit diesen Inline-Styles kollidieren (right:0
-   + bottom:0 aus inset:0 bleiben zusammen mit top:50%;left:50% aktiv und
-   quetschen die Wurzel auf ein Viertel der Fläche zusammen). */
-.ic-present-bg {
-  position: absolute; left: 0; top: 0; width: 1000px; height: 1400px; z-index: -1;
-}
+.ic-present-stage { position: absolute; inset: 0; overflow: hidden; }
+.ic-present-bg { position: absolute; inset: 0; z-index: 0; }
+.ic-present-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; transition: transform .7s ease; z-index: 1; }
 .ic-present-photo {
   position: absolute; padding: 0; transition: opacity .25s ease;
 }
 .ic-present-photo img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 4px 24px rgba(0,0,0,.6); }
 .ic-present-photo.ic-present-occluded { opacity: 0; pointer-events: none; }
+.ic-present-photo.ic-present-addable { cursor: pointer; }
+.ic-present-photo.ic-present-addable img { outline: 3px dashed rgba(255,255,255,.4); outline-offset: 3px; }
 .ic-present-step-frame {
   position: absolute; border: 3px dashed #e0503f; border-radius: 6px;
   display: flex; align-items: flex-end; padding: 10px; box-sizing: border-box;

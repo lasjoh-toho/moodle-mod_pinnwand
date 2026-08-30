@@ -237,5 +237,16 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083008, 'pinnwand');
     }
 
+    if ($oldversion < 2026083010) {
+        // Feedback-Durchgang: Wortfeld bleibt bearbeitbarer Text (SVG statt
+        // PNG) - strukturierte Daten für erneutes Bearbeiten.
+        $table = new xmldb_table('pinnwand_photos');
+        $field = new xmldb_field('wordfielddata', XMLDB_TYPE_TEXT, null, null, null, null, null, 'boardplaced');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026083010, 'pinnwand');
+    }
+
     return true;
 }
