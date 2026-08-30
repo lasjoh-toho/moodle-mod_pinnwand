@@ -15,6 +15,8 @@ class restore_pinnwand_activity_structure_step extends restore_activity_structur
 
         if ($userinfo) {
             $paths[] = new restore_path_element('photo', '/activity/pinnwand/photos/photo');
+            $paths[] = new restore_path_element('thread', '/activity/pinnwand/threads/thread');
+            $paths[] = new restore_path_element('threaditem', '/activity/pinnwand/threads/thread/threaditems/threaditem');
         }
 
         return $this->prepare_activity_structure($paths);
@@ -43,6 +45,30 @@ class restore_pinnwand_activity_structure_step extends restore_activity_structur
         $newitemid = $DB->insert_record('pinnwand_photos', $data);
         // "true" = für dieses Mapping existieren Dateien (siehe after_execute()).
         $this->set_mapping('pinnwand_photo', $oldid, $newitemid, true);
+    }
+
+    protected function process_thread($data) {
+        global $DB;
+
+        $data = (object) $data;
+        $oldid = $data->id;
+        $data->pinnwandid = $this->get_new_parentid('pinnwand');
+        $data->userid = $this->get_mappingid('user', $data->userid);
+
+        $newitemid = $DB->insert_record('pinnwand_threads', $data);
+        $this->set_mapping('pinnwand_thread', $oldid, $newitemid);
+    }
+
+    protected function process_threaditem($data) {
+        global $DB;
+
+        $data = (object) $data;
+        $data->threadid = $this->get_new_parentid('thread');
+        if (!empty($data->photoid)) {
+            $data->photoid = $this->get_mappingid('pinnwand_photo', $data->photoid);
+        }
+
+        $DB->insert_record('pinnwand_thread_items', $data);
     }
 
     protected function after_execute() {

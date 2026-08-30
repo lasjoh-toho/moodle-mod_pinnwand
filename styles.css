@@ -212,6 +212,62 @@
   background: rgba(20,21,24,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
 .ic-zoom-slider { width: 120px; }
+
+/* Roter Faden: Seitenpanel + Buttons */
+.ic-thread-add-toggle {
+  position: absolute; right: -10px; top: -10px; width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid #fff; background: rgba(224,80,63,.9); color: #fff; padding: 0;
+  display: flex; align-items: center; justify-content: center; z-index: 5;
+}
+.ic-thread-panel {
+  position: absolute; top: 48px; right: 0; bottom: 0; width: 260px; max-width: 80vw; z-index: 25;
+  background: rgba(20,21,24,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  padding: 12px; overflow-y: auto; box-shadow: -4px 0 16px rgba(0,0,0,.4);
+}
+.ic-thread-panel-title { font-size: .85rem; font-weight: 600; margin: 4px 0 8px; color: var(--ic-text); }
+.ic-thread-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.ic-thread-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 8px;
+  background: var(--ic-panel); position: relative;
+}
+.ic-thread-item.dragging { opacity: .4; }
+.ic-thread-item img, .ic-thread-frame-thumb {
+  width: 36px; height: 36px; object-fit: cover; border-radius: 4px; flex: 0 0 auto;
+}
+.ic-thread-frame-thumb {
+  display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.08);
+  color: var(--ic-muted); font-size: 1.1rem;
+}
+.ic-thread-item-label {
+  font-size: .78rem; color: var(--ic-text); flex: 1 1 auto; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.ic-thread-remove {
+  border: none; background: transparent; color: var(--ic-muted); font-size: .8rem; padding: 4px;
+}
+.ic-thread-actions { display: flex; flex-direction: column; gap: 6px; }
+.ic-thread-actions .ic-btn { width: 100%; }
+
+/* Präsentationsmodus (impress.js) */
+.ic-present-overlay { position: fixed; inset: 0; z-index: 10000; background: #0b0c0e; }
+#pinnwand-impress { position: absolute; inset: 0; }
+#pinnwand-impress .step { width: 340px; padding: 0; }
+#pinnwand-impress .step img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 4px 24px rgba(0,0,0,.6); }
+.ic-present-frame {
+  border: 3px dashed rgba(255,255,255,.7); border-radius: 6px; min-height: 220px;
+  display: flex; align-items: flex-end; padding: 10px; box-sizing: border-box;
+}
+.ic-present-frame-label { color: #fff; font-size: 1.1rem; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+.ic-present-close {
+  position: fixed; top: 16px; right: 16px; z-index: 10001; width: 40px; height: 40px;
+  border-radius: 50%; background: rgba(20,21,24,.7);
+}
+.ic-present-nav {
+  position: fixed; top: 50%; transform: translateY(-50%); z-index: 10001;
+  width: 44px; height: 44px; border-radius: 50%; background: rgba(20,21,24,.7);
+}
+.ic-present-prev { left: 16px; }
+.ic-present-next { right: 16px; }
 .ic-bg-panel {
   position: fixed; left: 12px; right: 12px; bottom: 70px; z-index: 30;
   background: var(--ic-panel); border-radius: 12px; padding: 12px 14px;

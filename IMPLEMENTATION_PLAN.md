@@ -109,22 +109,38 @@ Betrifft: `js/app.js` (Canvas-Logik), `mod_form.php`, `db/install.xml` +
 
 ---
 
-## Phase 3 — Roter Faden + impress.js-Präsentation
+## Phase 3 — Roter Faden + impress.js-Präsentation ✅
 
-Betrifft: neue DB-Tabelle `pinnwand_threads` (+ Zwischentabelle
-Thread↔Objekt/Leerrahmen), neuer Endpunkt in `classes/external.php`,
-neues JS-Modul, `impress.js` als Vendor-Library einbinden
+Betrifft: neue DB-Tabellen `pinnwand_threads`/`pinnwand_thread_items`,
+neue Endpunkte in `classes/external.php`, `js/vendor/impress.js` (MIT,
+vendored + `thirdpartylibs.xml`), `js/app.js` (Panel + Präsentation)
 
-- [ ] Datenmodell: Faden (Besitzer, Farbe) + geordnete Liste aus
-  Foto-Referenzen **und** Leer-Rahmen (Gruppen-/Detail-Hervorhebung)
-- [ ] Button mit rotem-Faden-Icon zum Anlegen eines Fadens
-- [ ] Seitenpanel (ähnlich Post-Stream, selber Bereich rechts) zum Anzeigen
-  und per Drag umsortieren der Faden-Karten
-- [ ] Berechtigung: Lehrkraft erlaubt Lernenden in den Settings eigene Fäden
-  (eigene Farbe pro Nutzer*in)
-- [ ] Präsentationsmodus: verbundene Objekte werden anhand ihrer
-  Board-Position/-Größe in eine `impress.js`-Sequenz überführt und abspielbar
-  gemacht (nur auf großen Monitoren sinnvoll — Zugriff dort anbieten)
+- [x] Datenmodell: ein Faden pro Person (Lehrkraft immer, Lernende nur mit
+  `studentthreads`-Einstellung), geordnete Items vom Typ `photo` (verweist
+  auf ein eigenes Foto) oder `frame` (Leerrahmen mit eigenen Koordinaten +
+  Beschriftung)
+- [x] Button mit rotem-Faden-Icon (`icon('thread')`, geschwungene Linie mit
+  zwei Knoten) in der Fab-Leiste der Pinnwand
+- [x] Seitenpanel rechts (`renderThreadPanel`) mit den Stationen des eigenen
+  Fadens, per HTML5-Drag-and-Drop umsortierbar (`reorder_thread_items`);
+  zusätzlich schreibgeschützte Ansicht des Lehrkraft-Fadens für Lernende
+- [x] Berechtigung `studentthreads` (Instanzeinstellung) steuert, ob
+  Lernende einen eigenen Faden anlegen dürfen; Farbe wird serverseitig
+  deterministisch aus einer 6er-Palette anhand der Nutzer-ID vergeben
+- [x] Präsentationsmodus: `openPresentation()` baut aus den Faden-Items eine
+  `impress.js`-Sequenz (Position/Skalierung aus den Board- bzw.
+  Rahmen-Koordinaten), Navigation per ‹/›-Button; gesperrt unter 900px
+  Breite (Hinweis statt Start)
+
+**Scoping-Hinweise:**
+- Leerrahmen-Größe/-Position ist aktuell fix (240×180 an Position 40/40) und
+  die Beschriftung kommt über einen einfachen `prompt()` - kein eigener
+  Formulardialog. Nachträgliches Verschieben/Skalieren eines Rahmens auf dem
+  Board ist noch nicht möglich (nur Löschen + neu anlegen).
+- Eine Präsentation kann Stationen von verschiedenen Boards enthalten;
+  deren Koordinaten werden unverändert übernommen, was bei stark
+  abweichenden Board-Layouts zu großen "Sprüngen" führen kann - für den
+  Regelfall (ein Board) funktioniert es unmittelbar korrekt.
 
 ---
 

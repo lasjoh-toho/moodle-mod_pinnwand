@@ -58,7 +58,10 @@
     boardPanMode: false,   // Pinnwand: Hand-Werkzeug aktiv
     boardDrawMode: false,  // Pinnwand: Annotationswerkzeug direkt auf dem Canvas aktiv
     boards: [],            // Liste der Boards {id, name} - id 0 = implizites erstes Board
-    currentBoard: 0        // aktuell angezeigtes Board (id)
+    currentBoard: 0,       // aktuell angezeigtes Board (id)
+    threads: [],           // vom Server geladene Rote Fäden (eigener + ggf. der Lehrkraft)
+    canusethreads: false,  // darf eigenen Faden anlegen/bearbeiten
+    threadPanelOpen: false // Faden-Seitenpanel ein-/ausgeblendet
   };
 
   // ------------------------------------------------------------------
@@ -966,7 +969,8 @@
     arrowleft: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
     fullscreen: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/></svg>',
     thumbtack: '<svg viewBox="0 0 1502 1502" width="16" height="16" fill="currentColor"><path d="M887.379 265.37c-71.92 39.67-90.783 153.676-73.858 220.443 25.373 89.642 120.263 184.87 208.333 223.115 88.825 39.357 213.79 19.878 236.138-70.095 17.062-70.586-14.408-161.368-105.1-252.481-51.592-61.787-195.222-150.364-265.514-120.983zm230.112 132.709c146.728 158.437 175.269 364.057-102.498 170.535-34.831-24.267-35.33-25.11-63.176-61.653-180.218-260.581 36.104-234.896 165.675-108.882zm-427.136 211.52c-30.14 129.742 141.096 224.808 206.885 226.635l115.713-114.768s-15.115-7.428-22.352-9.622c-95.305-35.201-153.483-115.01-186.185-198.223zM485.279 724.858c11.704 135.014 160.179 270.964 278.146 298.044 94.23 22.034 149.97-90.424 137.659-165.743-124.499-1.779-264.574-142.482-229.575-240.563-75.865-20.138-185.011 41.747-186.23 108.261zm-183.466 469.254c-10.709 15.142 2.074 28.789 19.1 14.38l288.835-244.45c-32.143-18.286-42.019-27.02-60.405-61.83 0 0-161.602 197.241-247.53 291.9z"/></svg>',
-    hand: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v7"/><path d="M10 10.5V6a2 2 0 0 0-4 0v10"/><path d="M6 14l-1.5-1.8a1.8 1.8 0 0 0-2.7 2.3L6 21h9a4 4 0 0 0 4-4v-5a2 2 0 0 0-4 0"/></svg>'
+    hand: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v7"/><path d="M10 10.5V6a2 2 0 0 0-4 0v10"/><path d="M6 14l-1.5-1.8a1.8 1.8 0 0 0-2.7 2.3L6 21h9a4 4 0 0 0 4-4v-5a2 2 0 0 0-4 0"/></svg>',
+    thread: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#e0503f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="6" r="1.6" fill="#e0503f"/><circle cx="20" cy="18" r="1.6" fill="#e0503f"/><path d="M4 6c4 0 2 6 6 6s2-6 6-6 2 6 4 6"/></svg>'
   };
   function icon(name) {
     if (name === 'text') {
@@ -1125,8 +1129,9 @@
 
       // Pin/Unpin direkt auf dem Board (Vorgabe-Icon) - von der Pinnwand
       // entfernen blendet das Foto hier sofort aus (bleibt in "Meine Bilder").
+      var pinToggle = null;
       if (state.studentcansend) {
-        var pinToggle = el('button', { class: 'ic-pin-toggle', title: S.removefromboard }, [icon('thumbtack')]);
+        pinToggle = el('button', { class: 'ic-pin-toggle', title: S.removefromboard }, [icon('thumbtack')]);
         pinToggle.addEventListener('click', function (ev) {
           ev.stopPropagation();
           callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: true }).then(function () {
@@ -1135,6 +1140,30 @@
           });
         });
         item.appendChild(pinToggle);
+      }
+
+      // Zum Roten Faden hinzufügen - nur während das Faden-Panel offen ist,
+      // um die Pinnwand im Normalfall nicht zusätzlich zu überladen.
+      if (state.threadPanelOpen && state.canusethreads) {
+        var already = false;
+        var own = ownThread();
+        if (own) {
+          already = own.items.some(function (it) { return it.itemtype === 'photo' && it.photoid === p.id; });
+        }
+        if (!already) {
+          var addThreadBtn = el('button', { class: 'ic-thread-add-toggle', title: S.addtothread }, [icon('thread')]);
+          addThreadBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            callAjax('mod_pinnwand_add_thread_item', {
+              cmid: cfg.cmid, itemtype: 'photo', photoid: p.id, boardid: state.currentBoard
+            }).then(function (res) {
+              state.threads = state.threads.filter(function (t) { return !t.isown; });
+              state.threads.push({ id: res.threadid, color: res.color, isown: true, items: res.items });
+              render();
+            });
+          });
+          item.appendChild(addThreadBtn);
+        }
       }
 
       var resize = el('div', { class: 'ic-resize' });
@@ -1154,7 +1183,7 @@
       // Handles (Größe/Rotation) nur bei Hover (Maus) bzw. nach Antippen
       // (Touch) einblenden - siehe .ic-arrange-item.show-handles in CSS.
       item.addEventListener('click', function (ev) {
-        if (ev.target === pinToggle || (pinToggle && pinToggle.contains(ev.target))) { return; }
+        if (ev.target.closest && ev.target.closest('.ic-pin-toggle, .ic-thread-add-toggle')) { return; }
         item.classList.toggle('show-handles');
       });
 
@@ -1263,12 +1292,218 @@
     drawBtn.addEventListener('click', function () { state.boardDrawMode = !state.boardDrawMode; render(); });
     fabRow.appendChild(drawBtn);
 
+    // Roter Faden: Seitenpanel rechts (siehe renderThreadPanel) ein-/ausblenden.
+    if (state.canusethreads || state.threads.length > 0) {
+      var threadBtn = el('button', { class: 'ic-fab' + (state.threadPanelOpen ? ' active' : ''), title: S.thread }, [icon('thread')]);
+      threadBtn.addEventListener('click', function () { state.threadPanelOpen = !state.threadPanelOpen; render(); });
+      fabRow.appendChild(threadBtn);
+    }
+
     var maxreached = state.maxpictures > 0 && state.photos.length >= state.maxpictures;
     var addBtn = el('button', { class: 'ic-fab ic-fab-primary', title: S.addphoto, disabled: maxreached ? 'disabled' : null }, ['+']);
     addBtn.addEventListener('click', function () { if (!maxreached) { state.step = 'capture'; render(); } });
     fabRow.appendChild(addBtn);
 
     body.appendChild(fabRow);
+
+    if (state.threadPanelOpen) { body.appendChild(renderThreadPanel()); }
+  }
+
+  // ------------------------------------------------------------------
+  // ROTER FADEN: Seitenpanel mit den Stationen des eigenen Fadens
+  // (Fotos + Leerrahmen), per Drag umsortierbar, plus - falls vorhanden -
+  // schreibgeschützte Ansicht des Fadens der Lehrkraft.
+  // ------------------------------------------------------------------
+  function ownThread() {
+    for (var i = 0; i < state.threads.length; i++) { if (state.threads[i].isown) { return state.threads[i]; } }
+    return null;
+  }
+  function sharedThread() {
+    for (var i = 0; i < state.threads.length; i++) { if (!state.threads[i].isown) { return state.threads[i]; } }
+    return null;
+  }
+
+  function threadItemLabel(item) {
+    if (item.itemtype === 'frame') { return item.framelabel || S.emptyframe; }
+    var p = null;
+    for (var i = 0; i < state.photos.length; i++) { if (state.photos[i].id === item.photoid) { p = state.photos[i]; break; } }
+    return p ? (p.sourcetitle || itemCaptionText(p)) : '';
+  }
+
+  function renderThreadList(thread, editable) {
+    var list = el('div', { class: 'ic-thread-list' });
+    if (!thread || thread.items.length === 0) {
+      list.appendChild(el('p', { class: 'ic-hint' }, [S.threads_empty]));
+      return list;
+    }
+    var dragFromIdx = null;
+    thread.items.forEach(function (item, idx) {
+      var row = el('div', { class: 'ic-thread-item', draggable: editable ? 'true' : null });
+      var photo = item.itemtype === 'photo'
+        ? state.photos.filter(function (p) { return p.id === item.photoid; })[0] : null;
+      if (photo) {
+        row.appendChild(el('img', { src: photo.url, alt: '' }));
+      } else {
+        row.appendChild(el('div', { class: 'ic-thread-frame-thumb' }, ['\u2b1a']));
+      }
+      row.appendChild(el('span', { class: 'ic-thread-item-label' }, [threadItemLabel(item)]));
+      if (editable) {
+        var rm = el('button', { class: 'ic-thread-remove', title: S.removefromthread }, ['\u2715']);
+        rm.addEventListener('click', function () {
+          callAjax('mod_pinnwand_remove_thread_item', { cmid: cfg.cmid, itemid: item.id }).then(function () {
+            thread.items.splice(idx, 1);
+            render();
+          });
+        });
+        row.appendChild(rm);
+
+        row.addEventListener('dragstart', function () { dragFromIdx = idx; row.classList.add('dragging'); });
+        row.addEventListener('dragend', function () { row.classList.remove('dragging'); });
+        row.addEventListener('dragover', function (ev) { ev.preventDefault(); });
+        row.addEventListener('drop', function (ev) {
+          ev.preventDefault();
+          if (dragFromIdx === null || dragFromIdx === idx) { return; }
+          var moved = thread.items.splice(dragFromIdx, 1)[0];
+          thread.items.splice(idx, 0, moved);
+          dragFromIdx = null;
+          callAjax('mod_pinnwand_reorder_thread_items', {
+            cmid: cfg.cmid, itemids: thread.items.map(function (it) { return it.id; })
+          });
+          render();
+        });
+      }
+      list.appendChild(row);
+    });
+    return list;
+  }
+
+  function renderThreadPanel() {
+    var panel = el('div', { class: 'ic-thread-panel' });
+    var own = ownThread();
+    var shared = sharedThread();
+
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.thread]));
+    panel.appendChild(renderThreadList(own, true));
+
+    if (state.canusethreads) {
+      var actions = el('div', { class: 'ic-thread-actions' });
+      var addFrameBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.addframetothread]);
+      addFrameBtn.addEventListener('click', function () {
+        var label = prompt(S.addframetothread, '') || '';
+        callAjax('mod_pinnwand_add_thread_item', {
+          cmid: cfg.cmid, itemtype: 'frame', boardid: state.currentBoard,
+          framex: 40, framey: 40, framew: 240, frameh: 180, framelabel: label
+        }).then(function (res) {
+          state.threads = state.threads.filter(function (t) { return !t.isown; });
+          state.threads.push({ id: res.threadid, color: res.color, isown: true, items: res.items });
+          render();
+        });
+      });
+      actions.appendChild(addFrameBtn);
+      if (own && own.items.length > 0) {
+        var presentBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.presentthread]);
+        presentBtn.addEventListener('click', function () { openPresentation(own); });
+        actions.appendChild(presentBtn);
+        var delBtn = el('button', { class: 'ic-btn ic-btn-danger' }, [S.deletethread]);
+        delBtn.addEventListener('click', function () {
+          if (confirm(S.confirmdeletethread)) {
+            callAjax('mod_pinnwand_delete_thread', { cmid: cfg.cmid }).then(function () {
+              state.threads = state.threads.filter(function (t) { return !t.isown; });
+              render();
+            });
+          }
+        });
+        actions.appendChild(delBtn);
+      }
+      panel.appendChild(actions);
+    }
+
+    if (shared) {
+      panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.teacherthread]));
+      panel.appendChild(renderThreadList(shared, false));
+      if (shared.items.length > 0) {
+        var presentSharedBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.presentthread]);
+        presentSharedBtn.addEventListener('click', function () { openPresentation(shared); });
+        panel.appendChild(presentSharedBtn);
+      }
+    }
+
+    return panel;
+  }
+
+  // ------------------------------------------------------------------
+  // PRÄSENTATION: verbundene Stationen eines Fadens als impress.js-Ablauf.
+  // Bewusst einfach gehalten: Position/Größe kommen direkt von den
+  // Board-Koordinaten (Fotos) bzw. den gespeicherten Rahmen-Koordinaten -
+  // kein separates Editieren der Kamerafahrt.
+  // ------------------------------------------------------------------
+  var impressScriptPromise = null;
+  function loadImpress() {
+    if (window.impress) { return Promise.resolve(); }
+    if (!impressScriptPromise) {
+      impressScriptPromise = new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = cfg.impressurl;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    return impressScriptPromise;
+  }
+
+  function openPresentation(thread) {
+    if (window.innerWidth < 900) { alert(S.present_smallscreen); return; }
+    loadImpress().then(function () {
+      var overlay = el('div', { class: 'ic-present-overlay' });
+      var impressRoot = el('div', { id: 'pinnwand-impress' });
+      var canvasEl = el('div', { class: 'step', id: 'ic-present-start', 'data-x': '0', 'data-y': '0' });
+      impressRoot.appendChild(canvasEl);
+
+      thread.items.forEach(function (item, idx) {
+        var x, y, w;
+        if (item.itemtype === 'frame') {
+          x = item.framex; y = item.framey; w = item.framew;
+        } else {
+          var photo = state.photos.filter(function (p) { return p.id === item.photoid; })[0];
+          if (!photo) { return; }
+          x = photo.canvasx; y = photo.canvasy; w = photo.canvasw;
+        }
+        var scale = Math.max(0.4, Math.min(2.5, w / 400));
+        var step = el('div', {
+          class: 'step', id: 'ic-present-step-' + idx,
+          'data-x': String(x + w / 2), 'data-y': String(y + (w * 0.7) / 2), 'data-scale': String(scale)
+        });
+        if (item.itemtype === 'frame') {
+          step.classList.add('ic-present-frame');
+          if (item.framelabel) { step.appendChild(el('div', { class: 'ic-present-frame-label' }, [item.framelabel])); }
+        } else {
+          var photo2 = state.photos.filter(function (p) { return p.id === item.photoid; })[0];
+          step.appendChild(el('img', { src: photo2.url, alt: '' }));
+        }
+        impressRoot.appendChild(step);
+      });
+
+      var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-present-close', title: S.exitpresent }, ['\u2715']);
+      var prevBtn = el('button', { class: 'ic-btn ic-present-nav ic-present-prev' }, ['\u2039']);
+      var nextBtn = el('button', { class: 'ic-btn ic-present-nav ic-present-next' }, ['\u203A']);
+
+      overlay.appendChild(impressRoot);
+      overlay.appendChild(closeBtn);
+      overlay.appendChild(prevBtn);
+      overlay.appendChild(nextBtn);
+      document.body.appendChild(overlay);
+
+      var api = window.impress('pinnwand-impress');
+      api.init();
+      prevBtn.addEventListener('click', function () { api.prev(); });
+      nextBtn.addEventListener('click', function () { api.next(); });
+      closeBtn.addEventListener('click', function () {
+        api.tear();
+        document.body.classList.remove('impress-enabled', 'impress-disabled', 'impress-supported', 'impress-not-supported');
+        overlay.remove();
+      });
+    });
   }
 
   // ==================================================================
@@ -1694,7 +1929,7 @@
     function point(ev) { var t = ev.touches ? ev.touches[0] : ev; return { x: t.clientX, y: t.clientY }; }
     function down(ev) {
       if (ev.target.classList.contains('ic-resize')) { return; }
-      if (ev.target.closest && ev.target.closest('.ic-pin-toggle')) { return; }
+      if (ev.target.closest && ev.target.closest('.ic-pin-toggle, .ic-thread-add-toggle')) { return; }
       if (state.boardDrawMode) { return; }
       dragging = true; totalDelta = 0;
       var p = point(ev);
@@ -2336,6 +2571,11 @@
       state.step = window.innerWidth >= 900 ? 'arrange' : 'moderate';
     }
     render();
+    callAjax('mod_pinnwand_get_threads', { cmid: cfg.cmid }).then(function (res) {
+      state.threads = res.threads || [];
+      state.canusethreads = !!res.canuse;
+      if (state.step === 'arrange') { render(); }
+    }).catch(function () { /* Fäden bleiben leer, Board funktioniert trotzdem */ });
   }).catch(function () {
     render();
   });

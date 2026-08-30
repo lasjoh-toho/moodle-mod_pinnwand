@@ -135,5 +135,50 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083000, 'pinnwand');
     }
 
+    if ($oldversion < 2026083001) {
+        // Phase 3: Roter Faden (geordnete Foto-/Rahmen-Sequenz je Person) +
+        // impress.js-Präsentation.
+        $table = new xmldb_table('pinnwand');
+        $field = new xmldb_field('studentthreads', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'boardpannable');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $threads = new xmldb_table('pinnwand_threads');
+        if (!$dbman->table_exists($threads)) {
+            $threads->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $threads->add_field('pinnwandid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $threads->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $threads->add_field('color', XMLDB_TYPE_CHAR, '7', null, XMLDB_NOTNULL, null, '#e0503f');
+            $threads->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $threads->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $threads->add_key('pinnwandid', XMLDB_KEY_FOREIGN, ['pinnwandid'], 'pinnwand', ['id']);
+            $threads->add_key('userid', XMLDB_KEY_FOREIGN, ['userid'], 'user', ['id']);
+            $dbman->create_table($threads);
+        }
+
+        $items = new xmldb_table('pinnwand_thread_items');
+        if (!$dbman->table_exists($items)) {
+            $items->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $items->add_field('threadid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $items->add_field('sortorder', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $items->add_field('itemtype', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'photo');
+            $items->add_field('photoid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+            $items->add_field('boardid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $items->add_field('framex', XMLDB_TYPE_NUMBER, '10,2', null, null, null, null);
+            $items->add_field('framey', XMLDB_TYPE_NUMBER, '10,2', null, null, null, null);
+            $items->add_field('framew', XMLDB_TYPE_NUMBER, '10,2', null, null, null, null);
+            $items->add_field('frameh', XMLDB_TYPE_NUMBER, '10,2', null, null, null, null);
+            $items->add_field('framelabel', XMLDB_TYPE_CHAR, '255', null, null, null, null);
+            $items->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $items->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $items->add_key('threadid', XMLDB_KEY_FOREIGN, ['threadid'], 'pinnwand_threads', ['id']);
+            $items->add_key('photoid', XMLDB_KEY_FOREIGN, ['photoid'], 'pinnwand_photos', ['id']);
+            $dbman->create_table($items);
+        }
+
+        upgrade_mod_savepoint(true, 2026083001, 'pinnwand');
+    }
+
     return true;
 }

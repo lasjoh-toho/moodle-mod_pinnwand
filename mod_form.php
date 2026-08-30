@@ -55,6 +55,10 @@ class mod_pinnwand_mod_form extends moodleform_mod {
         $mform->setDefault('boardpannable', 0);
         $mform->addHelpButton('boardpannable', 'boardpannable', 'pinnwand');
 
+        $mform->addElement('advcheckbox', 'studentthreads', get_string('studentthreads', 'pinnwand'));
+        $mform->setDefault('studentthreads', 0);
+        $mform->addHelpButton('studentthreads', 'studentthreads', 'pinnwand');
+
         $this->standard_coursemodule_elements();
         $this->add_action_buttons();
     }

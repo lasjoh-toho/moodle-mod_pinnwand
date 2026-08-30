@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<libraries>
+  <library>
+    <location>js/vendor/impress.js</location>
+    <name>impress.js</name>
+    <license>MIT</license>
+    <version>2.0.0</version>
+    <licenseversion></licenseversion>
+  </library>
+</libraries>

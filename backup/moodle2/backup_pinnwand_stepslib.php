@@ -16,7 +16,7 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
         $pinnwand = new backup_nested_element('pinnwand', ['id'], [
             'name', 'intro', 'introformat', 'maxpictures', 'allowconsent',
             'boarddefault', 'studentcansend', 'teachercansend', 'studentclassview',
-            'boardpannable', 'consenttext', 'timecreated', 'timemodified',
+            'boardpannable', 'studentthreads', 'consenttext', 'timecreated', 'timemodified',
         ]);
 
         // Fotos - personenbezogen, daher nur mit "userinfo" gesichert.
@@ -30,16 +30,37 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
             'canvasw', 'canvasrot', 'canvasz', 'boardid', 'timecreated',
         ]);
 
+        // Rote Fäden - ebenfalls personenbezogen (ein Faden pro Person).
+        $threads = new backup_nested_element('threads');
+        $thread = new backup_nested_element('thread', ['id'], ['userid', 'color', 'timecreated']);
+        $threaditems = new backup_nested_element('threaditems');
+        $threaditem = new backup_nested_element('threaditem', ['id'], [
+            'sortorder', 'itemtype', 'photoid', 'boardid',
+            'framex', 'framey', 'framew', 'frameh', 'framelabel', 'timecreated',
+        ]);
+
         $pinnwand->add_child($photos);
         $photos->add_child($photo);
+
+        $pinnwand->add_child($threads);
+        $threads->add_child($thread);
+        $thread->add_child($threaditems);
+        $threaditems->add_child($threaditem);
 
         $pinnwand->set_source_table('pinnwand', ['id' => backup::VAR_ACTIVITYID]);
 
         if ($userinfo) {
             $photo->set_source_table('pinnwand_photos', ['pinnwandid' => backup::VAR_PARENTID]);
+            $thread->set_source_table('pinnwand_threads', ['pinnwandid' => backup::VAR_PARENTID]);
+            $threaditem->set_source_table('pinnwand_thread_items', ['threadid' => backup::VAR_PARENTID]);
         }
 
         $photo->annotate_ids('user', 'userid');
+        $thread->annotate_ids('user', 'userid');
+        // photoid verweist auf ein Foto derselben Aktivität - wird beim
+        // Restore über die 'pinnwand_photo'-Zuordnung aufgelöst (siehe
+        // restore_pinnwand_stepslib.php process_threaditem()).
+        $threaditem->annotate_ids('pinnwand_photo', 'photoid');
 
         // Editor-Dateien der Aktivitätsbeschreibung (intro).
         $pinnwand->annotate_files('mod_pinnwand', 'intro', null);

@@ -902,4 +902,265 @@ class mod_pinnwand_external extends external_api {
             'url' => new external_value(PARAM_RAW, 'Neue Bild-URL'),
         ]);
     }
+
+    // ---------------------------------------------------------------
+    // Roter Faden: ein Faden pro Person (Lehrkraft immer, Lernende nur
+    // falls die Aktivitätseinstellung "studentthreads" es erlaubt).
+    // Farbe wird beim Anlegen einmalig aus einer festen Palette anhand der
+    // Nutzer-ID vergeben (deterministisch, ohne UI zur Auswahl).
+    // ---------------------------------------------------------------
+    const THREAD_COLORS = ['#e0503f', '#4f8cff', '#3fcf8e', '#e0b23f', '#b06fe0', '#3fc7cf'];
+
+    protected static function can_use_threads($instance, $context) {
+        return has_capability('mod/pinnwand:viewall', $context) || (bool) $instance->studentthreads;
+    }
+
+    protected static function get_or_create_thread($instance, $context, $USER) {
+        global $DB;
+        $thread = $DB->get_record('pinnwand_threads', ['pinnwandid' => $instance->id, 'userid' => $USER->id]);
+        if ($thread) {
+            return $thread;
+        }
+        if (!self::can_use_threads($instance, $context)) {
+            throw new moodle_exception('nopermissions', 'error', '', 'thread');
+        }
+        $color = self::THREAD_COLORS[$USER->id % count(self::THREAD_COLORS)];
+        $thread = (object) [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'color' => $color, 'timecreated' => time(),
+        ];
+        $thread->id = $DB->insert_record('pinnwand_threads', $thread);
+        return $thread;
+    }
+
+    protected static function export_thread_items($threadid) {
+        global $DB;
+        $records = $DB->get_records('pinnwand_thread_items', ['threadid' => $threadid], 'sortorder ASC');
+        $out = [];
+        foreach ($records as $r) {
+            $out[] = [
+                'id' => (int) $r->id,
+                'itemtype' => $r->itemtype,
+                'photoid' => $r->photoid !== null ? (int) $r->photoid : 0,
+                'boardid' => (int) $r->boardid,
+                'framex' => $r->framex !== null ? (float) $r->framex : 0,
+                'framey' => $r->framey !== null ? (float) $r->framey : 0,
+                'framew' => $r->framew !== null ? (float) $r->framew : 0,
+                'frameh' => $r->frameh !== null ? (float) $r->frameh : 0,
+                'framelabel' => (string) ($r->framelabel ?? ''),
+            ];
+        }
+        return $out;
+    }
+
+    protected static function thread_structure() {
+        return new external_single_structure([
+            'id' => new external_value(PARAM_INT, 'Thread-ID'),
+            'color' => new external_value(PARAM_TEXT, 'Farbe (Hex)'),
+            'isown' => new external_value(PARAM_BOOL, 'Gehört der aktuellen Person'),
+            'items' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Item-ID'),
+                'itemtype' => new external_value(PARAM_ALPHA, 'photo|frame'),
+                'photoid' => new external_value(PARAM_INT, 'Foto-ID (0 bei frame)'),
+                'boardid' => new external_value(PARAM_INT, 'Board-ID'),
+                'framex' => new external_value(PARAM_FLOAT, 'x (nur frame)'),
+                'framey' => new external_value(PARAM_FLOAT, 'y (nur frame)'),
+                'framew' => new external_value(PARAM_FLOAT, 'Breite (nur frame)'),
+                'frameh' => new external_value(PARAM_FLOAT, 'Höhe (nur frame)'),
+                'framelabel' => new external_value(PARAM_TEXT, 'Beschriftung (nur frame)'),
+            ])),
+        ]);
+    }
+
+    public static function get_threads_parameters() {
+        return new external_function_parameters(['cmid' => new external_value(PARAM_INT, 'Course module id')]);
+    }
+
+    public static function get_threads($cmid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::get_threads_parameters(), ['cmid' => $cmid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+
+        $out = [];
+        $own = $DB->get_record('pinnwand_threads', ['pinnwandid' => $instance->id, 'userid' => $USER->id]);
+        if ($own) {
+            $out[] = array_merge(
+                ['id' => (int) $own->id, 'color' => $own->color, 'isown' => true],
+                ['items' => self::export_thread_items($own->id)]
+            );
+        }
+        // Lernende sehen zusätzlich (nur lesend/abspielbar) den Faden der
+        // Lehrkraft, sofern vorhanden - die Lehrkraft selbst braucht das
+        // nicht (sieht ohnehin nur ihren eigenen offiziellen Faden).
+        if (!has_capability('mod/pinnwand:viewall', $context)) {
+            $teacherids = array_keys(get_users_by_capability($context, 'mod/pinnwand:viewall', 'u.id'));
+            if (!empty($teacherids)) {
+                [$insql, $inparams] = $DB->get_in_or_equal($teacherids);
+                $teacherthread = $DB->get_record_select(
+                    'pinnwand_threads', "pinnwandid = ? AND userid $insql",
+                    array_merge([$instance->id], $inparams), '*', IGNORE_MULTIPLE
+                );
+                if ($teacherthread) {
+                    $out[] = array_merge(
+                        ['id' => (int) $teacherthread->id, 'color' => $teacherthread->color, 'isown' => false],
+                        ['items' => self::export_thread_items($teacherthread->id)]
+                    );
+                }
+            }
+        }
+        return ['threads' => $out, 'canuse' => self::can_use_threads($instance, $context)];
+    }
+
+    public static function get_threads_returns() {
+        return new external_single_structure([
+            'threads' => new external_multiple_structure(self::thread_structure()),
+            'canuse' => new external_value(PARAM_BOOL, 'Darf einen eigenen Faden anlegen/bearbeiten'),
+        ]);
+    }
+
+    public static function add_thread_item_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'itemtype' => new external_value(PARAM_ALPHA, 'photo|frame'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID (bei photo)', VALUE_DEFAULT, 0),
+            'boardid' => new external_value(PARAM_INT, 'Board-ID', VALUE_DEFAULT, 0),
+            'framex' => new external_value(PARAM_FLOAT, 'x (bei frame)', VALUE_DEFAULT, 0),
+            'framey' => new external_value(PARAM_FLOAT, 'y (bei frame)', VALUE_DEFAULT, 0),
+            'framew' => new external_value(PARAM_FLOAT, 'Breite (bei frame)', VALUE_DEFAULT, 200),
+            'frameh' => new external_value(PARAM_FLOAT, 'Höhe (bei frame)', VALUE_DEFAULT, 150),
+            'framelabel' => new external_value(PARAM_TEXT, 'Beschriftung (bei frame)', VALUE_DEFAULT, ''),
+        ]);
+    }
+
+    public static function add_thread_item($cmid, $itemtype, $photoid = 0, $boardid = 0,
+            $framex = 0, $framey = 0, $framew = 200, $frameh = 150, $framelabel = '') {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::add_thread_item_parameters(), [
+            'cmid' => $cmid, 'itemtype' => $itemtype, 'photoid' => $photoid, 'boardid' => $boardid,
+            'framex' => $framex, 'framey' => $framey, 'framew' => $framew, 'frameh' => $frameh,
+            'framelabel' => $framelabel,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+        if (!in_array($params['itemtype'], ['photo', 'frame'], true)) {
+            throw new moodle_exception('invalidparameter', 'debug');
+        }
+        $thread = self::get_or_create_thread($instance, $context, $USER);
+
+        if ($params['itemtype'] === 'photo') {
+            $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+            if ($photo->userid != $USER->id || $photo->pinnwandid != $instance->id) {
+                throw new moodle_exception('nopermissions', 'error', '', 'add_thread_item');
+            }
+        }
+
+        $maxorder = (int) $DB->get_field_sql(
+            'SELECT MAX(sortorder) FROM {pinnwand_thread_items} WHERE threadid = ?', [$thread->id]
+        );
+        $item = (object) [
+            'threadid' => $thread->id,
+            'sortorder' => $maxorder + 1,
+            'itemtype' => $params['itemtype'],
+            'photoid' => $params['itemtype'] === 'photo' ? $params['photoid'] : null,
+            'boardid' => $params['boardid'],
+            'framex' => $params['itemtype'] === 'frame' ? $params['framex'] : null,
+            'framey' => $params['itemtype'] === 'frame' ? $params['framey'] : null,
+            'framew' => $params['itemtype'] === 'frame' ? $params['framew'] : null,
+            'frameh' => $params['itemtype'] === 'frame' ? $params['frameh'] : null,
+            'framelabel' => $params['itemtype'] === 'frame' ? $params['framelabel'] : null,
+            'timecreated' => time(),
+        ];
+        $item->id = $DB->insert_record('pinnwand_thread_items', $item);
+
+        return ['threadid' => (int) $thread->id, 'color' => $thread->color, 'items' => self::export_thread_items($thread->id)];
+    }
+
+    public static function add_thread_item_returns() {
+        return new external_single_structure([
+            'threadid' => new external_value(PARAM_INT, 'Thread-ID'),
+            'color' => new external_value(PARAM_TEXT, 'Farbe (Hex)'),
+            'items' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Item-ID'),
+                'itemtype' => new external_value(PARAM_ALPHA, 'photo|frame'),
+                'photoid' => new external_value(PARAM_INT, 'Foto-ID (0 bei frame)'),
+                'boardid' => new external_value(PARAM_INT, 'Board-ID'),
+                'framex' => new external_value(PARAM_FLOAT, 'x (nur frame)'),
+                'framey' => new external_value(PARAM_FLOAT, 'y (nur frame)'),
+                'framew' => new external_value(PARAM_FLOAT, 'Breite (nur frame)'),
+                'frameh' => new external_value(PARAM_FLOAT, 'Höhe (nur frame)'),
+                'framelabel' => new external_value(PARAM_TEXT, 'Beschriftung (nur frame)'),
+            ])),
+        ]);
+    }
+
+    public static function remove_thread_item_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'itemid' => new external_value(PARAM_INT, 'Item-ID'),
+        ]);
+    }
+
+    public static function remove_thread_item($cmid, $itemid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::remove_thread_item_parameters(), ['cmid' => $cmid, 'itemid' => $itemid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $item = $DB->get_record('pinnwand_thread_items', ['id' => $params['itemid']], '*', MUST_EXIST);
+        $thread = $DB->get_record('pinnwand_threads', ['id' => $item->threadid], '*', MUST_EXIST);
+        if ($thread->userid != $USER->id || $thread->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'remove_thread_item');
+        }
+        $DB->delete_records('pinnwand_thread_items', ['id' => $item->id]);
+        return ['success' => true];
+    }
+
+    public static function remove_thread_item_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function reorder_thread_items_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'itemids' => new external_multiple_structure(new external_value(PARAM_INT, 'Item-ID'), 'Neue Reihenfolge'),
+        ]);
+    }
+
+    public static function reorder_thread_items($cmid, $itemids) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::reorder_thread_items_parameters(), ['cmid' => $cmid, 'itemids' => $itemids]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $own = $DB->get_record('pinnwand_threads', ['pinnwandid' => $instance->id, 'userid' => $USER->id], '*', MUST_EXIST);
+        foreach ($params['itemids'] as $order => $itemid) {
+            $item = $DB->get_record('pinnwand_thread_items', ['id' => $itemid, 'threadid' => $own->id]);
+            if ($item) {
+                $item->sortorder = $order;
+                $DB->update_record('pinnwand_thread_items', $item);
+            }
+        }
+        return ['success' => true];
+    }
+
+    public static function reorder_thread_items_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function delete_thread_parameters() {
+        return new external_function_parameters(['cmid' => new external_value(PARAM_INT, 'Course module id')]);
+    }
+
+    public static function delete_thread($cmid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::delete_thread_parameters(), ['cmid' => $cmid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $own = $DB->get_record('pinnwand_threads', ['pinnwandid' => $instance->id, 'userid' => $USER->id]);
+        if ($own) {
+            $DB->delete_records('pinnwand_thread_items', ['threadid' => $own->id]);
+            $DB->delete_records('pinnwand_threads', ['id' => $own->id]);
+        }
+        return ['success' => true];
+    }
+
+    public static function delete_thread_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
 }
