@@ -100,24 +100,12 @@
     var body = el('div', { class: 'ic-body' });
     root.appendChild(body);
 
-    // Einheitliche Kopfzeile auf jedem Bildschirm außer der Startseite:
-    // Überschrift mittig, Schließen-Button rechts (führt immer zum Menü).
-    var screenTitles = {
-      capture: S.step_capture, perspective: S.step_perspective, crop: S.step_crop,
-      color: S.step_color, source: S.step_source, arrange: S.pinboard, moderate: S.moderate_mode
-    };
-    if (state.step !== 'home' && screenTitles[state.step]) {
-      body.classList.add('has-header');
-      var header = el('div', { class: 'ic-screen-header' }, [
-        el('h1', { class: 'ic-screen-title' }, [screenTitles[state.step]])
-      ]);
-      root.appendChild(header);
-      var closeBtn = el('button', {
-        class: 'ic-screen-close', title: S.back_menu, 'aria-label': S.back_menu,
-        onclick: function () { resetCaptureState(); state.step = 'home'; render(); }
-      }, ['\u2715']);
-      root.appendChild(closeBtn);
-    }
+    // Einheitliche, persistente Kopfzeile auf jedem Bildschirm: links Zurück-
+    // zum-Kurs + Vollbild, mittig Pinnwand-Name + Name der aktuellen
+    // Oberfläche (Titel/Untertitel nur ab einer Mindestbreite sichtbar,
+    // s. CSS), rechts die vier Haupt-Oberflächen als Navigations-Buttons.
+    // Bewusst in einer Zeile gehalten (auch mobil) - siehe .ic-topbar CSS.
+    root.appendChild(renderTopBar());
 
     switch (state.step) {
       case 'home': renderHome(body); break;
@@ -129,6 +117,78 @@
       case 'arrange': renderArrange(body); break;
       case 'moderate': renderModerate(body); break;
     }
+  }
+
+  // Ansichtsnamen für die Untertitel-Anzeige mittig in der Kopfzeile -
+  // sowohl die vier Hauptansichten als auch die Einzelschritte des
+  // Hinzufügen-Assistenten (dessen eigene Neugestaltung folgt in Phase 6).
+  var VIEW_LABELS = {
+    home: S.mygallery, arrange: S.pinboard, moderate: S.moderate_mode,
+    capture: S.step_capture, perspective: S.step_perspective, crop: S.step_crop,
+    color: S.step_color, source: S.step_source
+  };
+  // Diese Schritte gehören zum Hinzufügen-Assistenten - der "Hinzufügen"-
+  // Navigationsbutton gilt hier ebenfalls als aktiv.
+  var ADD_WIZARD_STEPS = { capture: 1, perspective: 1, crop: 1, color: 1, source: 1 };
+
+  function goToView(step) {
+    return function () {
+      if (state.step === step) { return; }
+      if (ADD_WIZARD_STEPS[state.step] && !ADD_WIZARD_STEPS[step]) { resetCaptureState(); }
+      state.step = step;
+      render();
+    };
+  }
+
+  function toggleFullscreen(btn) {
+    var el = document.documentElement;
+    if (!document.fullscreenElement) {
+      (el.requestFullscreen || el.webkitRequestFullscreen || function () {}).call(el);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
+    }
+  }
+
+  function renderTopBar() {
+    var bar = el('div', { class: 'ic-topbar' });
+
+    var left = el('div', { class: 'ic-topbar-left' });
+    left.appendChild(el('a', {
+      class: 'ic-icon-btn', title: S.back_course, 'aria-label': S.back_course, href: cfg.courseurl || '#'
+    }, [icon('courseback')]));
+    var fsActive = !!document.fullscreenElement;
+    var fsBtn = el('button', {
+      class: 'ic-icon-btn', title: fsActive ? S.exitfullscreen : S.fullscreen,
+      'aria-label': fsActive ? S.exitfullscreen : S.fullscreen
+    }, [icon('fullscreen')]);
+    fsBtn.addEventListener('click', toggleFullscreen);
+    left.appendChild(fsBtn);
+    bar.appendChild(left);
+
+    var center = el('div', { class: 'ic-topbar-center' }, [
+      el('span', { class: 'ic-topbar-title' }, [root.dataset.title || '']),
+      el('span', { class: 'ic-topbar-sub' }, [VIEW_LABELS[state.step] || ''])
+    ]);
+    bar.appendChild(center);
+
+    var right = el('div', { class: 'ic-topbar-right' });
+    var navItems = [
+      ['arrange', 'pin', S.pinboard],
+      ['home', 'person', S.mygallery],
+      ['capture', 'camera', S.addphoto]
+    ];
+    if (state.canmoderate) { navItems.push(['moderate', 'group', S.moderate_mode]); }
+    navItems.forEach(function (item) {
+      var isActive = state.step === item[0] || (item[0] === 'capture' && ADD_WIZARD_STEPS[state.step]);
+      var b = el('button', {
+        class: 'ic-icon-btn' + (isActive ? ' active' : ''), title: item[2], 'aria-label': item[2]
+      }, [icon(item[1])]);
+      b.addEventListener('click', goToView(item[0]));
+      right.appendChild(b);
+    });
+    bar.appendChild(right);
+
+    return bar;
   }
 
   function stepsBar(activeIdx) {
@@ -150,47 +210,6 @@
     if (maxreached) {
       wrap.appendChild(el('p', { class: 'ic-hint' }, [S.maxreached]));
     }
-
-    var menuRow = el('div', { class: 'ic-menu-row' });
-
-    var courseBtn = el('a', {
-      class: 'ic-btn ic-btn-ghost ic-btn-icon', title: S.back_course, 'aria-label': S.back_course,
-      href: cfg.courseurl || '#'
-    }, [icon('courseback')]);
-    menuRow.appendChild(courseBtn);
-
-    if (cfg.settingsurl) {
-      var settingsBtn = el('a', {
-        class: 'ic-btn ic-btn-ghost ic-btn-icon', title: S.activitysettings, 'aria-label': S.activitysettings,
-        href: cfg.settingsurl
-      }, ['\u2699']);
-      menuRow.appendChild(settingsBtn);
-    }
-
-    var btnCam = el('button', {
-      class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.takephoto, 'aria-label': S.takephoto,
-      disabled: maxreached ? 'disabled' : null,
-      onclick: function () { if (!maxreached) { state.step = 'capture'; render(); } }
-    }, [icon('camera')]);
-    menuRow.appendChild(btnCam);
-
-    var meBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon active', title: S.mygallery, 'aria-label': S.mygallery }, [icon('person')]);
-    menuRow.appendChild(meBtn);
-
-    if (state.photos.length > 0) {
-      var finishBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon', title: S.finishandarrange, 'aria-label': S.finishandarrange },
-        [icon('pin')]);
-      finishBtn.addEventListener('click', function () { state.step = 'arrange'; render(); });
-      menuRow.appendChild(finishBtn);
-    }
-
-    if (state.canmoderate) {
-      var modBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon', title: S.moderate_mode, 'aria-label': S.moderate_mode },
-        [icon('group')]);
-      modBtn.addEventListener('click', function () { state.step = 'moderate'; render(); });
-      menuRow.appendChild(modBtn);
-    }
-    wrap.appendChild(menuRow);
 
     var gallery = el('div', { class: 'ic-gallery' });
     state.photos.forEach(function (p, idx) {
@@ -938,7 +957,8 @@
     calendar: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>',
     upload: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><polyline points="7 9 12 4 17 9"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>',
     brush: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5 3 21"/><path d="M14 3c2 0 4 2 4 4 0 3-3 4-5 6l-4 4-3-3 4-4c2-2 3-5 6-5 0 0 0-2-2-2z"/></svg>',
-    arrowleft: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>'
+    arrowleft: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
+    fullscreen: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/></svg>'
   };
   function icon(name) {
     if (name === 'text') {

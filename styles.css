@@ -18,22 +18,32 @@
   flex-direction: column;
   overflow: hidden;
 }
-.ic-screen-header {
+.ic-topbar {
   position: absolute; top: env(safe-area-inset-top, 0); left: 0; right: 0; z-index: 20;
-  display: flex; align-items: center; justify-content: center;
-  height: 48px; pointer-events: none; background: linear-gradient(rgba(16,17,20,.85), rgba(16,17,20,0));
+  height: 48px; padding: 0 8px;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  flex-wrap: nowrap; /* auf jeden Fall in einer Zeile, auch mobil */
+  background: linear-gradient(rgba(16,17,20,.85), rgba(16,17,20,0));
 }
-.ic-screen-title {
-  font-size: .95rem; font-weight: 600; margin: 0; color: var(--ic-text);
-  max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.ic-topbar-left, .ic-topbar-right { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.ic-topbar-center {
+  display: none; /* erst ab Mindestbreite sichtbar, siehe Media Query unten */
+  flex: 1 1 auto; min-width: 0; text-align: center; flex-direction: column; line-height: 1.15;
 }
-.ic-screen-close {
-  position: absolute; top: env(safe-area-inset-top, 8px); right: 8px; z-index: 21;
-  width: 34px; height: 34px; border-radius: 50%; border: none;
-  background: rgba(20,21,24,.55); color: var(--ic-text); font-size: .85rem;
+.ic-topbar-title {
+  font-size: .92rem; font-weight: 600; color: var(--ic-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ic-topbar-sub { font-size: .72rem; color: var(--ic-muted); }
+@media (min-width: 560px) { .ic-topbar-center { display: flex; } }
+.ic-icon-btn {
+  width: 34px; height: 34px; border-radius: 50%; border: none; flex: 0 0 auto;
+  background: rgba(20,21,24,.55); color: var(--ic-text);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   display: flex; align-items: center; justify-content: center; padding: 0;
 }
-.ic-body.has-header { padding-top: 48px; }
+.ic-icon-btn.active { background: var(--ic-accent); }
+.ic-body { padding-top: 48px; }
 .ic-count-line { text-align: center; font-size: .78rem; color: var(--ic-muted); margin: 2px 0 8px; }
 .ic-body {
   flex: 1 1 auto;
@@ -174,7 +184,8 @@
 }
 .ic-fab {
   width: 46px; height: 46px; border-radius: 50%;
-  border: none; background: rgba(20,21,24,.8); color: #fff; font-size: 1.15rem;
+  border: none; background: rgba(20,21,24,.55); color: #fff; font-size: 1.15rem;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   display: flex; align-items: center; justify-content: center; padding: 0;
 }
 .ic-fab.active { background: var(--ic-accent); }

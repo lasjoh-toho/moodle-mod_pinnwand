@@ -20,14 +20,40 @@ $event->add_record_snapshot('course_modules', $cm);
 $event->add_record_snapshot('pinnwand', $instance);
 $event->trigger();
 
+$isediting = $PAGE->user_is_editing();
+$forceapp = optional_param('app', 0, PARAM_BOOL);
+$showapp = !$isediting || $forceapp;
+
 $PAGE->set_url('/mod/pinnwand/view.php', ['id' => $cm->id]);
 $PAGE->set_title(format_string($instance->name));
 $PAGE->set_heading(format_string($course->fullname));
-// Eigenes, schlankes mobiltaugliches Layout ohne Standard-Moodle-Chrome/Blöcke.
-$PAGE->set_pagelayout('embedded');
+if ($showapp) {
+    // Eigenes, schlankes mobiltaugliches Layout ohne Standard-Moodle-Chrome/Blöcke.
+    $PAGE->set_pagelayout('embedded');
+} else {
+    // Bearbeiten-Modus aktiv: normaler Moodle-View mit Kursnavigation, damit
+    // die Aktivitätseinstellungen (Zahnrad/Einstellungsmenü) erreichbar bleiben.
+    $PAGE->set_pagelayout('incourse');
+}
 $PAGE->set_context($context);
 
 $canmanage = has_capability('mod/pinnwand:viewall', $context);
+
+if (!$showapp) {
+    echo $OUTPUT->header();
+    echo $OUTPUT->heading(format_string($instance->name));
+    if ($instance->intro) {
+        echo $OUTPUT->box(format_module_intro('pinnwand', $instance, $cm->id), 'generalbox mod_introbox');
+    }
+    $appurl = new moodle_url('/mod/pinnwand/view.php', ['id' => $cm->id, 'app' => 1]);
+    echo $OUTPUT->single_button($appurl, get_string('modulename', 'pinnwand'), 'get');
+    if (has_capability('moodle/course:manageactivities', $context)) {
+        $settingsurl = new moodle_url('/course/modedit.php', ['update' => $cm->id, 'return' => 1]);
+        echo html_writer::div(html_writer::link($settingsurl, get_string('activitysettings', 'pinnwand')), 'mt-2');
+    }
+    echo $OUTPUT->footer();
+    exit;
+}
 
 $config = [
     'cmid' => $cm->id,
@@ -41,8 +67,8 @@ $config = [
     'currentuserfullname' => fullname($USER),
     'managerurl' => $canmanage ? (new moodle_url('/mod/pinnwand/manage.php', ['id' => $cm->id]))->out(false) : null,
     'courseurl' => (new moodle_url('/course/view.php', ['id' => $course->id]))->out(false),
-    'isediting' => $PAGE->user_is_editing(),
-    'settingsurl' => has_capability('moodle/course:manageactivities', $context)
+    'isediting' => $isediting,
+    'settingsurl' => ($isediting && has_capability('moodle/course:manageactivities', $context))
         ? (new moodle_url('/course/modedit.php', ['update' => $cm->id, 'return' => 1]))->out(false) : null,
     'strings' => [
         'step_capture' => get_string('step_capture', 'pinnwand'),
@@ -59,6 +85,8 @@ $config = [
         'rotate90' => get_string('rotate90', 'pinnwand'),
         'overlay_onboard' => get_string('overlay_onboard', 'pinnwand'),
         'back_course' => get_string('back_course', 'pinnwand'),
+        'fullscreen' => get_string('fullscreen', 'pinnwand'),
+        'exitfullscreen' => get_string('exitfullscreen', 'pinnwand'),
         'mygallery' => get_string('mygallery', 'pinnwand'),
         'editphoto' => get_string('editphoto', 'pinnwand'),
         'activitysettings' => get_string('activitysettings', 'pinnwand'),

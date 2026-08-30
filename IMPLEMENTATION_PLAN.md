@@ -40,27 +40,33 @@ Status-Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` erledigt
 
 ---
 
-## Phase 1 — App-Shell, responsives Start-Verhalten, Layout/Buttons
+## Phase 1 — App-Shell, responsives Start-Verhalten, Layout/Buttons ✅
 
 Betrifft: `view.php` (Einstiegslogik), `js/app.js` (Shell/Router), `styles.css`
 
-- [ ] **Einstiegslogik** in `view.php`/`app.js`:
-  - Bearbeiten-Modus aktiv (`isediting`) → Moodle-spezifischer View mit
-    Zugriff auf Einstellungen (bestehendes `settingsurl` nutzen)
-  - Bearbeiten-Modus aus → direkt App im Vollbild, ohne Einstellmöglichkeiten
-  - Innerhalb der App (nur für Lehrkraft-Rolle): großer Monitor →
-    Pinnwand-Ansicht als Startbildschirm; kleiner Monitor → Klassenübersicht
-    als Startbildschirm (Breakpoint definieren, z. B. `matchMedia`)
-- [ ] **Kopfzeile**: zentrierte Überschrift (Pinnwand-Name) + Name der
-  aktuellen Oberfläche (z. B. "Meine Bilder"), beide nur ab definierter
-  Mindestbreite sichtbar
-- [ ] **Obere Buttons**: rechts Board/Meine Bilder/Hinzufügen/Klassenübersicht,
-  links Zurück-zum-Kurs + Vollbild — muss auf Mobilgeräten in **einer Zeile**
-  bleiben (Icon-only unterhalb Breakpoint)
-- [ ] **Untere Buttons**: alle ansichtsspezifischen Aktionen unten mittig,
-  runde Buttons mit transparentem/geblurrtem Hintergrund — Ausnahme:
-  Overlay-Werkzeuge "Raster", "Daten", "Annotations" bleiben separat
-  positioniert (bestehende linke Dock-Leiste in der Galerie)
+- [x] **Einstiegslogik** in `view.php`:
+  - Bearbeiten-Modus aktiv → normaler Moodle-View (`pagelayout='incourse'`)
+    mit Intro, Link zur Aktivität (`?app=1`) und Link zu den Einstellungen
+  - Bearbeiten-Modus aus (oder `?app=1`) → direkt App im eigenen
+    Vollbild-Layout (`pagelayout='embedded'`), `settingsurl` nur im
+    Bearbeiten-Modus an die App übergeben
+  - Responsiver Start für Lehrkräfte (großer Monitor → Pinnwand,
+    kleiner → Klassenübersicht) war bereits vorhanden und blieb unverändert
+- [x] **Kopfzeile** (`renderTopBar()` in `js/app.js`): Pinnwand-Name +
+  aktuelle Oberfläche mittig, ab 560px sichtbar (`.ic-topbar-center`)
+- [x] **Obere Buttons**: links Kurs-zurück + Vollbild-Toggle
+  (Fullscreen-API), rechts Pinnwand/Meine Bilder/Hinzufügen/Klassenübersicht
+  (letzteres nur mit `canmoderate`) — als feste Icon-Reihe, passt auch mobil
+  in eine Zeile (`flex-wrap: nowrap`)
+- [x] **Untere Buttons**: bestehende `.ic-fab`-Reihe (Board-Einstellungen/
+  Daten-Toggle/Foto hinzufügen) jetzt mit `backdrop-filter: blur(10px)` -
+  Overlay-Werkzeuge der Galerie (linke Dock-Leiste: Raster/Daten/
+  Zeichenwerkzeuge) bewusst unverändert gelassen, wie gefordert
+
+**Scoping-Hinweis:** Der Hinzufügen-Assistent (Aufnahme → Perspektive →
+Zuschnitt → Farbe → Quelle) behält vorerst seine bisherige interne
+Schritt-Navigation; seine Neugestaltung (Pfeil/Haken-Buttons, Textrahmen
+usw.) ist explizit Teil von Phase 6.
 
 ---
 
