@@ -340,6 +340,43 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Speicher-/Aktualisierungs-Aufrufen und wurde dadurch stillschweigend auf
   0 zurückgesetzt.
 
+### Zwölfte Überarbeitung — Feedback aus erstem Test
+
+- **Bugfix**: Neu gespeicherte Fotos erschienen teils erst nach einem
+  Reload in "Meine Bilder" - Ursache war lokal unvollständig
+  zusammengebautes Foto-Objekt nach dem Speichern (fehlende neuere Felder
+  wie `boardid`/`backphotoid`/`showingback`). Alle vier Speicherpfade
+  (Kamera-Pipeline, Wortfeld, Post-Stream-Übernahme, Foto-Neubearbeitung)
+  laden jetzt nach dem Speichern den vollständigen Datensatz neu
+  (`refreshPhotos()`) statt ihn lokal nachzubauen.
+- **Bugfix Zuschnitt-Schritt**: Werkzeug-/Aktionsleiste wurden bisher erst
+  *nach* der Bildgrößen-Messung ins DOM gehängt, wodurch die Messung von
+  zu viel verfügbarem Platz ausging und das Bild im zweiten Schritt
+  (Zuschnitt) nicht mehr vollständig ins Bild passte. Jetzt korrekte
+  Reihenfolge.
+- Home ("Meine Bilder"): deutlich sichtbarer +-Button unten rechts.
+- Klassenansicht: "Ich bin Autor"-Checkbox ohne Textlabel.
+- Pinnwand: Einstellungen-Zahnrad auf sehr kleinen Smartphones ausgeblendet
+  (erst ab Tablet-Breite, 600px, sichtbar); Panel selbst begrenzt auf großen
+  Bildschirmen nicht mehr die volle Breite, schließt bei Klick außerhalb,
+  neue Einstellung "Weicher Rand" (Vignette), Hintergrundbild jetzt auch
+  aus den Uploads der Klasse wählbar (mit Berechtigungsprüfung).
+- Hinzufügen-Assistent: Kamera-Berechtigung wird erst beim Klick auf den
+  Kamera-Button angefragt (nicht mehr automatisch beim Öffnen des
+  Auswahl-Bildschirms); neuer Auswahl-Bildschirm mit breiten, untereinander
+  angeordneten Buttons (Kamera/Hochladen/URL/Textrahmen); durchgängig
+  kleiner Abbrechen-Button (✕) statt breitem "Zurück"-Text - Speichern
+  läuft ausschließlich über den Haken-Button am letzten Schritt.
+- Zieh-Handles (Ecken/Zuschnitt): Trefferfläche auf ca. 2 cm Durchmesser
+  vergrößert, sichtbarer Punkt bleibt klein, damit der Finger die Ecke
+  nicht verdeckt.
+- Galerie: Schließen-Button deutlich sichtbarer gestaltet (war zuvor ein
+  fast unsichtbarer "Ghost"-Button); neuer Fokus-Modus blendet Nav-Leiste,
+  Bildunterschrift und linkes Werkzeug-Dock aus, sobald ein Raster
+  angezeigt wird, das Zeichenwerkzeug aktiv ist oder ein Panel (Raster/
+  Daten/Rückseite) offen ist - nur der Schließen-Button bleibt immer
+  sichtbar, der Bildbereich wird dadurch maximal groß.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

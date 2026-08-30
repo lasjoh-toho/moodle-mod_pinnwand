@@ -261,16 +261,29 @@
     });
     wrap.appendChild(gallery);
     body.appendChild(wrap);
+
+    // Deutlich sichtbarer +-Button unten rechts - die reine Icon-Navigation
+    // oben in der Kopfzeile wurde als zu unauffällig empfunden.
+    var addFab = el('button', {
+      class: 'ic-home-add-fab' + (maxreached ? ' disabled' : ''), title: S.addphoto, 'aria-label': S.addphoto,
+      disabled: maxreached ? 'disabled' : null
+    }, ['+']);
+    addFab.addEventListener('click', function () { if (!maxreached) { state.step = 'capture'; render(); } });
+    body.appendChild(addFab);
   }
 
   // ==================================================================
-  // CAPTURE: Live-Kamera (getUserMedia) mit Datei-Upload-Fallback
+  // CAPTURE: erst Auswahl-Bildschirm (Kamera/Datei/URL/Textrahmen) ohne
+  // jede Kamera-Berechtigungsanfrage; erst nach Klick auf "Kamera" wechselt
+  // die Ansicht in den Live-Kamera-Modus und getUserMedia wird angefragt.
   // ==================================================================
   function renderCapture(body) {
-    var stage = el('div', { class: 'ic-stage' });
-    var video = el('video', { autoplay: 'autoplay', playsinline: 'playsinline', muted: 'muted' });
-    stage.appendChild(video);
-    body.appendChild(stage);
+    if (state.captureMode === 'camera') { renderCaptureCamera(body); return; }
+    renderCaptureChoice(body);
+  }
+
+  function renderCaptureChoice(body) {
+    var wrap = el('div', { class: 'ic-capture-choice' });
 
     var fileInput = el('input', {
       type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none'
@@ -301,27 +314,56 @@
       img.src = url;
     });
     urlRow.appendChild(urlInput); urlRow.appendChild(urlGo);
-    body.appendChild(urlRow);
 
-    var bar = el('div', { class: 'ic-actionbar' });
-    var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.back]);
-    backBtn.addEventListener('click', function () { state.step = 'home'; render(); });
-    var uploadBtn = el('button', { class: 'ic-btn' }, [S.uploadphoto]);
+    // Breite, untereinander angeordnete Buttons statt einer schmalen
+    // Icon-Reihe - besser greifbar und mit echtem Textlabel erkennbar.
+    var camBtn = el('button', { class: 'ic-choice-btn ic-btn-primary' }, [icon('camera'), el('span', {}, [S.takephoto])]);
+    camBtn.addEventListener('click', function () { state.captureMode = 'camera'; render(); });
+    var uploadBtn = el('button', { class: 'ic-choice-btn' }, [icon('upload'), el('span', {}, [S.uploadphoto])]);
     uploadBtn.addEventListener('click', function () { fileInput.click(); });
-    var urlBtn = el('button', { class: 'ic-btn' + (urlRow.classList.contains('open') ? ' ic-btn-primary' : '') }, [S.addviaurl]);
+    var urlBtn = el('button', { class: 'ic-choice-btn' + (urlRow.classList.contains('open') ? ' ic-btn-primary' : '') },
+      [icon('link'), el('span', {}, [S.addviaurl])]);
     urlBtn.addEventListener('click', function () {
       urlRow.classList.toggle('open');
       urlBtn.classList.toggle('ic-btn-primary', urlRow.classList.contains('open'));
     });
-    var textFrameBtn = el('button', { class: 'ic-btn' }, [S.addtextframe]);
+    var textFrameBtn = el('button', { class: 'ic-choice-btn' }, [icon('text'), el('span', {}, [S.addtextframe])]);
     textFrameBtn.addEventListener('click', function () {
       state.textFrame = null; // frisch beginnen
       state.step = 'textframe';
       render();
     });
+
+    wrap.appendChild(camBtn);
+    wrap.appendChild(uploadBtn);
+    wrap.appendChild(urlRow);
+    wrap.appendChild(urlBtn);
+    wrap.appendChild(textFrameBtn);
+    body.appendChild(wrap);
+
+    var bar = el('div', { class: 'ic-actionbar' });
+    bar.appendChild(cancelWizardBtn());
+    body.appendChild(bar);
+  }
+
+  function renderCaptureCamera(body) {
+    var stage = el('div', { class: 'ic-stage' });
+    var video = el('video', { autoplay: 'autoplay', playsinline: 'playsinline', muted: 'muted' });
+    stage.appendChild(video);
+    body.appendChild(stage);
+
+    var bar = el('div', { class: 'ic-actionbar' });
+    var cancelBtn = el('button', {
+      class: 'ic-btn ic-btn-ghost ic-btn-icon', title: S.cancel, 'aria-label': S.cancel
+    }, ['\u2715']);
+    cancelBtn.addEventListener('click', function () {
+      stopStream();
+      state.captureMode = null;
+      render();
+    });
     var shootBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.takephoto]);
     shootBtn.addEventListener('click', function () {
-      if (!state.stream) { fileInput.click(); return; }
+      if (!state.stream) { return; }
       var c = document.createElement('canvas');
       c.width = video.videoWidth; c.height = video.videoHeight;
       c.getContext('2d').drawImage(video, 0, 0);
@@ -329,7 +371,7 @@
       img.onload = function () { loadCapturedImage(img); };
       img.src = c.toDataURL('image/jpeg', 0.92);
     });
-    bar.appendChild(backBtn); bar.appendChild(uploadBtn); bar.appendChild(urlBtn); bar.appendChild(textFrameBtn); bar.appendChild(shootBtn);
+    bar.appendChild(cancelBtn); bar.appendChild(shootBtn);
     body.appendChild(bar);
 
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -338,7 +380,17 @@
           state.stream = stream;
           video.srcObject = stream;
         })
-        .catch(function () { /* still allow upload fallback */ });
+        .catch(function () {
+          // Keine Berechtigung/kein Kamerazugriff möglich - zurück zur
+          // Auswahl, dort steht der Datei-Upload-Fallback bereit.
+          alert(S.camera_error);
+          state.captureMode = null;
+          render();
+        });
+    } else {
+      alert(S.camera_error);
+      state.captureMode = null;
+      render();
     }
   }
 
@@ -399,8 +451,7 @@
     stageHint(stage, S.perspective_hint);
 
     var bar = el('div', { class: 'ic-actionbar' });
-    var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.back]);
-    backBtn.addEventListener('click', function () { state.step = 'capture'; render(); });
+    bar.appendChild(cancelWizardBtn());
     var nextBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.next, 'aria-label': S.next }, [icon('arrowright')]);
     nextBtn.addEventListener('click', function () {
       var scaledCorners = state.corners.map(function (p) {
@@ -411,7 +462,7 @@
       state.step = 'crop';
       render();
     });
-    bar.appendChild(backBtn); bar.appendChild(nextBtn);
+    bar.appendChild(nextBtn);
     body.appendChild(bar);
   }
 
@@ -457,10 +508,11 @@
 
     var handles = points.map(function () {
       var g = document.createElementNS(ns, 'g');
-      // Größere, unsichtbare Trefferfläche - so lässt sich der Punkt auch
-      // nahe am Bildrand oder mit dem Finger präzise packen ...
+      // Größere, unsichtbare Trefferfläche (~2cm Durchmesser bei 96dpi) - so
+      // lässt sich der Punkt auch nahe am Bildrand oder mit dem Finger
+      // präzise packen, ohne dass der Finger die Ecke selbst verdeckt ...
       var hit = document.createElementNS(ns, 'circle');
-      hit.setAttribute('r', '26');
+      hit.setAttribute('r', '38');
       hit.setAttribute('class', 'ic-handle-hit');
       hit.setAttribute('fill', 'rgba(0,0,0,0.001)');
       // ... während nur ein kleiner Punkt sichtbar ist und das Bild darunter
@@ -618,6 +670,24 @@
   // ==================================================================
   function renderCrop(body) {
     body.appendChild(stepsBar(2));
+
+    // Werkzeug- und Aktionsleiste MÜSSEN vor der Bildgrößen-Messung im DOM
+    // stehen (siehe fitImageToStage weiter unten) - sonst berechnet die
+    // Messung eine zu große Fläche, die nach Erscheinen dieser Leisten
+    // tatsächlich nicht mehr zur Verfügung steht (Bild ragt über den
+    // sichtbaren Bereich hinaus / wird nicht vollständig gezeigt).
+    var toolRow = el('div', { class: 'ic-crop-tools' });
+    var fullBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.usefullimage]);
+    var rotateBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('rotate'), el('span', {}, [S.rotate90])]);
+    toolRow.appendChild(fullBtn); toolRow.appendChild(rotateBtn);
+    body.appendChild(toolRow);
+
+    var bar = el('div', { class: 'ic-actionbar' });
+    bar.appendChild(cancelWizardBtn());
+    var nextBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.next, 'aria-label': S.next }, [icon('arrowright')]);
+    bar.appendChild(nextBtn);
+    body.appendChild(bar);
+
     var stage = el('div', { class: 'ic-stage' });
     var canvas = el('canvas', { class: 'ic-view' });
     stage.appendChild(canvas);
@@ -644,8 +714,6 @@
     makeDragOverlay(stage, canvas, state.cropRect, true);
     stageHint(stage, S.crop_hint);
 
-    var toolRow = el('div', { class: 'ic-crop-tools' });
-    var fullBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.usefullimage]);
     fullBtn.addEventListener('click', function () {
       state.cropRect = [
         { x: 0, y: 0 }, { x: canvas.width, y: 0 },
@@ -653,19 +721,11 @@
       ];
       render();
     });
-    var rotateBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('rotate'), el('span', {}, [S.rotate90])]);
     rotateBtn.addEventListener('click', function () {
       state.workCanvas = rotateCanvas90(state.workCanvas);
       state.cropRect = null;
       render();
     });
-    toolRow.appendChild(fullBtn); toolRow.appendChild(rotateBtn);
-    body.appendChild(toolRow);
-
-    var bar = el('div', { class: 'ic-actionbar' });
-    var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.back]);
-    backBtn.addEventListener('click', function () { state.step = 'perspective'; render(); });
-    var nextBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.next, 'aria-label': S.next }, [icon('arrowright')]);
     nextBtn.addEventListener('click', function () {
       var pts = state.cropRect.map(function (p) { return { x: p.x / fitScale, y: p.y / fitScale }; });
       var minX = Math.min(pts[0].x, pts[3].x), maxX = Math.max(pts[1].x, pts[2].x);
@@ -679,8 +739,6 @@
       state.step = 'color';
       render();
     });
-    bar.appendChild(backBtn); bar.appendChild(nextBtn);
-    body.appendChild(bar);
   }
 
   // ==================================================================
@@ -739,8 +797,7 @@
     body.appendChild(panel);
 
     var bar = el('div', { class: 'ic-actionbar' });
-    var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.back]);
-    backBtn.addEventListener('click', function () { state.step = 'crop'; render(); });
+    bar.appendChild(cancelWizardBtn());
     var isEditingExisting = !!state.editingPhotoId;
     var nextBtn = el('button', {
       class: 'ic-btn ic-btn-primary ic-btn-icon',
@@ -768,7 +825,7 @@
       state.step = 'source';
       render();
     });
-    bar.appendChild(backBtn); bar.appendChild(nextBtn);
+    bar.appendChild(nextBtn);
     body.appendChild(bar);
   }
 
@@ -871,8 +928,7 @@
     }
 
     var bar = el('div', { class: 'ic-actionbar' });
-    var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.back]);
-    backBtn.addEventListener('click', function () { state.step = 'color'; render(); });
+    bar.appendChild(cancelWizardBtn());
     var saveBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.savephoto, 'aria-label': S.savephoto }, [icon('check')]);
     saveBtn.addEventListener('click', function () {
       saveBtn.disabled = true;
@@ -893,27 +949,18 @@
         sourceorigauthor: info.sourceorigauthor,
         boardid: state.currentBoard || 0
       }).then(function (res) {
-        state.photos.push({
-          id: res.photoid, url: res.url, gridtype: 'none', gridvalue: 0, gridcolor: '#ff3c3c',
-          consent: !!consentChecked, annotationdata: '[]', hiddenfromboard: !!res.hiddenfromboard,
-          annotationonboard: true,
-          sourcetitle: info.sourcetitle,
-          sourceauthor: info.sourceauthor, sourceyear: info.sourceyear, sourceepoch: info.sourceepoch,
-          sourceplace: info.sourceplace, sourceorigauthor: info.sourceorigauthor,
-          timecreated: Math.floor(Date.now() / 1000),
-          canvasx: 20, canvasy: 20, canvasw: 220, canvasrot: 0, canvasz: state.photos.length,
-          boardid: state.currentBoard || 0
+        var maxreached = !!res.maxreached;
+        refreshPhotos().then(function () {
+          resetCaptureState();
+          state.step = maxreached ? 'arrange' : 'home';
+          render();
         });
-        state.maxpictures = res.max;
-        resetCaptureState();
-        state.step = res.maxreached ? 'arrange' : 'home';
-        render();
       }).catch(function (e) {
         alert(S.error_save + ' (' + e.message + ')');
         saveBtn.disabled = false;
       });
     });
-    bar.appendChild(backBtn); bar.appendChild(saveBtn);
+    bar.appendChild(saveBtn);
     body.appendChild(bar);
   }
 
@@ -925,6 +972,26 @@
     state.finalCanvas = null;
     state.editingPhotoId = null;
     state.textFrame = null;
+    state.captureMode = null;
+  }
+
+  // Kleiner, eindeutiger Abbrechen-Button (X) für den gesamten Hinzufügen-
+  // Assistenten - ersetzt die früheren breiten "Zurück"-Textbuttons, die je
+  // Schritt ein anderes Ziel hatten und Unklarheit erzeugten, ob bereits
+  // eingegebene Daten dabei gespeichert werden. Bricht den kompletten
+  // Assistenten ab (keine Zwischenspeicherung) und kehrt zu "Meine Bilder"
+  // zurück - das Speichern selbst passiert ausschließlich über den
+  // Haken-Button am jeweils letzten Schritt.
+  function cancelWizardBtn() {
+    var b = el('button', {
+      class: 'ic-btn ic-btn-ghost ic-btn-icon ic-cancel-btn', title: S.cancel, 'aria-label': S.cancel
+    }, ['\u2715']);
+    b.addEventListener('click', function () {
+      resetCaptureState();
+      state.step = 'home';
+      render();
+    });
+    return b;
   }
 
   // ==================================================================
@@ -1098,8 +1165,7 @@
     body.appendChild(addTextBtn);
 
     var bar = el('div', { class: 'ic-actionbar' });
-    var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.back]);
-    backBtn.addEventListener('click', function () { resetCaptureState(); state.step = 'capture'; render(); });
+    bar.appendChild(cancelWizardBtn());
     var saveBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.savephoto, 'aria-label': S.savephoto }, [icon('check')]);
     saveBtn.addEventListener('click', function () {
       saveBtn.disabled = true;
@@ -1111,24 +1177,18 @@
         sourcetitle: label, sourceauthor: '', sourceyear: '', sourceepoch: '', sourceplace: '', sourceorigauthor: '',
         boardid: state.currentBoard || 0
       }).then(function (res) {
-        state.photos.push({
-          id: res.photoid, url: res.url, gridtype: 'none', gridvalue: 0, gridcolor: '#ff3c3c',
-          consent: false, annotationdata: '[]', hiddenfromboard: !!res.hiddenfromboard, annotationonboard: true,
-          sourcetitle: label, sourceauthor: '', sourceyear: '', sourceepoch: '', sourceplace: '', sourceorigauthor: '',
-          timecreated: Math.floor(Date.now() / 1000),
-          canvasx: 20, canvasy: 20, canvasw: 220, canvasrot: 0, canvasz: state.photos.length,
-          boardid: state.currentBoard || 0
+        var maxreached = !!res.maxreached;
+        refreshPhotos().then(function () {
+          resetCaptureState();
+          state.step = maxreached ? 'arrange' : 'home';
+          render();
         });
-        state.maxpictures = res.max;
-        resetCaptureState();
-        state.step = res.maxreached ? 'arrange' : 'home';
-        render();
       }).catch(function (e) {
         alert(S.error_save + ' (' + e.message + ')');
         saveBtn.disabled = false;
       });
     });
-    bar.appendChild(backBtn); bar.appendChild(saveBtn);
+    bar.appendChild(saveBtn);
     body.appendChild(bar);
   }
 
@@ -1232,6 +1292,7 @@
     scissors: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="8.5" y1="8" x2="20" y2="19"/><line x1="8.5" y1="16" x2="20" y2="5"/></svg>',
     calendar: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>',
     upload: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><polyline points="7 9 12 4 17 9"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>',
+    link: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
     brush: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5 3 21"/><path d="M14 3c2 0 4 2 4 4 0 3-3 4-5 6l-4 4-3-3 4-4c2-2 3-5 6-5 0 0 0-2-2-2z"/></svg>',
     arrowleft: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
     fullscreen: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/></svg>',
@@ -1561,7 +1622,7 @@
     // Zeichnen) bleiben davon bewusst getrennt (eigene linke Dock-Leiste dort).
     var fabRow = el('div', { class: 'ic-fab-row' });
 
-    var gearBtn = el('button', { class: 'ic-fab', title: S.options }, ['\u2699']);
+    var gearBtn = el('button', { class: 'ic-fab ic-tablet-up', title: S.options }, ['\u2699']);
     gearBtn.addEventListener('click', function () { openBackgroundPanel(body); });
     fabRow.appendChild(gearBtn);
 
@@ -1656,16 +1717,9 @@
   function adoptStreamPhoto(photoid, x, y) {
     callAjax('mod_pinnwand_adopt_photo_to_board', {
       cmid: cfg.cmid, photoid: photoid, x: x, y: y, boardid: state.currentBoard
-    }).then(function (res) {
-      state.photos.push({
-        id: res.id, url: res.url, annotationdata: '[]', gridtype: 'none', gridvalue: 0,
-        gridcolor: '#ff3c3c', consent: false, hiddenfromboard: false, annotationonboard: true,
-        sourcetitle: '', sourceauthor: '', sourceyear: '', sourceepoch: '', sourceplace: '',
-        sourceorigauthor: '', timecreated: Math.floor(Date.now() / 1000),
-        canvasx: x, canvasy: y, canvasw: 200, canvasrot: 0, canvasz: 0, boardid: state.currentBoard
-      });
+    }).then(function () {
       state.streamPhotos = state.streamPhotos.filter(function (p) { return p.id !== photoid; });
-      render();
+      refreshPhotos().then(render);
     });
   }
 
@@ -2132,8 +2186,8 @@
       authorWrap.appendChild(authorInput);
       if (canedit) {
         authorInput.disabled = !!(p.sourceauthor && p.sourceauthor === p.userfullname);
-        var meLabel = el('label', { class: 'ic-me-check' });
-        var meCheck = el('input', { type: 'checkbox' });
+        var meLabel = el('label', { class: 'ic-me-check', title: S.student_is_author });
+        var meCheck = el('input', { type: 'checkbox', 'aria-label': S.student_is_author });
         meCheck.checked = !!(p.sourceauthor && p.sourceauthor === p.userfullname);
         meCheck.addEventListener('change', function () {
           if (meCheck.checked) {
@@ -2146,7 +2200,6 @@
           persistSource(p);
         });
         meLabel.appendChild(meCheck);
-        meLabel.appendChild(document.createTextNode(S.student_is_author));
         authorWrap.appendChild(meLabel);
       }
       fieldsRow1.appendChild(authorWrap);
@@ -2225,6 +2278,17 @@
     }).catch(function () { /* still keep local state */ });
   }
 
+  // Lädt die eigenen Fotos vollständig neu vom Server, statt (fehleranfällig)
+  // lokal ein unvollständiges Objekt zusammenzubauen - garantiert, dass alle
+  // Felder (auch neuere wie boardid/backphotoid/showingback) korrekt gesetzt
+  // sind und macht neu gespeicherte Fotos sofort überall sichtbar.
+  function refreshPhotos() {
+    return callAjax('mod_pinnwand_get_photos', { cmid: cfg.cmid }).then(function (res) {
+      state.photos = res.photos;
+      state.maxpictures = res.max;
+    });
+  }
+
   // ------------------------------------------------------------------
   // Hintergrund der Anordnungs-Leinwand: Farbe (Standard dunkelgrau) oder
   // eines der eigenen Fotos als Bild. Pro Nutzer*in/Aktivität gespeichert.
@@ -2248,6 +2312,10 @@
     var brightness = (bg.brightness != null ? bg.brightness : 100);
     var saturation = (bg.saturation != null ? bg.saturation : 100);
     bgEl.style.filter = 'brightness(' + brightness + '%) saturate(' + saturation + '%)';
+    // Weicher Rand: rein optische Vignette über der Hintergrund-Ebene,
+    // per box-shadow inset statt echter Unschärfe (performanter, kein
+    // erneutes Rendern des Hintergrundbilds nötig).
+    bgEl.style.boxShadow = bg.softedge ? 'inset 0 0 min(18vw,220px) min(6vw,80px) var(--ic-bg)' : 'none';
   }
 
   function openBackgroundPanel(body) {
@@ -2257,18 +2325,19 @@
     function bgLayerEl() { return document.querySelector('.ic-canvas-bg'); }
     function currentBrightness() { return (state.background && state.background.brightness != null) ? state.background.brightness : 100; }
     function currentSaturation() { return (state.background && state.background.saturation != null) ? state.background.saturation : 100; }
+    function currentSoftedge() { return !!(softCheck && softCheck.checked); }
 
     var panel = el('div', { class: 'ic-bg-panel', id: 'ic-bg-panel' });
     panel.appendChild(el('label', {}, [S.bg_color]));
     var colorInput = el('input', { type: 'color', value: (state.background && state.background.color) || '#2b2d33' });
     colorInput.addEventListener('input', function () {
-      state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation() };
+      state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge() };
       applyBackground(bgLayerEl());
     });
     colorInput.addEventListener('change', function () {
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: 'color', color: colorInput.value, photoid: 0,
-        brightness: currentBrightness(), saturation: currentSaturation()
+        brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge()
       }).then(function (res) { state.background = res.background; });
     });
     panel.appendChild(colorInput);
@@ -2279,11 +2348,11 @@
       state.photos.forEach(function (p) {
         var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' });
         t.addEventListener('click', function () {
-          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation() };
+          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge() };
           applyBackground(bgLayerEl());
           callAjax('mod_pinnwand_save_background', {
             cmid: cfg.cmid, type: 'image', color: colorInput.value, photoid: p.id,
-            brightness: currentBrightness(), saturation: currentSaturation()
+            brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge()
           }).then(function (res) { state.background = res.background; });
         });
         row.appendChild(t);
@@ -2301,11 +2370,11 @@
     urlApply.addEventListener('click', function () {
       var url = urlInput.value.trim();
       if (!url) { return; }
-      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation() };
+      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge() };
       applyBackground(bgLayerEl());
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: 'url', color: colorInput.value, photoid: 0, url: url,
-        brightness: currentBrightness(), saturation: currentSaturation()
+        brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge()
       }).then(function (res) { state.background = res.background; });
     });
     urlRow.appendChild(urlInput); urlRow.appendChild(urlApply);
@@ -2320,7 +2389,7 @@
       reader.onload = function () {
         callAjax('mod_pinnwand_save_background', {
           cmid: cfg.cmid, type: 'upload', color: colorInput.value, photoid: 0, url: '', imagedata: reader.result,
-          brightness: currentBrightness(), saturation: currentSaturation()
+          brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge()
         }).then(function (res) {
           state.background = res.background;
           applyBackground(bgLayerEl());
@@ -2339,7 +2408,7 @@
         cmid: cfg.cmid,
         type: state.background.type, color: state.background.color || '#2b2d33',
         photoid: 0, url: state.background.url || '',
-        brightness: currentBrightness(), saturation: currentSaturation()
+        brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge()
       }).then(function (res) { state.background = res.background; });
     }
     brightnessInput.addEventListener('input', function () {
@@ -2358,11 +2427,61 @@
     saturationInput.addEventListener('change', persistFilter);
     panel.appendChild(saturationInput);
 
+    // Weicher Rand (Vignette) - rein optische Einstellung, wirkt nur auf
+    // die Hintergrund-Ebene.
+    var softLabel = el('label', { class: 'ic-me-check', style: 'margin-top:10px' });
+    var softCheck = el('input', { type: 'checkbox' });
+    softCheck.checked = !!(state.background && state.background.softedge);
+    softCheck.addEventListener('change', function () {
+      state.background.softedge = softCheck.checked;
+      applyBackground(bgLayerEl());
+      persistFilter();
+    });
+    softLabel.appendChild(softCheck);
+    softLabel.appendChild(document.createTextNode(S.bg_softedge));
+    panel.appendChild(softLabel);
+
+    // Hintergrundbild auch aus den Uploads der Klasse wählbar - Berechtigung
+    // wird server-seitig über dieselbe Regel wie die Klassenansicht geprüft
+    // (mod/pinnwand:viewall oder studentclassview); ohne Berechtigung bleibt
+    // dieser Abschnitt einfach weg, statt einen Fehler zu zeigen.
+    callAjax('mod_pinnwand_get_all_photos', { cmid: cfg.cmid }).then(function (res) {
+      var classPhotos = (res.photos || []).filter(function (p) { return !state.photos.some(function (o) { return o.id === p.id; }); });
+      if (!classPhotos.length) { return; }
+      var classLabel = el('label', { style: 'margin-top:10px' }, [S.bg_image_class]);
+      var classRow = el('div', { class: 'ic-bg-thumbs' });
+      classPhotos.forEach(function (p) {
+        var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' });
+        t.addEventListener('click', function () {
+          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation(), softedge: softCheck.checked };
+          applyBackground(bgLayerEl());
+          callAjax('mod_pinnwand_save_background', {
+            cmid: cfg.cmid, type: 'image', color: colorInput.value, photoid: p.id,
+            brightness: currentBrightness(), saturation: currentSaturation(), softedge: softCheck.checked
+          }).then(function (res2) { state.background = res2.background; });
+        });
+        classRow.appendChild(t);
+      });
+      panel.insertBefore(classRow, closeBtn);
+      panel.insertBefore(classLabel, classRow);
+    }).catch(function () { /* keine Berechtigung (o.ä.) - Abschnitt einfach weglassen */ });
+
     var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost', style: 'margin-top:10px' }, [S.draw_done]);
     closeBtn.addEventListener('click', function () { panel.remove(); });
     panel.appendChild(closeBtn);
 
     body.appendChild(panel);
+
+    // Schließen bei Klick außerhalb des Panels (nicht im selben Klick, der
+    // es geöffnet hat - siehe setTimeout).
+    setTimeout(function () {
+      document.addEventListener('click', function onDocClick(ev) {
+        if (!panel.contains(ev.target)) {
+          panel.remove();
+          document.removeEventListener('click', onDocClick);
+        }
+      });
+    }, 0);
   }
 
   function makeMovable(item, container, onMove, onEnd) {
@@ -2476,6 +2595,20 @@
       if (except !== 'data') { var dp = document.getElementById('ic-data-panel'); if (dp) { dp.remove(); } }
       if (except !== 'back') { var bp = document.getElementById('ic-back-panel'); if (bp) { bp.remove(); } }
       if (except !== 'draw' && drawing) { exitDrawing(true); }
+      updateFocusMode();
+    }
+
+    // Sobald ein Panel (Raster/Daten/Rückseite) oder der Zeichenmodus aktiv
+    // ist, verschwindet alles außer dem Schließen-Button - vor allem die
+    // Nav-Leiste (nächstes/voriges Bild, Zoom) - damit auf kleinen
+    // Bildschirmen der Bildbereich maximal groß bleibt.
+    function updateFocusMode() {
+      var p = state.photos[state.lightboxIndex];
+      var hasGrid = !!(p && p.gridtype && p.gridtype !== 'none');
+      var active = !!(hasGrid || drawing || document.getElementById('ic-grid-panel') ||
+        document.getElementById('ic-data-panel') || document.getElementById('ic-back-panel'));
+      lb.classList.toggle('ic-lb-focus', active);
+      sizeLightboxImage();
     }
 
     var lb = el('div', { class: 'ic-lightbox' });
@@ -2550,7 +2683,7 @@
     // ---- Raster definieren (nur hier in der Galerie möglich) ----
     function toggleGridPanel() {
       var existing = document.getElementById('ic-grid-panel');
-      if (existing) { existing.remove(); return; }
+      if (existing) { existing.remove(); updateFocusMode(); return; }
 
       var p = state.photos[state.lightboxIndex];
       var panel = el('div', { class: 'ic-bg-panel', id: 'ic-grid-panel' });
@@ -2607,10 +2740,11 @@
       panel.appendChild(colorRow);
 
       var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost', style: 'margin-top:10px' }, [S.draw_done]);
-      closeBtn.addEventListener('click', function () { panel.remove(); });
+      closeBtn.addEventListener('click', function () { panel.remove(); updateFocusMode(); });
       panel.appendChild(closeBtn);
 
       lb.appendChild(panel);
+      updateFocusMode();
     }
 
     function persistGrid(p) {
@@ -2623,7 +2757,7 @@
     // ---- Daten: Quellenangaben direkt in der Galerie bearbeiten ----
     function toggleDataPanel() {
       var existing = document.getElementById('ic-data-panel');
-      if (existing) { existing.remove(); return; }
+      if (existing) { existing.remove(); updateFocusMode(); return; }
 
       var p = state.photos[state.lightboxIndex];
       var panel = el('div', { class: 'ic-bg-panel', id: 'ic-data-panel' });
@@ -2652,15 +2786,16 @@
       field('sourceorigauthor', 'sourceorigauthor');
 
       var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost', style: 'margin-top:10px' }, [S.draw_done]);
-      closeBtn.addEventListener('click', function () { panel.remove(); });
+      closeBtn.addEventListener('click', function () { panel.remove(); updateFocusMode(); });
       panel.appendChild(closeBtn);
 
       lb.appendChild(panel);
+      updateFocusMode();
     }
 
     function toggleBackPanel() {
       var existing = document.getElementById('ic-back-panel');
-      if (existing) { existing.remove(); return; }
+      if (existing) { existing.remove(); updateFocusMode(); return; }
 
       var p = state.photos[state.lightboxIndex];
       var panel = el('div', { class: 'ic-bg-panel', id: 'ic-back-panel' });
@@ -2694,10 +2829,11 @@
       }
 
       var closeBtn2 = el('button', { class: 'ic-btn ic-btn-ghost', style: 'margin-top:10px' }, [S.draw_done]);
-      closeBtn2.addEventListener('click', function () { panel.remove(); });
+      closeBtn2.addEventListener('click', function () { panel.remove(); updateFocusMode(); });
       panel.appendChild(closeBtn2);
 
       lb.appendChild(panel);
+      updateFocusMode();
     }
 
     function renderStaticAnnotation(p) {
@@ -2720,6 +2856,7 @@
       sizeLightboxImage();
       refreshOverlays();
       caption.textContent = captionText(p);
+      updateFocusMode();
     }
 
     // ---- Zeichnen/Schreiben: Striche als Vektordaten (Punkte, Farbe, Breite,
@@ -2733,6 +2870,7 @@
     function enterDrawing() {
       drawing = true;
       stylusBtn.classList.add('active');
+      updateFocusMode();
       var old = imgbox.querySelector('.ic-annot-layer');
       if (old) { old.remove(); }
 
@@ -2947,6 +3085,7 @@
       stylusBtn.classList.remove('active');
       stylusBtn.onclick = function () { closeAllPanels('draw'); enterDrawing(); };
       renderStaticAnnotation(p);
+      updateFocusMode();
     }
     stylusBtn.onclick = function () { closeAllPanels('draw'); enterDrawing(); };
 
@@ -3026,7 +3165,7 @@
     lb._icResizeHandler = sizeLightboxImage;
 
     refreshOverlays();
-    if (startDrawing) { closeAllPanels('draw'); enterDrawing(); }
+    if (startDrawing) { closeAllPanels('draw'); enterDrawing(); } else { updateFocusMode(); }
   }
 
   function captionText(p) {

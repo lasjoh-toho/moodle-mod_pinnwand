@@ -220,7 +220,7 @@ class mod_pinnwand_external extends external_api {
 
     protected static function get_background_data($instance, $context) {
         global $USER;
-        $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100];
+        $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'softedge' => false];
         $raw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
         if (!$raw) {
             return $default;
@@ -235,11 +235,17 @@ class mod_pinnwand_external extends external_api {
         $bg['color'] = clean_param($decoded['color'] ?? $default['color'], PARAM_TEXT);
         $bg['brightness'] = max(20, min(180, (int) ($decoded['brightness'] ?? 100)));
         $bg['saturation'] = max(0, min(200, (int) ($decoded['saturation'] ?? 100)));
+        $bg['softedge'] = !empty($decoded['softedge']);
         if ($bg['type'] === 'image' && !empty($decoded['photoid'])) {
             global $DB;
-            $photo = $DB->get_record('pinnwand_photos', [
-                'id' => (int) $decoded['photoid'], 'pinnwandid' => $instance->id, 'userid' => $USER->id,
-            ]);
+            // Eigene Fotos immer erlaubt; fremde Fotos (aus den Uploads der
+            // Klasse) nur, wenn die Person auch die Klassenansicht sehen darf -
+            // sonst würde eine gespeicherte Präferenz weiterhin ein Bild
+            // zeigen, dessen Berechtigung inzwischen entzogen wurde.
+            $photo = $DB->get_record('pinnwand_photos', ['id' => (int) $decoded['photoid'], 'pinnwandid' => $instance->id]);
+            if ($photo && ((int) $photo->userid !== (int) $USER->id) && !self::can_view_class($instance, $context)) {
+                $photo = false;
+            }
             if ($photo) {
                 $fs = get_file_storage();
                 $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id, 'filename', false);
@@ -288,6 +294,7 @@ class mod_pinnwand_external extends external_api {
                 'url' => new external_value(PARAM_RAW, 'Hintergrundbild-URL', VALUE_DEFAULT, null, NULL_ALLOWED),
                 'brightness' => new external_value(PARAM_INT, 'Helligkeit in %'),
                 'saturation' => new external_value(PARAM_INT, 'Sättigung in %'),
+                'softedge' => new external_value(PARAM_BOOL, 'Weicher Rand (Vignette)'),
             ]),
             'photos' => new external_multiple_structure(new external_single_structure([
                 'id' => new external_value(PARAM_INT, 'ID'),
@@ -430,18 +437,29 @@ class mod_pinnwand_external extends external_api {
             'imagedata' => new external_value(PARAM_RAW, 'Data-URL (base64) für hochgeladenes Hintergrundbild', VALUE_DEFAULT, ''),
             'brightness' => new external_value(PARAM_INT, 'Helligkeit in % (20-180)', VALUE_DEFAULT, 100),
             'saturation' => new external_value(PARAM_INT, 'Sättigung in % (0-200)', VALUE_DEFAULT, 100),
+            'softedge' => new external_value(PARAM_BOOL, 'Weicher Rand (Vignette)', VALUE_DEFAULT, false),
         ]);
     }
 
-    public static function save_background($cmid, $type, $color, $photoid, $url, $imagedata, $brightness, $saturation) {
-        global $USER;
+    public static function save_background($cmid, $type, $color, $photoid, $url, $imagedata, $brightness, $saturation, $softedge = false) {
+        global $USER, $DB;
         $params = self::validate_parameters(self::save_background_parameters(), [
             'cmid' => $cmid, 'type' => $type, 'color' => $color, 'photoid' => $photoid, 'url' => $url,
-            'imagedata' => $imagedata, 'brightness' => $brightness, 'saturation' => $saturation,
+            'imagedata' => $imagedata, 'brightness' => $brightness, 'saturation' => $saturation, 'softedge' => $softedge,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
 
         $type = in_array($params['type'], ['image', 'url', 'upload'], true) ? $params['type'] : 'color';
+
+        // Fremde Fotos (aus den Uploads der Klasse) nur erlauben, wenn die
+        // Person die Klassenansicht sehen darf - sonst könnte theoretisch
+        // jede beliebige Foto-ID untergeschoben werden.
+        if ($type === 'image' && $params['photoid'] > 0) {
+            $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid'], 'pinnwandid' => $instance->id]);
+            if (!$photo || ((int) $photo->userid !== (int) $USER->id && !self::can_view_class($instance, $context))) {
+                throw new moodle_exception('nopermissions', 'error', '', 'save_background');
+            }
+        }
 
         // Nur eine echte Datei schreiben, wenn tatsächlich neue Bilddaten
         // mitgeschickt wurden (sonst ist es z.B. nur eine Helligkeits-/
@@ -474,6 +492,7 @@ class mod_pinnwand_external extends external_api {
             'url' => clean_param($params['url'], PARAM_URL),
             'brightness' => max(20, min(180, (int) $params['brightness'])),
             'saturation' => max(0, min(200, (int) $params['saturation'])),
+            'softedge' => (bool) $params['softedge'],
         ];
         set_user_preference('mod_pinnwand_bg_' . $instance->id, json_encode($payload), $USER->id);
 
@@ -488,6 +507,7 @@ class mod_pinnwand_external extends external_api {
                 'url' => new external_value(PARAM_RAW, 'Hintergrundbild-URL', VALUE_DEFAULT, null, NULL_ALLOWED),
                 'brightness' => new external_value(PARAM_INT, 'Helligkeit in %'),
                 'saturation' => new external_value(PARAM_INT, 'Sättigung in %'),
+                'softedge' => new external_value(PARAM_BOOL, 'Weicher Rand (Vignette)'),
             ]),
         ]);
     }
