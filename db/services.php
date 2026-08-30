@@ -141,10 +141,10 @@ $functions = [
     'mod_pinnwand_get_stream_photos' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'get_stream_photos',
-        'description' => 'Post-Stream: neue Einreichungen aller anderen Lernenden für die Lehrkraft',
+        'description' => 'Post-Stream: eigene noch nicht platzierte Fotos, für die Lehrkraft zusätzlich fremde Einreichungen',
         'type'        => 'read',
         'ajax'        => true,
-        'capabilities' => 'mod/pinnwand:viewall',
+        'capabilities' => 'mod/pinnwand:view',
     ],
     'mod_pinnwand_adopt_photo_to_board' => [
         'classname'   => 'mod_pinnwand_external',

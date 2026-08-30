@@ -205,6 +205,7 @@ class mod_pinnwand_external extends external_api {
                 'boardid' => (int) $r->boardid,
                 'backphotoid' => $r->backphotoid !== null ? (int) $r->backphotoid : 0,
                 'showingback' => (bool) $r->showingback,
+                'boardplaced' => (bool) $r->boardplaced,
             ];
         }
         return [
@@ -321,6 +322,7 @@ class mod_pinnwand_external extends external_api {
                 'boardid' => new external_value(PARAM_INT, 'Board-ID (0 = erstes/Standard-Board)'),
                 'backphotoid' => new external_value(PARAM_INT, 'Verknüpfte Rückseite (0 = keine)'),
                 'showingback' => new external_value(PARAM_BOOL, 'Rückseite zeigt gerade nach oben'),
+                'boardplaced' => new external_value(PARAM_BOOL, 'Hat reale Board-Koordinaten (ist auf der Leinwand platziert)'),
             ])),
         ]);
     }
@@ -546,6 +548,11 @@ class mod_pinnwand_external extends external_api {
         $photo->canvasrot = $params['rot'];
         $photo->canvasz = $params['z'];
         $photo->boardid = $params['boardid'];
+        // Ein Aufruf von update_layout bedeutet immer, dass das Foto jetzt
+        // reale Board-Koordinaten hat - egal ob es gerade erst aus dem
+        // Post-Stream übernommen oder ein bereits platziertes Foto nur
+        // verschoben/skaliert/rotiert wurde.
+        $photo->boardplaced = 1;
         $DB->update_record('pinnwand_photos', $photo);
 
         return ['success' => true];
@@ -812,6 +819,12 @@ class mod_pinnwand_external extends external_api {
         }
 
         $photo->hiddenfromboard = !empty($params['hidden']) ? 1 : 0;
+        if ($photo->hiddenfromboard) {
+            // Ein erneutes Anpinnen soll wieder über den Post-Stream laufen
+            // (dorthin gezogen/getippt werden), nicht sofort an der alten
+            // Position auf dem Board wieder auftauchen.
+            $photo->boardplaced = 0;
+        }
         $DB->update_record('pinnwand_photos', $photo);
 
         return ['success' => true, 'hiddenfromboard' => (bool) $photo->hiddenfromboard];
@@ -1202,34 +1215,56 @@ class mod_pinnwand_external extends external_api {
     public static function get_stream_photos($cmid) {
         global $DB, $USER;
         $params = self::validate_parameters(self::get_stream_photos_parameters(), ['cmid' => $cmid]);
-        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:viewall');
-
-        $sql = "SELECT p.*, u.firstname, u.lastname
-                  FROM {pinnwand_photos} p
-                  JOIN {user} u ON u.id = p.userid
-                 WHERE p.pinnwandid = :icid AND p.userid <> :ownid
-              ORDER BY p.timecreated DESC";
-        $records = $DB->get_records_sql($sql, ['icid' => $instance->id, 'ownid' => $USER->id], 0, 100);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
 
         $fs = get_file_storage();
         $out = [];
-        foreach ($records as $r) {
+
+        $export = function ($r, $mine) use ($fs, $context, &$out) {
             $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $r->id, 'filename', false);
             $file = reset($files);
             if (!$file) {
-                continue;
+                return;
             }
             $out[] = [
                 'id' => (int) $r->id,
                 'userid' => (int) $r->userid,
                 'userfullname' => fullname($r),
+                'mine' => $mine,
                 'url' => (string) moodle_url::make_pluginfile_url(
                     $context->id, 'mod_pinnwand', 'photo', $r->id, '/', $file->get_filename()
                 ),
                 'sourcetitle' => (string) $r->sourcetitle,
                 'timecreated' => (int) $r->timecreated,
             ];
+        };
+
+        // Eigene, gepinnte aber noch nicht auf dem Board platzierte Fotos -
+        // der "Warteraum" vor der eigentlichen Leinwand, für alle Personen.
+        $own = $DB->get_records_select(
+            'pinnwand_photos', 'pinnwandid = ? AND userid = ? AND hiddenfromboard = 0 AND boardplaced = 0',
+            [$instance->id, $USER->id], 'timecreated DESC', '*', 0, 100
+        );
+        foreach ($own as $r) {
+            $r->firstname = $USER->firstname; $r->lastname = $USER->lastname;
+            $export($r, true);
         }
+
+        // Fremde, ebenfalls noch nicht platzierte Einreichungen - nur für
+        // die Lehrkraft (Post-Stream zur Klassen-Durchsicht).
+        if (has_capability('mod/pinnwand:viewall', $context)) {
+            $sql = "SELECT p.*, u.firstname, u.lastname
+                      FROM {pinnwand_photos} p
+                      JOIN {user} u ON u.id = p.userid
+                     WHERE p.pinnwandid = :icid AND p.userid <> :ownid
+                       AND p.hiddenfromboard = 0 AND p.boardplaced = 0
+                  ORDER BY p.timecreated DESC";
+            $records = $DB->get_records_sql($sql, ['icid' => $instance->id, 'ownid' => $USER->id], 0, 100);
+            foreach ($records as $r) {
+                $export($r, false);
+            }
+        }
+
         return ['photos' => $out];
     }
 
@@ -1239,6 +1274,7 @@ class mod_pinnwand_external extends external_api {
                 'id' => new external_value(PARAM_INT, 'ID'),
                 'userid' => new external_value(PARAM_INT, 'Nutzer-ID'),
                 'userfullname' => new external_value(PARAM_TEXT, 'Voller Name'),
+                'mine' => new external_value(PARAM_BOOL, 'Eigenes Foto (sonst: fremde Einreichung für die Lehrkraft)'),
                 'url' => new external_value(PARAM_RAW, 'URL'),
                 'sourcetitle' => new external_value(PARAM_TEXT, 'Titel'),
                 'timecreated' => new external_value(PARAM_INT, 'Eingereicht am'),
@@ -1278,12 +1314,15 @@ class mod_pinnwand_external extends external_api {
         $copy->userid = $USER->id;
         $copy->boardid = $params['boardid'];
         $copy->sourcephotoid = $source->id;
+        $copy->backphotoid = null;
+        $copy->showingback = 0;
         $copy->hiddenfromboard = 0;
         $copy->canvasx = $params['x'];
         $copy->canvasy = $params['y'];
         $copy->canvasw = 200;
         $copy->canvasrot = 0;
         $copy->canvasz = 0;
+        $copy->boardplaced = 1;
         $copy->timecreated = time();
         $newid = $DB->insert_record('pinnwand_photos', $copy);
 

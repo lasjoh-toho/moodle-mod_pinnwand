@@ -302,3 +302,52 @@ Betrifft: `js/app.js` (Lightbox), `styles.css`
 - **Präsentation nur Lehrkraft oder auch berechtigte Lernende?** Wer einen
   eigenen Faden anlegen darf (`studentthreads`), darf ihn auch präsentieren -
   dieselbe Berechtigung deckt beides ab. Siehe Phase 3.
+
+---
+
+## Phase 9 — Post-Stream als Warteraum + Roter Faden auf dem Board ✅
+
+Zweiter Feedback-Durchgang. Betrifft: neues Feld `boardplaced`,
+`get_stream_photos`/`update_layout`/`adopt_photo_to_board`/
+`set_photo_hidden` (alle in `classes/external.php`), `js/app.js`.
+
+- [x] **Architekturänderung**: Fotos erscheinen nicht mehr automatisch auf
+  der Leinwand, sobald sie gepinnt werden - neues Feld `boardplaced`
+  unterscheidet "gepinnt, aber noch im Post-Stream" von "aktiv auf dem
+  Board platziert". Erst ein Drag oder Tippen auf das PIN-Icon einer
+  Post-Stream-Karte platziert das Foto wirklich (setzt reale Koordinaten).
+  Entfernen vom Board setzt `boardplaced` zurück, damit erneutes Anpinnen
+  wieder über den Post-Stream läuft.
+- [x] **Post-Stream jetzt für alle** (vorher nur Lehrkraft): zeigt die
+  eigenen, noch nicht platzierten Fotos als persönlichen Warteraum; für
+  die Lehrkraft zusätzlich weiterhin fremde Einreichungen. Eigene Fotos
+  werden per `update_layout` direkt übernommen (keine Kopie), fremde
+  weiterhin per `adopt_photo_to_board` kopiert.
+- [x] PIN-Icon pro Post-Stream-Karte legt das Foto mittig auf die sichtbare
+  Pinnwand; Tippen auf die Karte selbst öffnet bei eigenen Fotos die große
+  Lightbox-Ansicht (fremde Einreichungen haben keine eigene Lightbox,
+  dort wirkt Tippen wie das PIN-Icon).
+- [x] **Bugfix**: Pin/Unpin-Aktionen (Home, Board, Klassenansicht) luden
+  den Post-Stream bisher nicht neu - dadurch erschienen frisch gepinnte
+  Fotos teils erst nach manuellem Reload. Jetzt wird nach jeder
+  Sichtbarkeits-Änderung `loadStreamPhotos()` mit aufgerufen.
+- [x] **Nebenbei gefundener Bugfix**: beim Kopieren eines fremden
+  Post-Stream-Fotos (`adopt_photo_to_board`) wurde versehentlich auch
+  dessen Rückseiten-Verknüpfung mitkopiert - hätte auf ein fremdes, nicht
+  zugängliches Foto gezeigt. Kopie startet jetzt ohne Rückseite.
+- [x] **Roter Faden auf dem Board**: Fotos im (geöffneten) Faden-Panel
+  bekommen einen roten Rahmen direkt auf der Leinwand; gesetzte Leerrahmen
+  werden als gestrichelte Rechtecke angezeigt; eine Linie verbindet jeweils
+  zwei aufeinanderfolgende Stationen (nur innerhalb desselben Boards);
+  "Als Präsentation abspielen" steht jetzt oberhalb der Liste statt darunter.
+
+**Migrationshinweis:** Bestandsfotos werden beim Upgrade auf `boardplaced=1`
+gesetzt, damit sich das Aussehen bereits existierender Boards durch dieses
+Update nicht rückwirkend ändert - nur künftig neu eingereichte/erneut
+gepinnte Fotos durchlaufen den neuen Post-Stream-Warteraum.
+
+**Scoping-Hinweis:** Leerrahmen auf dem Board sind (wie schon in Phase 3
+vermerkt) weiterhin nicht direkt verschiebbar/skalierbar - nur über das
+Faden-Panel neu anlegbar. Die Verbindungslinie überspringt Segmente
+zwischen Stationen auf unterschiedlichen Boards (kein Board-übergreifendes
+Zeichnen).

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/pinnwand/db" VERSION="2026083004" COMMENT="XMLDB file for module pinnwand">
+<XMLDB PATH="mod/pinnwand/db" VERSION="2026083007" COMMENT="XMLDB file for module pinnwand">
   <TABLES>
     <TABLE NAME="pinnwand" COMMENT="Instances of the pinnwand activity">
       <FIELDS>
@@ -53,6 +53,7 @@
         <FIELD NAME="sourcephotoid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Falls über den Post-Stream von einem fremden Foto übernommen: dessen ursprüngliche ID"/>
         <FIELD NAME="backphotoid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Verknüpfte Rückseite (eigenes Foto derselben Person) - per Doppelklick auf der Pinnwand umblätterbar"/>
         <FIELD NAME="showingback" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Welche Seite aktuell oben liegt: 0=Vorderseite, 1=Rückseite"/>
+        <FIELD NAME="boardplaced" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Erst wenn 1: Foto hat reale Board-Koordinaten und erscheint auf der Leinwand - vorher liegt es im Post-Stream bereit"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>

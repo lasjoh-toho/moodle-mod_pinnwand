@@ -377,6 +377,25 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Daten/Rückseite) offen ist - nur der Schließen-Button bleibt immer
   sichtbar, der Bildbereich wird dadurch maximal groß.
 
+### Dreizehnte Überarbeitung — Post-Stream als Warteraum, Roter Faden auf dem Board
+
+- **Architekturänderung**: Fotos landen beim Pinnen nicht mehr direkt auf
+  der Leinwand, sondern zunächst im Post-Stream (neues Feld `boardplaced`)
+  - von dort per Drag oder PIN-Icon auf das Board übernehmen. Der
+  Post-Stream ist jetzt für alle da (vorher nur Lehrkraft): eigener
+  Warteraum für noch nicht platzierte Fotos, für die Lehrkraft zusätzlich
+  weiterhin fremde Einreichungen.
+- **Bugfix**: Pin/Unpin lud den Post-Stream nicht neu, wodurch frisch
+  gepinnte Fotos teils erst nach Reload sichtbar wurden.
+- **Bugfix**: Kopieren eines fremden Post-Stream-Fotos übernahm
+  versehentlich dessen Rückseiten-Verknüpfung (zeigte auf ein fremdes,
+  nicht zugängliches Foto).
+- **Roter Faden auf dem Board**: rote Umrandung für enthaltene Fotos,
+  sichtbare Leerrahmen, Verbindungslinie zwischen aufeinanderfolgenden
+  Stationen, Präsentations-Start-Button jetzt oberhalb der Liste.
+- Bestandsfotos bleiben nach dem Update unverändert sichtbar
+  (Migrationslogik markiert sie als bereits platziert).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

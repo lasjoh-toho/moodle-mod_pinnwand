@@ -205,5 +205,22 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083004, 'pinnwand');
     }
 
+    if ($oldversion < 2026083007) {
+        // Feedback-Durchgang: Post-Stream als "Warteraum" vor der Leinwand -
+        // ein Foto zeigt erst auf dem Board an, wenn es aktiv aus dem
+        // Post-Stream dorthin gezogen/gepinnt wurde.
+        $table = new xmldb_table('pinnwand_photos');
+        $field = new xmldb_field('boardplaced', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'showingback');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+            // Bestandsfotos gelten als bereits platziert, damit sich das
+            // Aussehen bestehender Boards durch dieses Update nicht
+            // rückwirkend ändert - nur künftig neu eingereichte/gepinnte
+            // Fotos durchlaufen den neuen Post-Stream-Warteraum.
+            $DB->execute("UPDATE {pinnwand_photos} SET boardplaced = 1");
+        }
+        upgrade_mod_savepoint(true, 2026083007, 'pinnwand');
+    }
+
     return true;
 }

@@ -241,6 +241,7 @@
           var newHidden = !p.hiddenfromboard;
           callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: newHidden }).then(function () {
             p.hiddenfromboard = newHidden;
+            loadStreamPhotos();
             render();
           });
         });
@@ -1449,12 +1450,22 @@
     var backsideIds = {};
     state.photos.forEach(function (p) { if (p.backphotoid) { backsideIds[p.backphotoid] = true; } });
     var visible = state.photos.filter(function (p) {
-      return !p.hiddenfromboard && (p.boardid || 0) === state.currentBoard && !backsideIds[p.id];
+      return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === state.currentBoard && !backsideIds[p.id];
     });
+
+    // Roter Faden: wenn das Faden-Panel offen ist, bekommen enthaltene
+    // Fotos einen roten Rahmen direkt auf dem Board (siehe unten).
+    var threadPhotoIds = {};
+    if (state.threadPanelOpen) {
+      var ot = ownThread();
+      if (ot) {
+        ot.items.forEach(function (it) { if (it.itemtype === 'photo') { threadPhotoIds[it.photoid] = true; } });
+      }
+    }
 
     visible.forEach(function (p) {
       var item = el('div', {
-        class: 'ic-arrange-item',
+        class: 'ic-arrange-item' + (threadPhotoIds[p.id] ? ' ic-in-thread' : ''),
         style: 'left:' + p.canvasx + 'px;top:' + p.canvasy + 'px;width:' + p.canvasw + 'px;' +
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
@@ -1481,6 +1492,8 @@
           ev.stopPropagation();
           callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: true }).then(function () {
             p.hiddenfromboard = true;
+            p.boardplaced = false;
+            loadStreamPhotos();
             render();
           });
         });
@@ -1547,6 +1560,54 @@
         p.canvasrot = deg;
       }, function () { persistLayout(p); });
     });
+
+    // Roter Faden auf dem Board: gesetzte Leerrahmen anzeigen + eine Linie,
+    // die jeweils zwei aufeinanderfolgende Stationen verbindet - nur für
+    // Stationen auf dem gerade angezeigten Board (siehe Scoping-Hinweis zu
+    // Mehrfach-Board-Präsentationen in Phase 3/6).
+    if (state.threadPanelOpen) {
+      var threadForCanvas = ownThread();
+      if (threadForCanvas) {
+        var boardItems = threadForCanvas.items.filter(function (it) { return (it.boardid || 0) === state.currentBoard; });
+
+        // Leerrahmen als sichtbare, gestrichelte Rechtecke.
+        boardItems.forEach(function (it) {
+          if (it.itemtype !== 'frame') { return; }
+          var frameEl = el('div', {
+            class: 'ic-thread-frame-onboard',
+            style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;'
+          });
+          if (it.framelabel) { frameEl.appendChild(el('span', {}, [it.framelabel])); }
+          canvas.appendChild(frameEl);
+        });
+
+        // Verbindungslinie zwischen den Mittelpunkten aufeinanderfolgender
+        // Stationen (in Faden-Reihenfolge).
+        function centerOf(it) {
+          if (it.itemtype === 'frame') {
+            return { x: it.framex + it.framew / 2, y: it.framey + it.frameh / 2 };
+          }
+          var photo = state.photos.filter(function (o) { return o.id === it.photoid; })[0];
+          if (!photo) { return null; }
+          return { x: photo.canvasx + photo.canvasw / 2, y: photo.canvasy + (photo.canvasw * 0.7) / 2 };
+        }
+        var ns = 'http://www.w3.org/2000/svg';
+        var lineSvg = document.createElementNS(ns, 'svg');
+        lineSvg.setAttribute('class', 'ic-thread-line-svg');
+        for (var ti = 0; ti < boardItems.length - 1; ti++) {
+          var c1 = centerOf(boardItems[ti]), c2 = centerOf(boardItems[ti + 1]);
+          if (!c1 || !c2) { continue; }
+          var lineEl = document.createElementNS(ns, 'line');
+          lineEl.setAttribute('x1', c1.x); lineEl.setAttribute('y1', c1.y);
+          lineEl.setAttribute('x2', c2.x); lineEl.setAttribute('y2', c2.y);
+          lineEl.setAttribute('stroke', threadForCanvas.color || '#e0503f');
+          lineEl.setAttribute('stroke-width', '3');
+          lineEl.setAttribute('stroke-linecap', 'round');
+          lineSvg.appendChild(lineEl);
+        }
+        canvas.appendChild(lineSvg);
+      }
+    }
 
     // ---- Board-Leiste: Umschalten zwischen mehreren Pinnwänden ----
     var boards = boardList();
@@ -1652,18 +1713,16 @@
     // Lehrkraft. Teilt sich den rechten Rand mit dem Faden-Panel (siehe
     // gegenseitiges Schließen oben/unten) - beide gemeinsam offen wäre auf
     // den meisten Bildschirmen zu eng.
-    if (state.canmoderate) {
-      var streamBtn = el('button', { class: 'ic-fab' + (state.streamPanelOpen ? ' active' : ''), title: S.poststream }, [icon('stream')]);
-      streamBtn.addEventListener('click', function () {
-        state.streamPanelOpen = !state.streamPanelOpen;
-        if (state.streamPanelOpen) {
-          state.threadPanelOpen = false;
-          loadStreamPhotos();
-        }
-        render();
-      });
-      fabRow.appendChild(streamBtn);
-    }
+    var streamBtn = el('button', { class: 'ic-fab' + (state.streamPanelOpen ? ' active' : ''), title: S.poststream }, [icon('stream')]);
+    streamBtn.addEventListener('click', function () {
+      state.streamPanelOpen = !state.streamPanelOpen;
+      if (state.streamPanelOpen) {
+        state.threadPanelOpen = false;
+        loadStreamPhotos();
+      }
+      render();
+    });
+    fabRow.appendChild(streamBtn);
 
     var maxreached = state.maxpictures > 0 && state.photos.length >= state.maxpictures;
     var addBtn = el('button', { class: 'ic-fab ic-fab-primary', title: S.addphoto, disabled: maxreached ? 'disabled' : null }, ['+']);
@@ -1691,8 +1750,9 @@
       ev.preventDefault();
       var photoid = parseInt(ev.dataTransfer.getData('text/pinnwand-stream-photoid'), 10);
       if (!photoid) { return; }
+      var mine = ev.dataTransfer.getData('text/pinnwand-stream-mine') === '1';
       var pt = screenToCanvas(ev.clientX, ev.clientY);
-      adoptStreamPhoto(photoid, pt.x - 100, pt.y - 100);
+      placeStreamPhoto(photoid, pt.x - 100, pt.y - 100, mine);
     });
   }
 
@@ -1717,6 +1777,21 @@
   function adoptStreamPhoto(photoid, x, y) {
     callAjax('mod_pinnwand_adopt_photo_to_board', {
       cmid: cfg.cmid, photoid: photoid, x: x, y: y, boardid: state.currentBoard
+    }).then(function () {
+      state.streamPhotos = state.streamPhotos.filter(function (p) { return p.id !== photoid; });
+      refreshPhotos().then(render);
+    });
+  }
+
+  // Eigenes, noch nicht platziertes Foto aus dem Post-Stream direkt auf das
+  // Board übernehmen (keine Kopie nötig, es ist ja bereits das eigene Foto) -
+  // im Unterschied zu fremden Einreichungen (siehe adoptStreamPhoto).
+  function placeStreamPhoto(photoid, x, y, mine) {
+    if (!mine) { adoptStreamPhoto(photoid, x, y); return; }
+    var existing = state.photos.filter(function (p) { return p.id === photoid; })[0];
+    var w = existing ? existing.canvasw : 200;
+    callAjax('mod_pinnwand_update_layout', {
+      cmid: cfg.cmid, photoid: photoid, x: x, y: y, w: w, rot: 0, z: state.photos.length, boardid: state.currentBoard
     }).then(function () {
       state.streamPhotos = state.streamPhotos.filter(function (p) { return p.id !== photoid; });
       refreshPhotos().then(render);
@@ -1762,20 +1837,42 @@
         }
         card.style.bottom = bottomOffset + 'px';
         card.appendChild(el('img', { src: p.url, alt: '' }));
-        card.appendChild(el('span', { class: 'ic-stream-card-label' }, [p.userfullname + (p.sourcetitle ? ' · ' + p.sourcetitle : '')]));
+        card.appendChild(el('span', { class: 'ic-stream-card-label' },
+          [p.mine ? (p.sourcetitle || S.stream_own_label) : (p.userfullname + (p.sourcetitle ? ' · ' + p.sourcetitle : ''))]));
 
-        card.addEventListener('dragstart', function (ev) {
-          ev.dataTransfer.setData('text/pinnwand-stream-photoid', String(p.id));
-        });
-        card.addEventListener('click', function () {
+        function centerPoint() {
           var wrapEl = document.querySelector('.ic-canvas-wrap');
-          if (!wrapEl) { return; }
-          var rect = wrapEl.getBoundingClientRect();
-          var pt = {
+          var rect = wrapEl ? wrapEl.getBoundingClientRect() : { width: 400, height: 400 };
+          return {
             x: (rect.width / 2 - state.boardPanX) / (state.boardZoom || 1) - 100,
             y: (rect.height / 2 - state.boardPanY) / (state.boardZoom || 1) - 100
           };
-          adoptStreamPhoto(p.id, pt.x, pt.y);
+        }
+
+        // PIN-Icon: Foto direkt mittig auf die (sichtbare) Pinnwand legen -
+        // ohne Drag, ein Tippen genügt.
+        var pinBtn = el('button', { class: 'ic-stream-pin-btn', title: S.stream_pin_hint }, [icon('thumbtack')]);
+        pinBtn.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          var pt = centerPoint();
+          placeStreamPhoto(p.id, pt.x, pt.y, p.mine);
+        });
+        card.appendChild(pinBtn);
+
+        card.addEventListener('dragstart', function (ev) {
+          ev.dataTransfer.setData('text/pinnwand-stream-photoid', String(p.id));
+          ev.dataTransfer.setData('text/pinnwand-stream-mine', p.mine ? '1' : '0');
+        });
+        card.addEventListener('click', function () {
+          // Eigene Fotos: Kartenkörper öffnet die große Lightbox-Ansicht.
+          // Fremde Einreichungen (nur Lehrkraft) haben keine eigene
+          // Lightbox verfügbar - Tippen wirkt dort wie das PIN-Icon.
+          if (p.mine) {
+            var idx = state.photos.findIndex(function (o) { return o.id === p.id; });
+            if (idx !== -1) { openLightbox(idx); return; }
+          }
+          var pt = centerPoint();
+          placeStreamPhoto(p.id, pt.x, pt.y, p.mine);
         });
         cardsWrap.appendChild(card);
       });
@@ -1871,6 +1968,11 @@
     var shared = sharedThread();
 
     panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.thread]));
+    if (own && own.items.length > 0) {
+      var presentBtn = el('button', { class: 'ic-btn ic-btn-primary ic-thread-present-btn' }, [S.presentthread]);
+      presentBtn.addEventListener('click', function () { openPresentation(own); });
+      panel.appendChild(presentBtn);
+    }
     panel.appendChild(renderThreadList(own, true));
 
     if (state.canusethreads) {
@@ -1889,9 +1991,6 @@
       });
       actions.appendChild(addFrameBtn);
       if (own && own.items.length > 0) {
-        var presentBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.presentthread]);
-        presentBtn.addEventListener('click', function () { openPresentation(own); });
-        actions.appendChild(presentBtn);
         var delBtn = el('button', { class: 'ic-btn ic-btn-danger' }, [S.deletethread]);
         delBtn.addEventListener('click', function () {
           if (confirm(S.confirmdeletethread)) {
@@ -1908,12 +2007,12 @@
 
     if (shared) {
       panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.teacherthread]));
-      panel.appendChild(renderThreadList(shared, false));
       if (shared.items.length > 0) {
-        var presentSharedBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.presentthread]);
+        var presentSharedBtn = el('button', { class: 'ic-btn ic-btn-primary ic-thread-present-btn' }, [S.presentthread]);
         presentSharedBtn.addEventListener('click', function () { openPresentation(shared); });
         panel.appendChild(presentSharedBtn);
       }
+      panel.appendChild(renderThreadList(shared, false));
     }
 
     return panel;
@@ -2101,6 +2200,7 @@
             pinOverlay.classList.toggle('active', !p.hiddenfromboard);
             pinOverlay.title = p.hiddenfromboard ? S.sendtoboard : S.removefromboard;
             if (typeof pinCheck !== 'undefined') { pinCheck.checked = !p.hiddenfromboard; }
+            loadStreamPhotos();
           });
         });
         thumbWrap.appendChild(pinOverlay);
@@ -2129,6 +2229,7 @@
           var newHidden = !pinCheck.checked;
           callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: newHidden }).then(function () {
             p.hiddenfromboard = newHidden;
+            loadStreamPhotos();
           }).catch(function () { pinCheck.checked = !pinCheck.checked; });
         });
         pinLabel.appendChild(pinCheck);
@@ -3224,6 +3325,7 @@
       state.canusethreads = !!res.canuse;
       if (state.step === 'arrange') { render(); }
     }).catch(function () { /* Fäden bleiben leer, Board funktioniert trotzdem */ });
+    loadStreamPhotos();
   }).catch(function () {
     render();
   });
