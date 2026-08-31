@@ -146,6 +146,14 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:submit',
     ],
+    'mod_pinnwand_set_thread_bgmoves' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'set_thread_bgmoves',
+        'description' => 'Legt fest, ob sich der Hintergrund beim Präsentations-Zoom mitbewegt',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:submit',
+    ],
     'mod_pinnwand_get_stream_photos' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'get_stream_photos',

@@ -997,6 +997,7 @@ class mod_pinnwand_external extends external_api {
                 'framey' => $r->framey !== null ? (float) $r->framey : 0,
                 'framew' => $r->framew !== null ? (float) $r->framew : 0,
                 'frameh' => $r->frameh !== null ? (float) $r->frameh : 0,
+                'framerot' => $r->framerot !== null ? (float) $r->framerot : 0,
                 'framelabel' => (string) ($r->framelabel ?? ''),
             ];
         }
@@ -1007,6 +1008,7 @@ class mod_pinnwand_external extends external_api {
         return new external_single_structure([
             'id' => new external_value(PARAM_INT, 'Thread-ID'),
             'color' => new external_value(PARAM_TEXT, 'Farbe (Hex)'),
+            'bgmoves' => new external_value(PARAM_BOOL, 'Hintergrund bewegt sich beim Präsentations-Zoom mit'),
             'isown' => new external_value(PARAM_BOOL, 'Gehört der aktuellen Person'),
             'items' => new external_multiple_structure(new external_single_structure([
                 'id' => new external_value(PARAM_INT, 'Item-ID'),
@@ -1017,6 +1019,7 @@ class mod_pinnwand_external extends external_api {
                 'framey' => new external_value(PARAM_FLOAT, 'y (nur frame)'),
                 'framew' => new external_value(PARAM_FLOAT, 'Breite (nur frame)'),
                 'frameh' => new external_value(PARAM_FLOAT, 'Höhe (nur frame)'),
+                'framerot' => new external_value(PARAM_FLOAT, 'Rotation in Grad (nur frame)'),
                 'framelabel' => new external_value(PARAM_TEXT, 'Beschriftung (nur frame)'),
             ])),
         ]);
@@ -1035,7 +1038,7 @@ class mod_pinnwand_external extends external_api {
         $own = $DB->get_record('pinnwand_threads', ['pinnwandid' => $instance->id, 'userid' => $USER->id]);
         if ($own) {
             $out[] = array_merge(
-                ['id' => (int) $own->id, 'color' => $own->color, 'isown' => true],
+                ['id' => (int) $own->id, 'color' => $own->color, 'bgmoves' => (bool) $own->bgmoves, 'isown' => true],
                 ['items' => self::export_thread_items($own->id)]
             );
         }
@@ -1052,7 +1055,8 @@ class mod_pinnwand_external extends external_api {
                 );
                 if ($teacherthread) {
                     $out[] = array_merge(
-                        ['id' => (int) $teacherthread->id, 'color' => $teacherthread->color, 'isown' => false],
+                        ['id' => (int) $teacherthread->id, 'color' => $teacherthread->color,
+                            'bgmoves' => (bool) $teacherthread->bgmoves, 'isown' => false],
                         ['items' => self::export_thread_items($teacherthread->id)]
                     );
                 }
@@ -1137,6 +1141,7 @@ class mod_pinnwand_external extends external_api {
                 'framey' => new external_value(PARAM_FLOAT, 'y (nur frame)'),
                 'framew' => new external_value(PARAM_FLOAT, 'Breite (nur frame)'),
                 'frameh' => new external_value(PARAM_FLOAT, 'Höhe (nur frame)'),
+                'framerot' => new external_value(PARAM_FLOAT, 'Rotation in Grad (nur frame)'),
                 'framelabel' => new external_value(PARAM_TEXT, 'Beschriftung (nur frame)'),
             ])),
         ]);
@@ -1202,19 +1207,20 @@ class mod_pinnwand_external extends external_api {
             'framey' => new external_value(PARAM_FLOAT, 'y'),
             'framew' => new external_value(PARAM_FLOAT, 'Breite'),
             'frameh' => new external_value(PARAM_FLOAT, 'Höhe'),
+            'framerot' => new external_value(PARAM_FLOAT, 'Rotation in Grad', VALUE_DEFAULT, 0),
         ]);
     }
 
     /**
-     * Speichert Position/Größe eines Leerrahmens, nachdem er auf der
-     * Pinnwand verschoben oder skaliert wurde (siehe renderArrange, roter
-     * Faden auf dem Board).
+     * Speichert Position/Größe/Rotation eines Leerrahmens, nachdem er auf
+     * der Pinnwand verschoben, skaliert oder gedreht wurde (siehe
+     * renderArrange, roter Faden auf dem Board).
      */
-    public static function update_thread_frame($cmid, $itemid, $framex, $framey, $framew, $frameh) {
+    public static function update_thread_frame($cmid, $itemid, $framex, $framey, $framew, $frameh, $framerot = 0) {
         global $DB, $USER;
         $params = self::validate_parameters(self::update_thread_frame_parameters(), [
             'cmid' => $cmid, 'itemid' => $itemid, 'framex' => $framex, 'framey' => $framey,
-            'framew' => $framew, 'frameh' => $frameh,
+            'framew' => $framew, 'frameh' => $frameh, 'framerot' => $framerot,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
 
@@ -1227,6 +1233,7 @@ class mod_pinnwand_external extends external_api {
         $item->framey = $params['framey'];
         $item->framew = max(40, $params['framew']);
         $item->frameh = max(40, $params['frameh']);
+        $item->framerot = $params['framerot'];
         $DB->update_record('pinnwand_thread_items', $item);
 
         return ['success' => true];
@@ -1254,6 +1261,29 @@ class mod_pinnwand_external extends external_api {
     }
 
     public static function delete_thread_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function set_thread_bgmoves_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'bgmoves' => new external_value(PARAM_BOOL, 'Hintergrund bewegt sich beim Zoom mit'),
+        ]);
+    }
+
+    public static function set_thread_bgmoves($cmid, $bgmoves) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_thread_bgmoves_parameters(), ['cmid' => $cmid, 'bgmoves' => $bgmoves]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $thread = self::get_or_create_thread($instance, $context, $USER);
+        $thread->bgmoves = !empty($params['bgmoves']) ? 1 : 0;
+        $DB->update_record('pinnwand_threads', $thread);
+
+        return ['success' => true];
+    }
+
+    public static function set_thread_bgmoves_returns() {
         return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
     }
 

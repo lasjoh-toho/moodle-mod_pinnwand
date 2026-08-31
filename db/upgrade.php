@@ -248,5 +248,21 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083010, 'pinnwand');
     }
 
+    if ($oldversion < 2026083011) {
+        // Feedback-Durchgang: Rahmen drehbar + Hintergrund optional mit dem
+        // Präsentations-Zoom mitbewegen.
+        $table = new xmldb_table('pinnwand_thread_items');
+        $field = new xmldb_field('framerot', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0', 'frameh');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $table2 = new xmldb_table('pinnwand_threads');
+        $field2 = new xmldb_field('bgmoves', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'color');
+        if (!$dbman->field_exists($table2, $field2)) {
+            $dbman->add_field($table2, $field2);
+        }
+        upgrade_mod_savepoint(true, 2026083011, 'pinnwand');
+    }
+
     return true;
 }

@@ -489,3 +489,50 @@ möglicherweise nicht (SVG als `<img>`-Quelle lädt keine extern
 referenzierten Web-Fonts nach - eine Browser-Sicherheitsbeschränkung).
 Einbetten der Font-Daten direkt ins SVG wäre möglich, wurde aber aus
 Aufwandsgründen nicht umgesetzt.
+
+---
+
+## Phase 13 — Faden-Kurve+Sichtbarkeit, Hintergrund-Bewegung, Wortfeld-UX, Assistent-Handles ✅
+
+Sechster Feedback-Durchgang. Betrifft: `classes/external.php` (neue Felder
+`framerot`/`bgmoves`, neuer Endpunkt `set_thread_bgmoves`), `js/app.js`
+(Faden-Kurve, Rahmen-Rotation, Wortfeld-Primärtext, Assistent-Umbau),
+`db/install.xml` + `upgrade.php`.
+
+- [x] **Bugfix Faden-Linie**: fehlendes `viewBox`/`width`/`height`-Attribut
+  am SVG führte dazu, dass der Koordinatenraum vom Browser nicht
+  zuverlässig auf die 1000×1400-Canvasgröße abgebildet wurde - die Linie
+  erschien nur in einem Teilbereich (links, senkrecht). Jetzt fest auf die
+  tatsächliche Canvas-Größe fixiert.
+- [x] Faden-Linie als sanfte Kurve (quadratische Bezier, abwechselnde
+  Wölbungsrichtung) statt gerader Strecke - berührt dabei weiterhin exakt
+  die Mittelpunkte der verbundenen Stationen.
+- [x] Leerrahmen jetzt auch drehbar (neues Feld `framerot`, Rotations-
+  Handle analog zu Fotos).
+- [x] Leerrahmen in der Präsentation unsichtbar (dienen nur als Zoom-Ziel,
+  z. B. um auf Details des Hintergrunds hinzuweisen).
+- [x] Checkbox "Hintergrund bewegt sich beim Zoom mit" im Faden-Panel
+  (neues Feld `bgmoves` je Faden, neuer Endpunkt `set_thread_bgmoves`) -
+  Standard: Hintergrund bleibt bildschirmfüllend fest stehen.
+- [x] **Wortfeld-Editor**: erstes Textobjekt ("primär") füllt jetzt den
+  ganzen Rahmen, bricht automatisch um und passt seine Schriftgröße live
+  per 2D-Auto-Fit (Binärsuche) an; wird beim Öffnen des Editors sofort
+  fokussiert (Cursor sichtbar, kein Extra-Klick nötig). Export nutzt dafür
+  `<foreignObject>` im SVG (da SVG-`<text>` nicht automatisch umbricht).
+  Weitere Textobjekte bleiben wie bisher frei positionierbar/einzeilig.
+- [x] **Hinzufügen-Assistent umgebaut**: die Zuschnitt-Handles im zweiten
+  Schritt sind komplett entfallen - die vier Eckpunkte im Perspektive-
+  Schritt übernehmen Zuschnitt UND Perspektivkorrektur bereits gemeinsam
+  (das Ergebnis ist exakt auf das gewählte Viereck zugeschnitten). Der
+  vormalige Zuschnitt-Schritt zeigt jetzt nur noch Drehen-/Spiegeln-
+  Buttons, keine Handles mehr.
+- [x] "Weiter"/"Speichern"-Pfeil ist jetzt ein schwebender Button unten
+  rechts im Bild (in Zuschnitt- und Farbe-Schritt) statt in einer
+  separaten Aktionsleiste - nur im Perspektive-Schritt (mit Handles)
+  bleibt er unten mittig in der Aktionsleiste, um die Eckpunkte nicht zu
+  verdecken.
+
+**Scoping-Hinweis:** Der Quelle-Schritt (letzter Schritt, kleine
+Bildvorschau + Formular) behält den Speichern-Button in der Aktionsleiste -
+dort gibt es kein großformatiges Bild, auf dem eine schwebende Ecken-
+Platzierung sinnvoll wäre.

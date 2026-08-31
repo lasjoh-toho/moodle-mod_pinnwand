@@ -411,6 +411,16 @@
     return rotated;
   }
 
+  function mirrorCanvas(canvas) {
+    var mirrored = document.createElement('canvas');
+    mirrored.width = canvas.width; mirrored.height = canvas.height;
+    var ctx = mirrored.getContext('2d');
+    ctx.translate(mirrored.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(canvas, 0, 0);
+    return mirrored;
+  }
+
   function loadCapturedImage(img) {
     // Auf sinnvolle Maximalgröße begrenzen (Performance der Pixel-Operationen).
     var maxdim = 1800;
@@ -676,21 +686,19 @@
   function renderCrop(body) {
     body.appendChild(stepsBar(2));
 
-    // Werkzeug- und Aktionsleiste MÜSSEN vor der Bildgrößen-Messung im DOM
-    // stehen (siehe fitImageToStage weiter unten) - sonst berechnet die
-    // Messung eine zu große Fläche, die nach Erscheinen dieser Leisten
-    // tatsächlich nicht mehr zur Verfügung steht (Bild ragt über den
-    // sichtbaren Bereich hinaus / wird nicht vollständig gezeigt).
+    // Kein Zuschnitt-Handle-Schritt mehr hier - die vier Eckpunkte im
+    // vorherigen (Perspektive-)Schritt übernehmen Zuschnitt UND
+    // Perspektivkorrektur bereits gemeinsam (das Ergebnis ist exakt auf das
+    // gewählte Viereck zugeschnitten). Dieser Schritt bietet nur noch
+    // Drehen/Spiegeln als einfache Buttons - keine Handles ein zweites Mal.
     var toolRow = el('div', { class: 'ic-crop-tools' });
-    var fullBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.usefullimage]);
     var rotateBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('rotate'), el('span', {}, [S.rotate90])]);
-    toolRow.appendChild(fullBtn); toolRow.appendChild(rotateBtn);
+    var mirrorBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('mirror'), el('span', {}, [S.mirror])]);
+    toolRow.appendChild(rotateBtn); toolRow.appendChild(mirrorBtn);
     body.appendChild(toolRow);
 
     var bar = el('div', { class: 'ic-actionbar' });
     bar.appendChild(cancelWizardBtn());
-    var nextBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.next, 'aria-label': S.next }, [icon('arrowright')]);
-    bar.appendChild(nextBtn);
     body.appendChild(bar);
 
     var stage = el('div', { class: 'ic-stage' });
@@ -699,46 +707,27 @@
     body.appendChild(stage);
 
     var src = state.workCanvas;
-    var fitScale = fitImageToStage(canvas, stage, src.width, src.height);
+    fitImageToStage(canvas, stage, src.width, src.height);
     canvas.getContext('2d').drawImage(src, 0, 0, canvas.width, canvas.height);
 
-    if (!state.cropRect) {
-      var m = 0.04;
-      state.cropRect = [
-        { x: canvas.width * m, y: canvas.height * m },
-        { x: canvas.width * (1 - m), y: canvas.height * m },
-        { x: canvas.width * (1 - m), y: canvas.height * (1 - m) },
-        { x: canvas.width * m, y: canvas.height * (1 - m) }
-      ];
-      state.cropRectCanvasW = canvas.width; state.cropRectCanvasH = canvas.height;
-    } else if (state.cropRectCanvasW !== canvas.width || state.cropRectCanvasH !== canvas.height) {
-      var crx2 = canvas.width / state.cropRectCanvasW, cry2 = canvas.height / state.cropRectCanvasH;
-      state.cropRect = state.cropRect.map(function (p) { return { x: p.x * crx2, y: p.y * cry2 }; });
-      state.cropRectCanvasW = canvas.width; state.cropRectCanvasH = canvas.height;
-    }
-    makeDragOverlay(stage, canvas, state.cropRect, true);
-    stageHint(stage, S.crop_hint);
+    // Weiter-Pfeil als schwebender Button unten rechts IM Bild (nicht in
+    // der Aktionsleiste) - hier gibt es keine Handles, die er verdecken
+    // könnte.
+    var nextBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon ic-stage-next', title: S.next, 'aria-label': S.next }, [icon('arrowright')]);
+    stage.appendChild(nextBtn);
 
-    fullBtn.addEventListener('click', function () {
-      state.cropRect = [
-        { x: 0, y: 0 }, { x: canvas.width, y: 0 },
-        { x: canvas.width, y: canvas.height }, { x: 0, y: canvas.height }
-      ];
-      render();
-    });
     rotateBtn.addEventListener('click', function () {
       state.workCanvas = rotateCanvas90(state.workCanvas);
-      state.cropRect = null;
+      render();
+    });
+    mirrorBtn.addEventListener('click', function () {
+      state.workCanvas = mirrorCanvas(state.workCanvas);
       render();
     });
     nextBtn.addEventListener('click', function () {
-      var pts = state.cropRect.map(function (p) { return { x: p.x / fitScale, y: p.y / fitScale }; });
-      var minX = Math.min(pts[0].x, pts[3].x), maxX = Math.max(pts[1].x, pts[2].x);
-      var minY = Math.min(pts[0].y, pts[1].y), maxY = Math.max(pts[2].y, pts[3].y);
-      var w = Math.max(10, maxX - minX), h = Math.max(10, maxY - minY);
       var out = document.createElement('canvas');
-      out.width = Math.round(w); out.height = Math.round(h);
-      out.getContext('2d').drawImage(src, minX, minY, w, h, 0, 0, out.width, out.height);
+      out.width = state.workCanvas.width; out.height = state.workCanvas.height;
+      out.getContext('2d').drawImage(state.workCanvas, 0, 0);
       state.finalCanvas = out;
       state.colorSettings = { brightness: 0, contrast: 0, saturation: 0, grayscale: false };
       state.step = 'color';
@@ -803,9 +792,11 @@
 
     var bar = el('div', { class: 'ic-actionbar' });
     bar.appendChild(cancelWizardBtn());
+    body.appendChild(bar);
+
     var isEditingExisting = !!state.editingPhotoId;
     var nextBtn = el('button', {
-      class: 'ic-btn ic-btn-primary ic-btn-icon',
+      class: 'ic-btn ic-btn-primary ic-btn-icon ic-stage-next',
       title: isEditingExisting ? S.savephoto : S.next, 'aria-label': isEditingExisting ? S.savephoto : S.next
     }, [icon(isEditingExisting ? 'check' : 'arrowright')]);
     nextBtn.addEventListener('click', function () {
@@ -830,8 +821,7 @@
       state.step = 'source';
       render();
     });
-    bar.appendChild(nextBtn);
-    body.appendChild(bar);
+    stage.appendChild(nextBtn);
   }
 
   function applyColorAdjust(src, out, f) {
@@ -1052,6 +1042,22 @@
     return size;
   }
 
+  // 2D-Auto-Fit für das primäre (füllende, mehrzeilige) Textobjekt im
+  // Wortfeld: Binärsuche nach der größten Schriftgröße, bei der der Text
+  // (mit Zeilenumbruch) noch vollständig in den Rahmen passt.
+  function autoFitPrimaryText(el2, t, frameHeight) {
+    if (!el2.textContent) { return; }
+    var lo = 10, hi = Math.max(lo, Math.min(96, frameHeight * 0.5)), best = lo;
+    for (var i = 0; i < 8; i++) {
+      var mid = (lo + hi) / 2;
+      el2.style.fontSize = mid + 'px';
+      var fits = el2.scrollHeight <= el2.clientHeight + 1 && el2.scrollWidth <= el2.clientWidth + 1;
+      if (fits) { best = mid; lo = mid; } else { hi = mid; }
+    }
+    el2.style.fontSize = best + 'px';
+    t.size = best;
+  }
+
   function escapeXml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c];
@@ -1080,9 +1086,18 @@
       bgRect = '<rect x="0" y="0" width="' + tf.w + '" height="' + tf.h + '" rx="6" fill="' + preset.bg + '"' +
         (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
     }
-    var textEls = tf.texts.map(function (t) {
+    var textEls = tf.texts.map(function (t, idx) {
       if (!t.text) { return ''; }
       var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
+      if (idx === 0) {
+        // Primäres Textobjekt: füllt den Rahmen, bricht um (foreignObject,
+        // da SVG-<text> von Haus aus nicht automatisch umbricht).
+        return '<foreignObject x="0" y="0" width="' + tf.w + '" height="' + tf.h + '">' +
+          '<div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;box-sizing:border-box;' +
+          'padding:12px;display:flex;align-items:center;justify-content:center;text-align:center;' +
+          'font-family:' + escapeXml(fontDef.css) + ';font-size:' + t.size + 'px;color:' + (t.color || preset.text) +
+          ';white-space:pre-wrap;word-wrap:break-word;overflow:hidden;">' + escapeXml(t.text) + '</div></foreignObject>';
+      }
       var fitted = autoFitFontSize(t.text, fontDef.css, tf.w * 0.9, t.size);
       return '<text x="' + (t.x * tf.w) + '" y="' + (t.y * tf.h) + '" font-family="' + escapeXml(fontDef.css) +
         '" font-size="' + fitted + '" fill="' + (t.color || preset.text) +
@@ -1184,14 +1199,15 @@
       refreshControls();
     }
 
-    function textEl(t) {
+    function textEl(t, idx) {
+      var isPrimary = idx === 0;
       var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
       var el2 = el('div', {
-        class: 'ic-textframe-obj' + (t.id === activeId ? ' active' : ''),
+        class: 'ic-textframe-obj' + (isPrimary ? ' primary' : '') + (t.id === activeId ? ' active' : ''),
         'data-textid': String(t.id),
         contenteditable: 'true',
-        style: 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;font-family:' + fontDef.css + ';' +
-          'font-size:' + t.size + 'px;color:' + (t.color || preset.text)
+        style: (isPrimary ? '' : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;') +
+          'font-family:' + fontDef.css + ';font-size:' + t.size + 'px;color:' + (t.color || preset.text)
       }, [t.text || '']);
       if (!t.text) { el2.setAttribute('data-placeholder', S.textframe_placeholder); }
       // Wichtig: hier KEIN render() aufrufen - das würde das gerade fokussierte
@@ -1200,14 +1216,42 @@
       // nur die aktive Markierung + das Steuerelemente-Panel isoliert
       // aktualisiert (siehe selectText/refreshControls).
       el2.addEventListener('focus', function () { selectText(t.id); });
-      el2.addEventListener('input', function () { t.text = el2.textContent; });
-      var sizeHandle = el('div', { class: 'ic-textframe-size-handle', title: S.fontsize });
-      el2.appendChild(sizeHandle);
-      makeTextObjectMovable(el2, frame, t, sizeHandle);
-      sizeHandle.addEventListener('mousedown', function () { selectText(t.id); });
+      if (isPrimary) {
+        // Primäres Textobjekt: füllt den ganzen Rahmen, bricht automatisch
+        // um und passt seine Schriftgröße live an (2D-Fit: Breite + Höhe),
+        // statt eines kleinen, frei positionierten einzeiligen Labels.
+        el2.addEventListener('input', function () {
+          t.text = el2.textContent;
+          autoFitPrimaryText(el2, t, tf.h);
+        });
+      } else {
+        el2.addEventListener('input', function () { t.text = el2.textContent; });
+        var sizeHandle = el('div', { class: 'ic-textframe-size-handle', title: S.fontsize });
+        el2.appendChild(sizeHandle);
+        makeTextObjectMovable(el2, frame, t, sizeHandle);
+        sizeHandle.addEventListener('mousedown', function () { selectText(t.id); });
+      }
       return el2;
     }
-    tf.texts.forEach(function (t) { frame.appendChild(textEl(t)); });
+    tf.texts.forEach(function (t, idx) { frame.appendChild(textEl(t, idx)); });
+
+    // Die erste Karte ist beim Öffnen des Editors sofort beschreibbar -
+    // Cursor direkt gesetzt, kein zusätzlicher Klick nötig.
+    if (!tf._autofocused) {
+      tf._autofocused = true;
+      var primaryEl = frame.querySelector('.ic-textframe-obj.primary');
+      if (primaryEl) {
+        setTimeout(function () {
+          primaryEl.focus();
+          var range = document.createRange();
+          range.selectNodeContents(primaryEl);
+          range.collapse(false);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }, 0);
+      }
+    }
 
     // Presets
     var presetRow = el('div', { class: 'ic-textframe-presets' });
@@ -1418,6 +1462,7 @@
     pin: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-3 0-5.5 2.4-5.5 5.5 0 4 5.5 10.5 5.5 10.5s5.5-6.5 5.5-10.5C17.5 4.4 15 2 12 2z"/><circle cx="12" cy="7.5" r="2"/></svg>',
     group: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3-6 7-6s7 2.7 7 6"/><circle cx="18" cy="8.5" r="2.3"/><path d="M15.5 14.2c2.7.4 4.5 2.6 4.5 5.3"/></svg>',
     rotate: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"/><polyline points="3 21 3 15 9 15"/></svg>',
+    mirror: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><path d="M16 8l4 4-4 4"/><path d="M8 8l-4 4 4 4"/></svg>',
     person: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
     courseback: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>',
     scissors: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="8.5" y1="8" x2="20" y2="19"/><line x1="8.5" y1="16" x2="20" y2="5"/></svg>',
@@ -1708,13 +1753,15 @@
       if (threadForCanvas) {
         var boardItems = threadForCanvas.items.filter(function (it) { return (it.boardid || 0) === state.currentBoard; });
 
-        // Leerrahmen als sichtbare, gestrichelte Rechtecke - verschiebbar
-        // und skalierbar (nur im eigenen, bearbeitbaren Faden).
+        // Leerrahmen als sichtbare, gestrichelte Rechtecke - verschiebbar,
+        // skalierbar und drehbar (nur im eigenen, bearbeitbaren Faden).
         boardItems.forEach(function (it) {
           if (it.itemtype !== 'frame') { return; }
+          it.framerot = it.framerot || 0;
           var frameEl = el('div', {
             class: 'ic-thread-frame-onboard' + (threadForCanvas.isown ? ' editable' : ''),
-            style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;'
+            style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;' +
+              'transform:rotate(' + it.framerot + 'deg)'
           });
           if (it.framelabel) { frameEl.appendChild(el('span', {}, [it.framelabel])); }
           canvas.appendChild(frameEl);
@@ -1723,7 +1770,8 @@
 
           function persistFrame() {
             callAjax('mod_pinnwand_update_thread_frame', {
-              cmid: cfg.cmid, itemid: it.id, framex: it.framex, framey: it.framey, framew: it.framew, frameh: it.frameh
+              cmid: cfg.cmid, itemid: it.id, framex: it.framex, framey: it.framey,
+              framew: it.framew, frameh: it.frameh, framerot: it.framerot
             });
           }
           makeMovable(frameEl, canvas, function (x, y) {
@@ -1758,6 +1806,13 @@
           function frUp() { if (frDragging) { frDragging = false; persistFrame(); render(); } }
           window.addEventListener('mouseup', frUp);
           window.addEventListener('touchend', frUp);
+
+          // Rotations-Handle (analog zu Fotos) - kleiner Griff oben mittig.
+          var frameRotateHandle = el('div', { class: 'ic-rotate-handle' });
+          frameEl.appendChild(frameRotateHandle);
+          makeRotatable(frameRotateHandle, frameEl, function (deg) {
+            it.framerot = deg;
+          }, function () { persistFrame(); render(); });
         });
 
         // Verbindungslinie zwischen den Mittelpunkten aufeinanderfolgender
@@ -1773,16 +1828,31 @@
         var ns = 'http://www.w3.org/2000/svg';
         var lineSvg = document.createElementNS(ns, 'svg');
         lineSvg.setAttribute('class', 'ic-thread-line-svg');
+        // Explizites viewBox/width/height - ohne das wird der interne
+        // Koordinatenraum vom Browser nicht zuverlässig auf die tatsächliche
+        // Canvas-Größe (1000x1400) abgebildet, wodurch die Linie nur in
+        // einem Teilbereich sichtbar wird.
+        lineSvg.setAttribute('viewBox', '0 0 1000 1400');
+        lineSvg.setAttribute('width', '1000'); lineSvg.setAttribute('height', '1400');
+        lineSvg.setAttribute('preserveAspectRatio', 'none');
         for (var ti = 0; ti < boardItems.length - 1; ti++) {
           var c1 = centerOf(boardItems[ti]), c2 = centerOf(boardItems[ti + 1]);
           if (!c1 || !c2) { continue; }
-          var lineEl = document.createElementNS(ns, 'line');
-          lineEl.setAttribute('x1', c1.x); lineEl.setAttribute('y1', c1.y);
-          lineEl.setAttribute('x2', c2.x); lineEl.setAttribute('y2', c2.y);
-          lineEl.setAttribute('stroke', threadForCanvas.color || '#e0503f');
-          lineEl.setAttribute('stroke-width', '3');
-          lineEl.setAttribute('stroke-linecap', 'round');
-          lineSvg.appendChild(lineEl);
+          // Sanfte Kurve statt gerader Linie ("Faden"-Optik) - Start-/
+          // Endpunkt bleiben exakt die Objekt-Mittelpunkte, nur die Mitte
+          // der Strecke wölbt sich seitlich (abwechselnde Richtung).
+          var mx = (c1.x + c2.x) / 2, my = (c1.y + c2.y) / 2;
+          var dx = c2.x - c1.x, dy = c2.y - c1.y;
+          var len = Math.sqrt(dx * dx + dy * dy) || 1;
+          var bulge = Math.min(60, len * 0.18) * (ti % 2 === 0 ? 1 : -1);
+          var cx = mx + (-dy / len) * bulge, cy = my + (dx / len) * bulge;
+          var pathEl = document.createElementNS(ns, 'path');
+          pathEl.setAttribute('d', 'M ' + c1.x + ' ' + c1.y + ' Q ' + cx + ' ' + cy + ' ' + c2.x + ' ' + c2.y);
+          pathEl.setAttribute('fill', 'none');
+          pathEl.setAttribute('stroke', threadForCanvas.color || '#e0503f');
+          pathEl.setAttribute('stroke-width', '3');
+          pathEl.setAttribute('stroke-linecap', 'round');
+          lineSvg.appendChild(pathEl);
         }
         canvas.appendChild(lineSvg);
       }
@@ -2273,6 +2343,18 @@
 
     panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.thread]));
     if (own && own.items.length > 0) {
+      if (own.isown) {
+        var bgLabel = el('label', { class: 'ic-me-check', style: 'margin-bottom:8px' });
+        var bgCheck = el('input', { type: 'checkbox' });
+        bgCheck.checked = !!own.bgmoves;
+        bgCheck.addEventListener('change', function () {
+          own.bgmoves = bgCheck.checked;
+          callAjax('mod_pinnwand_set_thread_bgmoves', { cmid: cfg.cmid, bgmoves: bgCheck.checked });
+        });
+        bgLabel.appendChild(bgCheck);
+        bgLabel.appendChild(document.createTextNode(S.bgmoves_with_zoom));
+        panel.appendChild(bgLabel);
+      }
       var presentBtn = el('button', { class: 'ic-btn ic-btn-primary ic-thread-present-btn' }, [S.presentthread]);
       presentBtn.addEventListener('click', function () { openPresentation(own); });
       panel.appendChild(presentBtn);
@@ -2327,10 +2409,14 @@
     if (window.innerWidth < 900) { alert(S.present_smallscreen); return; }
     var overlay = el('div', { class: 'ic-present-overlay' });
     var stageEl = el('div', { class: 'ic-present-stage' });
-    var bgLayer = el('div', { class: 'ic-present-bg' });
+    var bgLayer = el('div', { class: 'ic-present-bg' + (thread.bgmoves ? ' ic-present-bg-moves' : '') });
     applyBackground(bgLayer);
-    stageEl.appendChild(bgLayer);
     var canvasEl = el('div', { class: 'ic-present-canvas' });
+    // Hintergrund bewegt sich beim Zoom mit (Checkbox im Faden-Panel): Teil
+    // der gezoomten Leinwand, genau wie Fotos/Rahmen - Rahmen lassen sich
+    // dann nutzen, um auf Details des Hintergrundbilds hinzuweisen. Sonst
+    // (Standard) eine eigenständige, bildschirmfüllende Ebene dahinter.
+    if (thread.bgmoves) { canvasEl.appendChild(bgLayer); } else { stageEl.appendChild(bgLayer); }
     stageEl.appendChild(canvasEl);
     overlay.appendChild(stageEl);
 
@@ -2384,11 +2470,13 @@
     // verlassen.
     function buildStep(it) {
       if (it.itemtype === 'frame') {
+        // Unsichtbar in der Präsentation - dient nur als Zoom-Ziel, damit
+        // auf Details des Hintergrunds/anderer Objekte hingewiesen werden
+        // kann, ohne selbst als Kasten sichtbar zu sein.
         var fEl = el('div', {
           class: 'ic-present-step-frame',
           style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;'
         });
-        if (it.framelabel) { fEl.appendChild(el('span', {}, [it.framelabel])); }
         canvasEl.appendChild(fEl);
         return { el: fEl, cx: it.framex + it.framew / 2, cy: it.framey + it.frameh / 2, w: it.framew, h: it.frameh };
       }

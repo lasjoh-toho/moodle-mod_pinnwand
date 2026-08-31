@@ -445,6 +445,24 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Große Bildschirme starten jetzt für alle Rollen im Pinnwand-Modus.
 - Sidebar-Buttons nebeneinander statt untereinander.
 
+### Siebzehnte Überarbeitung — Faden-Kurve, Hintergrund-Bewegung, Wortfeld-UX, Assistent-Umbau
+
+- **Bugfix Faden-Linie**: fehlendes `viewBox` am SVG führte dazu, dass die
+  Linie nur in einem Teilbereich (links, senkrecht) sichtbar war - jetzt
+  fest auf die Canvas-Größe fixiert; zusätzlich als sanfte Kurve statt
+  gerader Strecke gerendert.
+- Leerrahmen jetzt drehbar, in der Präsentation unsichtbar (dienen nur als
+  Zoom-Ziel, z. B. um auf Hintergrund-Details hinzuweisen).
+- Neue Checkbox "Hintergrund bewegt sich beim Zoom mit" im Faden-Panel.
+- **Wortfeld-Editor**: erstes Textobjekt füllt jetzt den ganzen Rahmen,
+  bricht automatisch um, passt die Schriftgröße live an und wird beim
+  Öffnen sofort fokussiert (Cursor direkt sichtbar).
+- **Hinzufügen-Assistent umgebaut**: Zuschnitt-Handles im zweiten Schritt
+  entfallen (Eckpunkte im ersten Schritt erledigen Zuschnitt +
+  Perspektivkorrektur bereits gemeinsam) - zweiter Schritt zeigt nur noch
+  Drehen/Spiegeln-Buttons. "Weiter"/"Speichern" ist jetzt ein schwebender
+  Button unten rechts im Bild, außer im Schritt mit den Eckpunkt-Handles.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

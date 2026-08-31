@@ -33,11 +33,11 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
 
         // Rote Fäden - ebenfalls personenbezogen (ein Faden pro Person).
         $threads = new backup_nested_element('threads');
-        $thread = new backup_nested_element('thread', ['id'], ['userid', 'color', 'timecreated']);
+        $thread = new backup_nested_element('thread', ['id'], ['userid', 'color', 'bgmoves', 'timecreated']);
         $threaditems = new backup_nested_element('threaditems');
         $threaditem = new backup_nested_element('threaditem', ['id'], [
             'sortorder', 'itemtype', 'photoid', 'boardid',
-            'framex', 'framey', 'framew', 'frameh', 'framelabel', 'timecreated',
+            'framex', 'framey', 'framew', 'frameh', 'framerot', 'framelabel', 'timecreated',
         ]);
 
         $pinnwand->add_child($photos);

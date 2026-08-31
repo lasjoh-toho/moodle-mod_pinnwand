@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/pinnwand/db" VERSION="2026083010" COMMENT="XMLDB file for module pinnwand">
+<XMLDB PATH="mod/pinnwand/db" VERSION="2026083011" COMMENT="XMLDB file for module pinnwand">
   <TABLES>
     <TABLE NAME="pinnwand" COMMENT="Instances of the pinnwand activity">
       <FIELDS>
@@ -71,6 +71,7 @@
         <FIELD NAME="pinnwandid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="color" TYPE="char" LENGTH="7" NOTNULL="true" DEFAULT="#e0503f" SEQUENCE="false"/>
+        <FIELD NAME="bgmoves" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Hintergrund bewegt sich während der Präsentation mit dem Kamera-Zoom mit (statt bildschirmfüllend stehenzubleiben)"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>
@@ -91,6 +92,7 @@
         <FIELD NAME="framey" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="framew" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="frameh" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="framerot" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Rotation des Leerrahmens in Grad"/>
         <FIELD NAME="framelabel" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
