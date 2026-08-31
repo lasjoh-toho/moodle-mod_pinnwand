@@ -154,6 +154,14 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:submit',
     ],
+    'mod_pinnwand_set_thread_style' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'set_thread_style',
+        'description' => 'Legt Farbe und Dicke der Fadenlinie/Rahmen-Umrandung fest',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:submit',
+    ],
     'mod_pinnwand_get_stream_photos' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'get_stream_photos',

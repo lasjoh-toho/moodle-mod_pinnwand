@@ -483,6 +483,26 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Schriftarten werden jetzt direkt als Base64-Daten-URI ins SVG
   eingebettet (bleiben dadurch auch beim Anzeigen als Bild erhalten).
 
+### Neunzehnte Überarbeitung — Rahmen-Schichtung, echte Flugbahn-Animation, Faden-Stil
+
+- Bugfix: Rahmen-Resize-Handle hatte keine eigene Geometrie im CSS und war
+  dadurch faktisch unsichtbar/unklickbar.
+- Rahmen jetzt auch in der Schichtung (Layer-Panel) verschiebbar, gemeinsam
+  mit Fotos in einer Liste.
+- Rahmenfarbe/-dicke und Verbindungslinie folgen jetzt dem Faden statt
+  hartcodierter Werte.
+- **Kamera-Animation komplett neu**: eine einzige durchgehende Animation
+  statt zweier verketteter Übergänge mit spürbarer Pause - schwungvoller
+  Start, sanfte Landung, Bogenhöhe wächst mit der Entfernung (kurze Wege =
+  elastisches Gleiten, weite Wege = echter parabelartiger Sprung).
+- Kamera dreht sich mit, wenn die aktuelle Station ein gedrehter Rahmen ist.
+- Neuer Stationstyp "Überblick einfügen" - Halte-/Pausenpunkt, der zur
+  ganzen Board-Übersicht fliegt.
+- Farbwähler + Dicke-Regler für den Faden unten im Panel; Start-Button in
+  Fadenfarbe.
+- Bugfix: `bgmoves`/`linewidth` gingen beim Hinzufügen neuer Faden-
+  Stationen versehentlich verloren.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

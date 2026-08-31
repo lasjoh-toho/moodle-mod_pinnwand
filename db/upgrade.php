@@ -264,5 +264,21 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083011, 'pinnwand');
     }
 
+    if ($oldversion < 2026083015) {
+        // Feedback-Durchgang: Rahmen in der Schichtung verschiebbar, Faden-
+        // Dicke einstellbar.
+        $table = new xmldb_table('pinnwand_thread_items');
+        $field = new xmldb_field('framez', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'framerot');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $table2 = new xmldb_table('pinnwand_threads');
+        $field2 = new xmldb_field('linewidth', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '3', 'bgmoves');
+        if (!$dbman->field_exists($table2, $field2)) {
+            $dbman->add_field($table2, $field2);
+        }
+        upgrade_mod_savepoint(true, 2026083015, 'pinnwand');
+    }
+
     return true;
 }

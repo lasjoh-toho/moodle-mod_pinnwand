@@ -610,3 +610,49 @@ Auswahl-basierte Formatierung einzelner Wörter - eine echte Wort-für-Wort-
 Auswahl hätte eine deutlich komplexere Selektions-UI erfordert. Die
 Positionierung/Größe weiterer (nicht-primärer) Textobjekte im exportierten
 SVG wird aus dem Textinhalt geschätzt, nicht live aus dem DOM gemessen.
+
+---
+
+## Phase 15 — Rahmen-Schichtung, echte Flugbahn-Animation, Faden-Stil ✅
+
+Achter Feedback-Durchgang. Betrifft: `classes/external.php` (neue Felder
+`framez`/`linewidth`, neuer Endpunkt `set_thread_style`, itemtype
+`overview`), `js/app.js` (Kamera-Animation komplett neu, Layer-Panel,
+Faden-Stil-UI), `db/install.xml` + `upgrade.php`.
+
+- [x] **Bugfix Rahmen-Resize-Handle**: hatte nie eigene Position/Größe im
+  CSS (nur eine Opacity-Regel ohne Geometrie) - dadurch faktisch
+  unsichtbar/nicht klickbar. Jetzt mit echter Geometrie unten rechts,
+  sichtbar bei Hover.
+- [x] **Rahmen in der Schichtung**: neues Feld `framez` - das
+  Schichtung-Panel zeigt jetzt Fotos UND Rahmen gemeinsam in einer per
+  Drag sortierbaren Liste; Rahmen-Z-Index auf dem Board kommt jetzt aus
+  `framez` statt einem festen CSS-Wert.
+- [x] Rahmenfarbe/-dicke folgen jetzt dem Faden (`thread.color`/
+  `thread.linewidth`) statt hartcodiertem Rot/3px - ebenso die
+  Verbindungslinie.
+- [x] **Kamera-Animation komplett neu**: eine einzige durchgehende
+  `requestAnimationFrame`-Schleife ersetzt die vorherigen zwei per
+  `setTimeout` verketteten CSS-Transitions (die die spürbare Pause "oben"
+  verursachten). Zeitverlauf folgt einer Ease-in-out-Kurve (schwungvoller
+  Start, sanfte Landung), die Bogenhöhe (Zoom-Dip) folgt `sin(t·π)` und
+  ist bei kurzen Wegen nahe 0 ("elastisches Gleiten"), bei weiten Wegen
+  deutlich ausgeprägt (echter parabelartiger Bogen). Gilt auch für den
+  Start-Zoom-in-Effekt (dieselbe Funktion, kein Sonderfall mehr).
+- [x] **Kamera-Rotation**: ist die aktuelle Station ein gedrehter Rahmen,
+  dreht sich die Kamera beim Anfliegen mit (kürzester Drehweg).
+- [x] **"Überblick einfügen"**: neuer Stationstyp `overview` - fügt einen
+  Halte-/Pausenpunkt in den Faden ein, der beim Abspielen zur ganzen
+  Board-Übersicht fliegt und dort verweilt, statt zu einem einzelnen
+  Foto/Rahmen zu zoomen.
+- [x] **Faden-Stil**: Farbwähler + Dicke-Regler unten im Faden-Panel
+  (unterhalb der Objekt-Liste) - wirkt auf Verbindungslinie und
+  Rahmen-Umrandung; Anwendung erst bei "change" (nicht während des
+  Ziehens im Farbwähler), um denselben Fokus-Zerstörungs-Fehler wie beim
+  Wortfeld-Editor zu vermeiden.
+- [x] Start-Präsentation-Button hat jetzt die Fadenfarbe statt der festen
+  Akzentfarbe.
+- [x] **Nebenbei gefundener Bugfix**: `bgmoves`/`linewidth` gingen bei
+  jedem `add_thread_item`-Aufruf (Foto/Rahmen/Überblick hinzufügen)
+  verloren, da der lokale Faden dabei komplett neu (ohne diese Felder)
+  aufgebaut wurde - neue Hilfsfunktion `replaceOwnThread()` behält sie bei.

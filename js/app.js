@@ -1805,8 +1805,7 @@
             callAjax('mod_pinnwand_add_thread_item', {
               cmid: cfg.cmid, itemtype: 'photo', photoid: p.id, boardid: state.currentBoard
             }).then(function (res) {
-              state.threads = state.threads.filter(function (t) { return !t.isown; });
-              state.threads.push({ id: res.threadid, color: res.color, isown: true, items: res.items });
+              replaceOwnThread(res);
               render();
             });
           });
@@ -1872,12 +1871,15 @@
         boardItems.forEach(function (it) {
           if (it.itemtype !== 'frame') { return; }
           it.framerot = it.framerot || 0;
+          var lineColor = threadForCanvas.color || '#e0503f';
+          var lineWidth = threadForCanvas.linewidth || 3;
           var frameEl = el('div', {
             class: 'ic-thread-frame-onboard' + (threadForCanvas.isown ? ' editable' : ''),
             style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;' +
-              'transform:rotate(' + it.framerot + 'deg)'
+              'transform:rotate(' + it.framerot + 'deg);border-color:' + lineColor + ';border-width:' + lineWidth + 'px'
           });
-          if (it.framelabel) { frameEl.appendChild(el('span', {}, [it.framelabel])); }
+          frameEl.style.zIndex = it.framez || 0;
+          if (it.framelabel) { frameEl.appendChild(el('span', { style: 'color:' + lineColor }, [it.framelabel])); }
           canvas.appendChild(frameEl);
 
           if (!threadForCanvas.isown) { return; }
@@ -1885,7 +1887,7 @@
           function persistFrame() {
             callAjax('mod_pinnwand_update_thread_frame', {
               cmid: cfg.cmid, itemid: it.id, framex: it.framex, framey: it.framey,
-              framew: it.framew, frameh: it.frameh, framerot: it.framerot
+              framew: it.framew, frameh: it.frameh, framerot: it.framerot, framez: it.framez || 0
             });
           }
           makeMovable(frameEl, canvas, function (x, y) {
@@ -1970,7 +1972,7 @@
           pathEl.setAttribute('d', d);
           pathEl.setAttribute('fill', 'none');
           pathEl.setAttribute('stroke', threadForCanvas.color || '#e0503f');
-          pathEl.setAttribute('stroke-width', '3');
+          pathEl.setAttribute('stroke-width', String(threadForCanvas.linewidth || 3));
           pathEl.setAttribute('stroke-linecap', 'round');
           pathEl.setAttribute('stroke-linejoin', 'round');
           lineSvg.appendChild(pathEl);
@@ -2277,9 +2279,18 @@
     var panel = el('div', { class: 'ic-thread-panel' });
     panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.layers]));
 
-    var items = state.photos.filter(function (p) {
+    var photoItems = state.photos.filter(function (p) {
       return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === state.currentBoard;
-    }).sort(function (a, b) { return (b.canvasz || 0) - (a.canvasz || 0); });
+    }).map(function (p) { return { kind: 'photo', z: p.canvasz || 0, ref: p }; });
+
+    var ownForLayers = ownThread();
+    var frameItems = (ownForLayers ? ownForLayers.items : []).filter(function (it) {
+      return it.itemtype === 'frame' && (it.boardid || 0) === state.currentBoard;
+    }).map(function (it) { return { kind: 'frame', z: it.framez || 0, ref: it }; });
+
+    // Fotos und Rahmen gemeinsam nach Z-Reihenfolge - oben in der Liste =
+    // ganz vorne (höchstes z).
+    var items = photoItems.concat(frameItems).sort(function (a, b) { return b.z - a.z; });
 
     var list = el('div', { class: 'ic-thread-list' });
     if (items.length === 0) {
@@ -2289,10 +2300,15 @@
     }
 
     var dragFromIdx = null;
-    items.forEach(function (p, idx) {
+    items.forEach(function (entry, idx) {
       var row = el('div', { class: 'ic-thread-item', draggable: 'true' });
-      row.appendChild(el('img', { src: p.url, alt: '' }));
-      row.appendChild(el('span', { class: 'ic-thread-item-label' }, [p.sourcetitle || itemCaptionText(p)]));
+      if (entry.kind === 'photo') {
+        row.appendChild(el('img', { src: entry.ref.url, alt: '' }));
+        row.appendChild(el('span', { class: 'ic-thread-item-label' }, [entry.ref.sourcetitle || itemCaptionText(entry.ref)]));
+      } else {
+        row.appendChild(el('div', { class: 'ic-thread-frame-thumb' }, ['\u2b1a']));
+        row.appendChild(el('span', { class: 'ic-thread-item-label' }, [entry.ref.framelabel || S.emptyframe]));
+      }
 
       row.addEventListener('dragstart', function () { dragFromIdx = idx; row.classList.add('dragging'); });
       row.addEventListener('dragend', function () { row.classList.remove('dragging'); });
@@ -2303,14 +2319,25 @@
         var moved = items.splice(dragFromIdx, 1)[0];
         items.splice(idx, 0, moved);
         dragFromIdx = null;
-        // Oben in der Liste = vorne -> höchstes canvasz zuerst vergeben.
+        // Oben in der Liste = vorne -> höchstes z zuerst vergeben.
         var total = items.length;
-        items.forEach(function (it, i) {
-          it.canvasz = total - i;
-          callAjax('mod_pinnwand_update_layout', {
-            cmid: cfg.cmid, photoid: it.id, x: it.canvasx, y: it.canvasy, w: it.canvasw,
-            rot: it.canvasrot || 0, z: it.canvasz, boardid: it.boardid || 0
-          });
+        items.forEach(function (it2, i) {
+          it2.z = total - i;
+          if (it2.kind === 'photo') {
+            var p = it2.ref;
+            p.canvasz = it2.z;
+            callAjax('mod_pinnwand_update_layout', {
+              cmid: cfg.cmid, photoid: p.id, x: p.canvasx, y: p.canvasy, w: p.canvasw,
+              rot: p.canvasrot || 0, z: p.canvasz, boardid: p.boardid || 0
+            });
+          } else {
+            var fr = it2.ref;
+            fr.framez = it2.z;
+            callAjax('mod_pinnwand_update_thread_frame', {
+              cmid: cfg.cmid, itemid: fr.id, framex: fr.framex, framey: fr.framey,
+              framew: fr.framew, frameh: fr.frameh, framerot: fr.framerot || 0, framez: fr.framez
+            });
+          }
         });
         render();
       });
@@ -2333,8 +2360,22 @@
     for (var i = 0; i < state.threads.length; i++) { if (!state.threads[i].isown) { return state.threads[i]; } }
     return null;
   }
+  // Ersetzt den eigenen Faden nach einer add_thread_item-Antwort - bewahrt
+  // dabei bgmoves/linewidth (die add_thread_item selbst nicht zurückgibt),
+  // damit diese Einstellungen nicht bei jedem Hinzufügen verloren gehen.
+  function replaceOwnThread(res) {
+    var prevOwn = ownThread();
+    state.threads = state.threads.filter(function (t) { return !t.isown; });
+    state.threads.push({
+      id: res.threadid, color: res.color,
+      bgmoves: prevOwn ? prevOwn.bgmoves : false,
+      linewidth: prevOwn ? prevOwn.linewidth : 3,
+      isown: true, items: res.items
+    });
+  }
 
   function threadItemLabel(item) {
+    if (item.itemtype === 'overview') { return S.addoverview; }
     if (item.itemtype === 'frame') { return item.framelabel || S.emptyframe; }
     var p = null;
     for (var i = 0; i < state.photos.length; i++) { if (state.photos[i].id === item.photoid) { p = state.photos[i]; break; } }
@@ -2421,8 +2462,7 @@
         callAjax('mod_pinnwand_add_thread_item', {
           cmid: cfg.cmid, itemtype: 'photo', photoid: p.id, boardid: state.currentBoard
         }).then(function (res) {
-          state.threads = state.threads.filter(function (t) { return !t.isown; });
-          state.threads.push({ id: res.threadid, color: res.color, isown: true, items: res.items });
+          replaceOwnThread(res);
           render();
         });
       });
@@ -2441,7 +2481,9 @@
 
     panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.thread]));
     if (own && own.items.length > 0) {
-      var presentBtn = el('button', { class: 'ic-btn ic-btn-primary ic-thread-present-btn' }, [S.presentthread]);
+      var presentBtn = el('button', {
+        class: 'ic-btn ic-thread-present-btn', style: 'background:' + (own.color || '#e0503f') + ';color:#fff'
+      }, [S.presentthread]);
       presentBtn.addEventListener('click', function () { openPresentation(own); });
       panel.appendChild(presentBtn);
     }
@@ -2458,6 +2500,29 @@
       bgLabel.appendChild(document.createTextNode(S.bgmoves_with_zoom));
       panel.appendChild(bgLabel);
       panel.appendChild(renderThreadObjectList(own));
+
+      // Fadenfarbe + Dicke - wirkt auf die Verbindungslinie UND die
+      // Rahmen-Umrandung auf dem Board.
+      var styleBox = el('div', { class: 'ic-thread-style' });
+      styleBox.appendChild(el('h3', { class: 'ic-thread-panel-subtitle' }, [S.threadstyle]));
+      var styleRow = el('div', { class: 'ic-textframe-edit' });
+      var colorInput = el('input', { type: 'color', value: (own && own.color) || '#e0503f', class: 'ic-textframe-custom-color' });
+      var widthInput = el('input', { type: 'range', min: '1', max: '12', step: '0.5', value: String((own && own.linewidth) || 3) });
+      function persistThreadStyle() {
+        var color = colorInput.value, width = parseFloat(widthInput.value);
+        if (own) { own.color = color; own.linewidth = width; }
+        callAjax('mod_pinnwand_set_thread_style', { cmid: cfg.cmid, color: color, linewidth: width });
+      }
+      colorInput.addEventListener('change', function () { persistThreadStyle(); render(); });
+      widthInput.addEventListener('input', function () {
+        if (own) { own.linewidth = parseFloat(widthInput.value); }
+      });
+      widthInput.addEventListener('change', function () { persistThreadStyle(); render(); });
+      styleRow.appendChild(colorInput);
+      styleRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.threadwidth]));
+      styleRow.appendChild(widthInput);
+      styleBox.appendChild(styleRow);
+      panel.appendChild(styleBox);
     }
 
     if (state.canusethreads) {
@@ -2469,12 +2534,21 @@
           cmid: cfg.cmid, itemtype: 'frame', boardid: state.currentBoard,
           framex: 40, framey: 40, framew: 240, frameh: 180, framelabel: label
         }).then(function (res) {
-          state.threads = state.threads.filter(function (t) { return !t.isown; });
-          state.threads.push({ id: res.threadid, color: res.color, isown: true, items: res.items });
+          replaceOwnThread(res);
           render();
         });
       });
       actions.appendChild(addFrameBtn);
+      var addOverviewBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.addoverview]);
+      addOverviewBtn.addEventListener('click', function () {
+        callAjax('mod_pinnwand_add_thread_item', {
+          cmid: cfg.cmid, itemtype: 'overview', boardid: state.currentBoard
+        }).then(function (res) {
+          replaceOwnThread(res);
+          render();
+        });
+      });
+      actions.appendChild(addOverviewBtn);
       if (own && own.items.length > 0) {
         var delBtn = el('button', { class: 'ic-btn ic-btn-danger' }, [S.deletethread]);
         delBtn.addEventListener('click', function () {
@@ -2493,7 +2567,9 @@
     if (shared) {
       panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.teacherthread]));
       if (shared.items.length > 0) {
-        var presentSharedBtn = el('button', { class: 'ic-btn ic-btn-primary ic-thread-present-btn' }, [S.presentthread]);
+        var presentSharedBtn = el('button', {
+          class: 'ic-btn ic-thread-present-btn', style: 'background:' + (shared.color || '#e0231f') + ';color:#fff'
+        }, [S.presentthread]);
         presentSharedBtn.addEventListener('click', function () { openPresentation(shared); });
         panel.appendChild(presentSharedBtn);
       }
@@ -2567,16 +2643,25 @@
     // ohne uns auf interne Skalierungs-Mechanik einer Bibliothek zu
     // verlassen.
     function buildStep(it) {
+      if (it.itemtype === 'overview') {
+        // Kein sichtbares Element nötig - reiner Kamera-Haltepunkt, der auf
+        // das ganze Board zoomt (Überblick, siehe "Überblick einfügen").
+        return { el: null, cx: 500, cy: 700, w: 1000, h: 1400, rot: 0, overview: true };
+      }
       if (it.itemtype === 'frame') {
         // Unsichtbar in der Präsentation - dient nur als Zoom-Ziel, damit
         // auf Details des Hintergrunds/anderer Objekte hingewiesen werden
-        // kann, ohne selbst als Kasten sichtbar zu sein.
+        // kann, ohne selbst als Kasten sichtbar zu sein. Ist der Rahmen
+        // gedreht, dreht sich die Kamera beim Anfliegen mit.
         var fEl = el('div', {
           class: 'ic-present-step-frame',
           style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;'
         });
         canvasEl.appendChild(fEl);
-        return { el: fEl, cx: it.framex + it.framew / 2, cy: it.framey + it.frameh / 2, w: it.framew, h: it.frameh };
+        return {
+          el: fEl, cx: it.framex + it.framew / 2, cy: it.framey + it.frameh / 2,
+          w: it.framew, h: it.frameh, rot: it.framerot || 0
+        };
       }
       var rec = photoRecs[it.photoid];
       if (!rec) { return null; }
@@ -2590,7 +2675,7 @@
         el: rec.el,
         cx: parseFloat(rec.el.style.left) + natW / 2,
         cy: parseFloat(rec.el.style.top) + natH / 2,
-        w: natW, h: natH, z: rec.z
+        w: natW, h: natH, z: rec.z, rot: 0
       };
       if (!img.complete) {
         img.addEventListener('load', function () {
@@ -2606,65 +2691,90 @@
       .map(buildStep)
       .filter(Boolean);
 
-    var currentIdx = 0;
-    var hopTimer = null;
+    function targetFor(s) {
+      return {
+        scale: Math.min(window.innerWidth / s.w, window.innerHeight / s.h),
+        cx: s.cx, cy: s.cy, rot: s.rot || 0
+      };
+    }
 
-    function applyTransform(scale, cx, cy, durationMs) {
+    function applyTransform(scale, cx, cy, rot) {
       var tx = window.innerWidth / 2 - scale * cx;
       var ty = window.innerHeight / 2 - scale * cy;
-      canvasEl.style.transition = (durationMs === 0) ? 'none' : 'transform ' + durationMs + 'ms ease';
-      canvasEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+      canvasEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) rotate(' + (rot || 0) + 'deg) scale(' + scale + ')';
     }
 
-    // Kamera: verschiebt/skaliert canvasEl so, dass die Station vollständig
-    // sichtbar ist UND den Bildschirm in einer Richtung (horizontal oder
-    // vertikal) ganz ausfüllt ("contain"-Fitting, kleinerer der beiden
-    // Füllungsgrade, nie beschnitten). Komplett selbst berechnet - keine
-    // Bibliotheks-Fließkommas, die sich unserer Kontrolle entziehen.
-    // Je kleiner eine Station (Rahmen/Foto), desto stärker der Zoom.
-    function targetFor(s) {
-      return { scale: Math.min(window.innerWidth / s.w, window.innerHeight / s.h), cx: s.cx, cy: s.cy };
+    // Easing für den Zeitverlauf selbst (nicht die Bogenhöhe!) - langsamer,
+    // schwungvoller Start, gleichmäßige Mitte, sanfte Landung.
+    function easeInOutCubic(x) {
+      return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
     }
+
+    var cameraFrame = null;
+
+    // Eine einzige durchgehende Animation von "from" nach "to" - kein
+    // zweigeteilter Übergang mit Pause dazwischen mehr. Bei kurzen Wegen
+    // ("elastisches Gleiten") bleibt die Zoom-Kurve nahezu gerade; bei
+    // weiten Wegen wölbt sie sich wie eine Parabel nach oben (kurzzeitig
+    // stärker herauszoomen, um einen Überblick über die Strecke zu geben),
+    // bevor sie zur Zielstation landet. Die Bogenhöhe folgt sin(t·π), damit
+    // sie am Anfang UND Ende sanft bei 0 ist (keine Ecke), unabhängig von
+    // der Zeit-Easing-Funktion, die den Bewegungsablauf selbst gestaltet.
+    function animateCamera(from, to, onDone) {
+      if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
+      var dist = Math.sqrt(Math.pow(to.cx - from.cx, 2) + Math.pow(to.cy - from.cy, 2));
+      var duration = Math.min(2400, Math.max(500, 550 + dist * 0.55));
+      // 0 bei sehr kurzen Wegen (reines elastisches Gleiten) bis 0.55 bei
+      // sehr weiten Wegen (deutlicher Bogen/Sprung).
+      var hopFactor = Math.min(0.55, Math.max(0, (dist - 120) / 1800));
+      var minScale = Math.min(from.scale, to.scale);
+      var hopAmount = minScale * hopFactor;
+      var rotDelta = (to.rot - from.rot + 540) % 360 - 180; // kürzester Drehweg
+
+      var start = null;
+      function frame(now) {
+        if (start === null) { start = now; }
+        var raw = Math.min(1, (now - start) / duration);
+        var te = easeInOutCubic(raw);
+        var arc = Math.sin(te * Math.PI) * hopAmount;
+        var scale = from.scale + (to.scale - from.scale) * te - arc;
+        var cx = from.cx + (to.cx - from.cx) * te;
+        var cy = from.cy + (to.cy - from.cy) * te;
+        var rot = from.rot + rotDelta * te;
+        applyTransform(scale, cx, cy, rot);
+        if (raw < 1) {
+          cameraFrame = requestAnimationFrame(frame);
+        } else {
+          cameraFrame = null;
+          if (onDone) { onDone(); }
+        }
+      }
+      cameraFrame = requestAnimationFrame(frame);
+    }
+
+    var currentIdx = 0;
+    var currentTransform = null; // { scale, cx, cy, rot } - letzter tatsächlich erreichter Zustand
 
     function goToStep(idx, skipTransition) {
-      if (hopTimer) { clearTimeout(hopTimer); hopTimer = null; }
       var fromIdx = currentIdx;
       currentIdx = Math.max(0, Math.min(steps.length - 1, idx));
       var s = steps[currentIdx];
       if (!s) { return; }
       var target = targetFor(s);
 
-      if (skipTransition || fromIdx === currentIdx) {
-        applyTransform(target.scale, target.cx, target.cy, 0);
+      if (skipTransition || fromIdx === currentIdx || !currentTransform) {
+        if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
+        applyTransform(target.scale, target.cx, target.cy, target.rot);
+        currentTransform = target;
         updateOcclusion();
         return;
       }
 
-      var from = steps[fromIdx];
-      var dist = from ? Math.sqrt(Math.pow(s.cx - from.cx, 2) + Math.pow(s.cy - from.cy, 2)) : 0;
-
-      if (!from || dist < 80) {
-        // Direkter Übergang bei sehr nahen Stationen - ein Sprung würde hier
-        // nur unruhig wirken.
-        applyTransform(target.scale, target.cx, target.cy, 700);
-        setTimeout(updateOcclusion, 700);
-        return;
-      }
-
-      // "Sprung": kurz herauszoomen (Überblick über den zurückgelegten Weg),
-      // dann zur Zielstation heranzoomen. Je weiter der Weg, desto höher
-      // (stärker herausgezoomt) und länger (mehr Zeit) der Sprung.
-      var hopFactor = Math.min(0.6, dist / 2200); // 0..0.6: wie stark der Zwischenschritt herauszoomt
-      var midScale = Math.min(target.scale, targetFor(from).scale) * (1 - hopFactor);
-      var midCx = (from.cx + s.cx) / 2, midCy = (from.cy + s.cy) / 2;
-      var hopDuration = Math.min(2200, 500 + dist * 0.7);
-      var halfDuration = hopDuration / 2;
-
-      applyTransform(midScale, midCx, midCy, halfDuration);
-      hopTimer = setTimeout(function () {
-        applyTransform(target.scale, target.cx, target.cy, halfDuration);
-        hopTimer = setTimeout(updateOcclusion, halfDuration);
-      }, halfDuration);
+      animateCamera(currentTransform, target, function () {
+        currentTransform = target;
+        updateOcclusion();
+      });
+      currentTransform = target;
     }
 
     // Occlusion: nur Fotos, die die aktive Station vom Z-Level her
@@ -2692,7 +2802,7 @@
     nextBtn.addEventListener('click', function () { goToStep(currentIdx + 1); });
     closeBtn.addEventListener('click', function () {
       document.removeEventListener('keydown', keyNav);
-      if (hopTimer) { clearTimeout(hopTimer); }
+      if (cameraFrame) { cancelAnimationFrame(cameraFrame); }
       overlay.remove();
     });
     function keyNav(ev) {
@@ -2710,15 +2820,19 @@
 
     if (steps.length > 0) {
       // Beim Start zoomt die Kamera aus einer Übersicht in die erste
-      // Station hinein, statt sofort scharf gestellt zu erscheinen.
-      var first = steps[0];
-      var overviewScale = targetFor(first).scale * 0.35;
-      applyTransform(overviewScale, first.cx, first.cy, 0);
+      // Station hinein, statt sofort scharf gestellt zu erscheinen -
+      // dieselbe Flugbahn-Logik wie zwischen zwei Stationen.
       currentIdx = 0;
+      var first = targetFor(steps[0]);
+      var overview = { scale: first.scale * 0.3, cx: first.cx, cy: first.cy, rot: first.rot };
+      applyTransform(overview.scale, overview.cx, overview.cy, overview.rot);
+      currentTransform = overview;
       requestAnimationFrame(function () {
-        var t0 = targetFor(first);
-        applyTransform(t0.scale, t0.cx, t0.cy, 900);
-        setTimeout(updateOcclusion, 900);
+        animateCamera(overview, first, function () {
+          currentTransform = first;
+          updateOcclusion();
+        });
+        currentTransform = first;
       });
     }
   }
