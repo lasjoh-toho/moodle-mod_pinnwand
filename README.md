@@ -463,6 +463,26 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Drehen/Spiegeln-Buttons. "Weiter"/"Speichern" ist jetzt ein schwebender
   Button unten rechts im Bild, außer im Schritt mit den Eckpunkt-Handles.
 
+### Achtzehnte Überarbeitung — Präsentations-Kamera, Faden-Politur, Wortfeld-Formatierung
+
+- Bugfix: "Bild hinzufügen" öffnete durch das `capture`-Attribut ebenfalls
+  die Kamera statt der Fotomediathek.
+- Lehrkraft-Faden ist jetzt immer echtes Rot statt einer zufälligen
+  Palettenfarbe.
+- Faden-Objektliste vereinfacht (kein Filter/Titel mehr), Hintergrund-
+  Checkbox davor verschoben.
+- Faden-Linie als durchgehende, an den Bild-Wegpunkten abgerundete
+  Catmull-Rom-Kurve.
+- Präsentations-Kamera: Zoom-in-Effekt beim Start, "Sprung"-Übergang
+  zwischen weit entfernten Stationen (Höhe/Dauer wachsen mit der
+  Entfernung).
+- Assistent-Navigation umgebaut: kreisrunde Zurück-/Weiter-Pfeile bei
+  30 %/60 % am unteren Bildrand statt Aktionsleiste.
+- **Wortfeld-Editor**: Rich-Text-Formatierung (Fett/Kursiv/Unterstrichen/
+  Durchgestrichen/Aufzählung), Zeilenabstand- und Laufweite-Regler,
+  Schriftarten werden jetzt direkt als Base64-Daten-URI ins SVG
+  eingebettet (bleiben dadurch auch beim Anzeigen als Bild erhalten).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
@@ -477,12 +497,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
   werden beim Restore ebenfalls nicht umgemappt - rein informationelle
   Felder ohne Auswirkung auf Anzeige oder Berechtigungen.
 - Post-Stream ist ein 15-Sekunden-Poll, kein Echtzeit-Push.
-- Textobjekte im Wortfeld sind verschiebbar, aber nicht einzeln drehbar;
-  Auto-Fit der Textgröße ist einzeilig (kein automatischer Zeilenumbruch).
-- Die eingebundene Google-Font ("Handschrift") erscheint im exportierten
-  SVG möglicherweise nicht (SVG als `<img>`-Quelle lädt keine extern
-  referenzierten Web-Fonts nach) - im Editor selbst wird sie korrekt live
-  angezeigt.
+- Textobjekte im Wortfeld sind verschiebbar, aber nicht einzeln drehbar.
+  "Laufweite" wirkt auf den ganzen Textblock, nicht auf einzeln
+  ausgewählte Wörter. Position/Größe weiterer (nicht-primärer)
+  Textobjekte im exportierten SVG werden aus dem Textinhalt geschätzt,
+  nicht live aus dem Editor-DOM gemessen.
+- Die eingebundene Google-Font wird beim Speichern direkt ins SVG
+  eingebettet (Netzwerkzugriff auf fonts.googleapis.com/fonts.gstatic.com
+  nötig) - schlägt dieser fehl, greift automatisch eine Systemschrift.
 - Eine Faden-Präsentation über mehrere Boards hinweg übernimmt deren
   Koordinaten unverändert, was bei stark abweichenden Board-Layouts zu
   großen Sprüngen führen kann.

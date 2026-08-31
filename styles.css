@@ -394,6 +394,17 @@
 }
 .ic-textframe-label { font-size: .78rem; color: var(--ic-muted); }
 .ic-textframe-edit input[type=range] { flex: 1 1 auto; }
+.ic-textframe-formatgrid {
+  display: grid; grid-template-columns: 1fr; gap: 6px; margin: 8px 0;
+}
+@media (min-width: 480px) {
+  .ic-textframe-formatgrid { grid-template-columns: 1fr 1fr; }
+  .ic-textframe-formatgrid:has(.ic-textframe-fmt-btn) { grid-template-columns: repeat(5, 1fr); }
+}
+.ic-textframe-fmt-btn { font-weight: 700; padding: 8px 0; }
+.ic-textframe-fmt-btn[title="Kursiv"], .ic-textframe-fmt-btn[title="Italic"] { font-style: italic; }
+.ic-textframe-fmt-btn[title="Unterstrichen"], .ic-textframe-fmt-btn[title="Underline"] { text-decoration: underline; }
+.ic-textframe-fmt-btn[title="Durchgestrichen"], .ic-textframe-fmt-btn[title="Strikethrough"] { text-decoration: line-through; }
 .ic-textframe-palette { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .ic-color-swatch {
   width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; padding: 0;

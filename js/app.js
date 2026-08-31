@@ -1089,25 +1089,84 @@
       bgRect = '<rect x="0" y="0" width="' + tf.w + '" height="' + tf.h + '" rx="6" fill="' + preset.bg + '"' +
         (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
     }
+    // Alle Textobjekte (nicht nur das primäre) laufen über foreignObject mit
+    // echtem HTML-Markup - so bleiben Fett/Kursiv/Unterstrichen/
+    // Durchgestrichen/Aufzählung sowie Zeilenabstand/Laufweite erhalten
+    // (SVG-<text> unterstützt weder automatischen Umbruch noch Inline-HTML).
     var textEls = tf.texts.map(function (t, idx) {
-      if (!t.text) { return ''; }
+      var html = t.html || (t.text ? escapeXml(t.text) : '');
+      if (!html) { return ''; }
       var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
+      var baseStyle = 'box-sizing:border-box;font-family:' + escapeXml(fontDef.css) + ';font-size:' + t.size +
+        'px;color:' + (t.color || preset.text) + ';line-height:' + (t.lineHeight || 1.2) +
+        ';letter-spacing:' + (t.letterSpacing || 0) + 'px;white-space:pre-wrap;word-wrap:break-word;overflow:hidden;';
       if (idx === 0) {
-        // Primäres Textobjekt: füllt den Rahmen, bricht um (foreignObject,
-        // da SVG-<text> von Haus aus nicht automatisch umbricht).
+        // Primäres Textobjekt: füllt den ganzen Rahmen.
         return '<foreignObject x="0" y="0" width="' + tf.w + '" height="' + tf.h + '">' +
-          '<div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;box-sizing:border-box;' +
-          'padding:12px;display:flex;align-items:center;justify-content:center;text-align:center;' +
-          'font-family:' + escapeXml(fontDef.css) + ';font-size:' + t.size + 'px;color:' + (t.color || preset.text) +
-          ';white-space:pre-wrap;word-wrap:break-word;overflow:hidden;">' + escapeXml(t.text) + '</div></foreignObject>';
+          '<div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;padding:12px;' +
+          'display:flex;align-items:center;justify-content:center;text-align:center;' + baseStyle + '">' +
+          html + '</div></foreignObject>';
       }
-      var fitted = autoFitFontSize(t.text, fontDef.css, tf.w * 0.9, t.size);
-      return '<text x="' + (t.x * tf.w) + '" y="' + (t.y * tf.h) + '" font-family="' + escapeXml(fontDef.css) +
-        '" font-size="' + fitted + '" fill="' + (t.color || preset.text) +
-        '" text-anchor="middle" dominant-baseline="middle">' + escapeXml(t.text) + '</text>';
+      // Weitere Textobjekte: frei positioniert, Box-Größe grob aus dem
+      // (Klartext-)Inhalt geschätzt (keine Live-DOM-Messung nötig).
+      var plain = t.text || '';
+      var lines = Math.max(1, (html.match(/<div|<li|<br/gi) || []).length + (plain ? 1 : 0));
+      var textW = Math.min(tf.w * 0.9, fitCtx && plain ? (function () {
+        fitCtx.font = t.size + 'px ' + fontDef.css;
+        return fitCtx.measureText(plain).width + 24;
+      })() : tf.w * 0.5);
+      var boxW = Math.max(60, textW);
+      var boxH = lines * t.size * (t.lineHeight || 1.2) + 16;
+      var boxX = t.x * tf.w - boxW / 2, boxY = t.y * tf.h - boxH / 2;
+      return '<foreignObject x="' + boxX + '" y="' + boxY + '" width="' + boxW + '" height="' + boxH + '">' +
+        '<div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;' +
+        'display:flex;align-items:center;justify-content:center;text-align:center;' + baseStyle + '">' +
+        html + '</div></foreignObject>';
     }).join('');
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + tf.w + '" height="' + tf.h +
       '" viewBox="0 0 ' + tf.w + ' ' + tf.h + '">' + defs + bgRect + textEls + '</svg>';
+  }
+
+  // Bettet die tatsächlich verwendeten Web-Fonts (aktuell nur "Handschrift")
+  // direkt als Base64-Daten-URI in einen <style>-Block des SVGs ein, damit
+  // die Schriftart auch beim Anzeigen als <img>-Quelle erhalten bleibt (ein
+  // extern referenziertes @font-face würde dort sonst nicht geladen). Bei
+  // Netzwerkfehlern wird das SVG unverändert zurückgegeben (Systemschrift
+  // als Rückfall) statt das Speichern zu blockieren.
+  var fontEmbedCache = {};
+  function embedFontsInSVG(svgString, tf) {
+    var usedFontIds = {};
+    tf.texts.forEach(function (t) { if (t.html) { usedFontIds[t.font] = true; } });
+    var toEmbed = TEXTFRAME_FONTS.filter(function (f) { return f.webfont && usedFontIds[f.id]; });
+    if (toEmbed.length === 0) { return Promise.resolve(svgString); }
+
+    return Promise.all(toEmbed.map(function (f) {
+      if (fontEmbedCache[f.id]) { return fontEmbedCache[f.id]; }
+      fontEmbedCache[f.id] = fetch('https://fonts.googleapis.com/css2?family=' + f.webfont + '&display=swap')
+        .then(function (r) { return r.text(); })
+        .then(function (css) {
+          var m = css.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+\.woff2)\)/);
+          if (!m) { return null; }
+          return fetch(m[1]).then(function (r) { return r.blob(); }).then(function (blob) {
+            return new Promise(function (resolve) {
+              var reader = new FileReader();
+              reader.onload = function () { resolve(reader.result); };
+              reader.onerror = function () { resolve(null); };
+              reader.readAsDataURL(blob);
+            });
+          });
+        }).then(function (dataUrl) {
+          if (!dataUrl) { return null; }
+          var family = f.css.split(',')[0].replace(/['"]/g, '').trim();
+          return '@font-face{font-family:\'' + family + '\';src:url(' + dataUrl + ') format("woff2");}';
+        }).catch(function () { return null; });
+      return fontEmbedCache[f.id];
+    })).then(function (rules) {
+      var css = rules.filter(Boolean).join('');
+      if (!css) { return svgString; }
+      var styleBlock = '<style>' + css + '</style>';
+      return svgString.replace('<svg ', '<svg ').replace(/(<svg[^>]*>)/, '$1' + styleBlock);
+    }).catch(function () { return svgString; });
   }
 
   // Speichert das Wortfeld (neu oder erneutes Bearbeiten eines bestehenden)
@@ -1118,31 +1177,33 @@
   function saveTextFrame(tf, saveBtn) {
     saveBtn.disabled = true;
     var svg = buildTextFrameSVG(tf);
-    var dataUrl = 'data:image/svg+xml;base64,' + utf8ToBase64(svg);
     var label = tf.texts.map(function (t) { return t.text; }).filter(Boolean).join(' ');
     var wordfielddata = JSON.stringify(tf);
     var isEditingExisting = !!state.editingPhotoId;
 
-    var promise = isEditingExisting
-      ? callAjax('mod_pinnwand_update_photo', {
-        cmid: cfg.cmid, photoid: state.editingPhotoId, imagedata: dataUrl, wordfielddata: wordfielddata
-      })
-      : callAjax('mod_pinnwand_save_photo', {
-        cmid: cfg.cmid, imagedata: dataUrl, gridtype: 'none', gridvalue: 0, consent: false,
-        sourcetitle: label, sourceauthor: '', sourceyear: '', sourceepoch: '', sourceplace: '', sourceorigauthor: '',
-        boardid: state.currentBoard || 0, wordfielddata: wordfielddata
-      });
+    embedFontsInSVG(svg, tf).then(function (finalSvg) {
+      var dataUrl = 'data:image/svg+xml;base64,' + utf8ToBase64(finalSvg);
+      var promise = isEditingExisting
+        ? callAjax('mod_pinnwand_update_photo', {
+          cmid: cfg.cmid, photoid: state.editingPhotoId, imagedata: dataUrl, wordfielddata: wordfielddata
+        })
+        : callAjax('mod_pinnwand_save_photo', {
+          cmid: cfg.cmid, imagedata: dataUrl, gridtype: 'none', gridvalue: 0, consent: false,
+          sourcetitle: label, sourceauthor: '', sourceyear: '', sourceepoch: '', sourceplace: '', sourceorigauthor: '',
+          boardid: state.currentBoard || 0, wordfielddata: wordfielddata
+        });
 
-    promise.then(function (res) {
-      var maxreached = !!res.maxreached;
-      refreshPhotos().then(function () {
-        resetCaptureState();
-        state.step = isEditingExisting ? 'arrange' : (maxreached ? 'arrange' : 'home');
-        render();
+      promise.then(function (res) {
+        var maxreached = !!res.maxreached;
+        refreshPhotos().then(function () {
+          resetCaptureState();
+          state.step = isEditingExisting ? 'arrange' : (maxreached ? 'arrange' : 'home');
+          render();
+        });
+      }).catch(function (e) {
+        alert(S.error_save + ' (' + e.message + ')');
+        saveBtn.disabled = false;
       });
-    }).catch(function (e) {
-      alert(S.error_save + ' (' + e.message + ')');
-      saveBtn.disabled = false;
     });
   }
 
@@ -1204,15 +1265,24 @@
 
     function textEl(t, idx) {
       var isPrimary = idx === 0;
+      t.lineHeight = t.lineHeight || 1.2;
+      t.letterSpacing = t.letterSpacing || 0;
       var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
       var el2 = el('div', {
         class: 'ic-textframe-obj' + (isPrimary ? ' primary' : '') + (t.id === activeId ? ' active' : ''),
         'data-textid': String(t.id),
         contenteditable: 'true',
         style: (isPrimary ? '' : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;') +
-          'font-family:' + fontDef.css + ';font-size:' + t.size + 'px;color:' + (t.color || preset.text)
-      }, [t.text || '']);
-      if (!t.text) { el2.setAttribute('data-placeholder', S.textframe_placeholder); }
+          'font-family:' + fontDef.css + ';font-size:' + t.size + 'px;color:' + (t.color || preset.text) +
+          ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px'
+      });
+      // innerHTML statt textContent: so bleiben Fett/Kursiv/Unterstrichen/
+      // Durchgestrichen/Aufzählungen (siehe Formatierungswerkzeuge) beim
+      // Zwischenspeichern erhalten statt auf reinen Text reduziert zu werden.
+      // Abwärtskompatibel: ältere gespeicherte Wortfelder haben nur t.text
+      // (kein t.html) - dann als Klartext übernehmen statt leer zu bleiben.
+      if (t.html) { el2.innerHTML = t.html; } else if (t.text) { el2.textContent = t.text; }
+      if (!t.html && !t.text) { el2.setAttribute('data-placeholder', S.textframe_placeholder); }
       // Wichtig: hier KEIN render() aufrufen - das würde das gerade fokussierte
       // contenteditable-Element sofort zerstören und den Cursor verlieren,
       // noch bevor überhaupt etwas eingegeben werden kann. Stattdessen wird
@@ -1224,11 +1294,11 @@
         // um und passt seine Schriftgröße live an (2D-Fit: Breite + Höhe),
         // statt eines kleinen, frei positionierten einzeiligen Labels.
         el2.addEventListener('input', function () {
-          t.text = el2.textContent;
+          t.html = el2.innerHTML; t.text = el2.textContent;
           autoFitPrimaryText(el2, t, tf.h);
         });
       } else {
-        el2.addEventListener('input', function () { t.text = el2.textContent; });
+        el2.addEventListener('input', function () { t.html = el2.innerHTML; t.text = el2.textContent; });
         var sizeHandle = el('div', { class: 'ic-textframe-size-handle', title: S.fontsize });
         el2.appendChild(sizeHandle);
         makeTextObjectMovable(el2, frame, t, sizeHandle);
@@ -1297,6 +1367,47 @@
       editRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontsize]));
       editRow.appendChild(sizeInput);
       controlsBox.appendChild(editRow);
+
+      // Fett/Kursiv/Unterstrichen/Durchgestrichen/Aufzählung wirken auf die
+      // aktuelle Textauswahl (execCommand) - mousedown+preventDefault hält
+      // die Selektion im contenteditable-Feld aktiv, obwohl auf einen
+      // Button außerhalb geklickt wird.
+      var formatRow = el('div', { class: 'ic-textframe-formatgrid' });
+      [
+        ['bold', 'B', S.format_bold], ['italic', 'I', S.format_italic],
+        ['underline', 'U', S.format_underline], ['strikeThrough', 'S', S.format_strike],
+        ['insertUnorderedList', '\u2022', S.format_bullets]
+      ].forEach(function (cmd) {
+        var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [cmd[1]]);
+        fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
+        formatRow.appendChild(fb);
+      });
+      controlsBox.appendChild(formatRow);
+
+      var spacingGrid = el('div', { class: 'ic-textframe-formatgrid' });
+      var lineRow = el('div', { class: 'ic-textframe-edit' });
+      var lineInput = el('input', { type: 'range', min: '0.9', max: '2.2', step: '0.05', value: String(active.lineHeight || 1.2) });
+      lineInput.addEventListener('input', function () {
+        active.lineHeight = parseFloat(lineInput.value);
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.lineHeight = active.lineHeight; }
+      });
+      lineRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.lineheight]));
+      lineRow.appendChild(lineInput);
+      spacingGrid.appendChild(lineRow);
+
+      var spaceRow = el('div', { class: 'ic-textframe-edit' });
+      var spaceInput = el('input', { type: 'range', min: '-2', max: '20', step: '0.5', value: String(active.letterSpacing || 0) });
+      spaceInput.addEventListener('input', function () {
+        active.letterSpacing = parseFloat(spaceInput.value);
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.letterSpacing = active.letterSpacing + 'px'; }
+      });
+      spaceRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.letterspacing]));
+      spaceRow.appendChild(spaceInput);
+      spacingGrid.appendChild(spaceRow);
+      controlsBox.appendChild(spacingGrid);
 
       var paletteRow = el('div', { class: 'ic-textframe-palette' });
       function applyColor(color) {

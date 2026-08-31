@@ -574,7 +574,39 @@ in Teil 2). Betrifft: `classes/external.php` (Faden-Farbe), `js/app.js`
   breiten Aktionsleiste bzw. eines reinen Abbrechen-Buttons - "Zurück"
   führt zum jeweils vorherigen Schritt (nicht mehr kompletter Abbruch).
 
-**Noch offen (Teil 2):** Wortfeld-Editor-Formatierungswerkzeuge
-(Zeilenabstand, Laufweite je Wort, Fett/Kursiv/Unterstrichen/
-Durchgestrichen, Aufzählungspunkte, zweispaltige Anordnung) sowie
-Schriftarten-Einbettung direkt ins SVG.
+**Teil 2 (siehe unten, Phase 14 Fortsetzung):** Wortfeld-Editor-
+Formatierungswerkzeuge und Schriftarten-Einbettung - erledigt.
+
+---
+
+## Phase 14 (Fortsetzung) — Wortfeld-Formatierungswerkzeuge + Font-Einbettung ✅
+
+- [x] **Rich-Text-Umstellung**: Textobjekte speichern jetzt `innerHTML`
+  (`t.html`) statt reinem `textContent` - Formatierung bleibt beim
+  Zwischenspeichern erhalten. Abwärtskompatibel: ältere Wortfelder mit nur
+  `t.text` werden weiterhin korrekt angezeigt und exportiert.
+- [x] Formatierungswerkzeuge: Fett/Kursiv/Unterstrichen/Durchgestrichen/
+  Aufzählung (per `document.execCommand`, mit `mousedown`+`preventDefault`
+  gegen Fokusverlust), wirken auf die aktuelle Textauswahl im jeweils
+  aktiven Textobjekt.
+- [x] Zeilenabstand- und Laufweite-Regler pro Textobjekt.
+- [x] Werkzeuge in einem Grid angeordnet: zwei (Zeilenabstand/Laufweite)
+  bzw. fünf Spalten (Formatierungs-Icons) ab 480px Breite, sonst
+  untereinander.
+- [x] **Export**: alle Textobjekte (nicht nur das primäre) laufen jetzt
+  über `foreignObject` mit echtem HTML-Markup statt SVG-`<text>` - so
+  werden Formatierung, Zeilenabstand und Laufweite auch im gespeicherten
+  SVG korrekt wiedergegeben.
+- [x] **Schriftarten-Einbettung**: die eingebundene Google-Font
+  ("Handschrift") wird beim Speichern asynchron als Base64-Daten-URI in
+  einen `<style>`-Block direkt im SVG eingebettet (`embedFontsInSVG`) -
+  bleibt dadurch auch beim Anzeigen als `<img>`-Quelle erhalten. Bei
+  Netzwerkfehlern wird unverändert mit Systemschrift-Rückfall gespeichert,
+  statt das Speichern zu blockieren.
+
+**Scoping-Hinweis:** "Laufweite für einzelne Worte" wurde als Regler pro
+gesamtem Textobjekt umgesetzt (wirkt auf den ganzen Textblock), nicht als
+Auswahl-basierte Formatierung einzelner Wörter - eine echte Wort-für-Wort-
+Auswahl hätte eine deutlich komplexere Selektions-UI erfordert. Die
+Positionierung/Größe weiterer (nicht-primärer) Textobjekte im exportierten
+SVG wird aus dem Textinhalt geschätzt, nicht live aus dem DOM gemessen.
