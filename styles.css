@@ -71,6 +71,13 @@
   width: 52px; height: 52px; border-radius: 50%;
   box-shadow: 0 4px 14px rgba(0,0,0,.5);
 }
+.ic-stage-nav-arrow {
+  position: absolute; bottom: 16px; z-index: 10;
+  width: 52px; height: 52px; border-radius: 50%; transform: translateX(-50%);
+  box-shadow: 0 4px 14px rgba(0,0,0,.5);
+}
+.ic-stage-nav-back { left: 30%; background: rgba(60,62,70,.85); color: #fff; border: none; }
+.ic-stage-nav-next { left: 60%; }
 .ic-stage-hint {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   background: rgba(0,0,0,.6); color: #fff; padding: 8px 16px; border-radius: 20px;
@@ -334,7 +341,7 @@
      Board-Koordinatenfläche ab, statt bildschirmfüllend fest zu stehen. */
   inset: auto; left: 0; top: 0; width: 1000px; height: 1400px;
 }
-.ic-present-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; transition: transform .7s ease; z-index: 1; }
+.ic-present-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; z-index: 1; }
 .ic-present-photo {
   position: absolute; padding: 0; transition: opacity .25s ease;
 }

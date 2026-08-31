@@ -291,7 +291,7 @@
     var wrap = el('div', { class: 'ic-capture-choice' });
 
     var fileInput = el('input', {
-      type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none'
+      type: 'file', accept: 'image/*', style: 'display:none'
     });
     fileInput.addEventListener('change', function (ev) {
       var file = ev.target.files[0];
@@ -465,20 +465,17 @@
     makeDragOverlay(stage, canvas, state.corners, true);
     stageHint(stage, S.perspective_hint);
 
-    var bar = el('div', { class: 'ic-actionbar' });
-    bar.appendChild(cancelWizardBtn());
-    var nextBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.next, 'aria-label': S.next }, [icon('arrowright')]);
-    nextBtn.addEventListener('click', function () {
+    stageNavArrows(stage, function () {
+      state.step = 'capture';
+      render();
+    }, function () {
       var scaledCorners = state.corners.map(function (p) {
         return { x: p.x / fitScale, y: p.y / fitScale };
       });
       state.workCanvas = applyPerspectiveCorrection(src, scaledCorners);
-      state.cropRect = null;
       state.step = 'crop';
       render();
     });
-    bar.appendChild(nextBtn);
-    body.appendChild(bar);
   }
 
   // Passt eine Zielgröße (Quellbild) proportional in den verfügbaren Stage-Bereich ein.
@@ -697,10 +694,6 @@
     toolRow.appendChild(rotateBtn); toolRow.appendChild(mirrorBtn);
     body.appendChild(toolRow);
 
-    var bar = el('div', { class: 'ic-actionbar' });
-    bar.appendChild(cancelWizardBtn());
-    body.appendChild(bar);
-
     var stage = el('div', { class: 'ic-stage' });
     var canvas = el('canvas', { class: 'ic-view' });
     stage.appendChild(canvas);
@@ -710,12 +703,6 @@
     fitImageToStage(canvas, stage, src.width, src.height);
     canvas.getContext('2d').drawImage(src, 0, 0, canvas.width, canvas.height);
 
-    // Weiter-Pfeil als schwebender Button unten rechts IM Bild (nicht in
-    // der Aktionsleiste) - hier gibt es keine Handles, die er verdecken
-    // könnte.
-    var nextBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon ic-stage-next', title: S.next, 'aria-label': S.next }, [icon('arrowright')]);
-    stage.appendChild(nextBtn);
-
     rotateBtn.addEventListener('click', function () {
       state.workCanvas = rotateCanvas90(state.workCanvas);
       render();
@@ -724,7 +711,10 @@
       state.workCanvas = mirrorCanvas(state.workCanvas);
       render();
     });
-    nextBtn.addEventListener('click', function () {
+    stageNavArrows(stage, function () {
+      state.step = 'perspective';
+      render();
+    }, function () {
       var out = document.createElement('canvas');
       out.width = state.workCanvas.width; out.height = state.workCanvas.height;
       out.getContext('2d').drawImage(state.workCanvas, 0, 0);
@@ -790,20 +780,15 @@
     panel.appendChild(grayRow);
     body.appendChild(panel);
 
-    var bar = el('div', { class: 'ic-actionbar' });
-    bar.appendChild(cancelWizardBtn());
-    body.appendChild(bar);
-
     var isEditingExisting = !!state.editingPhotoId;
-    var nextBtn = el('button', {
-      class: 'ic-btn ic-btn-primary ic-btn-icon ic-stage-next',
-      title: isEditingExisting ? S.savephoto : S.next, 'aria-label': isEditingExisting ? S.savephoto : S.next
-    }, [icon(isEditingExisting ? 'check' : 'arrowright')]);
-    nextBtn.addEventListener('click', function () {
+    var arrows = stageNavArrows(stage, function () {
+      state.step = 'crop';
+      render();
+    }, function () {
       // Ergebnis fest in finalCanvas übernehmen.
       state.finalCanvas = canvas;
       if (isEditingExisting) {
-        nextBtn.disabled = true;
+        arrows.nextBtn.disabled = true;
         var photoId = state.editingPhotoId;
         var dataUrl = state.finalCanvas.toDataURL('image/jpeg', 0.88);
         callAjax('mod_pinnwand_update_photo', { cmid: cfg.cmid, photoid: photoId, imagedata: dataUrl }).then(function (res) {
@@ -814,14 +799,13 @@
           render();
         }).catch(function (e) {
           alert(S.error_save + ' (' + e.message + ')');
-          nextBtn.disabled = false;
+          arrows.nextBtn.disabled = false;
         });
         return;
       }
       state.step = 'source';
       render();
-    });
-    stage.appendChild(nextBtn);
+    }, isEditingExisting ? 'check' : 'arrowright', isEditingExisting ? S.savephoto : S.next);
   }
 
   function applyColorAdjust(src, out, f) {
@@ -987,6 +971,25 @@
       render();
     });
     return b;
+  }
+
+  // Zurück-/Weiter-Pfeile als kreisrunde Buttons, fest positioniert bei 30%
+  // bzw. 60% der Bildbreite am unteren Rand der Bühne (statt einer breiten
+  // Aktionsleiste) - für die Schritte mit großformatigem Bild (Perspektive/
+  // Zuschnitt/Farbe). nextIcon erlaubt z.B. 'check' statt Pfeil beim
+  // letzten Schritt.
+  function stageNavArrows(stage, onBack, onNext, nextIcon, nextTitle) {
+    var backBtn = el('button', {
+      class: 'ic-stage-nav-arrow ic-stage-nav-back', title: S.back, 'aria-label': S.back
+    }, [icon('arrowleft')]);
+    var nextBtn = el('button', {
+      class: 'ic-stage-nav-arrow ic-stage-nav-next', title: nextTitle || S.next, 'aria-label': nextTitle || S.next
+    }, [icon(nextIcon || 'arrowright')]);
+    backBtn.addEventListener('click', onBack);
+    nextBtn.addEventListener('click', onNext);
+    stage.appendChild(backBtn);
+    stage.appendChild(nextBtn);
+    return { backBtn: backBtn, nextBtn: nextBtn };
   }
 
   // ==================================================================
@@ -1835,23 +1838,30 @@
         lineSvg.setAttribute('viewBox', '0 0 1000 1400');
         lineSvg.setAttribute('width', '1000'); lineSvg.setAttribute('height', '1400');
         lineSvg.setAttribute('preserveAspectRatio', 'none');
-        for (var ti = 0; ti < boardItems.length - 1; ti++) {
-          var c1 = centerOf(boardItems[ti]), c2 = centerOf(boardItems[ti + 1]);
-          if (!c1 || !c2) { continue; }
-          // Sanfte Kurve statt gerader Linie ("Faden"-Optik) - Start-/
-          // Endpunkt bleiben exakt die Objekt-Mittelpunkte, nur die Mitte
-          // der Strecke wölbt sich seitlich (abwechselnde Richtung).
-          var mx = (c1.x + c2.x) / 2, my = (c1.y + c2.y) / 2;
-          var dx = c2.x - c1.x, dy = c2.y - c1.y;
-          var len = Math.sqrt(dx * dx + dy * dy) || 1;
-          var bulge = Math.min(60, len * 0.18) * (ti % 2 === 0 ? 1 : -1);
-          var cx = mx + (-dy / len) * bulge, cy = my + (dx / len) * bulge;
+
+        var pts = boardItems.map(centerOf).filter(Boolean);
+        if (pts.length >= 2) {
+          // Durchgehende, an den Wegpunkten (Bildern) abgerundete Kurve
+          // (Catmull-Rom in kubische Bezier umgerechnet) - läuft exakt durch
+          // jeden Objekt-Mittelpunkt, aber ohne Knick an den Übergängen wie
+          // bei unabhängigen Einzelsegmenten.
+          var d = 'M ' + pts[0].x + ' ' + pts[0].y;
+          for (var ti = 0; ti < pts.length - 1; ti++) {
+            var p0 = pts[ti - 1] || pts[ti];
+            var p1 = pts[ti];
+            var p2 = pts[ti + 1];
+            var p3 = pts[ti + 2] || p2;
+            var c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
+            var c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
+            d += ' C ' + c1x + ' ' + c1y + ' ' + c2x + ' ' + c2y + ' ' + p2.x + ' ' + p2.y;
+          }
           var pathEl = document.createElementNS(ns, 'path');
-          pathEl.setAttribute('d', 'M ' + c1.x + ' ' + c1.y + ' Q ' + cx + ' ' + cy + ' ' + c2.x + ' ' + c2.y);
+          pathEl.setAttribute('d', d);
           pathEl.setAttribute('fill', 'none');
           pathEl.setAttribute('stroke', threadForCanvas.color || '#e0503f');
           pathEl.setAttribute('stroke-width', '3');
           pathEl.setAttribute('stroke-linecap', 'round');
+          pathEl.setAttribute('stroke-linejoin', 'round');
           lineSvg.appendChild(pathEl);
         }
         canvas.appendChild(lineSvg);
@@ -2273,18 +2283,6 @@
   // zusammenstellen, statt nur einzeln über den Board-Button pro Foto.
   function renderThreadObjectList(own) {
     var wrap = el('div', { class: 'ic-thread-objects' });
-    wrap.appendChild(el('h3', { class: 'ic-thread-panel-subtitle' }, [S.thread_all_objects]));
-
-    var filterRow = el('div', { class: 'ic-seg' });
-    var filterOptions = [['all', S.filter_all], ['in', S.filter_in_thread], ['out', S.filter_out_thread]];
-    var filterBtns = {};
-    filterOptions.forEach(function (opt) {
-      var b = el('button', { class: 'ic-btn ic-btn-ghost' + (state.threadObjectFilter === opt[0] ? ' ic-btn-primary' : '') }, [opt[1]]);
-      b.addEventListener('click', function () { state.threadObjectFilter = opt[0]; render(); });
-      filterBtns[opt[0]] = b;
-      filterRow.appendChild(b);
-    });
-    wrap.appendChild(filterRow);
 
     var inThreadIds = {};
     if (own) {
@@ -2293,12 +2291,9 @@
     var boardPhotos = state.photos.filter(function (p) {
       return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === state.currentBoard;
     });
-    var filter = state.threadObjectFilter || 'all';
-    var visible = boardPhotos.filter(function (p) {
-      if (filter === 'in') { return !!inThreadIds[p.id]; }
-      if (filter === 'out') { return !inThreadIds[p.id]; }
-      return true;
-    });
+    // Nur die noch nicht im Faden enthaltenen ("nicht in Präsentation")
+    // Objekte anzeigen - kein Filter, kein separater Titel nötig.
+    var visible = boardPhotos.filter(function (p) { return !inThreadIds[p.id]; });
 
     var list = el('div', { class: 'ic-thread-list' });
     if (visible.length === 0) {
@@ -2308,25 +2303,17 @@
       var row = el('div', { class: 'ic-thread-item' });
       row.appendChild(el('img', { src: p.url, alt: '' }));
       row.appendChild(el('span', { class: 'ic-thread-item-label' }, [p.sourcetitle || itemCaptionText(p)]));
-      var toggle = el('label', { class: 'ic-me-check' });
+      var toggle = el('label', { class: 'ic-me-check', title: S.not_in_presentation });
       var check = el('input', { type: 'checkbox' });
-      check.checked = !!inThreadIds[p.id];
+      check.checked = false;
       check.addEventListener('change', function () {
-        if (check.checked) {
-          callAjax('mod_pinnwand_add_thread_item', {
-            cmid: cfg.cmid, itemtype: 'photo', photoid: p.id, boardid: state.currentBoard
-          }).then(function (res) {
-            state.threads = state.threads.filter(function (t) { return !t.isown; });
-            state.threads.push({ id: res.threadid, color: res.color, isown: true, items: res.items });
-            render();
-          });
-        } else {
-          var itemid = inThreadIds[p.id];
-          callAjax('mod_pinnwand_remove_thread_item', { cmid: cfg.cmid, itemid: itemid }).then(function () {
-            own.items = own.items.filter(function (it) { return it.id !== itemid; });
-            render();
-          });
-        }
+        callAjax('mod_pinnwand_add_thread_item', {
+          cmid: cfg.cmid, itemtype: 'photo', photoid: p.id, boardid: state.currentBoard
+        }).then(function (res) {
+          state.threads = state.threads.filter(function (t) { return !t.isown; });
+          state.threads.push({ id: res.threadid, color: res.color, isown: true, items: res.items });
+          render();
+        });
       });
       toggle.appendChild(check);
       row.appendChild(toggle);
@@ -2343,24 +2330,24 @@
 
     panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.thread]));
     if (own && own.items.length > 0) {
-      if (own.isown) {
-        var bgLabel = el('label', { class: 'ic-me-check', style: 'margin-bottom:8px' });
-        var bgCheck = el('input', { type: 'checkbox' });
-        bgCheck.checked = !!own.bgmoves;
-        bgCheck.addEventListener('change', function () {
-          own.bgmoves = bgCheck.checked;
-          callAjax('mod_pinnwand_set_thread_bgmoves', { cmid: cfg.cmid, bgmoves: bgCheck.checked });
-        });
-        bgLabel.appendChild(bgCheck);
-        bgLabel.appendChild(document.createTextNode(S.bgmoves_with_zoom));
-        panel.appendChild(bgLabel);
-      }
       var presentBtn = el('button', { class: 'ic-btn ic-btn-primary ic-thread-present-btn' }, [S.presentthread]);
       presentBtn.addEventListener('click', function () { openPresentation(own); });
       panel.appendChild(presentBtn);
     }
     panel.appendChild(renderThreadList(own, true));
-    if (state.canusethreads) { panel.appendChild(renderThreadObjectList(own)); }
+    if (state.canusethreads) {
+      var bgLabel = el('label', { class: 'ic-me-check', style: 'margin:10px 0' });
+      var bgCheck = el('input', { type: 'checkbox' });
+      bgCheck.checked = !!(own && own.bgmoves);
+      bgCheck.addEventListener('change', function () {
+        if (own) { own.bgmoves = bgCheck.checked; }
+        callAjax('mod_pinnwand_set_thread_bgmoves', { cmid: cfg.cmid, bgmoves: bgCheck.checked });
+      });
+      bgLabel.appendChild(bgCheck);
+      bgLabel.appendChild(document.createTextNode(S.bgmoves_with_zoom));
+      panel.appendChild(bgLabel);
+      panel.appendChild(renderThreadObjectList(own));
+    }
 
     if (state.canusethreads) {
       var actions = el('div', { class: 'ic-thread-actions' });
@@ -2509,22 +2496,64 @@
       .filter(Boolean);
 
     var currentIdx = 0;
+    var hopTimer = null;
+
+    function applyTransform(scale, cx, cy, durationMs) {
+      var tx = window.innerWidth / 2 - scale * cx;
+      var ty = window.innerHeight / 2 - scale * cy;
+      canvasEl.style.transition = (durationMs === 0) ? 'none' : 'transform ' + durationMs + 'ms ease';
+      canvasEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    }
 
     // Kamera: verschiebt/skaliert canvasEl so, dass die Station vollständig
     // sichtbar ist UND den Bildschirm in einer Richtung (horizontal oder
     // vertikal) ganz ausfüllt ("contain"-Fitting, kleinerer der beiden
     // Füllungsgrade, nie beschnitten). Komplett selbst berechnet - keine
     // Bibliotheks-Fließkommas, die sich unserer Kontrolle entziehen.
+    // Je kleiner eine Station (Rahmen/Foto), desto stärker der Zoom.
+    function targetFor(s) {
+      return { scale: Math.min(window.innerWidth / s.w, window.innerHeight / s.h), cx: s.cx, cy: s.cy };
+    }
+
     function goToStep(idx, skipTransition) {
+      if (hopTimer) { clearTimeout(hopTimer); hopTimer = null; }
+      var fromIdx = currentIdx;
       currentIdx = Math.max(0, Math.min(steps.length - 1, idx));
       var s = steps[currentIdx];
       if (!s) { return; }
-      var scale = Math.min(window.innerWidth / s.w, window.innerHeight / s.h);
-      var tx = window.innerWidth / 2 - scale * s.cx;
-      var ty = window.innerHeight / 2 - scale * s.cy;
-      canvasEl.style.transition = skipTransition ? 'none' : '';
-      canvasEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
-      updateOcclusion();
+      var target = targetFor(s);
+
+      if (skipTransition || fromIdx === currentIdx) {
+        applyTransform(target.scale, target.cx, target.cy, 0);
+        updateOcclusion();
+        return;
+      }
+
+      var from = steps[fromIdx];
+      var dist = from ? Math.sqrt(Math.pow(s.cx - from.cx, 2) + Math.pow(s.cy - from.cy, 2)) : 0;
+
+      if (!from || dist < 80) {
+        // Direkter Übergang bei sehr nahen Stationen - ein Sprung würde hier
+        // nur unruhig wirken.
+        applyTransform(target.scale, target.cx, target.cy, 700);
+        setTimeout(updateOcclusion, 700);
+        return;
+      }
+
+      // "Sprung": kurz herauszoomen (Überblick über den zurückgelegten Weg),
+      // dann zur Zielstation heranzoomen. Je weiter der Weg, desto höher
+      // (stärker herausgezoomt) und länger (mehr Zeit) der Sprung.
+      var hopFactor = Math.min(0.6, dist / 2200); // 0..0.6: wie stark der Zwischenschritt herauszoomt
+      var midScale = Math.min(target.scale, targetFor(from).scale) * (1 - hopFactor);
+      var midCx = (from.cx + s.cx) / 2, midCy = (from.cy + s.cy) / 2;
+      var hopDuration = Math.min(2200, 500 + dist * 0.7);
+      var halfDuration = hopDuration / 2;
+
+      applyTransform(midScale, midCx, midCy, halfDuration);
+      hopTimer = setTimeout(function () {
+        applyTransform(target.scale, target.cx, target.cy, halfDuration);
+        hopTimer = setTimeout(updateOcclusion, halfDuration);
+      }, halfDuration);
     }
 
     // Occlusion: nur Fotos, die die aktive Station vom Z-Level her
@@ -2552,6 +2581,7 @@
     nextBtn.addEventListener('click', function () { goToStep(currentIdx + 1); });
     closeBtn.addEventListener('click', function () {
       document.removeEventListener('keydown', keyNav);
+      if (hopTimer) { clearTimeout(hopTimer); }
       overlay.remove();
     });
     function keyNav(ev) {
@@ -2567,7 +2597,19 @@
     overlay.appendChild(nextBtn);
     document.body.appendChild(overlay);
 
-    if (steps.length > 0) { goToStep(0, true); }
+    if (steps.length > 0) {
+      // Beim Start zoomt die Kamera aus einer Übersicht in die erste
+      // Station hinein, statt sofort scharf gestellt zu erscheinen.
+      var first = steps[0];
+      var overviewScale = targetFor(first).scale * 0.35;
+      applyTransform(overviewScale, first.cx, first.cy, 0);
+      currentIdx = 0;
+      requestAnimationFrame(function () {
+        var t0 = targetFor(first);
+        applyTransform(t0.scale, t0.cx, t0.cy, 900);
+        setTimeout(updateOcclusion, 900);
+      });
+    }
   }
 
   // ==================================================================

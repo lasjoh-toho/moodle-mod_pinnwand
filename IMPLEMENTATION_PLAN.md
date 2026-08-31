@@ -536,3 +536,45 @@ Sechster Feedback-Durchgang. Betrifft: `classes/external.php` (neue Felder
 Bildvorschau + Formular) behält den Speichern-Button in der Aktionsleiste -
 dort gibt es kein großformatiges Bild, auf dem eine schwebende Ecken-
 Platzierung sinnvoll wäre.
+
+---
+
+## Phase 14 — Präsentations-Kamera, Faden-Politur, Assistent-Navigation ✅ (Teil 1)
+
+Siebter Feedback-Durchgang (Teil 1 - Wortfeld-Formatierungswerkzeuge folgen
+in Teil 2). Betrifft: `classes/external.php` (Faden-Farbe), `js/app.js`
+(Präsentations-Kamera, Faden-Kurve, Objekt-Liste, Assistent-Navigation).
+
+- [x] **Bugfix**: "Bild hinzufügen" (Datei-Upload) öffnete durch das
+  `capture`-Attribut am Datei-Input ebenfalls die Kamera statt der
+  Fotomediathek des Geräts - Attribut entfernt.
+- [x] Lehrkraft-Faden ("Hauptfaden") ist jetzt immer echtes Rot (`#e0231f`)
+  statt einer zufälligen Palettenfarbe je nach Nutzer-ID; Lernenden-Fäden
+  behalten die unterscheidbare Paletten-Zuweisung.
+- [x] Faden-Objektliste im Panel vereinfacht: kein Filter, kein separater
+  Titel mehr - zeigt direkt nur die noch nicht im Faden enthaltenen
+  ("nicht in Präsentation") Objekte zum Zuschalten.
+- [x] Checkbox "Hintergrund bewegt sich beim Zoom mit" jetzt direkt über
+  dieser Objekt-Liste statt beim Präsentations-Button.
+- [x] **Faden-Linie**: durchgehende, an den Wegpunkten (Bildern)
+  abgerundete Catmull-Rom-Kurve statt unabhängiger Einzelsegmente mit
+  Knick an den Übergängen.
+- [x] **Präsentations-Kamera überarbeitet**: startet mit einem Zoom aus
+  einer Übersicht in die erste Station hinein (statt sofort scharf
+  gestellt zu erscheinen); Übergänge zwischen Stationen machen ab einer
+  Mindestentfernung einen kurzen "Sprung" (kurzzeitig herauszoomen für
+  Überblick, dann zur Zielstation heranzoomen) - Höhe und Dauer des
+  Sprungs wachsen mit der zurückgelegten Entfernung.
+- [x] Rahmen bleiben in der Präsentation vollständig unsichtbar (bereits in
+  Phase 13 umgesetzt, hier verifiziert) - kleinerer Rahmen = stärkerer
+  Zoom ist durch die Fitting-Formel bereits inhärent korrekt.
+- [x] **Assistent-Navigation umgebaut**: Perspektive-, Zuschnitt- und
+  Farbe-Schritt haben jetzt kreisrunde Zurück-/Weiter-Pfeile, fest
+  positioniert bei 30 %/60 % der Bildbreite am unteren Rand, statt einer
+  breiten Aktionsleiste bzw. eines reinen Abbrechen-Buttons - "Zurück"
+  führt zum jeweils vorherigen Schritt (nicht mehr kompletter Abbruch).
+
+**Noch offen (Teil 2):** Wortfeld-Editor-Formatierungswerkzeuge
+(Zeilenabstand, Laufweite je Wort, Fett/Kursiv/Unterstrichen/
+Durchgestrichen, Aufzählungspunkte, zweispaltige Anordnung) sowie
+Schriftarten-Einbettung direkt ins SVG.

@@ -53,6 +53,7 @@ $string['filter_all'] = 'Alle';
 $string['filter_in_thread'] = 'Mit Faden';
 $string['filter_out_thread'] = 'Ohne Faden';
 $string['thread_objects_empty'] = 'Keine Fotos auf diesem Board.';
+$string['not_in_presentation'] = 'Nicht in Präsentation - zuschalten';
 $string['teacherthread'] = 'Faden der Lehrkraft';
 $string['poststream'] = 'Post-Stream';
 $string['stream_filter_placeholder'] = 'Nach Name/Titel filtern…';

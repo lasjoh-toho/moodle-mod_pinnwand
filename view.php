@@ -166,6 +166,7 @@ $config = [
         'filter_in_thread' => get_string('filter_in_thread', 'pinnwand'),
         'filter_out_thread' => get_string('filter_out_thread', 'pinnwand'),
         'thread_objects_empty' => get_string('thread_objects_empty', 'pinnwand'),
+        'not_in_presentation' => get_string('not_in_presentation', 'pinnwand'),
         'teacherthread' => get_string('teacherthread', 'pinnwand'),
         'poststream' => get_string('poststream', 'pinnwand'),
         'stream_filter_placeholder' => get_string('stream_filter_placeholder', 'pinnwand'),

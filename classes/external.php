@@ -975,7 +975,11 @@ class mod_pinnwand_external extends external_api {
         if (!self::can_use_threads($instance, $context)) {
             throw new moodle_exception('nopermissions', 'error', '', 'thread');
         }
-        $color = self::THREAD_COLORS[$USER->id % count(self::THREAD_COLORS)];
+        // Der Faden der Lehrkraft ("Hauptfaden") ist immer echtes Rot -
+        // Lernende bekommen stattdessen eine unterscheidbare Farbe aus der
+        // Palette, deterministisch je nach Nutzer-ID.
+        $color = has_capability('mod/pinnwand:viewall', $context)
+            ? '#e0231f' : self::THREAD_COLORS[$USER->id % count(self::THREAD_COLORS)];
         $thread = (object) [
             'pinnwandid' => $instance->id, 'userid' => $USER->id, 'color' => $color, 'timecreated' => time(),
         ];

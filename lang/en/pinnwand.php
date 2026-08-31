@@ -53,6 +53,7 @@ $string['filter_all'] = 'All';
 $string['filter_in_thread'] = 'In thread';
 $string['filter_out_thread'] = 'Not in thread';
 $string['thread_objects_empty'] = 'No photos on this board.';
+$string['not_in_presentation'] = 'Not in presentation - tap to add';
 $string['teacherthread'] = 'Teacher\'s thread';
 $string['poststream'] = 'Post stream';
 $string['stream_filter_placeholder'] = 'Filter by name/title…';
