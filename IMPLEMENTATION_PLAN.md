@@ -843,3 +843,54 @@ Fotos/Rahmen-Koordinaten ungültig machen bzw. neu umrechnen müssen, was
 für ein bereits in Nutzung befindliches Board zu riskant/aufwendig wäre.
 Das neue Querformat (1400x1000) ist als deutlich universellerer Standard
 gedacht, der zu den meisten tatsächlichen Präsentationsbildern passt.
+
+---
+
+## Phase 22 — Hinzufügen-Modal, Text-Umbruch-Bugfix, WordArt-Grundlage, Block-Reorganisation ✅ (teilweise)
+
+Fünfzehnter Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`, neue
+Strings.
+
+- [x] **Kern-Bugfix Textumbruch**: `display:flex` auf dem primären
+  Textobjekt löste das bekannte CSS-Flexbox-`min-width:auto`-Verhalten
+  aus (ein Text-Inhalt als anonymes Flex-Item verweigert das Schrumpfen
+  unter seine intrinsische Breite) - dadurch funktionierte weder
+  automatischer noch manueller Zeilenumbruch. Umgestellt auf
+  `display:table-cell; vertical-align:middle` - zentriert genauso, ohne
+  diesen Effekt.
+- [x] **"Hinzufügen" ist jetzt ein Modal** (`openAddModal()`) statt eines
+  seitenweiten Bildschirms - nach demselben Muster wie die Einstellungen.
+  Die vormalige `renderCaptureChoice`-Funktion wurde entfernt (komplett
+  ins Modal überführt); mehrere Folge-Bugs an den "Zurück ins Leere"-
+  Stellen der Kamera-Ansicht behoben (kein Rückfall-Schritt mehr
+  vorhanden, jetzt direkt zu "Meine Bilder").
+- [x] **WordArt-Grundgerüst**: neuer Modal-Eintrag "WordArt" öffnet den
+  Wortfeld-Editor im WordArt-Modus. Sechs CSS-basierte Stil-Presets
+  (Normal/Umriss/3D/Glow/Chrome/Feuer), inspiriert von der als Referenz
+  bereitgestellten Vorlage - als reines CSS umgesetzt (Mehrfach-
+  text-shadow für 3D, -webkit-text-stroke für Kontur, drop-shadow für
+  Glow, background-clip:text für Verlaufsfüllungen), dadurch sowohl live
+  im Editor als auch im foreignObject-SVG-Export funktionsfähig, ohne
+  SVG-Pfad-Extraktion einer Schriftart. Jeder Stil-Button zeigt sich
+  selbst in seinem Stil (Live-Vorschau ohne separates Tab-System). Neues
+  Schriftstärke-Feld ergänzt.
+- [x] **Werkzeuge in drei Blöcke reorganisiert**: "Vorlagen" (Zettel-
+  Vorlagen, direkt als Beispiel sichtbar), "Schriften" (Schriftart,
+  Größe, Stärke, Zeilenabstand, Laufweite), "Form / Rand / Schatten /
+  Kontur" (Formatierung, WordArt-Stile, Farbpalette). Anordnung folgt dem
+  Seitenverhältnis des Zettels selbst (nicht der Bildschirmgröße):
+  hochkant untereinander, quer nebeneinander (mit Fallback auf
+  untereinander bei sehr schmalen Bildschirmen).
+
+**Bewusst nicht umgesetzt (siehe Rückmeldung im Chat):**
+- Audio hinzufügen (URL/Upload) und Video-Stream einbetten (gängige
+  Provider) - beide würden einen komplett neuen Objekttyp quer durchs
+  gesamte Datenmodell erfordern (Board-Darstellung, Präsentation,
+  Schichtung, Speicherung) und wurden als eigenständiges, später zu
+  planendes Feature-Paket zurückgestellt statt überstürzt unvollständig
+  umgesetzt zu werden.
+- Die volle WordArt-Tiefe aus der Referenzvorlage (Presets in Tabs mit
+  echten Bild-Vorschauen, umfangreiche kategorisierte Web-Font-Bibliothek
+  mit On-Demand-Nachladen) - stattdessen eine schlankere, aber
+  vollständig funktionsfähige Variante mit sechs kuratierten Stilen und
+  der bestehenden (kleineren) Schriftauswahl.

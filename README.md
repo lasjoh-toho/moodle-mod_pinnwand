@@ -582,6 +582,20 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Gestrichelte Randlinie für noch nicht im Faden enthaltene Objekte in der
   Präsentation entfernt.
 
+### Sechsundzwanzigste Überarbeitung — Hinzufügen-Modal, Text-Umbruch-Bugfix, WordArt
+
+- **Kern-Bugfix**: `display:flex` auf dem primären Textobjekt unterdrückte
+  durch das CSS-Flexbox-`min-width:auto`-Verhalten sowohl automatischen
+  als auch manuellen Zeilenumbruch komplett - behoben.
+- **"Hinzufügen" ist jetzt ein Modal** statt eines seitenweiten Bildschirms.
+- **Neu: WordArt** - sechs Stil-Presets (Normal/Umriss/3D/Glow/Chrome/
+  Feuer) als reines CSS, mit Live-Vorschau direkt am Button.
+- Werkzeuge in drei responsive Blöcke reorganisiert (Vorlagen/Schriften/
+  Form-Rand-Schatten-Kontur), Anordnung folgt dem Seitenverhältnis des
+  Zettels.
+- Bewusst noch nicht umgesetzt: Audio/Video als Board-Objekte (siehe
+  Scoping-Hinweis zu Phase 22 im IMPLEMENTATION_PLAN).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

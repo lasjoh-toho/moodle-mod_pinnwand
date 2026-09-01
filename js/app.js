@@ -284,40 +284,45 @@
       class: 'ic-home-add-fab' + (maxreached ? ' disabled' : ''), title: S.addphoto, 'aria-label': S.addphoto,
       disabled: maxreached ? 'disabled' : null
     }, ['+']);
-    addFab.addEventListener('click', function () { if (!maxreached) { state.step = 'capture'; render(); } });
+    addFab.addEventListener('click', function () { if (!maxreached) { openAddModal(); } });
     body.appendChild(addFab);
   }
 
-  // ==================================================================
-  // CAPTURE: erst Auswahl-Bildschirm (Kamera/Datei/URL/Textrahmen) ohne
-  // jede Kamera-Berechtigungsanfrage; erst nach Klick auf "Kamera" wechselt
-  // die Ansicht in den Live-Kamera-Modus und getUserMedia wird angefragt.
-  // ==================================================================
-  function renderCapture(body) {
-    if (state.captureMode === 'camera') { renderCaptureCamera(body); return; }
-    renderCaptureChoice(body);
-  }
+  // Öffnet den "Hinzufügen"-Dialog als Modal (wie die Einstellungen), statt
+  // seitenweit die ganze Ansicht zu wechseln. Aktionen, die weitere Schritte
+  // brauchen (Kamera, Wortfeld/WordArt), schließen das Modal und wechseln
+  // erst dann in den jeweiligen Vollbild-Schritt.
+  function openAddModal() {
+    var existingOverlay = document.getElementById('ic-add-modal-overlay');
+    if (existingOverlay) { existingOverlay.remove(); return; }
 
-  function renderCaptureChoice(body) {
-    var wrap = el('div', { class: 'ic-capture-choice' });
+    var overlay = el('div', { class: 'ic-modal-overlay', id: 'ic-add-modal-overlay' });
+    overlay.addEventListener('click', function (ev) { if (ev.target === overlay) { overlay.remove(); } });
+    var panel = el('div', { class: 'ic-add-modal' });
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.addphoto]));
 
-    var fileInput = el('input', {
-      type: 'file', accept: 'image/*', style: 'display:none'
-    });
+    function closeAndGo(step, prep) {
+      overlay.remove();
+      if (prep) { prep(); }
+      state.step = step;
+      render();
+    }
+
+    var fileInput = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
     fileInput.addEventListener('change', function (ev) {
       var file = ev.target.files[0];
       if (!file) { return; }
       var reader = new FileReader();
       reader.onload = function () {
         var img = new Image();
-        img.onload = function () { loadCapturedImage(img); };
+        img.onload = function () { overlay.remove(); loadCapturedImage(img); };
         img.src = reader.result;
       };
       reader.readAsDataURL(file);
     });
-    body.appendChild(fileInput);
+    panel.appendChild(fileInput);
 
-    var urlRow = el('div', { class: 'ic-url-row', id: 'ic-capture-url-row' });
+    var urlRow = el('div', { class: 'ic-url-row', style: 'display:none' });
     var urlInput = el('input', { type: 'url', placeholder: 'https://...' });
     var urlGo = el('button', { class: 'ic-btn ic-btn-primary' }, [S.bg_url_apply]);
     urlGo.addEventListener('click', function () {
@@ -325,41 +330,53 @@
       if (!url) { return; }
       var img = new Image();
       img.crossOrigin = 'anonymous';
-      img.onload = function () { loadCapturedImage(img); };
+      img.onload = function () { overlay.remove(); loadCapturedImage(img); };
       img.onerror = function () { alert(S.url_load_error); };
       img.src = url;
     });
     urlRow.appendChild(urlInput); urlRow.appendChild(urlGo);
 
-    // Breite, untereinander angeordnete Buttons statt einer schmalen
-    // Icon-Reihe - besser greifbar und mit echtem Textlabel erkennbar.
+    var grid = el('div', { class: 'ic-add-modal-grid' });
     var camBtn = el('button', { class: 'ic-choice-btn ic-btn-primary' }, [icon('camera'), el('span', {}, [S.takephoto])]);
-    camBtn.addEventListener('click', function () { state.captureMode = 'camera'; render(); });
+    camBtn.addEventListener('click', function () { closeAndGo('capture', function () { state.captureMode = 'camera'; }); });
     var uploadBtn = el('button', { class: 'ic-choice-btn' }, [icon('upload'), el('span', {}, [S.uploadphoto])]);
     uploadBtn.addEventListener('click', function () { fileInput.click(); });
-    var urlBtn = el('button', { class: 'ic-choice-btn' + (urlRow.classList.contains('open') ? ' ic-btn-primary' : '') },
-      [icon('link'), el('span', {}, [S.addviaurl])]);
+    var urlBtn = el('button', { class: 'ic-choice-btn' }, [icon('link'), el('span', {}, [S.addviaurl])]);
     urlBtn.addEventListener('click', function () {
-      urlRow.classList.toggle('open');
-      urlBtn.classList.toggle('ic-btn-primary', urlRow.classList.contains('open'));
+      urlRow.style.display = urlRow.style.display === 'none' ? 'flex' : 'none';
     });
     var textFrameBtn = el('button', { class: 'ic-choice-btn' }, [icon('text'), el('span', {}, [S.addtextframe])]);
     textFrameBtn.addEventListener('click', function () {
-      state.textFrame = null; // frisch beginnen
-      state.step = 'textframe';
-      render();
+      closeAndGo('textframe', function () { state.textFrame = null; state.wordArtMode = false; });
+    });
+    var wordArtBtn = el('button', { class: 'ic-choice-btn' }, [icon('text'), el('span', {}, [S.addwordart])]);
+    wordArtBtn.addEventListener('click', function () {
+      closeAndGo('textframe', function () { state.textFrame = null; state.wordArtMode = true; });
     });
 
-    wrap.appendChild(camBtn);
-    wrap.appendChild(uploadBtn);
-    wrap.appendChild(urlRow);
-    wrap.appendChild(urlBtn);
-    wrap.appendChild(textFrameBtn);
-    body.appendChild(wrap);
+    grid.appendChild(camBtn);
+    grid.appendChild(uploadBtn);
+    grid.appendChild(urlBtn);
+    grid.appendChild(textFrameBtn);
+    grid.appendChild(wordArtBtn);
+    panel.appendChild(grid);
+    panel.appendChild(urlRow);
 
-    var bar = el('div', { class: 'ic-actionbar' });
-    bar.appendChild(cancelWizardBtn());
-    body.appendChild(bar);
+    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel, 'aria-label': S.cancel }, ['\u2715']);
+    closeBtn.addEventListener('click', function () { overlay.remove(); });
+    panel.appendChild(closeBtn);
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+  }
+
+  // ==================================================================
+  // CAPTURE: Kamera-Aufnahme (Auswahl-Bildschirm ist jetzt ein Modal, siehe
+  // openAddModal) - erst nach Klick auf "Kamera" wechselt die Ansicht in
+  // den Live-Kamera-Modus und getUserMedia wird angefragt.
+  // ==================================================================
+  function renderCapture(body) {
+    renderCaptureCamera(body);
   }
 
   function renderCaptureCamera(body) {
@@ -375,6 +392,7 @@
     cancelBtn.addEventListener('click', function () {
       stopStream();
       state.captureMode = null;
+      state.step = 'home';
       render();
     });
     var shootBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.takephoto]);
@@ -397,15 +415,18 @@
           video.srcObject = stream;
         })
         .catch(function () {
-          // Keine Berechtigung/kein Kamerazugriff möglich - zurück zur
-          // Auswahl, dort steht der Datei-Upload-Fallback bereit.
+          // Keine Berechtigung/kein Kamerazugriff möglich - zurück zu Meine
+          // Bilder, dort steht der Datei-Upload-Fallback im "Hinzufügen"-
+          // Modal bereit.
           alert(S.camera_error);
           state.captureMode = null;
+          state.step = 'home';
           render();
         });
     } else {
       alert(S.camera_error);
       state.captureMode = null;
+      state.step = 'home';
       render();
     }
   }
@@ -477,7 +498,8 @@
     stageHint(stage, S.perspective_hint);
 
     stageNavArrows(stage, function () {
-      state.step = 'capture';
+      resetCaptureState();
+      state.step = 'home';
       render();
     }, function () {
       var scaledCorners = state.corners.map(function (p) {
@@ -1088,6 +1110,40 @@
   // Anzeigegröße scharf, und die Struktur (Preset/Texte/Maße) lässt sich
   // beim erneuten Bearbeiten aus `wordfielddata` (separat mitgespeichertes
   // JSON, siehe saveTextFrame) wieder exakt herstellen.
+  // WordArt-Stile: reine CSS-Technik (Mehrfach-text-shadow für den
+  // "3D-Extrude"-Effekt, -webkit-text-stroke für Kontur, drop-shadow für
+  // Glow, Verlaufsfüllung per background-clip:text für Chrome/Feuer) - läuft
+  // dadurch sowohl live im Editor als auch im foreignObject-SVG-Export
+  // (echtes CSS, keine SVG-Pfad-Extraktion einer Schriftart nötig).
+  var WORDART_STYLES = [
+    { id: 'none', label: 'Normal', css: function (color) { return 'color:' + color + ';'; } },
+    { id: 'outline', label: 'Umriss', css: function (color) {
+      return 'color:transparent;-webkit-text-stroke:2px ' + color + ';text-stroke:2px ' + color + ';';
+    } },
+    { id: 'shadow3d', label: '3D', css: function (color) {
+      var layers = [];
+      for (var i = 1; i <= 10; i++) { layers.push(i + 'px ' + i + 'px 0 rgba(0,0,0,' + (0.55 - i * 0.02) + ')'); }
+      return 'color:' + color + ';text-shadow:' + layers.join(',') + ';';
+    } },
+    { id: 'glow', label: 'Glow', css: function (color) {
+      return 'color:' + color + ';filter:drop-shadow(0 0 8px ' + color + ') drop-shadow(0 0 16px ' + color + ');';
+    } },
+    { id: 'chrome', label: 'Chrome', css: function () {
+      return 'background:linear-gradient(180deg,#8baac1 0%,#ffffff 45%,#161d26 50%,#a47c50 78%,#f3e5c8 100%);' +
+        '-webkit-background-clip:text;background-clip:text;color:transparent;';
+    } },
+    { id: 'fire', label: 'Feuer', css: function () {
+      return 'background:linear-gradient(0deg,#ff0000 0%,#ff8a00 40%,#ffd500 100%);' +
+        '-webkit-background-clip:text;background-clip:text;color:transparent;' +
+        'filter:drop-shadow(0 0 6px rgba(255,120,0,.7));';
+    } }
+  ];
+  function wordartCssFor(t, fallbackColor) {
+    if (!t.wordartStyle || t.wordartStyle === 'none') { return ''; }
+    var style = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0];
+    return style ? style.css(t.color || fallbackColor) : '';
+  }
+
   function buildTextFrameSVG(tf) {
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
     var defs = '';
@@ -1109,8 +1165,9 @@
       if (!html) { return ''; }
       var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
       var baseStyle = 'box-sizing:border-box;font-family:' + escapeXml(fontDef.css) + ';font-size:' + t.size +
-        'px;color:' + (t.color || preset.text) + ';line-height:' + (t.lineHeight || 1.2) +
-        ';letter-spacing:' + (t.letterSpacing || 0) + 'px;white-space:pre-wrap;word-wrap:break-word;overflow:hidden;';
+        'px;font-weight:' + (t.fontWeight || 700) + ';line-height:' + (t.lineHeight || 1.2) +
+        ';letter-spacing:' + (t.letterSpacing || 0) + 'px;white-space:pre-wrap;word-wrap:break-word;overflow:hidden;' +
+        (wordartCssFor(t, preset.text) || ('color:' + (t.color || preset.text) + ';'));
       if (idx === 0) {
         // Primäres Textobjekt: füllt den ganzen Rahmen.
         return '<foreignObject x="0" y="0" width="' + tf.w + '" height="' + tf.h + '">' +
@@ -1264,8 +1321,6 @@
     })();
 
     var activeId = tf.texts[0] && tf.texts[0].id;
-    var controlsBox = el('div', { class: 'ic-textframe-controls' });
-
     function selectText(id) {
       activeId = id;
       frame.querySelectorAll('.ic-textframe-obj').forEach(function (o) {
@@ -1278,14 +1333,16 @@
       var isPrimary = idx === 0;
       t.lineHeight = t.lineHeight || 1.2;
       t.letterSpacing = t.letterSpacing || 0;
+      t.fontWeight = t.fontWeight || 700;
       var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
       var el2 = el('div', {
         class: 'ic-textframe-obj' + (isPrimary ? ' primary' : '') + (t.id === activeId ? ' active' : ''),
         'data-textid': String(t.id),
         contenteditable: 'true',
         style: (isPrimary ? '' : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;') +
-          'font-family:' + fontDef.css + ';font-size:' + t.size + 'px;color:' + (t.color || preset.text) +
-          ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px'
+          'font-family:' + fontDef.css + ';font-size:' + t.size + 'px;font-weight:' + t.fontWeight +
+          ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px;' +
+          (wordartCssFor(t, preset.text) || ('color:' + (t.color || preset.text) + ';'))
       });
       // innerHTML statt textContent: so bleiben Fett/Kursiv/Unterstrichen/
       // Durchgestrichen/Aufzählungen (siehe Formatierungswerkzeuge) beim
@@ -1337,7 +1394,23 @@
       }
     }
 
-    // Presets
+    // Werkzeuge in drei klar benannte Blöcke - Anordnung (unter- oder
+    // nebeneinander) richtet sich nach dem Seitenverhältnis des Zettels
+    // selbst (nicht nach der Bildschirmgröße), siehe CSS .ic-tf-landscape/
+    // .ic-tf-portrait.
+    var blocksWrap = el('div', { class: 'ic-textframe-blocks ' + (tf.w >= tf.h ? 'ic-tf-landscape' : 'ic-tf-portrait') });
+    var blockTemplates = el('div', { class: 'ic-textframe-block' });
+    blockTemplates.appendChild(el('h3', { class: 'ic-textframe-block-title' }, [S.tfblock_templates]));
+    var blockFonts = el('div', { class: 'ic-textframe-block' });
+    blockFonts.appendChild(el('h3', { class: 'ic-textframe-block-title' }, [S.tfblock_fonts]));
+    var blockForm = el('div', { class: 'ic-textframe-block' });
+    blockForm.appendChild(el('h3', { class: 'ic-textframe-block-title' }, [S.tfblock_form]));
+    blocksWrap.appendChild(blockTemplates);
+    blocksWrap.appendChild(blockFonts);
+    blocksWrap.appendChild(blockForm);
+    body.appendChild(blocksWrap);
+
+    // Block 1: Vorlagen für den Zettel selbst (als Beispiel direkt sichtbar).
     var presetRow = el('div', { class: 'ic-textframe-presets' });
     TEXTFRAME_PRESETS.forEach(function (p) {
       var label = p.id === 'none' ? S.preset_none : p.id === 'paper' ? S.preset_paper : p.id === 'dark' ? S.preset_dark : S.preset_light;
@@ -1345,15 +1418,19 @@
       b.addEventListener('click', function () { tf.preset = p.id; render(); });
       presetRow.appendChild(b);
     });
-    body.appendChild(presetRow);
+    blockTemplates.appendChild(presetRow);
 
-    // Steuerelemente des aktiven Textobjekts (Font, Größe, Farbe) - werden
-    // isoliert neu aufgebaut (refreshControls), NIE über ein volles render(),
-    // damit ein fokussiertes contenteditable-Feld nie mitten in der
-    // Bearbeitung zerstört wird.
-    body.appendChild(controlsBox);
+    // Block 2 (Schriften) + Block 3 (Form/Rand/Schatten/Kontur + Farbpalette)
+    // werden isoliert neu aufgebaut (refreshControls), NIE über ein volles
+    // render(), damit ein fokussiertes contenteditable-Feld nie mitten in
+    // der Bearbeitung zerstört wird.
+    var fontsBox = el('div', {});
+    var formBox = el('div', {});
+    blockFonts.appendChild(fontsBox);
+    blockForm.appendChild(formBox);
     function refreshControls() {
-      controlsBox.innerHTML = '';
+      fontsBox.innerHTML = '';
+      formBox.innerHTML = '';
       var active = tf.texts.filter(function (t) { return t.id === activeId; })[0];
       if (!active) { return; }
 
@@ -1377,24 +1454,18 @@
       });
       editRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontsize]));
       editRow.appendChild(sizeInput);
-      controlsBox.appendChild(editRow);
+      fontsBox.appendChild(editRow);
 
-      // Fett/Kursiv/Unterstrichen/Durchgestrichen/Aufzählung wirken auf die
-      // aktuelle Textauswahl (execCommand) - mousedown+preventDefault hält
-      // die Selektion im contenteditable-Feld aktiv, obwohl auf einen
-      // Button außerhalb geklickt wird.
-      var formatRow = el('div', { class: 'ic-textframe-formatgrid' });
-      [
-        ['bold', 'B', S.format_bold], ['italic', 'I', S.format_italic],
-        ['underline', 'U', S.format_underline], ['strikeThrough', 'S', S.format_strike],
-        ['insertUnorderedList', '\u2022', S.format_bullets]
-      ].forEach(function (cmd) {
-        var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [cmd[1]]);
-        fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-        fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
-        formatRow.appendChild(fb);
+      var weightRow = el('div', { class: 'ic-textframe-edit' });
+      var weightInput = el('input', { type: 'range', min: '300', max: '900', step: '100', value: String(active.fontWeight || 700) });
+      weightInput.addEventListener('input', function () {
+        active.fontWeight = parseInt(weightInput.value, 10);
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.fontWeight = active.fontWeight; }
       });
-      controlsBox.appendChild(formatRow);
+      weightRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontweight]));
+      weightRow.appendChild(weightInput);
+      fontsBox.appendChild(weightRow);
 
       var spacingGrid = el('div', { class: 'ic-textframe-formatgrid' });
       var lineRow = el('div', { class: 'ic-textframe-edit' });
@@ -1418,13 +1489,59 @@
       spaceRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.letterspacing]));
       spaceRow.appendChild(spaceInput);
       spacingGrid.appendChild(spaceRow);
-      controlsBox.appendChild(spacingGrid);
+      fontsBox.appendChild(spacingGrid);
+
+      // Wendet Farbe UND (falls gesetzt) den WordArt-Stil gemeinsam neu auf
+      // das Live-Element an - ein WordArt-Stil kann "color" durch eine
+      // Verlaufsfüllung (background-clip:text) ersetzen, ein reines
+      // objEl.style.color reicht dafür nicht aus.
+      function reapplyTextStyle() {
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (!objEl) { return; }
+        objEl.style.cssText += ';' + (wordartCssFor(active, preset.text) || ('color:' + (active.color || preset.text) + ';'));
+      }
+
+      // Fett/Kursiv/Unterstrichen/Durchgestrichen/Aufzählung wirken auf die
+      // aktuelle Textauswahl (execCommand) - mousedown+preventDefault hält
+      // die Selektion im contenteditable-Feld aktiv, obwohl auf einen
+      // Button außerhalb geklickt wird.
+      var formatRow = el('div', { class: 'ic-textframe-formatgrid' });
+      [
+        ['bold', 'B', S.format_bold], ['italic', 'I', S.format_italic],
+        ['underline', 'U', S.format_underline], ['strikeThrough', 'S', S.format_strike],
+        ['insertUnorderedList', '\u2022', S.format_bullets]
+      ].forEach(function (cmd) {
+        var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [cmd[1]]);
+        fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
+        formatRow.appendChild(fb);
+      });
+      formBox.appendChild(formatRow);
+
+      // WordArt-Stile (Form/Rand/Schatten/Kontur) - nur im WordArt-Modus.
+      // Jeder Button zeigt seinen eigenen Namen bereits im jeweiligen Stil -
+      // dient dadurch gleichzeitig als Live-Vorschau ohne separate Tabs.
+      if (state.wordArtMode) {
+        var wordartRow = el('div', { class: 'ic-textframe-wordart-row' });
+        WORDART_STYLES.forEach(function (w) {
+          var wb = el('button', {
+            class: 'ic-wordart-preset-btn' + ((active.wordartStyle || 'none') === w.id ? ' active' : ''),
+            style: w.css(active.color || preset.text)
+          }, [w.label]);
+          wb.addEventListener('click', function () {
+            active.wordartStyle = w.id;
+            reapplyTextStyle();
+            refreshControls();
+          });
+          wordartRow.appendChild(wb);
+        });
+        formBox.appendChild(wordartRow);
+      }
 
       var paletteRow = el('div', { class: 'ic-textframe-palette' });
       function applyColor(color) {
         active.color = color;
-        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.color = color; }
+        reapplyTextStyle();
         refreshControls();
       }
       TEXTFRAME_PALETTE.forEach(function (color) {
@@ -1436,9 +1553,9 @@
         paletteRow.appendChild(sw);
       });
       var customColor = el('input', { type: 'color', value: active.color || preset.text, class: 'ic-textframe-custom-color' });
-      customColor.addEventListener('input', function () { applyColor(customColor.value); });
+      customColor.addEventListener('change', function () { applyColor(customColor.value); });
       paletteRow.appendChild(customColor);
-      controlsBox.appendChild(paletteRow);
+      formBox.appendChild(paletteRow);
 
       if (tf.texts.length > 1) {
         var rmBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.removetextobject]);
@@ -1446,7 +1563,7 @@
           tf.texts = tf.texts.filter(function (t) { return t.id !== active.id; });
           render();
         });
-        controlsBox.appendChild(rmBtn);
+        formBox.appendChild(rmBtn);
       }
     }
     refreshControls();
@@ -2245,7 +2362,7 @@
 
     var maxreached = state.maxpictures > 0 && state.photos.length >= state.maxpictures;
     var addBtn = el('button', { class: 'ic-fab ic-fab-primary', title: S.addphoto, disabled: maxreached ? 'disabled' : null }, ['+']);
-    addBtn.addEventListener('click', function () { if (!maxreached) { state.step = 'capture'; render(); } });
+    addBtn.addEventListener('click', function () { if (!maxreached) { openAddModal(); } });
     fabRow.appendChild(addBtn);
 
     body.appendChild(fabRow);
