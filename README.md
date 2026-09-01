@@ -503,6 +503,23 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Bugfix: `bgmoves`/`linewidth` gingen beim Hinzufügen neuer Faden-
   Stationen versehentlich verloren.
 
+### Zwanzigste Überarbeitung — Hintergrund-Koordinatensystem-Fix, Faden-Linie als Canvas2D, Objekt-Auswahl
+
+- **Kern-Fix**: Hintergrund war viewport-relativ positioniert statt fest
+  auf die 1000x1400-Koordinatenfläche - dadurch erschien er in Pinnwand
+  und Präsentation in unterschiedlichem Maßstab, Rahmen zeigten dadurch
+  nicht mehr auf dieselbe Bildstelle. Jetzt fest 1000x1400, echter Teil
+  desselben Koordinatensystems wie Fotos/Rahmen.
+- Faden-Linie von SVG auf Canvas2D umgestellt (unmissverständliche
+  Pixel-Dimensionen, keine viewBox-Mehrdeutigkeit mehr möglich).
+- Leerrahmen jetzt auch im Schichtung-Tab sichtbar/verschiebbar.
+- Neue geräteübergreifende Objekt-Auswahl: Klick auf eine Zeile im
+  Schichtung- oder Faden-Panel hebt das Objekt auf dem Board und in allen
+  offenen Leisten hervor.
+- Fadenfarbe/-dicke speichert jetzt zusätzlich bei "input" als Absicherung
+  gegen unzuverlässiges "change" bei `input[type=color]`.
+- Kürzere Beschriftungen ("Hintergrund relativ", "+ Rahmen", "+ Überblick").
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

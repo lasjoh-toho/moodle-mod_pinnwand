@@ -200,11 +200,14 @@
 .ic-canvas-wrap.pan-active:active { cursor: grabbing; }
 .ic-canvas-panzoom { transform-origin: 0 0; will-change: transform; }
 .ic-canvas-bg {
-  /* inset:0 füllt zunächst genau den sichtbaren Bereich; min-width/-height
-     stellt sicher, dass mindestens die Pinnwand-Koordinatenfläche (1000x1400)
-     abgedeckt ist. So deckt die gewählte Farbe/das Bild IMMER die komplette
-     Fläche ab, egal ob der Bildschirm größer oder kleiner als 1000x1400 ist. */
-  position: absolute; inset: 0; min-width: 1000px; min-height: 1400px; z-index: 0;
+  /* Fest auf die Pinnwand-Koordinatenfläche (1000x1400) - dadurch echter
+     Teil desselben Koordinatensystems wie Fotos/Rahmen (wird über dieselbe
+     .ic-canvas-panzoom-Transformation mitgezoomt/-verschoben). Vorher war
+     die Fläche viewport-relativ (inset:0 + min-width/height), wodurch das
+     Hintergrundbild je nach Bildschirmgröße in einem anderen Maßstab
+     erschien als in der Präsentation - Rahmen zeigten dadurch nicht mehr
+     auf dieselbe Stelle im Bild. */
+  position: absolute; left: 0; top: 0; width: 1000px; height: 1400px; z-index: 0;
   background-color: #2b2d33;
 }
 /* Schwebende runde Icon-Buttons, alle in einer Zeile unter der Pinnwand
@@ -275,6 +278,8 @@
   background: var(--ic-panel); position: relative;
 }
 .ic-thread-item.dragging { opacity: .4; }
+.ic-thread-item { cursor: pointer; }
+.ic-thread-item.selected { background: rgba(224,80,63,.25); outline: 2px solid var(--ic-accent); }
 .ic-thread-item img, .ic-thread-frame-thumb {
   width: 36px; height: 36px; object-fit: cover; border-radius: 4px; flex: 0 0 auto;
 }
@@ -336,7 +341,7 @@
    "Leinwand" mit allen Fotos/Rahmen. */
 .ic-present-overlay { position: fixed; inset: 0; z-index: 10000; background: #0b0c0e; overflow: hidden; }
 .ic-present-stage { position: absolute; inset: 0; overflow: hidden; }
-.ic-present-bg { position: absolute; inset: 0; z-index: 0; }
+.ic-present-bg { position: absolute; z-index: 0; }
 .ic-present-bg.ic-present-bg-moves {
   /* Teil der gezoomten Leinwand (siehe openPresentation): deckt die
      Board-Koordinatenfläche ab, statt bildschirmfüllend fest zu stehen. */
@@ -432,11 +437,13 @@
 .ic-arrange-item { position: absolute; touch-action: none; }
 .ic-arrange-item img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
 .ic-arrange-item.ic-in-thread img { outline: 3px solid #e0503f; outline-offset: 2px; border-radius: 4px; }
+.ic-arrange-item.selected img { outline: 3px solid var(--ic-accent); outline-offset: 3px; box-shadow: 0 0 0 6px rgba(224,80,63,.25); }
 .ic-thread-frame-onboard {
   position: absolute; border-style: dashed; border-radius: 6px; pointer-events: none;
   display: flex; align-items: flex-end; padding: 6px; box-sizing: border-box;
 }
 .ic-thread-frame-onboard.editable { pointer-events: auto; cursor: move; touch-action: none; }
+.ic-thread-frame-onboard.selected { box-shadow: 0 0 0 4px rgba(224,80,63,.35); }
 .ic-thread-frame-onboard.editable .ic-resize {
   position: absolute; right: -10px; bottom: -10px; width: 26px; height: 26px;
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: nwse-resize;
@@ -450,7 +457,7 @@
 }
 .ic-thread-frame-onboard.editable:hover .ic-rotate-handle { opacity: 1; }
 .ic-thread-frame-onboard span { color: #e0503f; font-size: .85rem; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
-.ic-thread-line-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+.ic-thread-line-canvas { position: absolute; left: 0; top: 0; width: 1000px; height: 1400px; pointer-events: none; z-index: 2; }
 .ic-arrange-item .ic-resize {
   position: absolute; right: -10px; bottom: -10px; width: 26px; height: 26px;
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff;

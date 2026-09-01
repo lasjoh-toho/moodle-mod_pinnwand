@@ -69,6 +69,7 @@
     canusepoststream: true, // darf den Post-Stream nutzen (Instanzeinstellung)
     canuselayers: false,    // darf das Schichtung-Panel nutzen (Instanzeinstellung)
     layerPanelOpen: false,
+    selectedItemKey: null, // z.B. 'photo:123' oder 'frame:456' - für Hervorhebung in allen Leisten + auf dem Board
     threadObjectFilter: 'all'
   };
 
@@ -1755,7 +1756,8 @@
 
     visible.forEach(function (p) {
       var item = el('div', {
-        class: 'ic-arrange-item' + (threadPhotoIds[p.id] ? ' ic-in-thread' : ''),
+        class: 'ic-arrange-item' + (threadPhotoIds[p.id] ? ' ic-in-thread' : '') +
+          (state.selectedItemKey === 'photo:' + p.id ? ' selected' : ''),
         style: 'left:' + p.canvasx + 'px;top:' + p.canvasy + 'px;width:' + p.canvasw + 'px;' +
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
@@ -1861,7 +1863,7 @@
     // die jeweils zwei aufeinanderfolgende Stationen verbindet - nur für
     // Stationen auf dem gerade angezeigten Board (siehe Scoping-Hinweis zu
     // Mehrfach-Board-Präsentationen in Phase 3/6).
-    if (state.threadPanelOpen) {
+    if (state.threadPanelOpen || state.layerPanelOpen) {
       var threadForCanvas = ownThread();
       if (threadForCanvas) {
         var boardItems = threadForCanvas.items.filter(function (it) { return (it.boardid || 0) === state.currentBoard; });
@@ -1874,7 +1876,8 @@
           var lineColor = threadForCanvas.color || '#e0503f';
           var lineWidth = threadForCanvas.linewidth || 3;
           var frameEl = el('div', {
-            class: 'ic-thread-frame-onboard' + (threadForCanvas.isown ? ' editable' : ''),
+            class: 'ic-thread-frame-onboard' + (threadForCanvas.isown ? ' editable' : '') +
+              (state.selectedItemKey === 'frame:' + it.id ? ' selected' : ''),
             style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;' +
               'transform:rotate(' + it.framerot + 'deg);border-color:' + lineColor + ';border-width:' + lineWidth + 'px'
           });
@@ -1941,24 +1944,26 @@
           if (!photo) { return null; }
           return { x: photo.canvasx + photo.canvasw / 2, y: photo.canvasy + (photo.canvasw * 0.7) / 2 };
         }
-        var ns = 'http://www.w3.org/2000/svg';
-        var lineSvg = document.createElementNS(ns, 'svg');
-        lineSvg.setAttribute('class', 'ic-thread-line-svg');
-        // Explizites viewBox/width/height - ohne das wird der interne
-        // Koordinatenraum vom Browser nicht zuverlässig auf die tatsächliche
-        // Canvas-Größe (1000x1400) abgebildet, wodurch die Linie nur in
-        // einem Teilbereich sichtbar wird.
-        lineSvg.setAttribute('viewBox', '0 0 1000 1400');
-        lineSvg.setAttribute('width', '1000'); lineSvg.setAttribute('height', '1400');
-        lineSvg.setAttribute('preserveAspectRatio', 'none');
-
         var pts = boardItems.map(centerOf).filter(Boolean);
         if (pts.length >= 2) {
+          // Canvas2D statt SVG: canvas.width/height sind echte Pixel-
+          // Dimensionen des Zeichenpuffers, ohne jede Mehrdeutigkeit
+          // zwischen Element-Attribut und CSS-Größe (wie sie bei einem
+          // <svg> ohne exakt übereinstimmendes viewBox/CSS entstehen kann -
+          // das war die Ursache dafür, dass die Linie nur in einem
+          // Teilbereich sichtbar/abgeschnitten war).
+          var lineCanvas = el('canvas', { class: 'ic-thread-line-canvas', width: '1000', height: '1400' });
+          var lctx = lineCanvas.getContext('2d');
+          lctx.strokeStyle = threadForCanvas.color || '#e0503f';
+          lctx.lineWidth = threadForCanvas.linewidth || 3;
+          lctx.lineCap = 'round';
+          lctx.lineJoin = 'round';
+          lctx.beginPath();
+          lctx.moveTo(pts[0].x, pts[0].y);
           // Durchgehende, an den Wegpunkten (Bildern) abgerundete Kurve
           // (Catmull-Rom in kubische Bezier umgerechnet) - läuft exakt durch
           // jeden Objekt-Mittelpunkt, aber ohne Knick an den Übergängen wie
           // bei unabhängigen Einzelsegmenten.
-          var d = 'M ' + pts[0].x + ' ' + pts[0].y;
           for (var ti = 0; ti < pts.length - 1; ti++) {
             var p0 = pts[ti - 1] || pts[ti];
             var p1 = pts[ti];
@@ -1966,18 +1971,11 @@
             var p3 = pts[ti + 2] || p2;
             var c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
             var c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
-            d += ' C ' + c1x + ' ' + c1y + ' ' + c2x + ' ' + c2y + ' ' + p2.x + ' ' + p2.y;
+            lctx.bezierCurveTo(c1x, c1y, c2x, c2y, p2.x, p2.y);
           }
-          var pathEl = document.createElementNS(ns, 'path');
-          pathEl.setAttribute('d', d);
-          pathEl.setAttribute('fill', 'none');
-          pathEl.setAttribute('stroke', threadForCanvas.color || '#e0503f');
-          pathEl.setAttribute('stroke-width', String(threadForCanvas.linewidth || 3));
-          pathEl.setAttribute('stroke-linecap', 'round');
-          pathEl.setAttribute('stroke-linejoin', 'round');
-          lineSvg.appendChild(pathEl);
+          lctx.stroke();
+          canvas.appendChild(lineCanvas);
         }
-        canvas.appendChild(lineSvg);
       }
     }
 
@@ -2301,7 +2299,9 @@
 
     var dragFromIdx = null;
     items.forEach(function (entry, idx) {
-      var row = el('div', { class: 'ic-thread-item', draggable: 'true' });
+      var key = entry.kind + ':' + entry.ref.id;
+      var row = el('div', { class: 'ic-thread-item' + (state.selectedItemKey === key ? ' selected' : ''), draggable: 'true' });
+      row.addEventListener('click', function () { selectItem(key); });
       if (entry.kind === 'photo') {
         row.appendChild(el('img', { src: entry.ref.url, alt: '' }));
         row.appendChild(el('span', { class: 'ic-thread-item-label' }, [entry.ref.sourcetitle || itemCaptionText(entry.ref)]));
@@ -2352,6 +2352,14 @@
   // (Fotos + Leerrahmen), per Drag umsortierbar, plus - falls vorhanden -
   // schreibgeschützte Ansicht des Fadens der Lehrkraft.
   // ------------------------------------------------------------------
+  // Markiert ein Objekt (Foto oder Rahmen) als "aktiv" - wird in allen
+  // offenen Seitenleisten (Faden, Schichtung) UND direkt auf dem Board
+  // hervorgehoben (siehe renderArrange/renderLayerPanel/renderThreadList).
+  function selectItem(key) {
+    state.selectedItemKey = (state.selectedItemKey === key) ? null : key;
+    render();
+  }
+
   function ownThread() {
     for (var i = 0; i < state.threads.length; i++) { if (state.threads[i].isown) { return state.threads[i]; } }
     return null;
@@ -2390,7 +2398,13 @@
     }
     var dragFromIdx = null;
     thread.items.forEach(function (item, idx) {
-      var row = el('div', { class: 'ic-thread-item', draggable: editable ? 'true' : null });
+      var itemKey = item.itemtype === 'photo' ? 'photo:' + item.photoid
+        : item.itemtype === 'frame' ? 'frame:' + item.id : null;
+      var row = el('div', {
+        class: 'ic-thread-item' + (itemKey && state.selectedItemKey === itemKey ? ' selected' : ''),
+        draggable: editable ? 'true' : null
+      });
+      if (itemKey) { row.addEventListener('click', function () { selectItem(itemKey); }); }
       var photo = item.itemtype === 'photo'
         ? state.photos.filter(function (p) { return p.id === item.photoid; })[0] : null;
       if (photo) {
@@ -2401,7 +2415,8 @@
       row.appendChild(el('span', { class: 'ic-thread-item-label' }, [threadItemLabel(item)]));
       if (editable) {
         var rm = el('button', { class: 'ic-thread-remove', title: S.removefromthread }, ['\u2715']);
-        rm.addEventListener('click', function () {
+        rm.addEventListener('click', function (ev) {
+          ev.stopPropagation();
           callAjax('mod_pinnwand_remove_thread_item', { cmid: cfg.cmid, itemid: item.id }).then(function () {
             thread.items.splice(idx, 1);
             render();
@@ -2513,9 +2528,19 @@
         if (own) { own.color = color; own.linewidth = width; }
         callAjax('mod_pinnwand_set_thread_style', { cmid: cfg.cmid, color: color, linewidth: width });
       }
+      var styleDebounce = null;
+      function persistThreadStyleDebounced() {
+        if (styleDebounce) { clearTimeout(styleDebounce); }
+        styleDebounce = setTimeout(persistThreadStyle, 400);
+      }
+      colorInput.addEventListener('input', function () {
+        if (own) { own.color = colorInput.value; }
+        persistThreadStyleDebounced();
+      });
       colorInput.addEventListener('change', function () { persistThreadStyle(); render(); });
       widthInput.addEventListener('input', function () {
         if (own) { own.linewidth = parseFloat(widthInput.value); }
+        persistThreadStyleDebounced();
       });
       widthInput.addEventListener('change', function () { persistThreadStyle(); render(); });
       styleRow.appendChild(colorInput);
@@ -2587,10 +2612,20 @@
     applyBackground(bgLayer);
     var canvasEl = el('div', { class: 'ic-present-canvas' });
     // Hintergrund bewegt sich beim Zoom mit (Checkbox im Faden-Panel): Teil
-    // der gezoomten Leinwand, genau wie Fotos/Rahmen - Rahmen lassen sich
-    // dann nutzen, um auf Details des Hintergrundbilds hinzuweisen. Sonst
-    // (Standard) eine eigenständige, bildschirmfüllende Ebene dahinter.
-    if (thread.bgmoves) { canvasEl.appendChild(bgLayer); } else { stageEl.appendChild(bgLayer); }
+    // der gezoomten Leinwand, exakt 1000x1400 - dasselbe Koordinatensystem
+    // wie Fotos/Rahmen (siehe .ic-canvas-bg auf der echten Pinnwand) - so
+    // zeigen Rahmen zuverlässig auf dieselbe Stelle im Hintergrundbild wie
+    // beim Einrichten auf dem Board. Sonst (Standard) eine eigenständige,
+    // bildschirmfüllende Ebene dahinter - Maße explizit per JS gesetzt statt
+    // über eine CSS-Vererbungskette, um jede Mehrdeutigkeit auszuschließen.
+    if (thread.bgmoves) {
+      canvasEl.appendChild(bgLayer);
+    } else {
+      bgLayer.style.left = '0'; bgLayer.style.top = '0';
+      bgLayer.style.width = window.innerWidth + 'px';
+      bgLayer.style.height = window.innerHeight + 'px';
+      stageEl.appendChild(bgLayer);
+    }
     stageEl.appendChild(canvasEl);
     overlay.appendChild(stageEl);
 

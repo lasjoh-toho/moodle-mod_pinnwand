@@ -656,3 +656,43 @@ Faden-Stil-UI), `db/install.xml` + `upgrade.php`.
   jedem `add_thread_item`-Aufruf (Foto/Rahmen/Überblick hinzufügen)
   verloren, da der lokale Faden dabei komplett neu (ohne diese Felder)
   aufgebaut wurde - neue Hilfsfunktion `replaceOwnThread()` behält sie bei.
+
+---
+
+## Phase 16 — Koordinatensystem-Fix Hintergrund, Faden-Linie als Canvas2D, geräteübergreifende Auswahl ✅
+
+Neunter Feedback-Durchgang. Betrifft: `styles.css` (Hintergrund-
+Koordinatensystem), `js/app.js` (Faden-Linie, Präsentations-Hintergrund,
+Objekt-Auswahl).
+
+- [x] **Kern-Fix Hintergrund-Maßstab**: `.ic-canvas-bg` war bisher
+  viewport-relativ positioniert (`inset:0` + `min-width/height:1000/1400`),
+  wodurch das Hintergrundbild je nach Bildschirmgröße in einem ANDEREN
+  Maßstab erschien als die feste 1000x1400-Koordinatenfläche von Fotos
+  und Rahmen - dadurch zeigten Rahmen in der Präsentation nicht mehr auf
+  dieselbe Stelle im Bild wie beim Einrichten auf der Pinnwand. Jetzt fest
+  auf 1000x1400 - echter Teil desselben Koordinatensystems, wird über
+  dieselbe Zoom/Pan-Transformation mitbewegt. Der Präsentations-
+  Hintergrund (bei aktivierter "Hintergrund relativ"-Checkbox) war schon
+  vorher 1000x1400 - beide sind jetzt konsistent.
+- [x] Präsentations-Hintergrund (Standardfall, "Hintergrund relativ" AUS):
+  Maße werden jetzt explizit per JS aus der Fenstergröße gesetzt statt
+  über eine CSS-Vererbungskette, die zu klein/mehrdeutig auflösen konnte.
+- [x] **Faden-Linie von SVG auf Canvas2D umgestellt**: nachdem das
+  SVG-viewBox-Problem trotz vorherigem Fix weiter auftrat, wurde die
+  ganze Technik gewechselt - ein `<canvas>`-Element hat unmissverständliche
+  Pixel-Dimensionen (width/height als echte Element-Eigenschaften), ohne
+  jede Möglichkeit einer CSS-vs-Attribut-Mehrdeutigkeit wie bei SVG.
+- [x] Leerrahmen sind jetzt auch sichtbar und verschiebbar, wenn das
+  Schichtung-Tab (Layer) aktiv ist, nicht nur das Faden-Tab.
+- [x] **Geräteübergreifende Objekt-Auswahl**: Klick auf eine Zeile im
+  Schichtung- oder Faden-Panel markiert das Objekt (rote Umrandung +
+  Glow) direkt auf dem Board UND in allen offenen Seitenleisten - hilft,
+  ein bestimmtes (ggf. von anderen Objekten verdecktes) Foto/Rahmen
+  gezielt wiederzufinden.
+- [x] Farbwähler/Dicke-Regler für den Faden speichern jetzt zusätzlich
+  bei "input" (mit kurzem Debounce), falls "change" auf manchen
+  Browsern/Geräten für `input[type=color]` nicht zuverlässig feuert.
+- [x] Kürzere Beschriftungen: "Hintergrund relativ" statt "Hintergrund
+  bewegt sich beim Zoom mit", "+ Rahmen" statt "Leerrahmen zum Faden
+  hinzufügen", "+ Überblick" statt "Überblick einfügen".
