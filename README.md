@@ -536,13 +536,31 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Auswahl-Hervorhebung jetzt auch in der Objekt-Liste.
 - Rahmen direkt in der Schichtung-/Faden-Liste umbenennbar.
 
+### Zweiundzwanzigste Überarbeitung — Hintergrund-Anpassung, Präsentations-Politur, Stylus
+
+- Neue Abschneiden/Füllen-Wahl für den Hintergrund (ersetzt den "weichen
+  Rand" vollständig).
+- Größere Farbwähler-Buttons.
+- Post-Stream öffnet sich automatisch, wenn es Einreichungen gibt.
+- Letzter Slide + "Weiter" fliegt zur Übersicht und verlässt die
+  Präsentation danach automatisch.
+- Doppelklick im Layer-/Faden-Modus öffnet die Präsentation direkt an der
+  jeweiligen Station; einfacher Klick markiert.
+- Neue Instanzeinstellung für die Transparenz der Seitenleisten.
+- **Neues Stylus-Werkzeug**: Freihand-Anmerkungen direkt auf dem
+  Hintergrund, exakt auf dessen Koordinatensystem gemappt, eigener Button
+  unten links mit Farbe/Radierer/Dicke.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
 - Die Leinwand hat pro Board eine feste Größe (1000×1400px); ein Export als
   Bild/PDF ist nicht enthalten und wäre ein guter nächster Ausbauschritt.
 - Kamera-Zugriff per `getUserMedia` benötigt HTTPS; auf `http://`-Testinstanzen
-  greift automatisch der Datei-Upload-Fallback (`capture="environment"`).
+  greift automatisch der Datei-Upload-Fallback.
+- Der Stylus zeichnet auf einer Ebene unter den Fotos - auf Bereichen, die
+  von einem Foto überdeckt sind, lässt sich nicht direkt zeichnen (das Foto
+  bleibt dort vorrangig bedienbar).
 - Persönliche Hintergrundbilder werden beim Kurs-Restore ohne Nutzer-ID-
   Remapping wiederhergestellt (funktioniert nur korrekt, wenn Nutzer-IDs
   zwischen Quelle und Ziel gleich bleiben) - siehe `backup/moodle2/*`.

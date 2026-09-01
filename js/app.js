@@ -7,6 +7,11 @@
   var root = document.getElementById('pinnwand-app');
   if (!root) { return; }
 
+  // Deckkraft der Seitenleisten (Faden/Post-Stream/Schichtung) - konfigurierbar
+  // in den Aktivitätseinstellungen, per CSS-Variable an die Panels durchgereicht.
+  var sidebarOpacity = (typeof cfg.sidebaropacity === 'number') ? cfg.sidebaropacity : 92;
+  document.documentElement.style.setProperty('--ic-sidebar-opacity', Math.max(0, Math.min(100, sidebarOpacity)) / 100);
+
   // ------------------------------------------------------------------
   // Ajax-Hilfsfunktion (spricht direkt mit Moodles lib/ajax/service.php,
   // ohne RequireJS/AMD core/ajax – dadurch ist app.js ein simples
@@ -70,6 +75,11 @@
     canuselayers: false,    // darf das Schichtung-Panel nutzen (Instanzeinstellung)
     layerPanelOpen: false,
     selectedItemKey: null, // z.B. 'photo:123' oder 'frame:456' - für Hervorhebung in allen Leisten + auf dem Board
+    boardInkStrokes: [],   // Stylus: eigene Striche direkt auf dem Hintergrund des aktuellen Boards
+    boardInkBoard: null,   // zu welchem Board boardInkStrokes gerade gehört (löst Neuladen bei Board-Wechsel aus)
+    boardDrawColor: null,  // wird beim ersten Öffnen des Stylus-Panels auf INK_COLORS[0] gesetzt
+    boardDrawWidth: 0.01,
+    boardDrawErase: false,
     threadObjectFilter: 'all'
   };
 
@@ -1728,6 +1738,64 @@
     wrap.appendChild(panZoomLayer);
     body.appendChild(wrap);
 
+    // Stylus-Zeichenebene: exakt 1000x1400 wie der Hintergrund (siehe
+    // .ic-canvas-bg-image) - Striche liegen dadurch immer exakt an der
+    // richtigen Stelle über dem Hintergrundbild, unabhängig von Zoom/Board-
+    // Größe. Unterhalb der Fotos (damit diese weiterhin normal bedienbar
+    // bleiben), oberhalb des Hintergrunds.
+    if (state.boardInkBoard !== state.currentBoard) {
+      state.boardInkBoard = state.currentBoard;
+      state.boardInkStrokes = [];
+      callAjax('mod_pinnwand_get_board_ink', { cmid: cfg.cmid, boardid: state.currentBoard }).then(function (res) {
+        if (state.currentBoard !== state.boardInkBoard) { return; }
+        try { state.boardInkStrokes = JSON.parse(res.strokedata || '[]'); } catch (e) { state.boardInkStrokes = []; }
+        render();
+      });
+    }
+    var inkCanvas = el('canvas', { class: 'ic-board-ink-layer', width: '1000', height: '1400' });
+    canvas.appendChild(inkCanvas);
+    var inkCtx = inkCanvas.getContext('2d');
+    redrawInk(inkCanvas, inkCtx, state.boardInkStrokes || []);
+    if (state.boardDrawMode) {
+      inkCanvas.classList.add('active');
+      var curStroke = null;
+      function inkPoint(ev) {
+        var t = ev.touches ? ev.touches[0] : ev;
+        var r = inkCanvas.getBoundingClientRect();
+        return { x: (t.clientX - r.left) / r.width, y: (t.clientY - r.top) / r.height };
+      }
+      function inkDown(ev) {
+        ev.preventDefault();
+        curStroke = {
+          id: 's' + Date.now() + Math.random().toString(36).slice(2, 7),
+          points: [inkPoint(ev)],
+          color: state.boardDrawColor || INK_COLORS[0],
+          width: state.boardDrawWidth || 0.01,
+          erase: !!state.boardDrawErase
+        };
+        state.boardInkStrokes.push(curStroke);
+      }
+      function inkMove(ev) {
+        if (!curStroke) { return; }
+        ev.preventDefault();
+        curStroke.points.push(inkPoint(ev));
+        redrawInk(inkCanvas, inkCtx, state.boardInkStrokes);
+      }
+      function inkUp() {
+        if (!curStroke) { return; }
+        curStroke = null;
+        callAjax('mod_pinnwand_save_board_ink', {
+          cmid: cfg.cmid, boardid: state.currentBoard, strokes: JSON.stringify(state.boardInkStrokes)
+        });
+      }
+      inkCanvas.addEventListener('mousedown', inkDown);
+      inkCanvas.addEventListener('touchstart', inkDown, { passive: false });
+      inkCanvas.addEventListener('mousemove', inkMove);
+      inkCanvas.addEventListener('touchmove', inkMove, { passive: false });
+      window.addEventListener('mouseup', inkUp);
+      window.addEventListener('touchend', inkUp);
+    }
+
     function applyBoardTransform() {
       panZoomLayer.style.transform =
         'translate(' + state.boardPanX + 'px,' + state.boardPanY + 'px) scale(' + state.boardZoom + ')';
@@ -1847,9 +1915,19 @@
           // Fotos ändert - sonst "hinkt" die Linie der neuen Position
           // hinterher, bis irgendein anderer Grund einen Re-Render auslöst.
           if (state.threadPanelOpen) { render(); }
+        } else if (state.threadPanelOpen || state.layerPanelOpen) {
+          // Im Layer-/Faden-Modus: einfacher Klick markiert das Objekt statt
+          // die Galerie zu öffnen (siehe dblclick weiter unten für die
+          // Präsentations-Vorschau).
+          selectItem('photo:' + p.id);
         }
         else if (state.boardDrawMode) { openLightbox(state.photos.indexOf(p), true); }
         else { openLightbox(state.photos.indexOf(p)); }
+      });
+      item.addEventListener('dblclick', function (ev) {
+        if ((state.threadPanelOpen || state.layerPanelOpen) && openPresentationAtItem('photo', p.id)) {
+          ev.preventDefault();
+        }
       });
       makeResizable(resize, item, function (w) {
         p.canvasw = w;
@@ -1895,7 +1973,13 @@
           }
           makeMovable(frameEl, canvas, function (x, y) {
             it.framex = x; it.framey = y;
-          }, function (moved) { if (moved) { persistFrame(); render(); } });
+          }, function (moved) {
+            if (moved) { persistFrame(); render(); }
+            else { selectItem('frame:' + it.id); }
+          });
+          frameEl.addEventListener('dblclick', function (ev) {
+            if (openPresentationAtItem('frame', it.id)) { ev.preventDefault(); }
+          });
 
           var frameResize = el('div', { class: 'ic-resize' });
           frameEl.appendChild(frameResize);
@@ -2061,13 +2145,6 @@
     dataBtn.addEventListener('click', function () { state.showData = !state.showData; render(); });
     fabRow.appendChild(dataBtn);
 
-    // Zeichnen-Werkzeug direkt auf der Pinnwand: solange aktiv, öffnet ein
-    // Tippen auf ein Foto direkt den Zeichenmodus (statt der normalen
-    // Ansicht) - siehe openLightbox(index, startDrawing) weiter unten.
-    var drawBtn = el('button', { class: 'ic-fab' + (state.boardDrawMode ? ' active' : ''), title: S.drawonboard }, [icon('pen')]);
-    drawBtn.addEventListener('click', function () { state.boardDrawMode = !state.boardDrawMode; render(); });
-    fabRow.appendChild(drawBtn);
-
     // Seitenleisten-Buttons (Roter Faden / Post-Stream / Schichtung) in der
     // oberen rechten Ecke der Pinnwand - schließen sich gegenseitig, da sie
     // sich denselben rechten Rand teilen.
@@ -2097,6 +2174,35 @@
       sidebarBar.appendChild(layerBtn);
     }
     body.appendChild(sidebarBar);
+
+    // Stylus: eigener Button unten links, direkt mit den Annotationswerkzeugen
+    // verknüpft - zeichnet direkt auf den Hintergrund (genau auf dessen
+    // 1000x1400-Koordinatenfläche gemappt, siehe Zeichen-Ebene weiter unten),
+    // nicht an ein einzelnes Foto gebunden.
+    var stylusBar = el('div', { class: 'ic-stylus-bar' });
+    var stylusBtn = el('button', { class: 'ic-fab' + (state.boardDrawMode ? ' active' : ''), title: S.drawonboard }, [icon('pen')]);
+    stylusBtn.addEventListener('click', function () { state.boardDrawMode = !state.boardDrawMode; render(); });
+    stylusBar.appendChild(stylusBtn);
+    if (state.boardDrawMode) {
+      var stylusTools = el('div', { class: 'ic-stylus-tools' });
+      INK_COLORS.forEach(function (c) {
+        var sw = el('button', {
+          class: 'ic-color-swatch' + (state.boardDrawColor === c && !state.boardDrawErase ? ' active' : ''), style: 'background:' + c
+        });
+        sw.addEventListener('click', function () { state.boardDrawColor = c; state.boardDrawErase = false; render(); });
+        stylusTools.appendChild(sw);
+      });
+      var eraseBtn = el('button', { class: 'ic-icon-btn' + (state.boardDrawErase ? ' active' : ''), title: S.erase }, [icon('eraser')]);
+      eraseBtn.addEventListener('click', function () { state.boardDrawErase = !state.boardDrawErase; render(); });
+      stylusTools.appendChild(eraseBtn);
+      var sizeSlider = el('input', {
+        type: 'range', min: '0.004', max: '0.03', step: '0.002', value: String(state.boardDrawWidth || 0.01), class: 'ic-stylus-size'
+      });
+      sizeSlider.addEventListener('input', function () { state.boardDrawWidth = parseFloat(sizeSlider.value); });
+      stylusTools.appendChild(sizeSlider);
+      stylusBar.appendChild(stylusTools);
+    }
+    body.appendChild(stylusBar);
 
     var maxreached = state.maxpictures > 0 && state.photos.length >= state.maxpictures;
     var addBtn = el('button', { class: 'ic-fab ic-fab-primary', title: S.addphoto, disabled: maxreached ? 'disabled' : null }, ['+']);
@@ -2139,6 +2245,14 @@
   function loadStreamPhotos() {
     callAjax('mod_pinnwand_get_stream_photos', { cmid: cfg.cmid }).then(function (res) {
       state.streamPhotos = res.photos || [];
+      // Beim allerersten Laden: wenn es Einreichungen gibt, den Post-Stream
+      // gleich mit öffnen, statt dass sie unbemerkt bleiben.
+      if (!state._streamAutoOpenChecked) {
+        state._streamAutoOpenChecked = true;
+        if (state.streamPhotos.length > 0 && state.step === 'arrange' && !state.threadPanelOpen && !state.layerPanelOpen) {
+          state.streamPanelOpen = true;
+        }
+      }
       if (state.step === 'arrange' && state.streamPanelOpen) { render(); }
     }).catch(function () { /* Stream bleibt leer, Board funktioniert trotzdem */ });
     if (!streamPollTimer) {
@@ -2371,6 +2485,23 @@
   function selectItem(key) {
     state.selectedItemKey = (state.selectedItemKey === key) ? null : key;
     render();
+  }
+
+  // Öffnet die Präsentation direkt an der Station eines bestimmten Objekts
+  // (Doppelklick auf ein Foto/Rahmen im Layer- oder Faden-Modus) - nur
+  // möglich, wenn das Objekt tatsächlich Teil des eigenen Fadens ist.
+  function openPresentationAtItem(kind, id) {
+    var own = ownThread();
+    if (!own || !own.items.length) { return false; }
+    var idx = -1;
+    for (var i = 0; i < own.items.length; i++) {
+      var it = own.items[i];
+      if (kind === 'photo' && it.itemtype === 'photo' && it.photoid === id) { idx = i; break; }
+      if (kind === 'frame' && it.itemtype === 'frame' && it.id === id) { idx = i; break; }
+    }
+    if (idx === -1) { return false; }
+    openPresentation(own, idx);
+    return true;
   }
 
   function ownThread() {
@@ -2639,7 +2770,7 @@
     return panel;
   }
 
-  function openPresentation(thread) {
+  function openPresentation(thread, startIndex) {
     if (window.innerWidth < 900) { alert(S.present_smallscreen); return; }
     var overlay = el('div', { class: 'ic-present-overlay' });
     var stageEl = el('div', { class: 'ic-present-stage' });
@@ -2874,7 +3005,19 @@
     var prevBtn = el('button', { class: 'ic-btn ic-present-nav ic-present-prev' }, ['\u2039']);
     var nextBtn = el('button', { class: 'ic-btn ic-present-nav ic-present-next' }, ['\u203A']);
     prevBtn.addEventListener('click', function () { goToStep(currentIdx - 1); });
-    nextBtn.addEventListener('click', function () { goToStep(currentIdx + 1); });
+    nextBtn.addEventListener('click', function () {
+      if (currentIdx >= steps.length - 1) {
+        // Letzter Schritt: zur Board-Übersicht fliegen und danach die
+        // Präsentation automatisch verlassen, statt einfach stehenzubleiben.
+        var overviewTarget = { scale: Math.min(window.innerWidth / 1000, window.innerHeight / 1400), cx: 500, cy: 700, rot: 0 };
+        animateCamera(currentTransform, overviewTarget, function () {
+          setTimeout(function () { closeBtn.click(); }, 400);
+        });
+        currentTransform = overviewTarget;
+        return;
+      }
+      goToStep(currentIdx + 1);
+    });
     closeBtn.addEventListener('click', function () {
       document.removeEventListener('keydown', keyNav);
       if (cameraFrame) { cancelAnimationFrame(cameraFrame); }
@@ -2894,21 +3037,32 @@
     document.body.appendChild(overlay);
 
     if (steps.length > 0) {
-      // Beim Start zoomt die Kamera aus einer Übersicht in die erste
-      // Station hinein, statt sofort scharf gestellt zu erscheinen -
-      // dieselbe Flugbahn-Logik wie zwischen zwei Stationen.
-      currentIdx = 0;
-      var first = targetFor(steps[0]);
-      var overview = { scale: first.scale * 0.3, cx: first.cx, cy: first.cy, rot: first.rot };
-      applyTransform(overview.scale, overview.cx, overview.cy, overview.rot);
-      currentTransform = overview;
-      requestAnimationFrame(function () {
-        animateCamera(overview, first, function () {
+      var initialIdx = (typeof startIndex === 'number' && steps[startIndex]) ? startIndex : 0;
+      if (initialIdx > 0) {
+        // Direkt-Vorschau eines einzelnen Objekts (Doppelklick im Layer-/
+        // Faden-Modus) - sofort dorthin springen, kein Übersichts-Effekt.
+        currentIdx = initialIdx;
+        var direct = targetFor(steps[initialIdx]);
+        applyTransform(direct.scale, direct.cx, direct.cy, direct.rot);
+        currentTransform = direct;
+        updateOcclusion();
+      } else {
+        // Beim Start zoomt die Kamera aus einer Übersicht in die erste
+        // Station hinein, statt sofort scharf gestellt zu erscheinen -
+        // dieselbe Flugbahn-Logik wie zwischen zwei Stationen.
+        currentIdx = 0;
+        var first = targetFor(steps[0]);
+        var overview = { scale: first.scale * 0.3, cx: first.cx, cy: first.cy, rot: first.rot };
+        applyTransform(overview.scale, overview.cx, overview.cy, overview.rot);
+        currentTransform = overview;
+        requestAnimationFrame(function () {
+          animateCamera(overview, first, function () {
+            currentTransform = first;
+            updateOcclusion();
+          });
           currentTransform = first;
-          updateOcclusion();
         });
-        currentTransform = first;
-      });
+      }
     }
   }
 
@@ -3233,10 +3387,11 @@
     if ((bg.type === 'image' || bg.type === 'url' || bg.type === 'upload') && bg.url) {
       img.style.backgroundColor = bg.color || '#2b2d33';
       img.style.backgroundImage = "url('" + bg.url + "')";
-      // "contain" statt "cover": das Bild wird nie beschnitten, füllt die
-      // 1000x1400-Fläche so gut es geht - der Rest bleibt in der gewählten
-      // Farbe sichtbar.
-      img.style.backgroundSize = 'contain';
+      // "cover" (abschneiden): füllt die 1000x1400-Fläche komplett aus 100%
+      // Breite ODER 100% Höhe, die größere Seite wird beschnitten.
+      // "contain" (füllen, Standard): nie beschnitten, lässt ggf. einen
+      // Rand in der gewählten Farbe.
+      img.style.backgroundSize = bg.fit === 'cover' ? 'cover' : 'contain';
       img.style.backgroundRepeat = 'no-repeat';
       img.style.backgroundPosition = 'center';
     } else {
@@ -3255,18 +3410,19 @@
     function bgLayerEl() { return document.querySelector('.ic-canvas-bg'); }
     function currentBrightness() { return (state.background && state.background.brightness != null) ? state.background.brightness : 100; }
     function currentSaturation() { return (state.background && state.background.saturation != null) ? state.background.saturation : 100; }
+    function currentFit() { return (state.background && state.background.fit) || 'contain'; }
 
     var panel = el('div', { class: 'ic-bg-panel', id: 'ic-bg-panel' });
     panel.appendChild(el('label', {}, [S.bg_color]));
     var colorInput = el('input', { type: 'color', value: (state.background && state.background.color) || '#2b2d33' });
     colorInput.addEventListener('input', function () {
-      state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation() };
+      state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
       applyBackground(bgLayerEl());
     });
     colorInput.addEventListener('change', function () {
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: 'color', color: colorInput.value, photoid: 0,
-        brightness: currentBrightness(), saturation: currentSaturation()
+        brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
       }).then(function (res) { state.background = res.background; });
     });
     panel.appendChild(colorInput);
@@ -3277,11 +3433,11 @@
       state.photos.forEach(function (p) {
         var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' });
         t.addEventListener('click', function () {
-          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation() };
+          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
           applyBackground(bgLayerEl());
           callAjax('mod_pinnwand_save_background', {
             cmid: cfg.cmid, type: 'image', color: colorInput.value, photoid: p.id,
-            brightness: currentBrightness(), saturation: currentSaturation()
+            brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
           }).then(function (res) { state.background = res.background; });
         });
         row.appendChild(t);
@@ -3299,11 +3455,11 @@
     urlApply.addEventListener('click', function () {
       var url = urlInput.value.trim();
       if (!url) { return; }
-      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation() };
+      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
       applyBackground(bgLayerEl());
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: 'url', color: colorInput.value, photoid: 0, url: url,
-        brightness: currentBrightness(), saturation: currentSaturation()
+        brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
       }).then(function (res) { state.background = res.background; });
     });
     urlRow.appendChild(urlInput); urlRow.appendChild(urlApply);
@@ -3318,7 +3474,7 @@
       reader.onload = function () {
         callAjax('mod_pinnwand_save_background', {
           cmid: cfg.cmid, type: 'upload', color: colorInput.value, photoid: 0, url: '', imagedata: reader.result,
-          brightness: currentBrightness(), saturation: currentSaturation()
+          brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
         }).then(function (res) {
           state.background = res.background;
           applyBackground(bgLayerEl());
@@ -3337,7 +3493,7 @@
         cmid: cfg.cmid,
         type: state.background.type, color: state.background.color || '#2b2d33',
         photoid: 0, url: state.background.url || '',
-        brightness: currentBrightness(), saturation: currentSaturation()
+        brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
       }).then(function (res) { state.background = res.background; });
     }
     brightnessInput.addEventListener('input', function () {
@@ -3356,6 +3512,24 @@
     saturationInput.addEventListener('change', persistFilter);
     panel.appendChild(saturationInput);
 
+    // Abschneiden (cover) vs. Füllen (contain) - wie das Hintergrundbild
+    // die 1000x1400-Fläche ausfüllt, wenn sein Seitenverhältnis nicht
+    // exakt passt.
+    panel.appendChild(el('label', { style: 'margin-top:10px' }, [S.bg_fit]));
+    var fitRow = el('div', { class: 'ic-seg' });
+    [['contain', S.bg_fit_contain], ['cover', S.bg_fit_cover]].forEach(function (opt) {
+      var fitBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (currentFit() === opt[0] ? ' ic-btn-primary' : '') }, [opt[1]]);
+      fitBtn.addEventListener('click', function () {
+        state.background.fit = opt[0];
+        applyBackground(bgLayerEl());
+        persistFilter();
+        panel.remove();
+        openBackgroundPanel(body);
+      });
+      fitRow.appendChild(fitBtn);
+    });
+    panel.appendChild(fitRow);
+
     // Hintergrundbild auch aus den Uploads der Klasse wählbar - Berechtigung
     // wird server-seitig über dieselbe Regel wie die Klassenansicht geprüft
     // (mod/pinnwand:viewall oder studentclassview); ohne Berechtigung bleibt
@@ -3368,11 +3542,11 @@
       classPhotos.forEach(function (p) {
         var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' });
         t.addEventListener('click', function () {
-          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation() };
+          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
           applyBackground(bgLayerEl());
           callAjax('mod_pinnwand_save_background', {
             cmid: cfg.cmid, type: 'image', color: colorInput.value, photoid: p.id,
-            brightness: currentBrightness(), saturation: currentSaturation()
+            brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
           }).then(function (res2) { state.background = res2.background; });
         });
         classRow.appendChild(t);

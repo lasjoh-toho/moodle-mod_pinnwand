@@ -731,3 +731,43 @@ Occlusion-Bugfix, Auswahl-Hervorhebung, Rahmen-Umbenennung), `styles.css`
 - [x] **Rahmen umbenennbar**: neuer leichtgewichtiger Endpunkt
   `set_frame_label` - Beschriftung direkt in der Schichtung- und
   Faden-Reihenfolge-Liste per Klick bearbeitbar (contenteditable).
+
+---
+
+## Phase 18 — Hintergrund-Abschneiden/Füllen, Präsentations-Politur, Sidebar-Transparenz, Stylus ✅
+
+Elfter Feedback-Durchgang. Betrifft: `classes/external.php` (fit-Parameter,
+neue Tabelle+Endpunkte für Stylus), `js/app.js` (Präsentations-Navigation,
+Stylus-Zeichenebene), `mod_form.php`/`view.php` (sidebaropacity),
+`db/install.xml`+`upgrade.php`.
+
+- [x] **Abschneiden/Füllen-Wahl für den Hintergrund**: neuer `fit`-
+  Parameter (`cover`=abschneiden/`contain`=füllen) mit Radio-Buttons im
+  Settings-Panel - ersetzt den entfernten "weichen Rand" vollständig
+  (auch serverseitig bereinigt).
+- [x] Größere Farbwähler-Buttons (32→44px).
+- [x] Post-Stream-Panel öffnet sich beim ersten Laden automatisch, wenn es
+  Einreichungen gibt.
+- [x] Letzter Slide + "Weiter": Kamera fliegt zur Board-Übersicht und
+  verlässt die Präsentation danach automatisch.
+- [x] Doppelklick im Layer-/Faden-Modus öffnet die Präsentation direkt an
+  der jeweiligen Station (statt der Galerie) - für Fotos und Rahmen;
+  einfacher Klick markiert stattdessen (`openPresentation` unterstützt
+  jetzt einen optionalen Start-Index für diese Direkt-Vorschau).
+- [x] **Sidebar-Transparenz konfigurierbar**: neue Instanzeinstellung
+  `sidebaropacity` (Standard 92%), über eine CSS-Variable an alle
+  Seitenleisten-Panels durchgereicht.
+- [x] **Stylus-Werkzeug**: eigener Button unten links (aus der unteren
+  Fab-Reihe herausgelöst), direkt mit den Annotationswerkzeugen verknüpft
+  (Farbpalette, Radierer, Dicke). Zeichnet auf einer eigenen, exakt
+  1000x1400 großen Ebene - dasselbe Koordinatensystem wie der Hintergrund,
+  bleibt dadurch bei jedem Zoom/jeder Bildschirmgröße exakt an der
+  richtigen Stelle. Striche werden vektoriell gespeichert (neue Tabelle
+  `pinnwand_board_ink`, ein Datensatz je Person+Board) und wiederverwenden
+  dieselbe Bereinigungslogik wie Foto-Annotationen (`clean_strokes()`,
+  aus `save_annotation` extrahiert).
+
+**Noch offen:** Der gemeldete Bug "aus dem Post-Stream angepinnte Objekte
+erst nach Reload bewegbar" konnte trotz gründlicher Code-Durchsicht nicht
+reproduziert/lokalisiert werden - der bestehende Code (`placeStreamPhoto`,
+`refreshPhotos`) sieht korrekt aus. Braucht genauere Reproduktionsschritte.

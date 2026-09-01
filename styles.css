@@ -242,6 +242,19 @@
   position: absolute; bottom: 14px; right: 8px; z-index: 30;
   display: flex; flex-direction: row; gap: 6px;
 }
+.ic-stylus-bar {
+  position: absolute; bottom: 14px; left: 8px; z-index: 30;
+  display: flex; align-items: center; gap: 8px;
+}
+.ic-stylus-tools {
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 20px;
+  background: rgba(20,21,24,.75); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.ic-stylus-size { width: 70px; }
+.ic-board-ink-layer {
+  position: absolute; left: 0; top: 0; width: 1000px; height: 1400px; pointer-events: none;
+}
+.ic-board-ink-layer.active { pointer-events: auto; touch-action: none; cursor: crosshair; }
 .ic-board-bar {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 15;
   display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 20px;
@@ -268,7 +281,7 @@
 }
 .ic-thread-panel {
   position: absolute; top: 48px; right: 0; bottom: 0; width: 260px; max-width: 80vw; z-index: 25;
-  background: rgba(20,21,24,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  background: rgba(20,21,24,var(--ic-sidebar-opacity,.92)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   padding: 12px; overflow-y: auto; box-shadow: -4px 0 16px rgba(0,0,0,.4);
 }
 .ic-thread-panel-title { font-size: .85rem; font-weight: 600; margin: 4px 0 8px; color: var(--ic-text); }
@@ -308,7 +321,7 @@
 /* Post-Stream */
 .ic-stream-panel {
   position: absolute; top: 48px; right: 0; bottom: 0; max-width: 80vw; z-index: 25;
-  background: rgba(20,21,24,.92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  background: rgba(20,21,24,var(--ic-sidebar-opacity,.92)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   padding: 10px 10px 10px 16px; box-shadow: -4px 0 16px rgba(0,0,0,.4);
   display: flex; flex-direction: column;
 }
@@ -425,7 +438,7 @@
 }
 .ic-color-swatch.active { border-color: var(--ic-accent); }
 .ic-textframe-custom-color {
-  width: 32px; height: 32px; border: none; border-radius: 50%; background: transparent; padding: 0;
+  width: 44px; height: 44px; border: none; border-radius: 50%; background: transparent; padding: 0;
   -webkit-appearance: none; -moz-appearance: none; appearance: none; overflow: hidden; cursor: pointer;
 }
 .ic-textframe-custom-color::-webkit-color-swatch-wrapper { padding: 0; }

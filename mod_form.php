@@ -55,6 +55,11 @@ class mod_pinnwand_mod_form extends moodleform_mod {
         $mform->setDefault('boardpannable', 0);
         $mform->addHelpButton('boardpannable', 'boardpannable', 'pinnwand');
 
+        $mform->addElement('text', 'sidebaropacity', get_string('sidebaropacity', 'pinnwand'), ['size' => 4]);
+        $mform->setType('sidebaropacity', PARAM_INT);
+        $mform->setDefault('sidebaropacity', 92);
+        $mform->addHelpButton('sidebaropacity', 'sidebaropacity', 'pinnwand');
+
         $mform->addElement('advcheckbox', 'studentthreads', get_string('studentthreads', 'pinnwand'));
         $mform->setDefault('studentthreads', 0);
         $mform->addHelpButton('studentthreads', 'studentthreads', 'pinnwand');
@@ -75,6 +80,9 @@ class mod_pinnwand_mod_form extends moodleform_mod {
         $errors = parent::validation($data, $files);
         if (isset($data['maxpictures']) && $data['maxpictures'] < 0) {
             $errors['maxpictures'] = get_string('err_maxpictures', 'pinnwand');
+        }
+        if (isset($data['sidebaropacity']) && ($data['sidebaropacity'] < 0 || $data['sidebaropacity'] > 100)) {
+            $errors['sidebaropacity'] = get_string('err_sidebaropacity', 'pinnwand');
         }
         return $errors;
     }

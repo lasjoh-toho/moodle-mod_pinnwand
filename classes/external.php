@@ -228,7 +228,7 @@ class mod_pinnwand_external extends external_api {
 
     protected static function get_background_data($instance, $context) {
         global $USER;
-        $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'softedge' => false];
+        $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'fit' => 'contain'];
         $raw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
         if (!$raw) {
             return $default;
@@ -243,7 +243,8 @@ class mod_pinnwand_external extends external_api {
         $bg['color'] = clean_param($decoded['color'] ?? $default['color'], PARAM_TEXT);
         $bg['brightness'] = max(20, min(180, (int) ($decoded['brightness'] ?? 100)));
         $bg['saturation'] = max(0, min(200, (int) ($decoded['saturation'] ?? 100)));
-        $bg['softedge'] = !empty($decoded['softedge']);
+        $fitval = $decoded['fit'] ?? 'contain';
+        $bg['fit'] = in_array($fitval, ['cover', 'contain'], true) ? $fitval : 'contain';
         if ($bg['type'] === 'image' && !empty($decoded['photoid'])) {
             global $DB;
             // Eigene Fotos immer erlaubt; fremde Fotos (aus den Uploads der
@@ -302,7 +303,7 @@ class mod_pinnwand_external extends external_api {
                 'url' => new external_value(PARAM_RAW, 'Hintergrundbild-URL', VALUE_DEFAULT, null, NULL_ALLOWED),
                 'brightness' => new external_value(PARAM_INT, 'Helligkeit in %'),
                 'saturation' => new external_value(PARAM_INT, 'Sättigung in %'),
-                'softedge' => new external_value(PARAM_BOOL, 'Weicher Rand (Vignette)'),
+                'fit' => new external_value(PARAM_ALPHA, 'contain oder cover'),
             ]),
             'photos' => new external_multiple_structure(new external_single_structure([
                 'id' => new external_value(PARAM_INT, 'ID'),
@@ -354,25 +355,12 @@ class mod_pinnwand_external extends external_api {
      * bleiben löschbar, und dieselben Daten reichen für Galerie- UND
      * Anordnungs-Ansicht.
      */
-    public static function save_annotation($cmid, $photoid, $strokes) {
-        global $DB, $USER;
-        $params = self::validate_parameters(self::save_annotation_parameters(), [
-            'cmid' => $cmid, 'photoid' => $photoid, 'strokes' => $strokes,
-        ]);
-        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
-
-        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
-        if ($photo->userid != $USER->id || $photo->pinnwandid != $instance->id) {
-            throw new moodle_exception('nopermissions', 'error', '', 'save_annotation');
-        }
-
-        $decoded = json_decode($params['strokes'], true);
-        if (!is_array($decoded)) {
-            throw new moodle_exception('error_save', 'pinnwand');
-        }
-        // Grobe Validierung/Bereinigung - nur erwartete Felder, harte Obergrenzen
-        // gegen übermäßig große Payloads. Zwei Elementtypen: Freihand-Striche
-        // (mit "points") und Text-Elemente (type "text", mit x/y/text).
+    /**
+     * Bereinigt/validiert eine rohe Strichdaten-Liste (JSON-dekodiert) -
+     * gemeinsam für Foto-Annotationen UND Board-weite Stylus-Anmerkungen
+     * genutzt (siehe save_annotation/save_board_ink).
+     */
+    protected static function clean_strokes($decoded) {
         $clean = [];
         foreach (array_slice($decoded, 0, 500) as $stroke) {
             if (!is_array($stroke)) {
@@ -419,8 +407,26 @@ class mod_pinnwand_external extends external_api {
                 'erase' => !empty($stroke['erase']),
             ];
         }
+        return $clean;
+    }
 
-        $photo->annotationdata = json_encode($clean);
+    public static function save_annotation($cmid, $photoid, $strokes) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::save_annotation_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'strokes' => $strokes,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->userid != $USER->id || $photo->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'save_annotation');
+        }
+
+        $decoded = json_decode($params['strokes'], true);
+        if (!is_array($decoded)) {
+            throw new moodle_exception('error_save', 'pinnwand');
+        }
+        $photo->annotationdata = json_encode(self::clean_strokes($decoded));
         $DB->update_record('pinnwand_photos', $photo);
 
         return ['success' => true, 'annotationdata' => $photo->annotationdata];
@@ -430,6 +436,77 @@ class mod_pinnwand_external extends external_api {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'OK'),
             'annotationdata' => new external_value(PARAM_RAW, 'Gespeicherte, bereinigte Strichdaten (JSON)'),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // Stylus-Werkzeug: Freihand-Anmerkungen direkt auf dem Board-Hintergrund
+    // (nicht an ein einzelnes Foto gebunden) - ein Datensatz je Person+Board.
+    // ---------------------------------------------------------------
+    public static function get_board_ink_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'boardid' => new external_value(PARAM_INT, 'Board-ID', VALUE_DEFAULT, 0),
+        ]);
+    }
+
+    public static function get_board_ink($cmid, $boardid = 0) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::get_board_ink_parameters(), ['cmid' => $cmid, 'boardid' => $boardid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+
+        $row = $DB->get_record('pinnwand_board_ink', [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $params['boardid'],
+        ]);
+        return ['strokedata' => $row ? (string) $row->strokedata : '[]'];
+    }
+
+    public static function get_board_ink_returns() {
+        return new external_single_structure(['strokedata' => new external_value(PARAM_RAW, 'JSON-Array der Striche')]);
+    }
+
+    public static function save_board_ink_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'boardid' => new external_value(PARAM_INT, 'Board-ID', VALUE_DEFAULT, 0),
+            'strokes' => new external_value(PARAM_RAW, 'JSON-Array der Striche'),
+        ]);
+    }
+
+    public static function save_board_ink($cmid, $boardid, $strokes) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::save_board_ink_parameters(), [
+            'cmid' => $cmid, 'boardid' => $boardid, 'strokes' => $strokes,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $decoded = json_decode($params['strokes'], true);
+        if (!is_array($decoded)) {
+            throw new moodle_exception('error_save', 'pinnwand');
+        }
+        $clean = json_encode(self::clean_strokes($decoded));
+
+        $row = $DB->get_record('pinnwand_board_ink', [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $params['boardid'],
+        ]);
+        if ($row) {
+            $row->strokedata = $clean;
+            $row->timemodified = time();
+            $DB->update_record('pinnwand_board_ink', $row);
+        } else {
+            $DB->insert_record('pinnwand_board_ink', (object) [
+                'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $params['boardid'],
+                'strokedata' => $clean, 'timecreated' => time(), 'timemodified' => time(),
+            ]);
+        }
+
+        return ['success' => true, 'strokedata' => $clean];
+    }
+
+    public static function save_board_ink_returns() {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'OK'),
+            'strokedata' => new external_value(PARAM_RAW, 'Gespeicherte, bereinigte Strichdaten (JSON)'),
         ]);
     }
 
@@ -447,15 +524,15 @@ class mod_pinnwand_external extends external_api {
             'imagedata' => new external_value(PARAM_RAW, 'Data-URL (base64) für hochgeladenes Hintergrundbild', VALUE_DEFAULT, ''),
             'brightness' => new external_value(PARAM_INT, 'Helligkeit in % (20-180)', VALUE_DEFAULT, 100),
             'saturation' => new external_value(PARAM_INT, 'Sättigung in % (0-200)', VALUE_DEFAULT, 100),
-            'softedge' => new external_value(PARAM_BOOL, 'Weicher Rand (Vignette)', VALUE_DEFAULT, false),
+            'fit' => new external_value(PARAM_ALPHA, 'contain (füllen, mit Rand) oder cover (abschneiden)', VALUE_DEFAULT, 'contain'),
         ]);
     }
 
-    public static function save_background($cmid, $type, $color, $photoid, $url, $imagedata, $brightness, $saturation, $softedge = false) {
+    public static function save_background($cmid, $type, $color, $photoid, $url, $imagedata, $brightness, $saturation, $fit = 'contain') {
         global $USER, $DB;
         $params = self::validate_parameters(self::save_background_parameters(), [
             'cmid' => $cmid, 'type' => $type, 'color' => $color, 'photoid' => $photoid, 'url' => $url,
-            'imagedata' => $imagedata, 'brightness' => $brightness, 'saturation' => $saturation, 'softedge' => $softedge,
+            'imagedata' => $imagedata, 'brightness' => $brightness, 'saturation' => $saturation, 'fit' => $fit,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
 
@@ -502,7 +579,7 @@ class mod_pinnwand_external extends external_api {
             'url' => clean_param($params['url'], PARAM_URL),
             'brightness' => max(20, min(180, (int) $params['brightness'])),
             'saturation' => max(0, min(200, (int) $params['saturation'])),
-            'softedge' => (bool) $params['softedge'],
+            'fit' => in_array($params['fit'], ['cover', 'contain'], true) ? $params['fit'] : 'contain',
         ];
         set_user_preference('mod_pinnwand_bg_' . $instance->id, json_encode($payload), $USER->id);
 
@@ -517,7 +594,7 @@ class mod_pinnwand_external extends external_api {
                 'url' => new external_value(PARAM_RAW, 'Hintergrundbild-URL', VALUE_DEFAULT, null, NULL_ALLOWED),
                 'brightness' => new external_value(PARAM_INT, 'Helligkeit in %'),
                 'saturation' => new external_value(PARAM_INT, 'Sättigung in %'),
-                'softedge' => new external_value(PARAM_BOOL, 'Weicher Rand (Vignette)'),
+                'fit' => new external_value(PARAM_ALPHA, 'contain oder cover'),
             ]),
         ]);
     }

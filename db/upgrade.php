@@ -280,5 +280,36 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083015, 'pinnwand');
     }
 
+    if ($oldversion < 2026083018) {
+        // Feedback-Durchgang: Deckkraft der Seitenleisten-Hintergründe
+        // als Instanzeinstellung konfigurierbar.
+        $table = new xmldb_table('pinnwand');
+        $field = new xmldb_field('sidebaropacity', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '92', 'boardpannable');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026083018, 'pinnwand');
+    }
+
+    if ($oldversion < 2026083019) {
+        // Feedback-Durchgang: Stylus-Werkzeug - Freihand-Anmerkungen direkt
+        // auf dem Board-Hintergrund.
+        $table = new xmldb_table('pinnwand_board_ink');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('pinnwandid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('boardid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('strokedata', XMLDB_TYPE_TEXT, null, null, null, null, null);
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('pinnwandid', XMLDB_KEY_FOREIGN, ['pinnwandid'], 'pinnwand', ['id']);
+            $table->add_index('userboard', XMLDB_INDEX_UNIQUE, ['pinnwandid', 'userid', 'boardid']);
+            $dbman->create_table($table);
+        }
+        upgrade_mod_savepoint(true, 2026083019, 'pinnwand');
+    }
+
     return true;
 }

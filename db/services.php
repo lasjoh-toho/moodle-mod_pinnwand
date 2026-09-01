@@ -58,6 +58,22 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:submit',
     ],
+    'mod_pinnwand_get_board_ink' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'get_board_ink',
+        'description' => 'Lädt die eigenen Stylus-Anmerkungen direkt auf dem Board-Hintergrund',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:view',
+    ],
+    'mod_pinnwand_save_board_ink' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'save_board_ink',
+        'description' => 'Speichert Stylus-Anmerkungen direkt auf dem Board-Hintergrund',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:submit',
+    ],
     'mod_pinnwand_save_background' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'save_background',
