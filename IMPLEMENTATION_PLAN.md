@@ -771,3 +771,27 @@ Stylus-Zeichenebene), `mod_form.php`/`view.php` (sidebaropacity),
 erst nach Reload bewegbar" konnte trotz gründlicher Code-Durchsicht nicht
 reproduziert/lokalisiert werden - der bestehende Code (`placeStreamPhoto`,
 `refreshPhotos`) sieht korrekt aus. Braucht genauere Reproduktionsschritte.
+
+---
+
+## Phase 19 — Echter Hintergrund-Bug gefunden (Zoom-Verschachtelung), Post-Stream-Platzierungs-Bug ✅
+
+Zwölfter Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Kern-Bug endlich gefunden**: die Hintergrund-"Tapete" (`.ic-canvas-bg`)
+  lag als Kind der gezoomten `.ic-canvas-panzoom`-Ebene. Da diese Ebene
+  bei jedem Zoom ≠ 1 (dem Normalfall - die Pinnwand passt selten exakt
+  in den sichtbaren Bereich) eine `scale()`-Transformation bekommt, wurde
+  die Tapete MIT skaliert und füllte dadurch nur einen Teil des Fensters
+  ("klebte an einer zu kleinen Fläche"). Fix: neue eigenständige
+  `.ic-canvas-wallpaper`-Ebene AUSSERHALB der gezoomten Ebene (füllt immer
+  den kompletten sichtbaren Bereich, unabhängig vom Zoom) - nur das
+  koordinatengebundene 1000x1400-Bild-Element bleibt innerhalb der
+  Zoom-Ebene (soll ja mitgezoomt werden, das ist gewollt).
+- [x] **Bugfix Post-Stream-Platzierung gefunden**: die "Mitte" für neu
+  platzierte Fotos (PIN-Icon/Kartenklick) wurde über die volle
+  Wrap-Breite berechnet, ohne die vom Post-Stream selbst rechts belegte
+  Fläche abzuziehen - das Foto landete dadurch teils unsichtbar/
+  unklickbar HINTER der eigenen Seitenleiste und ließ sich erst nach
+  deren Schließen (praktisch: nach Reload) bewegen. Jetzt bezieht sich
+  "Mitte" auf den vom Post-Stream freien Bereich.

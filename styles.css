@@ -199,6 +199,11 @@
 .ic-canvas-wrap.pan-active { cursor: grab; }
 .ic-canvas-wrap.pan-active:active { cursor: grabbing; }
 .ic-canvas-panzoom { transform-origin: 0 0; will-change: transform; }
+.ic-canvas-wallpaper {
+  /* Füllt IMMER den ganzen sichtbaren Bereich, unabhängig vom Board-Zoom -
+     liegt bewusst AUSSERHALB von .ic-canvas-panzoom (siehe renderArrange). */
+  position: absolute; inset: 0; z-index: 0;
+}
 .ic-canvas-bg {
   /* Äußeres Element: bildschirmfüllende Tapete (reine Farbe) - inset:0 +
      min-width/-height deckt immer mindestens die Board-Koordinatenfläche

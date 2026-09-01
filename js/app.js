@@ -1729,10 +1729,17 @@
 
   function renderArrange(body) {
     var wrap = el('div', { class: 'ic-canvas-wrap' + (cfg.boardpannable ? ' pannable' : '') });
+    // Tapete: AUSSERHALB der gezoomten .ic-canvas-panzoom-Ebene, sonst würde
+    // sie mit skaliert und bei einem Zoom < 1 (typischer Fall) nur einen Teil
+    // des Fensters füllen. Füllt dadurch immer den kompletten sichtbaren
+    // Bereich, unabhängig vom Board-Zoom.
+    var wallpaper = el('div', { class: 'ic-canvas-wallpaper' });
+    wrap.appendChild(wallpaper);
     var panZoomLayer = el('div', { class: 'ic-canvas-panzoom' });
     var bgLayer = el('div', { class: 'ic-canvas-bg' });
     panZoomLayer.appendChild(bgLayer);
     applyBackground(bgLayer);
+    applyWallpaperColor(wallpaper);
     var canvas = el('div', { class: 'ic-arrange-canvas' });
     panZoomLayer.appendChild(canvas);
     wrap.appendChild(panZoomLayer);
@@ -2332,8 +2339,12 @@
         function centerPoint() {
           var wrapEl = document.querySelector('.ic-canvas-wrap');
           var rect = wrapEl ? wrapEl.getBoundingClientRect() : { width: 400, height: 400 };
+          // Der Post-Stream selbst deckt einen Teil rechts ab - "Mitte" auf
+          // den davon freien Bereich beziehen, sonst landet das Foto hinter
+          // der eigenen Leiste (unsichtbar/unklickbar, bis sie geschlossen wird).
+          var usableWidth = Math.max(100, rect.width - (state.streamWidth || 0));
           return {
-            x: (rect.width / 2 - state.boardPanX) / (state.boardZoom || 1) - 100,
+            x: (usableWidth / 2 - state.boardPanX) / (state.boardZoom || 1) - 100,
             y: (rect.height / 2 - state.boardPanY) / (state.boardZoom || 1) - 100
           };
         }
@@ -3366,6 +3377,15 @@
   // ------------------------------------------------------------------
   // Hintergrund der Anordnungs-Leinwand: Farbe (Standard dunkelgrau) oder
   // eines der eigenen Fotos als Bild. Pro Nutzer*in/Aktivität gespeichert.
+  // Setzt nur die Farbfläche der (unskalierten) Tapete außerhalb der
+  // Zoom-Ebene - siehe renderArrange, Bugfix: die Tapete lag vorher
+  // fälschlich innerhalb der gezoomten Ebene und wurde bei Zoom < 1
+  // (Normalfall) kleiner als das Fenster dargestellt.
+  function applyWallpaperColor(wallpaperEl) {
+    var bg = state.background || { type: 'color', color: '#2b2d33' };
+    wallpaperEl.style.backgroundColor = bg.color || '#2b2d33';
+  }
+
   // ------------------------------------------------------------------
   function applyBackground(bgEl) {
     var bg = state.background || { type: 'color', color: '#2b2d33' };
@@ -3407,7 +3427,11 @@
     var existing = document.getElementById('ic-bg-panel');
     if (existing) { existing.remove(); return; }
 
-    function bgLayerEl() { return document.querySelector('.ic-canvas-bg'); }
+    function bgLayerEl() {
+      var wallpaperEl = document.querySelector('.ic-canvas-wallpaper');
+      if (wallpaperEl) { applyWallpaperColor(wallpaperEl); }
+      return document.querySelector('.ic-canvas-bg');
+    }
     function currentBrightness() { return (state.background && state.background.brightness != null) ? state.background.brightness : 100; }
     function currentSaturation() { return (state.background && state.background.saturation != null) ? state.background.saturation : 100; }
     function currentFit() { return (state.background && state.background.fit) || 'contain'; }

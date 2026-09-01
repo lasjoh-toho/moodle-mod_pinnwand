@@ -551,6 +551,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Hintergrund, exakt auf dessen Koordinatensystem gemappt, eigener Button
   unten links mit Farbe/Radierer/Dicke.
 
+### Dreiundzwanzigste Überarbeitung — echte Ursache des Hintergrund-Bugs gefunden
+
+- **Kern-Bug endlich gefunden**: die Hintergrund-Tapete lag als Kind der
+  gezoomten Board-Ebene und wurde bei jedem Zoom ≠ 1 (Normalfall)
+  mitskaliert - dadurch füllte sie nur einen Teil des Fensters. Jetzt eine
+  eigenständige, unskalierte Ebene außerhalb der Zoom-Transformation.
+- **Bugfix gefunden**: neu aus dem Post-Stream platzierte Fotos landeten
+  bei der "Mitte"-Berechnung teils hinter der Post-Stream-Leiste selbst
+  (unklickbar, bis sie geschlossen wurde) - behoben.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
