@@ -520,6 +520,22 @@ Details und Scoping-Entscheidungen. In Kurzform:
   gegen unzuverlässiges "change" bei `input[type=color]`.
 - Kürzere Beschriftungen ("Hintergrund relativ", "+ Rahmen", "+ Überblick").
 
+### Einundzwanzigste Überarbeitung — Hintergrund-Regression behoben, Occlusion-Bugfix, Rahmen umbenennbar
+
+- **Regression aus der vorigen Überarbeitung behoben**: das Hintergrundbild
+  war auf breiten Bildschirmen links abgeschnitten. Neue Struktur: äußere
+  bildschirmfüllende Tapete + inneres, fest 1000x1400 großes Bild-Element -
+  beides gleichzeitig.
+- **Bugfix Präsentation**: Rahmen blendeten beim Zoomen fälschlich Fotos
+  dahinter aus (fehlende Z-Eigenschaft) - Rahmen blenden jetzt nie mehr
+  etwas aus.
+- Weicher Rand entfernt.
+- Bugfix Farbwähler: native Farbfelder füllten ihre Box nicht vollständig
+  aus (nur ein schmaler Streifen sichtbar) - behoben.
+- Settings-Panel jetzt über der Button-Reihe zentriert.
+- Auswahl-Hervorhebung jetzt auch in der Objekt-Liste.
+- Rahmen direkt in der Schichtung-/Faden-Liste umbenennbar.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -1259,6 +1259,38 @@ class mod_pinnwand_external extends external_api {
         return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
     }
 
+    public static function set_frame_label_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'itemid' => new external_value(PARAM_INT, 'Item-ID (Leerrahmen)'),
+            'framelabel' => new external_value(PARAM_TEXT, 'Beschriftung'),
+        ]);
+    }
+
+    /** Benennt einen Leerrahmen um - eigener leichtgewichtiger Endpunkt, damit
+     * dafür nicht die komplette Geometrie erneut mitgeschickt werden muss. */
+    public static function set_frame_label($cmid, $itemid, $framelabel) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_frame_label_parameters(), [
+            'cmid' => $cmid, 'itemid' => $itemid, 'framelabel' => $framelabel,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $item = $DB->get_record('pinnwand_thread_items', ['id' => $params['itemid'], 'itemtype' => 'frame'], '*', MUST_EXIST);
+        $thread = $DB->get_record('pinnwand_threads', ['id' => $item->threadid], '*', MUST_EXIST);
+        if ($thread->userid != $USER->id || $thread->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'set_frame_label');
+        }
+        $item->framelabel = clean_param($params['framelabel'], PARAM_TEXT);
+        $DB->update_record('pinnwand_thread_items', $item);
+
+        return ['success' => true];
+    }
+
+    public static function set_frame_label_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
     public static function delete_thread_parameters() {
         return new external_function_parameters(['cmid' => new external_value(PARAM_INT, 'Course module id')]);
     }

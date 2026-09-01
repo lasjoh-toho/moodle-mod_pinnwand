@@ -696,3 +696,38 @@ Objekt-Auswahl).
 - [x] Kürzere Beschriftungen: "Hintergrund relativ" statt "Hintergrund
   bewegt sich beim Zoom mit", "+ Rahmen" statt "Leerrahmen zum Faden
   hinzufügen", "+ Überblick" statt "Überblick einfügen".
+
+---
+
+## Phase 17 — Hintergrund-Regression behoben, Präsentations-Occlusion-Bugfix, Rahmen umbenennbar ✅
+
+Zehnter Feedback-Durchgang. Betrifft: `js/app.js` (Hintergrund-Struktur,
+Occlusion-Bugfix, Auswahl-Hervorhebung, Rahmen-Umbenennung), `styles.css`
+(Farbwähler-Rendering, Settings-Panel-Position), `classes/external.php`
+(neuer Endpunkt `set_frame_label`).
+
+- [x] **Regression aus Phase 16 behoben**: die Änderung auf feste
+  1000x1400-Größe hatte das Hintergrundbild auf Bildschirmen, die breiter
+  als 1000px sind, buchstäblich links "abgeschnitten" (die restliche
+  Fläche blieb leer). Neue Struktur: äußeres Element bleibt
+  bildschirmfüllende Tapete (reine Farbe), ein neues inneres
+  `.ic-canvas-bg-image`-Element (fest 1000x1400) trägt das eigentliche
+  Bild - dadurch gleichzeitig bildschirmfüllend UND exakt auf die
+  Board-Koordinaten gemappt.
+- [x] **Bugfix Präsentations-Occlusion**: Rahmen-Stationen hatten keine
+  `z`-Eigenschaft, wodurch beim Zoomen auf einen Rahmen fälschlich alle
+  Fotos mit z>0 dahinter ausgeblendet wurden. Occlusion wird jetzt nur
+  noch angewendet, wenn die aktive Station tatsächlich ein Foto ist -
+  Rahmen (und "Überblick") blenden nie mehr etwas aus.
+- [x] Weicher Rand (Vignette) komplett entfernt.
+- [x] **Bugfix Farbwähler**: `input[type=color]` ohne `appearance:none` und
+  Styling der internen Swatch-Pseudo-Elemente füllte die Box nicht
+  vollständig (nur ein schmaler Streifen sichtbar) - behoben für Faden-
+  Farbe und Hintergrund-Farbe.
+- [x] Settings-Panel (Hintergrund-Einstellungen) jetzt horizontal über der
+  Button-Reihe zentriert statt kantenbündig/rechts verankert.
+- [x] Auswahl-Hervorhebung jetzt auch in der "nicht in Präsentation"-Liste
+  (vorher nur Schichtung + Faden-Reihenfolge-Liste).
+- [x] **Rahmen umbenennbar**: neuer leichtgewichtiger Endpunkt
+  `set_frame_label` - Beschriftung direkt in der Schichtung- und
+  Faden-Reihenfolge-Liste per Klick bearbeitbar (contenteditable).

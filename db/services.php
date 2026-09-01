@@ -138,6 +138,14 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:submit',
     ],
+    'mod_pinnwand_set_frame_label' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'set_frame_label',
+        'description' => 'Benennt einen Leerrahmen um',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:submit',
+    ],
     'mod_pinnwand_delete_thread' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'delete_thread',

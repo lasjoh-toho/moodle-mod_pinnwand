@@ -2307,7 +2307,20 @@
         row.appendChild(el('span', { class: 'ic-thread-item-label' }, [entry.ref.sourcetitle || itemCaptionText(entry.ref)]));
       } else {
         row.appendChild(el('div', { class: 'ic-thread-frame-thumb' }, ['\u2b1a']));
-        row.appendChild(el('span', { class: 'ic-thread-item-label' }, [entry.ref.framelabel || S.emptyframe]));
+        var frameLabelEl = el('span', {
+          class: 'ic-thread-item-label ic-thread-item-label-editable', contenteditable: 'true'
+        }, [entry.ref.framelabel || S.emptyframe]);
+        frameLabelEl.addEventListener('click', function (ev) { ev.stopPropagation(); });
+        frameLabelEl.addEventListener('focus', function () {
+          if (!entry.ref.framelabel) { frameLabelEl.textContent = ''; }
+        });
+        frameLabelEl.addEventListener('blur', function () {
+          var text = frameLabelEl.textContent.trim();
+          entry.ref.framelabel = text;
+          if (!text) { frameLabelEl.textContent = S.emptyframe; }
+          callAjax('mod_pinnwand_set_frame_label', { cmid: cfg.cmid, itemid: entry.ref.id, framelabel: text });
+        });
+        row.appendChild(frameLabelEl);
       }
 
       row.addEventListener('dragstart', function () { dragFromIdx = idx; row.classList.add('dragging'); });
@@ -2412,7 +2425,24 @@
       } else {
         row.appendChild(el('div', { class: 'ic-thread-frame-thumb' }, ['\u2b1a']));
       }
-      row.appendChild(el('span', { class: 'ic-thread-item-label' }, [threadItemLabel(item)]));
+      if (editable && item.itemtype === 'frame') {
+        var frameLabelEl2 = el('span', {
+          class: 'ic-thread-item-label ic-thread-item-label-editable', contenteditable: 'true'
+        }, [item.framelabel || S.emptyframe]);
+        frameLabelEl2.addEventListener('click', function (ev) { ev.stopPropagation(); });
+        frameLabelEl2.addEventListener('focus', function () {
+          if (!item.framelabel) { frameLabelEl2.textContent = ''; }
+        });
+        frameLabelEl2.addEventListener('blur', function () {
+          var text = frameLabelEl2.textContent.trim();
+          item.framelabel = text;
+          if (!text) { frameLabelEl2.textContent = S.emptyframe; }
+          callAjax('mod_pinnwand_set_frame_label', { cmid: cfg.cmid, itemid: item.id, framelabel: text });
+        });
+        row.appendChild(frameLabelEl2);
+      } else {
+        row.appendChild(el('span', { class: 'ic-thread-item-label' }, [threadItemLabel(item)]));
+      }
       if (editable) {
         var rm = el('button', { class: 'ic-thread-remove', title: S.removefromthread }, ['\u2715']);
         rm.addEventListener('click', function (ev) {
@@ -2467,7 +2497,12 @@
       list.appendChild(el('p', { class: 'ic-hint' }, [S.thread_objects_empty]));
     }
     visible.forEach(function (p) {
-      var row = el('div', { class: 'ic-thread-item' });
+      var key = 'photo:' + p.id;
+      var row = el('div', { class: 'ic-thread-item' + (state.selectedItemKey === key ? ' selected' : '') });
+      row.addEventListener('click', function (ev) {
+        if (ev.target.closest('.ic-me-check')) { return; }
+        selectItem(key);
+      });
       row.appendChild(el('img', { src: p.url, alt: '' }));
       row.appendChild(el('span', { class: 'ic-thread-item-label' }, [p.sourcetitle || itemCaptionText(p)]));
       var toggle = el('label', { class: 'ic-me-check', title: S.not_in_presentation });
@@ -2695,7 +2730,7 @@
         canvasEl.appendChild(fEl);
         return {
           el: fEl, cx: it.framex + it.framew / 2, cy: it.framey + it.frameh / 2,
-          w: it.framew, h: it.frameh, rot: it.framerot || 0
+          w: it.framew, h: it.frameh, rot: it.framerot || 0, frame: true
         };
       }
       var rec = photoRecs[it.photoid];
@@ -2817,7 +2852,12 @@
     // (auch Hintergrund und nicht überlappende Fotos) bleiben sichtbar.
     function updateOcclusion() {
       var active = steps[currentIdx];
-      if (!active || !active.el) { return; }
+      if (!active || !active.el || active.frame) {
+        // Kein echtes Foto als aktive Station (Rahmen oder Überblick) -
+        // alles bleibt sichtbar, nichts wird ausgeblendet.
+        Object.keys(photoRecs).forEach(function (pid) { photoRecs[pid].el.classList.remove('ic-present-occluded'); });
+        return;
+      }
       var activeRect = active.el.getBoundingClientRect();
       var activeZ = active.z || 0;
       Object.keys(photoRecs).forEach(function (pid) {
@@ -3175,27 +3215,37 @@
   // ------------------------------------------------------------------
   function applyBackground(bgEl) {
     var bg = state.background || { type: 'color', color: '#2b2d33' };
+    // Äußeres Element: reine Farbfläche, füllt die komplette (ggf. größere
+    // als 1000x1400) sichtbare Fläche als Tapete.
+    bgEl.style.backgroundImage = 'none';
+    bgEl.style.backgroundColor = bg.color || '#2b2d33';
+
+    // Inneres 1000x1400-Element trägt das eigentliche Bild - exakt auf die
+    // Board-Koordinatenfläche gemappt (NICHT auf die ggf. größere äußere
+    // Fläche), damit Rahmen/Fotos immer auf dieselbe Bildstelle zeigen,
+    // unabhängig von Bildschirmgröße/Präsentationsmodus.
+    var img = bgEl.querySelector('.ic-canvas-bg-image');
+    if (!img) {
+      img = document.createElement('div');
+      img.className = 'ic-canvas-bg-image';
+      bgEl.appendChild(img);
+    }
     if ((bg.type === 'image' || bg.type === 'url' || bg.type === 'upload') && bg.url) {
-      // Die gewählte Farbe bleibt als Basis gesetzt, damit sie durchscheint,
-      // falls das Bild transparent ist oder den Hintergrund nicht ganz füllt.
-      bgEl.style.backgroundColor = bg.color || '#2b2d33';
-      bgEl.style.backgroundImage = "url('" + bg.url + "')";
+      img.style.backgroundColor = bg.color || '#2b2d33';
+      img.style.backgroundImage = "url('" + bg.url + "')";
       // "contain" statt "cover": das Bild wird nie beschnitten, füllt die
-      // Fläche so gut es geht - der Rest bleibt in der gewählten Farbe sichtbar.
-      bgEl.style.backgroundSize = 'contain';
-      bgEl.style.backgroundRepeat = 'no-repeat';
-      bgEl.style.backgroundPosition = 'center';
+      // 1000x1400-Fläche so gut es geht - der Rest bleibt in der gewählten
+      // Farbe sichtbar.
+      img.style.backgroundSize = 'contain';
+      img.style.backgroundRepeat = 'no-repeat';
+      img.style.backgroundPosition = 'center';
     } else {
-      bgEl.style.backgroundImage = 'none';
-      bgEl.style.backgroundColor = bg.color || '#2b2d33';
+      img.style.backgroundImage = 'none';
+      img.style.backgroundColor = bg.color || '#2b2d33';
     }
     var brightness = (bg.brightness != null ? bg.brightness : 100);
     var saturation = (bg.saturation != null ? bg.saturation : 100);
-    bgEl.style.filter = 'brightness(' + brightness + '%) saturate(' + saturation + '%)';
-    // Weicher Rand: rein optische Vignette über der Hintergrund-Ebene,
-    // per box-shadow inset statt echter Unschärfe (performanter, kein
-    // erneutes Rendern des Hintergrundbilds nötig).
-    bgEl.style.boxShadow = bg.softedge ? 'inset 0 0 min(18vw,220px) min(6vw,80px) var(--ic-bg)' : 'none';
+    img.style.filter = 'brightness(' + brightness + '%) saturate(' + saturation + '%)';
   }
 
   function openBackgroundPanel(body) {
@@ -3205,19 +3255,18 @@
     function bgLayerEl() { return document.querySelector('.ic-canvas-bg'); }
     function currentBrightness() { return (state.background && state.background.brightness != null) ? state.background.brightness : 100; }
     function currentSaturation() { return (state.background && state.background.saturation != null) ? state.background.saturation : 100; }
-    function currentSoftedge() { return !!(softCheck && softCheck.checked); }
 
     var panel = el('div', { class: 'ic-bg-panel', id: 'ic-bg-panel' });
     panel.appendChild(el('label', {}, [S.bg_color]));
     var colorInput = el('input', { type: 'color', value: (state.background && state.background.color) || '#2b2d33' });
     colorInput.addEventListener('input', function () {
-      state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge() };
+      state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation() };
       applyBackground(bgLayerEl());
     });
     colorInput.addEventListener('change', function () {
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: 'color', color: colorInput.value, photoid: 0,
-        brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge()
+        brightness: currentBrightness(), saturation: currentSaturation()
       }).then(function (res) { state.background = res.background; });
     });
     panel.appendChild(colorInput);
@@ -3228,11 +3277,11 @@
       state.photos.forEach(function (p) {
         var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' });
         t.addEventListener('click', function () {
-          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge() };
+          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation() };
           applyBackground(bgLayerEl());
           callAjax('mod_pinnwand_save_background', {
             cmid: cfg.cmid, type: 'image', color: colorInput.value, photoid: p.id,
-            brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge()
+            brightness: currentBrightness(), saturation: currentSaturation()
           }).then(function (res) { state.background = res.background; });
         });
         row.appendChild(t);
@@ -3250,11 +3299,11 @@
     urlApply.addEventListener('click', function () {
       var url = urlInput.value.trim();
       if (!url) { return; }
-      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge() };
+      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation() };
       applyBackground(bgLayerEl());
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: 'url', color: colorInput.value, photoid: 0, url: url,
-        brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge()
+        brightness: currentBrightness(), saturation: currentSaturation()
       }).then(function (res) { state.background = res.background; });
     });
     urlRow.appendChild(urlInput); urlRow.appendChild(urlApply);
@@ -3269,7 +3318,7 @@
       reader.onload = function () {
         callAjax('mod_pinnwand_save_background', {
           cmid: cfg.cmid, type: 'upload', color: colorInput.value, photoid: 0, url: '', imagedata: reader.result,
-          brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge()
+          brightness: currentBrightness(), saturation: currentSaturation()
         }).then(function (res) {
           state.background = res.background;
           applyBackground(bgLayerEl());
@@ -3288,7 +3337,7 @@
         cmid: cfg.cmid,
         type: state.background.type, color: state.background.color || '#2b2d33',
         photoid: 0, url: state.background.url || '',
-        brightness: currentBrightness(), saturation: currentSaturation(), softedge: currentSoftedge()
+        brightness: currentBrightness(), saturation: currentSaturation()
       }).then(function (res) { state.background = res.background; });
     }
     brightnessInput.addEventListener('input', function () {
@@ -3307,20 +3356,6 @@
     saturationInput.addEventListener('change', persistFilter);
     panel.appendChild(saturationInput);
 
-    // Weicher Rand (Vignette) - rein optische Einstellung, wirkt nur auf
-    // die Hintergrund-Ebene.
-    var softLabel = el('label', { class: 'ic-me-check', style: 'margin-top:10px' });
-    var softCheck = el('input', { type: 'checkbox' });
-    softCheck.checked = !!(state.background && state.background.softedge);
-    softCheck.addEventListener('change', function () {
-      state.background.softedge = softCheck.checked;
-      applyBackground(bgLayerEl());
-      persistFilter();
-    });
-    softLabel.appendChild(softCheck);
-    softLabel.appendChild(document.createTextNode(S.bg_softedge));
-    panel.appendChild(softLabel);
-
     // Hintergrundbild auch aus den Uploads der Klasse wählbar - Berechtigung
     // wird server-seitig über dieselbe Regel wie die Klassenansicht geprüft
     // (mod/pinnwand:viewall oder studentclassview); ohne Berechtigung bleibt
@@ -3333,11 +3368,11 @@
       classPhotos.forEach(function (p) {
         var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' });
         t.addEventListener('click', function () {
-          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation(), softedge: softCheck.checked };
+          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation() };
           applyBackground(bgLayerEl());
           callAjax('mod_pinnwand_save_background', {
             cmid: cfg.cmid, type: 'image', color: colorInput.value, photoid: p.id,
-            brightness: currentBrightness(), saturation: currentSaturation(), softedge: softCheck.checked
+            brightness: currentBrightness(), saturation: currentSaturation()
           }).then(function (res2) { state.background = res2.background; });
         });
         classRow.appendChild(t);
