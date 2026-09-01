@@ -795,3 +795,25 @@ Zwölfter Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
   unklickbar HINTER der eigenen Seitenleiste und ließ sich erst nach
   deren Schließen (praktisch: nach Reload) bewegen. Jetzt bezieht sich
   "Mitte" auf den vom Post-Stream freien Bereich.
+
+---
+
+## Phase 20 — Board-Auto-Einpassung, Stylus über Objekten sichtbar ✅
+
+Dreizehnter Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Tatsächliche Ursache des Hintergrund-Problems gefunden**: der
+  Board-Zoom startete immer bei 1 (unskaliert, kein "an den Bildschirm
+  anpassen"). Die 1000x1400-Koordinatenfläche (Hochformat) wirkte dadurch
+  auf den meisten (breiteren als hohen) Bildschirmen wie eine schmale,
+  hochkantige Insel oben links, während der Rest des Fensters leer blieb -
+  und mit ihr das darin liegende Hintergrundbild. Fix: das Board wird beim
+  ersten Anzeigen automatisch auf den sichtbaren Bereich eingepasst und
+  zentriert (nur einmal je Board - spätere manuelle Zoom-/Pan-Anpassungen
+  bleiben danach erhalten).
+- [x] Stylus-Zeichenebene bekommt jetzt eine hohe Z-Ebene - Striche können
+  über Fotos/Objekte hinweg gemalt werden und bleiben dabei sichtbar,
+  statt darunter zu verschwinden.
+- [x] Stylus-Anmerkungen werden jetzt auch in der Präsentation angezeigt
+  (vorher fehlten sie dort komplett) - über den Fotos, nicht von der
+  Occlusion-Logik betroffen.

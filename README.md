@@ -561,6 +561,17 @@ Details und Scoping-Entscheidungen. In Kurzform:
   bei der "Mitte"-Berechnung teils hinter der Post-Stream-Leiste selbst
   (unklickbar, bis sie geschlossen wurde) - behoben.
 
+### Vierundzwanzigste Überarbeitung — Board-Auto-Einpassung, Stylus über Objekten
+
+- **Tatsächliche Ursache endlich gefunden**: der Board-Zoom startete immer
+  bei 1 (kein "an den Bildschirm anpassen") - die hochformatige
+  1000x1400-Fläche wirkte dadurch auf breiteren Bildschirmen wie eine
+  schmale Insel oben links. Board wird jetzt beim ersten Anzeigen
+  automatisch eingepasst und zentriert.
+- Stylus-Linien können jetzt über Fotos/Objekte hinweg gemalt werden und
+  bleiben dabei sichtbar (hohe Z-Ebene).
+- Stylus-Anmerkungen werden jetzt auch in der Präsentation angezeigt.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

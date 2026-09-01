@@ -1745,11 +1745,34 @@
     wrap.appendChild(panZoomLayer);
     body.appendChild(wrap);
 
+    // Board beim ersten Anzeigen auf den sichtbaren Bereich einpassen und
+    // zentrieren - sonst bleibt der Zoom dauerhaft bei 1 (unskaliert) und
+    // die 1000x1400-Koordinatenfläche (mitsamt Hintergrundbild) wirkt auf
+    // den meisten Bildschirmen wie eine schmale, hochkantige Insel links
+    // oben, während der Rest des Fensters leer bleibt. Nur einmal je Board -
+    // spätere manuelle Zoom-/Pan-Anpassungen der Person bleiben danach
+    // erhalten und werden nicht bei jedem Re-Render überschrieben.
+    if (!state._boardFitted) { state._boardFitted = {}; }
+    if (!state._boardFitted[state.currentBoard]) {
+      state._boardFitted[state.currentBoard] = true;
+      requestAnimationFrame(function () {
+        var r = wrap.getBoundingClientRect();
+        if (r.width > 20 && r.height > 20) {
+          var fit = Math.min(r.width / 1000, r.height / 1400, 1);
+          state.boardZoom = Math.max(0.15, fit);
+          state.boardPanX = (r.width - 1000 * state.boardZoom) / 2;
+          state.boardPanY = (r.height - 1400 * state.boardZoom) / 2;
+          applyBoardTransform();
+        }
+      });
+    }
+
     // Stylus-Zeichenebene: exakt 1000x1400 wie der Hintergrund (siehe
     // .ic-canvas-bg-image) - Striche liegen dadurch immer exakt an der
     // richtigen Stelle über dem Hintergrundbild, unabhängig von Zoom/Board-
-    // Größe. Unterhalb der Fotos (damit diese weiterhin normal bedienbar
-    // bleiben), oberhalb des Hintergrunds.
+    // Größe. Hohe Z-Ebene: Striche sollen über Fotos/Objekte hinweg gemalt
+    // werden können und dabei sichtbar bleiben (z.B. um mehrere Fotos zu
+    // verbinden oder etwas Übergreifendes zu markieren).
     if (state.boardInkBoard !== state.currentBoard) {
       state.boardInkBoard = state.currentBoard;
       state.boardInkStrokes = [];
@@ -2848,6 +2871,19 @@
       }
       canvasEl.appendChild(pEl);
       photoRecs[p.id] = { el: pEl, z: p.canvasz || 0 };
+    });
+
+    // Stylus-Anmerkungen des Boards - über den Fotos, damit Linien auch
+    // über Objekte hinweg gemalt sichtbar bleiben (nicht von der
+    // Occlusion-Logik betroffen, da sie kein "photoRecs"-Eintrag sind).
+    var presentInkCanvas = el('canvas', {
+      class: 'ic-board-ink-layer', width: '1000', height: '1400', style: 'z-index:600'
+    });
+    canvasEl.appendChild(presentInkCanvas);
+    callAjax('mod_pinnwand_get_board_ink', { cmid: cfg.cmid, boardid: firstBoardId }).then(function (res) {
+      var strokes = [];
+      try { strokes = JSON.parse(res.strokedata || '[]'); } catch (e) { strokes = []; }
+      redrawInk(presentInkCanvas, presentInkCanvas.getContext('2d'), strokes);
     });
 
     // Für jede Station (Foto oder Leerrahmen) Zielposition/-größe merken -

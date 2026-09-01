@@ -257,7 +257,7 @@
 }
 .ic-stylus-size { width: 70px; }
 .ic-board-ink-layer {
-  position: absolute; left: 0; top: 0; width: 1000px; height: 1400px; pointer-events: none;
+  position: absolute; left: 0; top: 0; width: 1000px; height: 1400px; z-index: 500; pointer-events: none;
 }
 .ic-board-ink-layer.active { pointer-events: auto; touch-action: none; cursor: crosshair; }
 .ic-board-bar {
