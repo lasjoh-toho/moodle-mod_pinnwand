@@ -817,3 +817,29 @@ Dreizehnter Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
 - [x] Stylus-Anmerkungen werden jetzt auch in der Präsentation angezeigt
   (vorher fehlten sie dort komplett) - über den Fotos, nicht von der
   Occlusion-Logik betroffen.
+
+---
+
+## Phase 21 — Board auf Querformat umgestellt, Abschneiden/Füllen steuert Board-Einpassung ✅
+
+Vierzehnter Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Board-Koordinatenfläche auf Querformat umgestellt** (1400x1000 statt
+  1000x1400 hochkant) - zentrale Konstanten `BOARD_W`/`BOARD_H` statt
+  verstreuter Zahlenwerte. Die meisten Präsentationsflächen/Bildschirme
+  sind breiter als hoch; das hochformatige Board wirkte auf ihnen wie eine
+  zu schmale Fläche mit Rand oben/unten.
+- [x] Die "Abschneiden/Füllen"-Einstellung des Hintergrunds steuert jetzt
+  zusätzlich, wie das Board selbst beim ersten Anzeigen eingepasst wird:
+  "Füllen" (contain) zeigt das ganze Board (ggf. mit Rand), "Abschneiden"
+  (cover) füllt den Bildschirm komplett aus.
+- [x] Gestrichelte Randlinie für noch nicht im Faden enthaltene Objekte in
+  der Präsentation entfernt.
+
+**Scoping-Hinweis:** Eine vollständig DYNAMISCHE Board-Größe passend zum
+jeweils gewählten Hintergrundbild (statt eines festen Querformats) wurde
+nicht umgesetzt - das würde bei jedem Bildwechsel alle bereits platzierten
+Fotos/Rahmen-Koordinaten ungültig machen bzw. neu umrechnen müssen, was
+für ein bereits in Nutzung befindliches Board zu riskant/aufwendig wäre.
+Das neue Querformat (1400x1000) ist als deutlich universellerer Standard
+gedacht, der zu den meisten tatsächlichen Präsentationsbildern passt.

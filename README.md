@@ -572,16 +572,29 @@ Details und Scoping-Entscheidungen. In Kurzform:
   bleiben dabei sichtbar (hohe Z-Ebene).
 - Stylus-Anmerkungen werden jetzt auch in der Präsentation angezeigt.
 
+### Fünfundzwanzigste Überarbeitung — Board auf Querformat, Abschneiden/Füllen steuert Einpassung
+
+- **Board-Koordinatenfläche auf Querformat umgestellt** (1400x1000 statt
+  1000x1400 hochkant) - passt zu den meisten tatsächlichen
+  Präsentationsbildern/Bildschirmen.
+- Die Abschneiden/Füllen-Einstellung des Hintergrunds steuert jetzt auch,
+  wie das Board selbst eingepasst wird.
+- Gestrichelte Randlinie für noch nicht im Faden enthaltene Objekte in der
+  Präsentation entfernt.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
-- Die Leinwand hat pro Board eine feste Größe (1000×1400px); ein Export als
-  Bild/PDF ist nicht enthalten und wäre ein guter nächster Ausbauschritt.
+- Die Leinwand hat pro Board eine feste Größe (1400×1000px, Querformat); ein
+  Export als Bild/PDF ist nicht enthalten und wäre ein guter nächster
+  Ausbauschritt. Die Größe passt sich nicht dynamisch an das jeweils
+  gewählte Hintergrundbild an (siehe Scoping-Hinweis zu Phase 21 im
+  IMPLEMENTATION_PLAN).
 - Kamera-Zugriff per `getUserMedia` benötigt HTTPS; auf `http://`-Testinstanzen
   greift automatisch der Datei-Upload-Fallback.
-- Der Stylus zeichnet auf einer Ebene unter den Fotos - auf Bereichen, die
-  von einem Foto überdeckt sind, lässt sich nicht direkt zeichnen (das Foto
-  bleibt dort vorrangig bedienbar).
+- Der Stylus liegt in einer hohen Z-Ebene über den Fotos (Striche bleiben
+  dadurch auch über Objekten sichtbar) - beim aktiven Zeichnen sind Fotos
+  darunter währenddessen nicht per Klick bedienbar.
 - Persönliche Hintergrundbilder werden beim Kurs-Restore ohne Nutzer-ID-
   Remapping wiederhergestellt (funktioniert nur korrekt, wenn Nutzer-IDs
   zwischen Quelle und Ziel gleich bleiben) - siehe `backup/moodle2/*`.

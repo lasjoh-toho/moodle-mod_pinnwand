@@ -1571,6 +1571,10 @@
   // lässt sie sich verlustfrei bei jeder Anzeigegröße neu zeichnen und ist
   // - anders als das Raster - auch im Anordnungsmodus sichtbar.
   // ------------------------------------------------------------------
+  // Board-Koordinatenfläche: Querformat (die meisten Präsentationsflächen/
+  // Bildschirme sind breiter als hoch). Zentrale Konstanten statt
+  // verstreuter Zahlenwerte, damit das Format an einer Stelle definiert ist.
+  var BOARD_W = 1400, BOARD_H = 1000;
   var INK_COLORS = ['#ef4444', '#111111', '#2563eb', '#22c55e', '#facc15', '#ffffff'];
   var INK_SIZES = [4, 10, 20, 36];
 
@@ -1747,27 +1751,32 @@
 
     // Board beim ersten Anzeigen auf den sichtbaren Bereich einpassen und
     // zentrieren - sonst bleibt der Zoom dauerhaft bei 1 (unskaliert) und
-    // die 1000x1400-Koordinatenfläche (mitsamt Hintergrundbild) wirkt auf
-    // den meisten Bildschirmen wie eine schmale, hochkantige Insel links
-    // oben, während der Rest des Fensters leer bleibt. Nur einmal je Board -
-    // spätere manuelle Zoom-/Pan-Anpassungen der Person bleiben danach
-    // erhalten und werden nicht bei jedem Re-Render überschrieben.
+    // die 1400x1000-Koordinatenfläche (mitsamt Hintergrundbild) wirkt auf
+    // vielen Bildschirmen wie eine zu kleine Insel, während der Rest des
+    // Fensters leer bleibt. Nur einmal je Board - spätere manuelle Zoom-/
+    // Pan-Anpassungen der Person bleiben danach erhalten. Die "Abschneiden/
+    // Füllen"-Einstellung des Hintergrunds (siehe Settings) steuert dabei
+    // auch, wie das Board selbst eingepasst wird: "Füllen" (contain) zeigt
+    // das ganze Board (ggf. mit Rand), "Abschneiden" (cover) füllt den
+    // Bildschirm komplett aus (überschüssiger Rand wird abgeschnitten).
     if (!state._boardFitted) { state._boardFitted = {}; }
     if (!state._boardFitted[state.currentBoard]) {
       state._boardFitted[state.currentBoard] = true;
       requestAnimationFrame(function () {
         var r = wrap.getBoundingClientRect();
         if (r.width > 20 && r.height > 20) {
-          var fit = Math.min(r.width / 1000, r.height / 1400, 1);
+          var bg = state.background || {};
+          var wRatio = r.width / BOARD_W, hRatio = r.height / BOARD_H;
+          var fit = bg.fit === 'cover' ? Math.max(wRatio, hRatio) : Math.min(wRatio, hRatio, 1);
           state.boardZoom = Math.max(0.15, fit);
-          state.boardPanX = (r.width - 1000 * state.boardZoom) / 2;
-          state.boardPanY = (r.height - 1400 * state.boardZoom) / 2;
+          state.boardPanX = (r.width - BOARD_W * state.boardZoom) / 2;
+          state.boardPanY = (r.height - BOARD_H * state.boardZoom) / 2;
           applyBoardTransform();
         }
       });
     }
 
-    // Stylus-Zeichenebene: exakt 1000x1400 wie der Hintergrund (siehe
+    // Stylus-Zeichenebene: exakt 1400x1000 wie der Hintergrund (siehe
     // .ic-canvas-bg-image) - Striche liegen dadurch immer exakt an der
     // richtigen Stelle über dem Hintergrundbild, unabhängig von Zoom/Board-
     // Größe. Hohe Z-Ebene: Striche sollen über Fotos/Objekte hinweg gemalt
@@ -1782,7 +1791,7 @@
         render();
       });
     }
-    var inkCanvas = el('canvas', { class: 'ic-board-ink-layer', width: '1000', height: '1400' });
+    var inkCanvas = el('canvas', { class: 'ic-board-ink-layer', width: String(BOARD_W), height: String(BOARD_H) });
     canvas.appendChild(inkCanvas);
     var inkCtx = inkCanvas.getContext('2d');
     redrawInk(inkCanvas, inkCtx, state.boardInkStrokes || []);
@@ -2066,7 +2075,7 @@
           // <svg> ohne exakt übereinstimmendes viewBox/CSS entstehen kann -
           // das war die Ursache dafür, dass die Linie nur in einem
           // Teilbereich sichtbar/abgeschnitten war).
-          var lineCanvas = el('canvas', { class: 'ic-thread-line-canvas', width: '1000', height: '1400' });
+          var lineCanvas = el('canvas', { class: 'ic-thread-line-canvas', width: String(BOARD_W), height: String(BOARD_H) });
           var lctx = lineCanvas.getContext('2d');
           lctx.strokeStyle = threadForCanvas.color || '#e0503f';
           lctx.lineWidth = threadForCanvas.linewidth || 3;
@@ -2207,7 +2216,7 @@
 
     // Stylus: eigener Button unten links, direkt mit den Annotationswerkzeugen
     // verknüpft - zeichnet direkt auf den Hintergrund (genau auf dessen
-    // 1000x1400-Koordinatenfläche gemappt, siehe Zeichen-Ebene weiter unten),
+    // 1400x1000-Koordinatenfläche gemappt, siehe Zeichen-Ebene weiter unten),
     // nicht an ein einzelnes Foto gebunden.
     var stylusBar = el('div', { class: 'ic-stylus-bar' });
     var stylusBtn = el('button', { class: 'ic-fab' + (state.boardDrawMode ? ' active' : ''), title: S.drawonboard }, [icon('pen')]);
@@ -2812,7 +2821,7 @@
     applyBackground(bgLayer);
     var canvasEl = el('div', { class: 'ic-present-canvas' });
     // Hintergrund bewegt sich beim Zoom mit (Checkbox im Faden-Panel): Teil
-    // der gezoomten Leinwand, exakt 1000x1400 - dasselbe Koordinatensystem
+    // der gezoomten Leinwand, exakt 1400x1000 - dasselbe Koordinatensystem
     // wie Fotos/Rahmen (siehe .ic-canvas-bg auf der echten Pinnwand) - so
     // zeigen Rahmen zuverlässig auf dieselbe Stelle im Hintergrundbild wie
     // beim Einrichten auf dem Board. Sonst (Standard) eine eigenständige,
@@ -2877,7 +2886,7 @@
     // über Objekte hinweg gemalt sichtbar bleiben (nicht von der
     // Occlusion-Logik betroffen, da sie kein "photoRecs"-Eintrag sind).
     var presentInkCanvas = el('canvas', {
-      class: 'ic-board-ink-layer', width: '1000', height: '1400', style: 'z-index:600'
+      class: 'ic-board-ink-layer', width: String(BOARD_W), height: String(BOARD_H), style: 'z-index:600'
     });
     canvasEl.appendChild(presentInkCanvas);
     callAjax('mod_pinnwand_get_board_ink', { cmid: cfg.cmid, boardid: firstBoardId }).then(function (res) {
@@ -2894,7 +2903,7 @@
       if (it.itemtype === 'overview') {
         // Kein sichtbares Element nötig - reiner Kamera-Haltepunkt, der auf
         // das ganze Board zoomt (Überblick, siehe "Überblick einfügen").
-        return { el: null, cx: 500, cy: 700, w: 1000, h: 1400, rot: 0, overview: true };
+        return { el: null, cx: BOARD_W / 2, cy: BOARD_H / 2, w: BOARD_W, h: BOARD_H, rot: 0, overview: true };
       }
       if (it.itemtype === 'frame') {
         // Unsichtbar in der Präsentation - dient nur als Zoom-Ziel, damit
@@ -3056,7 +3065,7 @@
       if (currentIdx >= steps.length - 1) {
         // Letzter Schritt: zur Board-Übersicht fliegen und danach die
         // Präsentation automatisch verlassen, statt einfach stehenzubleiben.
-        var overviewTarget = { scale: Math.min(window.innerWidth / 1000, window.innerHeight / 1400), cx: 500, cy: 700, rot: 0 };
+        var overviewTarget = { scale: Math.min(window.innerWidth / BOARD_W, window.innerHeight / BOARD_H), cx: BOARD_W / 2, cy: BOARD_H / 2, rot: 0 };
         animateCamera(currentTransform, overviewTarget, function () {
           setTimeout(function () { closeBtn.click(); }, 400);
         });
@@ -3426,11 +3435,11 @@
   function applyBackground(bgEl) {
     var bg = state.background || { type: 'color', color: '#2b2d33' };
     // Äußeres Element: reine Farbfläche, füllt die komplette (ggf. größere
-    // als 1000x1400) sichtbare Fläche als Tapete.
+    // als 1400x1000) sichtbare Fläche als Tapete.
     bgEl.style.backgroundImage = 'none';
     bgEl.style.backgroundColor = bg.color || '#2b2d33';
 
-    // Inneres 1000x1400-Element trägt das eigentliche Bild - exakt auf die
+    // Inneres 1400x1000-Element trägt das eigentliche Bild - exakt auf die
     // Board-Koordinatenfläche gemappt (NICHT auf die ggf. größere äußere
     // Fläche), damit Rahmen/Fotos immer auf dieselbe Bildstelle zeigen,
     // unabhängig von Bildschirmgröße/Präsentationsmodus.
@@ -3443,7 +3452,7 @@
     if ((bg.type === 'image' || bg.type === 'url' || bg.type === 'upload') && bg.url) {
       img.style.backgroundColor = bg.color || '#2b2d33';
       img.style.backgroundImage = "url('" + bg.url + "')";
-      // "cover" (abschneiden): füllt die 1000x1400-Fläche komplett aus 100%
+      // "cover" (abschneiden): füllt die 1400x1000-Fläche komplett aus 100%
       // Breite ODER 100% Höhe, die größere Seite wird beschnitten.
       // "contain" (füllen, Standard): nie beschnitten, lässt ggf. einen
       // Rand in der gewählten Farbe.
@@ -3573,7 +3582,7 @@
     panel.appendChild(saturationInput);
 
     // Abschneiden (cover) vs. Füllen (contain) - wie das Hintergrundbild
-    // die 1000x1400-Fläche ausfüllt, wenn sein Seitenverhältnis nicht
+    // die 1400x1000-Fläche ausfüllt, wenn sein Seitenverhältnis nicht
     // exakt passt.
     panel.appendChild(el('label', { style: 'margin-top:10px' }, [S.bg_fit]));
     var fitRow = el('div', { class: 'ic-seg' });
