@@ -652,6 +652,17 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Zweistufiges Beenden: erster Klick auf leere Fläche verlässt nur den
   Modus, ein weiterer löst die Auswahl auf.
 
+### Zweiunddreißigste Überarbeitung — Gruppen-Verschieben, Layer-/Faden-Mehrfachauswahl, Filterleiste
+
+- Klick in die Auswahlbox (ohne Objekt zu treffen) sowie ein neuer
+  Mittelpunkt-Griff verschieben jetzt die ganze Gruppe.
+- Box-Icon und Add-to-Selection-Icon im Zoom-Popup ergänzt.
+- Mehrfachauswahl jetzt auch im Layer- und Faden-Panel: Hervorhebung,
+  Strg+Klick, gemeinsames Verschieben als Block (interne Reihenfolge
+  bleibt erhalten).
+- **Neu: Filterleiste** - blendet Fotos aus, die in keinem der Felder
+  Titel/Jahr/Epoche/Autor der Vorlage/Autor mit dem Muster übereinstimmen.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

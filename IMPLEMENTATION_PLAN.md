@@ -1044,3 +1044,32 @@ Zwanzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
 - [x] Visuelles Feedback: im aktiven Modus wird der Rand der Umrandung
   durchgezogen statt gestrichelt, der Plus-Button dreht sich zu einem "×"
   und wird grün.
+
+---
+
+## Phase 28 — Gruppen-Verschieben über die Box, Layer-/Faden-Mehrfachauswahl, Filterleiste ✅
+
+Einundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`,
+neue Strings.
+
+- [x] **Klick in die Auswahlbox (ohne Objekt zu treffen) verschiebt die
+  ganze Gruppe** statt die Ansicht zu verschieben.
+- [x] **Mittelpunkt-Griff** (Kreis in der Mitte der Box) zum gemeinsamen
+  Verschieben ergänzt.
+- [x] **Zoom-Popup erweitert**: Box-Icon (startet die Auswahlbox sofort)
+  und Add-to-Selection-Icon ergänzt.
+- [x] **Mehrfachauswahl im Layer- und Faden-Panel**: ausgewählte Objekte
+  werden in beiden Listen hervorgehoben (gestrichelter blauer Rahmen),
+  Strg+Klick fügt hinzu/entfernt. Zieht man ein Element, das Teil einer
+  Mehrfachauswahl ist, wird der ganze Block gemeinsam an die neue Position
+  verschoben - die interne Reihenfolge der ausgewählten Elemente
+  untereinander bleibt dabei erhalten.
+- [x] **Filterleiste**: neues Filter-Icon im zentralen Menü öffnet ein
+  Eingabefeld; blendet Fotos aus, die in keinem der Felder Titel/Jahr/
+  Epoche/Autor der Vorlage/Autor mit dem eingegebenen Muster
+  übereinstimmen. Aktualisiert die Sichtbarkeit direkt im DOM bei jedem
+  Tastendruck (kein voller Re-Render, sonst würde das Eingabefeld mitten
+  in der Eingabe den Fokus verlieren).
+- [x] `toggleMultiSelect` auf Modulebene vereinheitlicht
+  (`toggleMultiSelectGlobal`), damit sowohl die Pinnwand-Leinwand als auch
+  die eigenständigen Layer-/Faden-Panel-Funktionen darauf zugreifen können.

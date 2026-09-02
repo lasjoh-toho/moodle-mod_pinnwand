@@ -83,7 +83,8 @@
     threadObjectFilter: 'all',
     boardNames: {}, // boardid -> eigener Titel (Standard: Aktivitätsname [+ Nummer], siehe boardDisplayName)
     multiSelect: [], // Mehrfachauswahl per Auswahlbox/Strg+Klick, z.B. ['photo:12','frame:3']
-    multiSelectAddMode: false // nach Klick auf den Plus-Button: normale Klicks schalten die Auswahl um, bis auf leere Fläche geklickt wird
+    multiSelectAddMode: false, // nach Klick auf den Plus-Button: normale Klicks schalten die Auswahl um, bis auf leere Fläche geklickt wird
+    boardFilter: '' // Filterleiste: blendet Fotos aus, die in keinem Feld (Titel/Jahr/Epoche/Autor der Vorlage/Autor) übereinstimmen
   };
 
   // ------------------------------------------------------------------
@@ -1713,6 +1714,9 @@
     eraser: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H8l-6-6a2 2 0 0 1 0-2.8l8-8a2 2 0 0 1 2.8 0l7 7a2 2 0 0 1 0 2.8L13 20"/><path d="M6 13l6 6"/></svg>',
     clone: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
     search: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    boxselect: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 3"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
+    move: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>',
+    filter: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="4 4 20 4 14 12.5 14 19 10 21 10 12.5 4 4"/></svg>',
     trash: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
     grid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg>',
@@ -1919,6 +1923,15 @@
 
   // mit fortlaufender Nummer ("Klassenfoto", "Klassenfoto 2", ...) - außer
   // die Person hat dem Board über set_board_name einen eigenen Titel gegeben.
+  // Schaltet die Zugehörigkeit eines Objekts zur Mehrfachauswahl um - auf
+  // Modulebene, damit sowohl renderArrange als auch die eigenständigen
+  // Panel-Funktionen (Layer/Faden) darauf zugreifen können.
+  function toggleMultiSelectGlobal(key) {
+    var idx = state.multiSelect.indexOf(key);
+    if (idx === -1) { state.multiSelect.push(key); } else { state.multiSelect.splice(idx, 1); }
+    render();
+  }
+
   function boardDisplayName(boardId) {
     if (state.boardNames && state.boardNames[boardId]) { return state.boardNames[boardId]; }
     var boards = boardList();
@@ -2046,6 +2059,14 @@
     var visible = state.photos.filter(function (p) {
       return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === state.currentBoard && !backsideIds[p.id];
     });
+    if (state.boardFilter && state.boardFilter.trim()) {
+      var fq = state.boardFilter.trim().toLowerCase();
+      visible = visible.filter(function (p) {
+        return [p.sourcetitle, p.sourceyear, p.sourceepoch, p.sourceorigauthor, p.sourceauthor].some(function (v) {
+          return (v || '').toLowerCase().indexOf(fq) !== -1;
+        });
+      });
+    }
 
     // Roter Faden: wenn das Faden-Panel offen ist, bekommen enthaltene
     // Fotos einen roten Rahmen direkt auf dem Board (siehe unten).
@@ -2062,6 +2083,7 @@
         class: 'ic-arrange-item' + (threadPhotoIds[p.id] ? ' ic-in-thread' : '') +
           (state.selectedItemKey === 'photo:' + p.id ? ' selected' : '') +
           (state.multiSelect.indexOf('photo:' + p.id) !== -1 ? ' multi-selected' : ''),
+        'data-multikey': 'photo:' + p.id,
         style: 'left:' + p.canvasx + 'px;top:' + p.canvasy + 'px;width:' + p.canvasw + 'px;' +
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
@@ -2160,7 +2182,7 @@
           // hinterher, bis irgendein anderer Grund einen Re-Render auslöst.
           if (state.threadPanelOpen) { render(); }
         } else if (lastPointerCtrl || state.multiSelectAddMode) {
-          toggleMultiSelect(groupKey);
+          toggleMultiSelectGlobal(groupKey);
         } else if (state.threadPanelOpen || state.layerPanelOpen) {
           // Im Layer-/Faden-Modus: einfacher Klick markiert das Objekt statt
           // die Galerie zu öffnen (siehe dblclick weiter unten für die
@@ -2203,6 +2225,7 @@
             class: 'ic-thread-frame-onboard' + (threadForCanvas.isown ? ' editable' : '') +
               (state.selectedItemKey === 'frame:' + it.id ? ' selected' : '') +
               (state.multiSelect.indexOf('frame:' + it.id) !== -1 ? ' multi-selected' : ''),
+            'data-multikey': 'frame:' + it.id,
             style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;' +
               'transform:rotate(' + it.framerot + 'deg);border-color:' + lineColor + ';border-width:' + lineWidth + 'px'
           });
@@ -2230,7 +2253,7 @@
                 persistGroupExcept(frameGroupKey);
               }
               render();
-            } else if (lastPointerCtrl || state.multiSelectAddMode) { toggleMultiSelect(frameGroupKey); }
+            } else if (lastPointerCtrl || state.multiSelectAddMode) { toggleMultiSelectGlobal(frameGroupKey); }
             else { selectItem(frameGroupKey); }
           });
           frameEl.addEventListener('dblclick', function (ev) {
@@ -2365,11 +2388,27 @@
     // Kurzes Ziehen = Verschieben der Ansicht; langes Halten OHNE Bewegung
     // löst stattdessen eine Auswahlbox aus (Mehrfachauswahl).
     var panDragging = false, panStartX = 0, panStartY = 0, panOrigX = 0, panOrigY = 0;
+    // Aktualisiert die Sichtbarkeit anhand der Filterleiste direkt im DOM
+    // (kein render(), sonst würde das Eingabefeld bei jedem Tastendruck
+    // mitten in der Eingabe zerstört und den Fokus verlieren).
+    function applyBoardFilterVisibility() {
+      var fq = (state.boardFilter || '').trim().toLowerCase();
+      canvas.querySelectorAll('[data-multikey^="photo:"]').forEach(function (el2) {
+        var id = parseInt(el2.getAttribute('data-multikey').split(':')[1], 10);
+        var p = state.photos.filter(function (o) { return o.id === id; })[0];
+        var match = !fq || !p || [p.sourcetitle, p.sourceyear, p.sourceepoch, p.sourceorigauthor, p.sourceauthor].some(function (v) {
+          return (v || '').toLowerCase().indexOf(fq) !== -1;
+        });
+        el2.style.display = match ? '' : 'none';
+      });
+    }
+
     function isEmptyAreaTarget(target) {
       return !target.closest('.ic-arrange-item, .ic-thread-frame-onboard, button, input, a, .ic-board-ink-layer.active');
     }
 
     var longPressTimer = null, longPressStartX = 0, longPressStartY = 0;
+    var boxModeArmed = false; // per Lupen-Popup aktiviert - nächster Klick auf leere Fläche startet die Box sofort
     var selectionBoxEl = null, selBoxStartWorld = null, selBoxAdd = false;
 
     var lastPointerCtrl = false;
@@ -2412,12 +2451,6 @@
         }
       });
     }
-    function toggleMultiSelect(key) {
-      var idx = state.multiSelect.indexOf(key);
-      if (idx === -1) { state.multiSelect.push(key); } else { state.multiSelect.splice(idx, 1); }
-      render();
-    }
-
     function boardRectOf(idOrItem, kind) {
       if (kind === 'photo') {
         return { x: idOrItem.canvasx, y: idOrItem.canvasy, w: idOrItem.canvasw, h: idOrItem.canvasw * 0.75 };
@@ -2479,6 +2512,21 @@
     wrap.addEventListener('pointerdown', function (ev) {
       if (ev.pointerType === 'touch' && activeTouches > 1) { return; } // Pinch hat Vorrang
       if (!isEmptyAreaTarget(ev.target)) { return; }
+      if (boxModeArmed) {
+        boxModeArmed = false;
+        startSelectionBox(ev.clientX, ev.clientY, ev.ctrlKey || ev.metaKey);
+        return;
+      }
+      // Klick innerhalb der Box der Mehrfachauswahl (aber auf kein Objekt
+      // getroffen) bewegt die ganze Gruppe statt die Ansicht zu verschieben.
+      if (selBoundingBox && state.multiSelect.length > 0) {
+        var wp = screenToCanvas(ev.clientX, ev.clientY);
+        if (wp.x >= selBoundingBox.x && wp.x <= selBoundingBox.x + selBoundingBox.w &&
+            wp.y >= selBoundingBox.y && wp.y <= selBoundingBox.y + selBoundingBox.h) {
+          startGroupDrag(ev.clientX, ev.clientY);
+          return;
+        }
+      }
       panDragging = true;
       panStartX = ev.clientX; panStartY = ev.clientY;
       panOrigX = state.boardPanX; panOrigY = state.boardPanY;
@@ -2559,9 +2607,47 @@
       var zoomInBtn = el('button', { class: 'ic-icon-btn', title: S.zoomin }, ['+']);
       zoomInBtn.addEventListener('click', function () { zoomBoardBy(1 / 0.85); zoomSlider.value = Math.round(state.boardZoom * 100); });
       popup.appendChild(zoomOutBtn); popup.appendChild(zoomSlider); popup.appendChild(zoomInBtn);
+
+      // Auswahlbox und Hinzufügen-Modus lassen sich hier auch ohne langes
+      // Drücken bzw. ohne bestehende Auswahl starten.
+      var boxSelBtn = el('button', { class: 'ic-icon-btn', title: S.boxselect }, [icon('boxselect')]);
+      boxSelBtn.addEventListener('click', function () {
+        popup.remove();
+        boxModeArmed = true;
+      });
+      var addSelBtn = el('button', { class: 'ic-icon-btn', title: S.selection_add }, ['+\u25CB']);
+      addSelBtn.addEventListener('click', function () {
+        popup.remove();
+        state.multiSelectAddMode = true;
+        render();
+      });
+      popup.appendChild(boxSelBtn); popup.appendChild(addSelBtn);
+
       body.appendChild(popup);
     });
     fabRow.appendChild(zoomBtn);
+
+    // Filterleiste: blendet Fotos aus, die in keinem der Felder Titel/Jahr/
+    // Epoche/Autor der Vorlage/Autor mit dem eingegebenen Muster übereinstimmen.
+    var filterBtn = el('button', { class: 'ic-fab' + (state.boardFilter ? ' active' : ''), title: S.filterbar }, [icon('filter')]);
+    filterBtn.addEventListener('click', function () {
+      var existing = document.getElementById('ic-filter-popup');
+      if (existing) { existing.remove(); return; }
+      var popup = el('div', { class: 'ic-filter-popup', id: 'ic-filter-popup' });
+      var filterInput = el('input', {
+        type: 'text', placeholder: S.filterbar_placeholder, value: state.boardFilter
+      });
+      filterInput.addEventListener('input', function () {
+        state.boardFilter = filterInput.value;
+        applyBoardFilterVisibility();
+      });
+      var filterClear = el('button', { class: 'ic-icon-btn', title: S.filterbar_clear }, ['\u2715']);
+      filterClear.addEventListener('click', function () { state.boardFilter = ''; render(); });
+      popup.appendChild(filterInput); popup.appendChild(filterClear);
+      body.appendChild(popup);
+      filterInput.focus();
+    });
+    fabRow.appendChild(filterBtn);
 
     // Seitenleisten-Buttons (Roter Faden / Post-Stream / Schichtung) in der
     // oberen rechten Ecke der Pinnwand - schließen sich gegenseitig, da sie
@@ -2635,6 +2721,75 @@
 
     // Drop-Zone: Karte aus dem Post-Stream auf das Board ziehen = Kopie
     // anlegen (siehe renderStreamPanel/adopt_photo_to_board).
+    var selBoundingBox = null; // Bounding-Box der Mehrfachauswahl in Board-Koordinaten (für "Klick in die Box bewegt Gruppe")
+
+    // Wendet denselben Versatz auf ALLE Mitglieder der Mehrfachauswahl an
+    // (für das Verschieben über die Box selbst bzw. den Mittelpunkt-Griff,
+    // nicht von einem einzelnen gezogenen Objekt ausgehend).
+    function applyGroupDeltaAll(dx, dy) {
+      state.multiSelect.forEach(function (k) {
+        var parts = k.split(':'); var kind = parts[0], id = parseInt(parts[1], 10);
+        if (kind === 'photo') {
+          var op = state.photos.filter(function (o) { return o.id === id; })[0];
+          if (op) { op.canvasx += dx; op.canvasy += dy; }
+        } else {
+          var ot = ownThread();
+          var oi = ot ? ot.items.filter(function (o) { return o.itemtype === 'frame' && o.id === id; })[0] : null;
+          if (oi) { oi.framex += dx; oi.framey += dy; }
+        }
+      });
+    }
+    function persistGroupAll() {
+      state.multiSelect.forEach(function (k) {
+        var parts = k.split(':'); var kind = parts[0], id = parseInt(parts[1], 10);
+        if (kind === 'photo') {
+          var op = state.photos.filter(function (o) { return o.id === id; })[0];
+          if (op) { persistLayout(op); }
+        } else {
+          var ot = ownThread();
+          var oi = ot ? ot.items.filter(function (o) { return o.itemtype === 'frame' && o.id === id; })[0] : null;
+          if (oi) {
+            callAjax('mod_pinnwand_update_thread_frame', {
+              cmid: cfg.cmid, itemid: oi.id, framex: oi.framex, framey: oi.framey,
+              framew: oi.framew, frameh: oi.frameh, framerot: oi.framerot || 0, framez: oi.framez || 0
+            });
+          }
+        }
+      });
+    }
+    // Zieht man auf der Box selbst (ohne ein Objekt zu treffen) oder am
+    // Mittelpunkt-Griff, bewegt sich die ganze Gruppe gemeinsam.
+    function startGroupDrag(startClientX, startClientY) {
+      var lastX = startClientX, lastY = startClientY;
+      function move(ev) {
+        var dx = (ev.clientX - lastX) / (state.boardZoom || 1);
+        var dy = (ev.clientY - lastY) / (state.boardZoom || 1);
+        lastX = ev.clientX; lastY = ev.clientY;
+        applyGroupDeltaAll(dx, dy);
+        var overlayEl = document.querySelector('.ic-selection-overlay');
+        if (overlayEl) {
+          overlayEl.style.left = (parseFloat(overlayEl.style.left) + dx) + 'px';
+          overlayEl.style.top = (parseFloat(overlayEl.style.top) + dy) + 'px';
+        }
+        state.multiSelect.forEach(function (k) {
+          var kEl = canvas.querySelector('[data-multikey="' + k + '"]');
+          if (kEl) {
+            kEl.style.left = (parseFloat(kEl.style.left) + dx) + 'px';
+            kEl.style.top = (parseFloat(kEl.style.top) + dy) + 'px';
+          }
+        });
+      }
+      function up() {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        persistGroupAll();
+        render();
+      }
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    }
+
+
     // Umrandung der Mehrfachauswahl mit Plus-Button oben rechts - Klick
     // darauf aktiviert den Hinzufügen/Entfernen-Modus: normale Klicks auf
     // Objekte schalten deren Zugehörigkeit zur Auswahl um (wie Strg+Klick),
@@ -2655,6 +2810,7 @@
         var minY = Math.min.apply(null, selRects.map(function (r) { return r.y; }));
         var maxX = Math.max.apply(null, selRects.map(function (r) { return r.x + r.w; }));
         var maxY = Math.max.apply(null, selRects.map(function (r) { return r.y + r.h; }));
+        selBoundingBox = { x: minX - 6, y: minY - 6, w: maxX - minX + 12, h: maxY - minY + 12 };
         var selOverlay = el('div', {
           class: 'ic-selection-overlay' + (state.multiSelectAddMode ? ' add-mode' : ''),
           style: 'left:' + (minX - 6) + 'px;top:' + (minY - 6) + 'px;width:' + (maxX - minX + 12) + 'px;height:' + (maxY - minY + 12) + 'px;'
@@ -2668,6 +2824,17 @@
           render();
         });
         selOverlay.appendChild(selAddBtn);
+
+        // Mittelpunkt-Griff: zieht man daran, bewegt sich die ganze Gruppe -
+        // eine klar erkennbare, dedizierte Grifffläche zusätzlich zum Klick
+        // auf die Box selbst (siehe wrap-pointerdown weiter unten).
+        var selMoveHandle = el('div', { class: 'ic-selection-move-handle', title: S.selection_move }, [icon('move')]);
+        selMoveHandle.addEventListener('pointerdown', function (ev) {
+          ev.stopPropagation();
+          startGroupDrag(ev.clientX, ev.clientY);
+        });
+        selOverlay.appendChild(selMoveHandle);
+
         canvas.appendChild(selOverlay);
       }
       // Klick auf leere Fläche: im Hinzufügen-Modus beendet der erste Klick
@@ -2885,8 +3052,15 @@
     var dragFromIdx = null;
     items.forEach(function (entry, idx) {
       var key = entry.kind + ':' + entry.ref.id;
-      var row = el('div', { class: 'ic-thread-item' + (state.selectedItemKey === key ? ' selected' : ''), draggable: 'true' });
-      row.addEventListener('click', function () { selectItem(key); });
+      var row = el('div', {
+        class: 'ic-thread-item' + (state.selectedItemKey === key ? ' selected' : '') +
+          (state.multiSelect.indexOf(key) !== -1 ? ' multi-selected' : ''),
+        draggable: 'true'
+      });
+      row.addEventListener('click', function (ev) {
+        if (ev.ctrlKey || ev.metaKey || state.multiSelectAddMode) { toggleMultiSelectGlobal(key); return; }
+        selectItem(key);
+      });
       if (entry.kind === 'photo') {
         row.appendChild(el('img', { src: entry.ref.url, alt: '' }));
         row.appendChild(el('span', { class: 'ic-thread-item-label' }, [entry.ref.sourcetitle || itemCaptionText(entry.ref)]));
@@ -2914,8 +3088,23 @@
       row.addEventListener('drop', function (ev) {
         ev.preventDefault();
         if (dragFromIdx === null || dragFromIdx === idx) { return; }
-        var moved = items.splice(dragFromIdx, 1)[0];
-        items.splice(idx, 0, moved);
+        var draggedKey = items[dragFromIdx].kind + ':' + items[dragFromIdx].ref.id;
+        var targetKey = key;
+        // Gehört das gezogene Element zu einer bestehenden Mehrfachauswahl,
+        // wird der GANZE Block gemeinsam verschoben - die interne
+        // Reihenfolge der ausgewählten Elemente untereinander bleibt dabei
+        // unverändert, nur ihre Position in der Gesamtliste ändert sich.
+        var blockKeys = (state.multiSelect.indexOf(draggedKey) !== -1 && state.multiSelect.length > 1)
+          ? items.filter(function (it) { return state.multiSelect.indexOf(it.kind + ':' + it.ref.id) !== -1; })
+          : [items[dragFromIdx]];
+        var blockKeySet = {};
+        blockKeys.forEach(function (it) { blockKeySet[it.kind + ':' + it.ref.id] = true; });
+        var rest = items.filter(function (it) { return !blockKeySet[it.kind + ':' + it.ref.id]; });
+        var targetPos = rest.findIndex(function (it) { return (it.kind + ':' + it.ref.id) === targetKey; });
+        if (targetPos === -1) { targetPos = rest.length; }
+        rest.splice(targetPos, 0, blockKeys[0]);
+        rest.splice.apply(rest, [targetPos + 1, 0].concat(blockKeys.slice(1)));
+        items = rest;
         dragFromIdx = null;
         // Oben in der Liste = vorne -> höchstes z zuerst vergeben.
         var total = items.length;
@@ -3016,10 +3205,16 @@
       var itemKey = item.itemtype === 'photo' ? 'photo:' + item.photoid
         : item.itemtype === 'frame' ? 'frame:' + item.id : null;
       var row = el('div', {
-        class: 'ic-thread-item' + (itemKey && state.selectedItemKey === itemKey ? ' selected' : ''),
+        class: 'ic-thread-item' + (itemKey && state.selectedItemKey === itemKey ? ' selected' : '') +
+          (itemKey && state.multiSelect.indexOf(itemKey) !== -1 ? ' multi-selected' : ''),
         draggable: editable ? 'true' : null
       });
-      if (itemKey) { row.addEventListener('click', function () { selectItem(itemKey); }); }
+      if (itemKey) {
+        row.addEventListener('click', function (ev) {
+          if (ev.ctrlKey || ev.metaKey || state.multiSelectAddMode) { toggleMultiSelectGlobal(itemKey); return; }
+          selectItem(itemKey);
+        });
+      }
       var photo = item.itemtype === 'photo'
         ? state.photos.filter(function (p) { return p.id === item.photoid; })[0] : null;
       if (photo) {
@@ -3062,8 +3257,26 @@
         row.addEventListener('drop', function (ev) {
           ev.preventDefault();
           if (dragFromIdx === null || dragFromIdx === idx) { return; }
-          var moved = thread.items.splice(dragFromIdx, 1)[0];
-          thread.items.splice(idx, 0, moved);
+          var draggedItem = thread.items[dragFromIdx];
+          var draggedKey = draggedItem.itemtype === 'photo' ? 'photo:' + draggedItem.photoid : 'frame:' + draggedItem.id;
+          // Gehört das gezogene Element zu einer bestehenden Mehrfachauswahl,
+          // wird der ganze Block gemeinsam verschoben - die interne
+          // Reihenfolge der ausgewählten Elemente untereinander bleibt dabei
+          // unverändert.
+          var blockItems = (state.multiSelect.indexOf(draggedKey) !== -1 && state.multiSelect.length > 1)
+            ? thread.items.filter(function (it) {
+                var k = it.itemtype === 'photo' ? 'photo:' + it.photoid : 'frame:' + it.id;
+                return state.multiSelect.indexOf(k) !== -1;
+              })
+            : [draggedItem];
+          var blockIdSet = {};
+          blockItems.forEach(function (it) { blockIdSet[it.id] = true; });
+          var rest = thread.items.filter(function (it) { return !blockIdSet[it.id]; });
+          var targetPos = rest.indexOf(item);
+          if (targetPos === -1) { targetPos = rest.length; }
+          rest.splice(targetPos, 0, blockItems[0]);
+          rest.splice.apply(rest, [targetPos + 1, 0].concat(blockItems.slice(1)));
+          thread.items = rest;
           dragFromIdx = null;
           callAjax('mod_pinnwand_reorder_thread_items', {
             cmid: cfg.cmid, itemids: thread.items.map(function (it) { return it.id; })
