@@ -1228,3 +1228,27 @@ Fünfundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`,
   gelb, wenn es auf mehreren weiteren Boards existiert (öffnet ein Modal
   mit Übersicht aller Verwendungen, aus dem gezielt einzelne
   Platzierungen entfernt werden können).
+
+---
+
+## Phase 33 — Präsentations-Board-Zuordnungs-Bugfix ✅
+
+Sechsundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`.
+
+- [x] **Kern-Bugfix gefunden**: die Präsentation bestimmte "welches Board
+  wird gezeigt" bisher anhand des Boards der ALLERERSTEN jemals zum Faden
+  hinzugefügten Station (`thread.items[0].boardid`) - nicht anhand des
+  gerade angezeigten Boards. Neu hinzugefügte Stationen (z.B. Rahmen) auf
+  einem ANDEREN Board fielen dadurch unsichtbar aus der Präsentation
+  heraus, obwohl sie im Faden-Panel (das alle Boards ungefiltert
+  auflistet) ganz normal erschienen und ihre Schrittnummer bekamen.
+  Referenz ist jetzt beim eigenen Faden das gerade angezeigte Board
+  (`state.currentBoard`) - bei einem fremden/geteilten Faden bleibt die
+  alte Referenz (Board der ersten Station) bestehen, da dort
+  `state.currentBoard` kein sinnvoller Bezugspunkt ist.
+- [x] Begleit-Fix: die Direkt-Vorschau per Doppelklick
+  (`openPresentationAtItem`) berechnete ihren Ziel-Index bisher anhand
+  der ungefilterten Gesamtliste des Fadens - nach dem Bugfix musste sie
+  konsistent auf die nach Board gefilterte Liste umgestellt werden, sonst
+  wäre bei Fäden mit Stationen auf mehreren Boards der falsche Schritt
+  angesprungen worden.

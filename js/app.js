@@ -3443,9 +3443,13 @@
   function openPresentationAtItem(kind, id) {
     var own = ownThread();
     if (!own || !own.items.length) { return false; }
+    // Index bezieht sich auf die nach dem aktuellen Board gefilterte Liste
+    // (dieselbe Filterung wie in openPresentation), da ein Doppelklick auf
+    // dem Board immer ein Objekt DES gerade angezeigten Boards trifft.
+    var boardItems = own.items.filter(function (it) { return (it.boardid || 0) === state.currentBoard; });
     var idx = -1;
-    for (var i = 0; i < own.items.length; i++) {
-      var it = own.items[i];
+    for (var i = 0; i < boardItems.length; i++) {
+      var it = boardItems[i];
       if (kind === 'photo' && it.itemtype === 'photo' && it.photoid === id) { idx = i; break; }
       if (kind === 'frame' && it.itemtype === 'frame' && it.id === id) { idx = i; break; }
     }
@@ -3774,10 +3778,18 @@
     overlay.appendChild(stageEl);
 
     // Alle Stationen müssen vom selben Board stammen, um gemeinsam
-    // dargestellt zu werden - Referenz ist das Board der ersten Station
-    // (siehe Scoping-Hinweis: Board-übergreifende Fäden sind ein
-    // Sonderfall und werden hier nicht gemischt dargestellt).
-    var firstBoardId = thread.items.length ? (thread.items[0].boardid || 0) : 0;
+    // dargestellt zu werden. Beim eigenen Faden ist das Referenz-Board das
+    // gerade angezeigte Board (nicht mehr das Board der allerersten
+    // jemals hinzugefügten Station - das führte dazu, dass neu
+    // hinzugefügte Stationen auf einem anderen Board unsichtbar aus der
+    // Präsentation herausfielen, obwohl sie im Faden-Panel - das alle
+    // Boards ungefiltert zeigt - ganz normal erschienen). Bei einem
+    // FREMDEN (geteilten) Faden hat state.currentBoard keine Bedeutung
+    // für dessen Board-Nummernschema - dort bleibt die Station der
+    // ersten Station die Referenz.
+    var firstBoardId = thread.isown
+      ? (state.currentBoard || 0)
+      : (thread.items.length ? (thread.items[0].boardid || 0) : 0);
 
     // Alle auf diesem Board platzierten Fotos zeigen (nicht nur die des
     // Fadens) - Textrahmen (Wortfeld) sind technisch auch nur Fotos und

@@ -702,6 +702,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Rot/Gelb-Kennzeichnung für Objekte auf mehreren Boards beim Löschen.
 - Noch offen: echter Wechsel zu fremden Boards im Dropdown.
 
+### Siebenunddreißigste Überarbeitung — Präsentations-Board-Zuordnungs-Bugfix
+
+- **Kern-Bugfix**: die Präsentation bestimmte "welches Board wird gezeigt"
+  bisher anhand des Boards der allerersten jemals hinzugefügten Station,
+  nicht anhand des gerade angezeigten Boards - neue Stationen (z.B.
+  Rahmen) auf einem anderen Board fielen dadurch unsichtbar aus der
+  Präsentation heraus, obwohl sie im Faden-Panel normal erschienen.
+  Referenz ist jetzt das gerade angezeigte Board.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
