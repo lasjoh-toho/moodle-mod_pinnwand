@@ -1073,3 +1073,42 @@ neue Strings.
 - [x] `toggleMultiSelect` auf Modulebene vereinheitlicht
   (`toggleMultiSelectGlobal`), damit sowohl die Pinnwand-Leinwand als auch
   die eigenständigen Layer-/Faden-Panel-Funktionen darauf zugreifen können.
+
+---
+
+## Phase 29 — Klonen-Doppelklick-Bugfix, Zoom-Menü konsolidiert, Pin-Neugestaltung ✅
+
+Zweiundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`,
+neue Strings.
+
+- [x] **Kern-Bugfix Foto-Verdopplung**: der "Board klonen"-Button hatte
+  keinen Schutz vor Doppelklick - ein zweiter Klick vor Abschluss der
+  ersten Anfrage duplizierte alle Fotos ein zweites Mal (Ursache für die
+  gemeldete Verdopplung in Klassenansicht UND Meine Bilder, da beide auf
+  dieselbe Datenbanktabelle zugreifen). Button wird jetzt während der
+  Anfrage deaktiviert. Bereits entstandene Duplikate müssen manuell über
+  den Löschen-Button in der Klassenansicht entfernt werden.
+- [x] Filterleiste aus eigenem Button ins Zoom-Popup verschoben (jetzt
+  dreizeilig: Zoom-Regler / Auswahl-Werkzeuge / Filter).
+- [x] Box-Symbol wählt jetzt sofort alle gerade angezeigten (gefilterten)
+  Objekte aus, statt eine Auswahlbox aufzuziehen.
+- [x] Plus-Symbol überall durch ein Kreis-Symbol ersetzt (Zoom-Popup und
+  Auswahl-Umrandung).
+- [x] Neuer Ausschnitt-Button (Auge-Symbol) springt mit Zoom/Position
+  exakt auf den Bereich, in dem die aktuelle Mehrfachauswahl zu sehen ist.
+- [x] **Pin-Neugestaltung in "Meine Bilder"**: Bild-Wrapper mit eigenem
+  overflow:hidden abgetrennt, damit der Pin darüber hinausragen kann -
+  schwebt jetzt mittig über dem Bild, bevor es befestigt ist; beim
+  Befestigen hebt sich das Bild dem Pin entgegen. Stärkerer Schatten für
+  unbefestigte (schwebende) Bilder, etwas hellerer Thumbnail-Hintergrund.
+- [x] **Pin-Neugestaltung in der Klassenansicht**: Checkbox+Beschriftung
+  vollständig durch den Pin ersetzt - sitzt bei unbefestigten Bildern
+  neben dem Bild, bei befestigten mittig oben auf dem Bild. Sowohl ein
+  Klick auf den Pin als auch auf die jeweils andere (aktuell nicht vom Pin
+  belegte) Position schaltet den Status um. Kurze "Pin"/"Unpin"-Tooltips
+  ergänzt (statt der längeren "Zur Pinnwand senden"-Texte).
+- [x] Nebenbei gefundener Bugfix: `.ic-thumb-btn { display:none }` blendete
+  ab 900px Breite den kompletten Pin-Button aus (Rest aus der Zeit vor
+  dieser Umstellung, als dort stattdessen die Checkbox erschien) - jetzt
+  bleibt der Pin auf allen Bildschirmgrößen sichtbar, nur der separate
+  Löschen-Button in der breiten Spalte bleibt größenabhängig.

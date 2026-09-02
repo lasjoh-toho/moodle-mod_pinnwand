@@ -254,13 +254,15 @@
     var gallery = el('div', { class: 'ic-gallery' });
     state.photos.forEach(function (p, idx) {
       var thumb = el('div', { class: 'ic-thumb' });
+      var imgWrap = el('div', { class: 'ic-thumb-img-wrap' });
       var img = el('img', { src: p.url, alt: '' });
       img.addEventListener('click', function () { openLightbox(idx); });
-      thumb.appendChild(img);
+      imgWrap.appendChild(img);
+      thumb.appendChild(imgWrap);
       if (state.studentcansend) {
         var pin = el('button', {
           class: 'ic-pin' + (p.hiddenfromboard ? '' : ' active'),
-          title: p.hiddenfromboard ? S.sendtoboard : S.removefromboard
+          title: p.hiddenfromboard ? S.pintooltip : S.unpintooltip
         }, [icon('thumbtack')]);
         pin.addEventListener('click', function (ev) {
           ev.stopPropagation();
@@ -1717,6 +1719,8 @@
     boxselect: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 3"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
     move: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>',
     filter: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="4 4 20 4 14 12.5 14 19 10 21 10 12.5 4 4"/></svg>',
+    circle: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
     trash: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
     grid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg>',
@@ -1907,12 +1911,14 @@
       var cloneBoard = el('button', { class: 'ic-icon-btn', title: S.cloneboard }, [icon('clone')]);
       cloneBoard.addEventListener('click', function () {
         if (!confirm(S.cloneboard_confirm)) { return; }
+        if (cloneBoard.disabled) { return; } // Schutz vor Doppelklick - hat sonst alle Fotos zweimal dupliziert
+        cloneBoard.disabled = true;
         callAjax('mod_pinnwand_clone_board', { cmid: cfg.cmid, boardid: state.currentBoard }).then(function (res) {
           refreshPhotos().then(function () {
             state.currentBoard = res.newboardid;
             render();
           });
-        });
+        }).catch(function () { cloneBoard.disabled = false; });
       });
       wrap.appendChild(cloneBoard);
     }
@@ -2373,6 +2379,33 @@
       zoomBoardBy(Math.max(0.1, zoomValue) / state.boardZoom, clientX, clientY);
     }
 
+    // Springt mit Kamera-Zoom/-Position exakt auf den Ausschnitt, in dem
+    // alle aktuell ausgewählten Objekte zu sehen sind.
+    function fitViewToSelection() {
+      if (!state.multiSelect.length) { return; }
+      var rects = state.multiSelect.map(function (k) {
+        var parts = k.split(':'); var kind = parts[0], id = parseInt(parts[1], 10);
+        if (kind === 'photo') {
+          var op = state.photos.filter(function (o) { return o.id === id; })[0];
+          return op ? boardRectOf(op, 'photo') : null;
+        }
+        var ot = ownThread();
+        var oi = ot ? ot.items.filter(function (o) { return o.itemtype === 'frame' && o.id === id; })[0] : null;
+        return oi ? boardRectOf(oi, 'frame') : null;
+      }).filter(Boolean);
+      if (!rects.length) { return; }
+      var minX = Math.min.apply(null, rects.map(function (r) { return r.x; })) - 30;
+      var minY = Math.min.apply(null, rects.map(function (r) { return r.y; })) - 30;
+      var maxX = Math.max.apply(null, rects.map(function (r) { return r.x + r.w; })) + 30;
+      var maxY = Math.max.apply(null, rects.map(function (r) { return r.y + r.h; })) + 30;
+      var rect = wrap.getBoundingClientRect();
+      var fit = Math.min(rect.width / (maxX - minX), rect.height / (maxY - minY), 3);
+      state.boardZoom = Math.max(0.1, fit);
+      state.boardPanX = rect.width / 2 - (minX + maxX) / 2 * state.boardZoom;
+      state.boardPanY = rect.height / 2 - (minY + maxY) / 2 * state.boardZoom;
+      applyBoardTransform();
+    }
+
     // Mausrad zoomt (zentriert auf den Mauszeiger) - unabhängig von der
     // "Pinnwand verschiebbar"-Einstellung, da Zoomen ein grundlegendes
     // Bedürfnis ist, das nicht an ein Werkzeug gebunden sein muss.
@@ -2591,9 +2624,9 @@
     dataBtn.addEventListener('click', function () { state.showData = !state.showData; render(); });
     fabRow.appendChild(dataBtn);
 
-    // Lupe: öffnet ein kleines Zoom-Popup (Regler + Plus/Minus) statt einer
-    // permanent sichtbaren Button-Gruppe.
-    var zoomBtn = el('button', { class: 'ic-fab', title: S.zoomtool }, [icon('search')]);
+    // Lupe: öffnet ein kleines Zoom-Popup (Regler + Plus/Minus + Auswahl-
+    // Werkzeuge + Filterleiste) statt mehrerer permanent sichtbarer Buttons.
+    var zoomBtn = el('button', { class: 'ic-fab' + (state.boardFilter ? ' active' : ''), title: S.zoomtool }, [icon('search')]);
     zoomBtn.addEventListener('click', function () {
       var existing = document.getElementById('ic-zoom-popup');
       if (existing) { existing.remove(); return; }
@@ -2606,48 +2639,61 @@
       zoomSlider.addEventListener('input', function () { zoomBoardTo(parseInt(zoomSlider.value, 10) / 100); });
       var zoomInBtn = el('button', { class: 'ic-icon-btn', title: S.zoomin }, ['+']);
       zoomInBtn.addEventListener('click', function () { zoomBoardBy(1 / 0.85); zoomSlider.value = Math.round(state.boardZoom * 100); });
-      popup.appendChild(zoomOutBtn); popup.appendChild(zoomSlider); popup.appendChild(zoomInBtn);
+      var row1 = el('div', { class: 'ic-zoom-popup-row' });
+      row1.appendChild(zoomOutBtn); row1.appendChild(zoomSlider); row1.appendChild(zoomInBtn);
 
-      // Auswahlbox und Hinzufügen-Modus lassen sich hier auch ohne langes
-      // Drücken bzw. ohne bestehende Auswahl starten.
+      // Box-Symbol: wählt sofort alle gerade angezeigten (gefilterten)
+      // Objekte aus. Kreis-Symbol: aktiviert den Hinzufügen/Entfernen-Modus
+      // (danach angetippte einzelne Objekte werden zur Auswahl hinzugefügt/
+      // entfernt). Auge: springt mit der Kamera genau auf den Ausschnitt,
+      // in dem die aktuelle Auswahl zu sehen ist.
       var boxSelBtn = el('button', { class: 'ic-icon-btn', title: S.boxselect }, [icon('boxselect')]);
       boxSelBtn.addEventListener('click', function () {
         popup.remove();
-        boxModeArmed = true;
+        var keys = visible.map(function (p) { return 'photo:' + p.id; });
+        if (state.threadPanelOpen || state.layerPanelOpen) {
+          var ot = ownThread();
+          if (ot) {
+            ot.items.forEach(function (it) {
+              if (it.itemtype === 'frame' && (it.boardid || 0) === state.currentBoard) { keys.push('frame:' + it.id); }
+            });
+          }
+        }
+        state.multiSelect = keys;
+        render();
       });
-      var addSelBtn = el('button', { class: 'ic-icon-btn', title: S.selection_add }, ['+\u25CB']);
+      var addSelBtn = el('button', { class: 'ic-icon-btn ic-icon-btn-circle', title: S.selection_add }, [icon('circle')]);
       addSelBtn.addEventListener('click', function () {
         popup.remove();
         state.multiSelectAddMode = true;
         render();
       });
-      popup.appendChild(boxSelBtn); popup.appendChild(addSelBtn);
+      var fitSelBtn = el('button', { class: 'ic-icon-btn', title: S.selection_fit }, [icon('eye')]);
+      fitSelBtn.addEventListener('click', function () {
+        popup.remove();
+        fitViewToSelection();
+      });
+      var row2 = el('div', { class: 'ic-zoom-popup-row' });
+      row2.appendChild(boxSelBtn); row2.appendChild(addSelBtn); row2.appendChild(fitSelBtn);
 
-      body.appendChild(popup);
-    });
-    fabRow.appendChild(zoomBtn);
-
-    // Filterleiste: blendet Fotos aus, die in keinem der Felder Titel/Jahr/
-    // Epoche/Autor der Vorlage/Autor mit dem eingegebenen Muster übereinstimmen.
-    var filterBtn = el('button', { class: 'ic-fab' + (state.boardFilter ? ' active' : ''), title: S.filterbar }, [icon('filter')]);
-    filterBtn.addEventListener('click', function () {
-      var existing = document.getElementById('ic-filter-popup');
-      if (existing) { existing.remove(); return; }
-      var popup = el('div', { class: 'ic-filter-popup', id: 'ic-filter-popup' });
+      // Filterleiste (Titel/Jahr/Epoche/Autor der Vorlage/Autor) direkt
+      // hier statt eines eigenen Buttons.
       var filterInput = el('input', {
-        type: 'text', placeholder: S.filterbar_placeholder, value: state.boardFilter
+        type: 'text', placeholder: S.filterbar_placeholder, value: state.boardFilter, class: 'ic-zoom-filter-input'
       });
       filterInput.addEventListener('input', function () {
         state.boardFilter = filterInput.value;
         applyBoardFilterVisibility();
       });
       var filterClear = el('button', { class: 'ic-icon-btn', title: S.filterbar_clear }, ['\u2715']);
-      filterClear.addEventListener('click', function () { state.boardFilter = ''; render(); });
-      popup.appendChild(filterInput); popup.appendChild(filterClear);
+      filterClear.addEventListener('click', function () { state.boardFilter = ''; filterInput.value = ''; applyBoardFilterVisibility(); });
+      var row3 = el('div', { class: 'ic-zoom-popup-row' });
+      row3.appendChild(filterInput); row3.appendChild(filterClear);
+
+      popup.appendChild(row1); popup.appendChild(row2); popup.appendChild(row3);
       body.appendChild(popup);
-      filterInput.focus();
     });
-    fabRow.appendChild(filterBtn);
+    fabRow.appendChild(zoomBtn);
 
     // Seitenleisten-Buttons (Roter Faden / Post-Stream / Schichtung) in der
     // oberen rechten Ecke der Pinnwand - schließen sich gegenseitig, da sie
@@ -2817,7 +2863,7 @@
         });
         var selAddBtn = el('button', {
           class: 'ic-selection-add-btn' + (state.multiSelectAddMode ? ' active' : ''), title: S.selection_add
-        }, ['+']);
+        }, [icon('circle')]);
         selAddBtn.addEventListener('click', function (ev) {
           ev.stopPropagation();
           state.multiSelectAddMode = true;
@@ -3911,25 +3957,35 @@
       var img = el('img', { src: p.url, alt: '' });
       thumbWrap.appendChild(img);
 
-      // Kompakte Overlay-Steuerung direkt auf dem Thumbnail (nur schmale
-      // Bildschirme sichtbar) - auf breiten Bildschirmen bleiben die
-      // ausführlichen Steuerelemente weiter unten in der Zeile aktiv.
+      // Kompakte Overlay-Steuerung direkt auf dem Thumbnail - der Pin sitzt
+      // bei unbefestigten Bildern NEBEN dem Bild, bei befestigten mittig
+      // OBEN auf dem Bild (siehe CSS .ic-thumb-btn-pin.pinned). Sowohl ein
+      // Klick auf den Pin als auch auf die jeweils andere (aktuell nicht
+      // vom Pin belegte) Position schaltet den Status um.
       if (candelete && state.teachercansend) {
         var pinOverlay = el('button', {
-          class: 'ic-thumb-btn ic-thumb-btn-pin' + (p.hiddenfromboard ? '' : ' active'),
-          title: p.hiddenfromboard ? S.sendtoboard : S.removefromboard
+          class: 'ic-thumb-btn ic-thumb-btn-pin' + (p.hiddenfromboard ? '' : ' active pinned'),
+          title: p.hiddenfromboard ? S.pintooltip : S.unpintooltip
         }, [icon('thumbtack')]);
-        pinOverlay.addEventListener('click', function () {
+        var pinOtherZone = el('div', {
+          class: 'ic-thumb-pin-otherzone' + (p.hiddenfromboard ? ' pinned' : ''),
+          title: p.hiddenfromboard ? S.pintooltip : S.unpintooltip
+        });
+        function togglePin() {
           var newHidden = !p.hiddenfromboard;
           callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: newHidden }).then(function () {
             p.hiddenfromboard = newHidden;
             pinOverlay.classList.toggle('active', !p.hiddenfromboard);
-            pinOverlay.title = p.hiddenfromboard ? S.sendtoboard : S.removefromboard;
-            if (typeof pinCheck !== 'undefined') { pinCheck.checked = !p.hiddenfromboard; }
+            pinOverlay.classList.toggle('pinned', !p.hiddenfromboard);
+            pinOtherZone.classList.toggle('pinned', p.hiddenfromboard);
+            pinOverlay.title = pinOtherZone.title = p.hiddenfromboard ? S.pintooltip : S.unpintooltip;
             loadStreamPhotos();
           });
-        });
+        }
+        pinOverlay.addEventListener('click', togglePin);
+        pinOtherZone.addEventListener('click', togglePin);
         thumbWrap.appendChild(pinOverlay);
+        thumbWrap.appendChild(pinOtherZone);
       }
       if (candelete) {
         var delOverlay = el('button', { class: 'ic-thumb-btn ic-thumb-btn-del', html: '&times;' });
@@ -3943,25 +3999,10 @@
       }
       thumbCluster.appendChild(thumbWrap);
 
-      // Auf breiten Bildschirmen: ausführliche Checkbox + Löschen-Button
-      // direkt neben (nicht mehr innerhalb der Metadaten-Zeile bzw. am
-      // Ende der Zeile) - siehe .ic-thumb-cluster-controls in CSS.
+      // Auf breiten Bildschirmen: Löschen-Button zusätzlich hier (der Pin
+      // sitzt jetzt direkt auf dem Thumbnail, siehe oben - keine separate
+      // Checkbox/Beschriftung mehr nötig).
       var wideControls = el('div', { class: 'ic-thumb-cluster-controls ic-wide-only' });
-      if (candelete && state.teachercansend) {
-        var pinLabel = el('label', { class: 'ic-me-check' });
-        var pinCheck = el('input', { type: 'checkbox' });
-        pinCheck.checked = !p.hiddenfromboard;
-        pinCheck.addEventListener('change', function () {
-          var newHidden = !pinCheck.checked;
-          callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: newHidden }).then(function () {
-            p.hiddenfromboard = newHidden;
-            loadStreamPhotos();
-          }).catch(function () { pinCheck.checked = !pinCheck.checked; });
-        });
-        pinLabel.appendChild(pinCheck);
-        pinLabel.appendChild(document.createTextNode(S.pinboard));
-        wideControls.appendChild(pinLabel);
-      }
       if (candelete) {
         var del = el('button', { class: 'ic-btn ic-btn-danger' }, ['\u2715']);
         del.addEventListener('click', function () {

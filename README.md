@@ -663,6 +663,22 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - **Neu: Filterleiste** - blendet Fotos aus, die in keinem der Felder
   Titel/Jahr/Epoche/Autor der Vorlage/Autor mit dem Muster übereinstimmen.
 
+### Dreiunddreißigste Überarbeitung — Klonen-Bugfix, Zoom-Menü konsolidiert, Pin-Neugestaltung
+
+- **Kern-Bugfix**: "Board klonen" hatte keinen Schutz vor Doppelklick -
+  ein zweiter Klick duplizierte alle Fotos ein zweites Mal (Ursache der
+  gemeldeten Verdopplung). Bereits entstandene Duplikate müssen manuell
+  gelöscht werden.
+- Filterleiste jetzt Teil des Zoom-Popups statt eines eigenen Buttons; Box-
+  Symbol wählt sofort alle sichtbaren Objekte; Plus wurde zum Kreis;
+  neuer Ausschnitt-Button (Auge) springt auf die aktuelle Auswahl.
+- Pin-Neugestaltung in "Meine Bilder" und der Klassenansicht: Pin schwebt/
+  sitzt neben dem Bild, wenn nicht befestigt, rückt beim Befestigen an die
+  Bildmitte/-oberkante, während sich das Bild ihm entgegenhebt. Checkbox
+  in der Klassenansicht entfernt, kurze Pin/Unpin-Tooltips ergänzt.
+- Nebenbei gefunden: der Pin-Button war ab 900px Bildschirmbreite
+  komplett unsichtbar - behoben.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
