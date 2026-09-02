@@ -1,5 +1,10 @@
 /* Bildaufnahme-App: eigenständiges, mobiltaugliches Layout */
 .pinnwand-app, .pinnwand-app * { box-sizing: border-box; }
+.pinnwand-app * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.3) transparent; }
+.pinnwand-app *::-webkit-scrollbar { width: 6px; height: 6px; }
+.pinnwand-app *::-webkit-scrollbar-track { background: transparent; }
+.pinnwand-app *::-webkit-scrollbar-thumb { background: rgba(255,255,255,.3); border-radius: 3px; }
+.pinnwand-app *::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.5); }
 .pinnwand-app {
   --ic-bg: #101114;
   --ic-panel: #1b1d22;
@@ -290,7 +295,6 @@
   display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 20px;
   background: rgba(20,21,24,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
-.ic-zoom-slider { width: 120px; }
 
 /* Roter Faden: Seitenpanel + Buttons */
 .ic-thread-add-toggle {

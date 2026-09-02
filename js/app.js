@@ -367,7 +367,7 @@
     panel.appendChild(closeBtn);
 
     overlay.appendChild(panel);
-    document.body.appendChild(overlay);
+    root.appendChild(overlay);
   }
 
   // ==================================================================
@@ -2247,9 +2247,23 @@
       body.appendChild(fullHint);
     }
 
-    // ---- Hand-Werkzeug + Zoom-Regler (nur wenn Aktivität es erlaubt) ----
+    // ---- Zoom (immer verfügbar) + Hand-Werkzeug (nur wenn Aktivität es erlaubt) ----
+    // Zoomt so, dass der angegebene Bildschirmpunkt (Mauszeiger bzw. bei den
+    // +/- Buttons die Board-Mitte) an derselben Stelle stehen bleibt.
+    function zoomBoardBy(factor, clientX, clientY) {
+      var newZoom = Math.max(0.1, Math.min(3, state.boardZoom * factor));
+      var rect = wrap.getBoundingClientRect();
+      var cx = (clientX != null ? clientX : rect.left + rect.width / 2) - rect.left;
+      var cy = (clientY != null ? clientY : rect.top + rect.height / 2) - rect.top;
+      var wx = (cx - state.boardPanX) / state.boardZoom;
+      var wy = (cy - state.boardPanY) / state.boardZoom;
+      state.boardZoom = newZoom;
+      state.boardPanX = cx - wx * newZoom;
+      state.boardPanY = cy - wy * newZoom;
+      applyBoardTransform();
+    }
+    var zoomBar = el('div', { class: 'ic-pan-bar' });
     if (cfg.boardpannable) {
-      var panBar = el('div', { class: 'ic-pan-bar' });
       var handBtn = el('button', {
         class: 'ic-icon-btn' + (state.boardPanMode ? ' active' : ''), title: S.pantool
       }, [icon('hand')]);
@@ -2258,20 +2272,27 @@
         wrap.classList.toggle('pan-active', state.boardPanMode);
         handBtn.classList.toggle('active', state.boardPanMode);
       });
-      var zoomSlider = el('input', {
-        type: 'range', min: '50', max: '200', step: '5', value: String(Math.round(state.boardZoom * 100)),
-        class: 'ic-zoom-slider'
-      });
-      zoomSlider.addEventListener('input', function () {
-        state.boardZoom = (parseInt(zoomSlider.value, 10) || 100) / 100;
-        applyBoardTransform();
-      });
-      panBar.appendChild(handBtn);
-      panBar.appendChild(zoomSlider);
-      body.appendChild(panBar);
+      zoomBar.appendChild(handBtn);
+    }
+    var zoomOutBtn = el('button', { class: 'ic-icon-btn', title: S.zoomout }, ['\u2212']);
+    zoomOutBtn.addEventListener('click', function () { zoomBoardBy(0.85); });
+    var zoomInBtn = el('button', { class: 'ic-icon-btn', title: S.zoomin }, ['+']);
+    zoomInBtn.addEventListener('click', function () { zoomBoardBy(1 / 0.85); });
+    zoomBar.appendChild(zoomOutBtn);
+    zoomBar.appendChild(zoomInBtn);
+    body.appendChild(zoomBar);
 
-      // Ziehen auf leerer Fläche (nicht auf einem Foto) verschiebt die
-      // Ansicht, solange das Hand-Werkzeug aktiv ist.
+    // Mausrad zoomt (zentriert auf den Mauszeiger) - unabhängig von der
+    // "Pinnwand verschiebbar"-Einstellung, da Zoomen ein grundlegendes
+    // Bedürfnis ist, das nicht an das Hand-Werkzeug gebunden sein muss.
+    wrap.addEventListener('wheel', function (ev) {
+      if (!ev.ctrlKey && Math.abs(ev.deltaY) < Math.abs(ev.deltaX)) { return; } // horizontales Scrollen ignorieren
+      ev.preventDefault();
+      var factor = ev.deltaY < 0 ? 1.1 : 1 / 1.1;
+      zoomBoardBy(factor, ev.clientX, ev.clientY);
+    }, { passive: false });
+
+    if (cfg.boardpannable) {
       var panDragging = false, panStartX = 0, panStartY = 0, panOrigX = 0, panOrigY = 0;
       wrap.addEventListener('pointerdown', function (ev) {
         if (!state.boardPanMode) { return; }

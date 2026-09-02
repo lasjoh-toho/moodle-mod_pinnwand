@@ -596,6 +596,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Bewusst noch nicht umgesetzt: Audio/Video als Board-Objekte (siehe
   Scoping-Hinweis zu Phase 22 im IMPLEMENTATION_PLAN).
 
+### Siebenundzwanzigste Überarbeitung — Plus-Button-Bugfix, Zoom + schmale Scrollbalken
+
+- **Kern-Bugfix**: das Hinzufügen-Modal hing außerhalb des Bereichs, in
+  dem die App ihre CSS-Variablen definiert - dadurch praktisch unsichtbar/
+  unbedienbar. Behoben.
+- Zoom-Buttons (+/-) und Mausrad-Zoom für die Pinnwand ergänzt, jetzt
+  immer verfügbar (nicht mehr nur bei aktivierter Verschiebbarkeit).
+- Schmale Scrollbalken app-weit.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

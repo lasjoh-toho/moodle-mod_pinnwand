@@ -143,6 +143,8 @@ $config = [
         'zoom_out' => get_string('zoom_out', 'pinnwand'),
         'zoom_reset' => get_string('zoom_reset', 'pinnwand'),
         'pantool' => get_string('pantool', 'pinnwand'),
+        'zoomin' => get_string('zoomin', 'pinnwand'),
+        'zoomout' => get_string('zoomout', 'pinnwand'),
         'boardof' => get_string('boardof', 'pinnwand', ['cur' => '{cur}', 'total' => '{total}']),
         'newboard' => get_string('newboard', 'pinnwand'),
         'boardfull_confirm' => get_string('boardfull_confirm', 'pinnwand'),

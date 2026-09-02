@@ -894,3 +894,25 @@ Strings.
   mit On-Demand-Nachladen) - stattdessen eine schlankere, aber
   vollständig funktionsfähige Variante mit sechs kuratierten Stilen und
   der bestehenden (kleineren) Schriftauswahl.
+
+---
+
+## Phase 23 — Plus-Button-Bugfix, Zoom-Buttons + Mausrad, schmale Scrollbalken ✅
+
+Sechzehnter Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Kern-Bugfix Plus-Button**: das neue "Hinzufügen"-Modal (Phase 22)
+  wurde an `document.body` angehängt - AUSSERHALB von `#pinnwand-app`, wo
+  sämtliche CSS-Variablen (Farben, Akzentfarbe usw.) definiert sind.
+  Dadurch blieb das Modal praktisch unsichtbar/unbedienbar (ein Klick
+  irgendwo darauf traf de facto nur die dunkle Overlay-Fläche und schloss
+  es sofort wieder). Jetzt wie das bestehende Settings-Panel innerhalb der
+  App-Wurzel eingehängt (`root.appendChild` statt `document.body.appendChild`).
+- [x] **Zoom-Buttons (+/-) und Mausrad-Zoom** für die Pinnwand ergänzt -
+  jetzt unabhängig von der "Pinnwand verschiebbar"-Instanzeinstellung
+  immer verfügbar (das Hand-Werkzeug zum Ziehen bleibt weiterhin davon
+  abhängig). Zoomt zentriert auf den Mauszeiger (bzw. bei den Buttons auf
+  die Board-Mitte) - der anvisierte Punkt bleibt beim Zoomen an derselben
+  Bildschirmstelle stehen.
+- [x] Schmale Scrollbalken app-weit (Firefox: `scrollbar-width:thin`;
+  Chrome/Safari: `::-webkit-scrollbar`).
