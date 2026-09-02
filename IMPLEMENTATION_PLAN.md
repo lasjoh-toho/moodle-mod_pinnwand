@@ -1003,3 +1003,27 @@ Interaktionssystem (Auswahlbox-Rendering, Hit-Testing gegen alle
 Objekte, gemeinsames Verschieben mehrerer Elemente) und wurde für einen
 eigenen, sauberen Durchgang zurückgestellt statt in dieser bereits sehr
 umfangreichen Antwort überstürzt mit umgesetzt zu werden.
+
+---
+
+## Phase 26 — Mehrfachauswahl per Auswahlbox ✅
+
+Neunzehnter Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Auswahlbox per langem Drücken** (Finger oder Maus, ~450ms ohne
+  nennenswerte Bewegung) auf leerer Fläche der Pinnwand - zieht man
+  danach weiter, spannt sich eine Box auf; beim Loslassen werden alle
+  Fotos (und, falls die Faden-/Schichtung-Leiste offen ist, auch Rahmen)
+  innerhalb der Box ausgewählt. Bewegt sich der Zeiger VOR Ablauf der
+  450ms merklich, bleibt es beim normalen Verschieben der Ansicht.
+- [x] **Strg+Klick** fügt einzelne Objekte zur Auswahl hinzu/entfernt sie
+  wieder, ohne eine Box aufzuziehen.
+- [x] **Gemeinsames Verschieben**: Zieht man ein Objekt, das Teil der
+  Mehrfachauswahl ist, bewegen sich alle ausgewählten Objekte um denselben
+  Versatz mit (Daten sofort, sichtbar nach dem Loslassen).
+- [x] **Plus-Button oben rechts an der Umrandung der Auswahl** - startet
+  eine weitere Auswahlbox, deren Treffer zur bestehenden Auswahl
+  hinzugefügt (nicht ersetzt) werden.
+- [x] Nur auf der Pinnwand/im Layersystem verfügbar, bewusst NICHT in der
+  Präsentation (dort hat Ziehen bereits eine andere Bedeutung - manuelles
+  Kamera-Schwenken, siehe Phase 25).

@@ -81,7 +81,8 @@
     boardDrawWidth: 0.01,
     boardDrawErase: false,
     threadObjectFilter: 'all',
-    boardNames: {} // boardid -> eigener Titel (Standard: Aktivitätsname [+ Nummer], siehe boardDisplayName)
+    boardNames: {}, // boardid -> eigener Titel (Standard: Aktivitätsname [+ Nummer], siehe boardDisplayName)
+    multiSelect: [] // Mehrfachauswahl per Auswahlbox/Strg+Klick, z.B. ['photo:12','frame:3']
   };
 
   // ------------------------------------------------------------------
@@ -2058,7 +2059,8 @@
     visible.forEach(function (p) {
       var item = el('div', {
         class: 'ic-arrange-item' + (threadPhotoIds[p.id] ? ' ic-in-thread' : '') +
-          (state.selectedItemKey === 'photo:' + p.id ? ' selected' : ''),
+          (state.selectedItemKey === 'photo:' + p.id ? ' selected' : '') +
+          (state.multiSelect.indexOf('photo:' + p.id) !== -1 ? ' multi-selected' : ''),
         style: 'left:' + p.canvasx + 'px;top:' + p.canvasy + 'px;width:' + p.canvasw + 'px;' +
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
@@ -2138,21 +2140,31 @@
       });
 
       var moved = false;
+      var groupKey = 'photo:' + p.id;
       makeMovable(item, canvas, function (x, y) {
+        var dx = x - p.canvasx, dy = y - p.canvasy;
         p.canvasx = x; p.canvasy = y; moved = true;
+        applyGroupDelta(groupKey, dx, dy);
       }, function () {
         if (moved) {
-          persistLayout(p); moved = false;
+          persistLayout(p);
+          if (state.multiSelect.indexOf(groupKey) !== -1 && state.multiSelect.length > 1) {
+            persistGroupExcept(groupKey);
+            render();
+          }
+          moved = false;
           // Der Rote Faden (rote Rahmen + Verbindungslinie) muss neu
           // gezeichnet werden, sobald sich die Position eines enthaltenen
           // Fotos ändert - sonst "hinkt" die Linie der neuen Position
           // hinterher, bis irgendein anderer Grund einen Re-Render auslöst.
           if (state.threadPanelOpen) { render(); }
+        } else if (lastPointerCtrl) {
+          toggleMultiSelect(groupKey);
         } else if (state.threadPanelOpen || state.layerPanelOpen) {
           // Im Layer-/Faden-Modus: einfacher Klick markiert das Objekt statt
           // die Galerie zu öffnen (siehe dblclick weiter unten für die
           // Präsentations-Vorschau).
-          selectItem('photo:' + p.id);
+          selectItem(groupKey);
         }
         else if (state.boardDrawMode) { openLightbox(state.photos.indexOf(p), true); }
         else { openLightbox(state.photos.indexOf(p)); }
@@ -2188,7 +2200,8 @@
           var lineWidth = threadForCanvas.linewidth || 3;
           var frameEl = el('div', {
             class: 'ic-thread-frame-onboard' + (threadForCanvas.isown ? ' editable' : '') +
-              (state.selectedItemKey === 'frame:' + it.id ? ' selected' : ''),
+              (state.selectedItemKey === 'frame:' + it.id ? ' selected' : '') +
+              (state.multiSelect.indexOf('frame:' + it.id) !== -1 ? ' multi-selected' : ''),
             style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;' +
               'transform:rotate(' + it.framerot + 'deg);border-color:' + lineColor + ';border-width:' + lineWidth + 'px'
           });
@@ -2204,11 +2217,20 @@
               framew: it.framew, frameh: it.frameh, framerot: it.framerot, framez: it.framez || 0
             });
           }
+          var frameGroupKey = 'frame:' + it.id;
           makeMovable(frameEl, canvas, function (x, y) {
+            var dx = x - it.framex, dy = y - it.framey;
             it.framex = x; it.framey = y;
+            applyGroupDelta(frameGroupKey, dx, dy);
           }, function (moved) {
-            if (moved) { persistFrame(); render(); }
-            else { selectItem('frame:' + it.id); }
+            if (moved) {
+              persistFrame();
+              if (state.multiSelect.indexOf(frameGroupKey) !== -1 && state.multiSelect.length > 1) {
+                persistGroupExcept(frameGroupKey);
+              }
+              render();
+            } else if (lastPointerCtrl) { toggleMultiSelect(frameGroupKey); }
+            else { selectItem(frameGroupKey); }
           });
           frameEl.addEventListener('dblclick', function (ev) {
             if (openPresentationAtItem('frame', it.id)) { ev.preventDefault(); }
@@ -2339,24 +2361,148 @@
 
     // Verschieben auf leerer Fläche (nicht auf einem Foto/Rahmen/Bedienelement)
     // funktioniert jetzt immer - unabhängig von Instanzeinstellung/Werkzeug.
+    // Kurzes Ziehen = Verschieben der Ansicht; langes Halten OHNE Bewegung
+    // löst stattdessen eine Auswahlbox aus (Mehrfachauswahl).
     var panDragging = false, panStartX = 0, panStartY = 0, panOrigX = 0, panOrigY = 0;
     function isEmptyAreaTarget(target) {
       return !target.closest('.ic-arrange-item, .ic-thread-frame-onboard, button, input, a, .ic-board-ink-layer.active');
     }
+
+    var longPressTimer = null, longPressStartX = 0, longPressStartY = 0;
+    var selectionBoxEl = null, selBoxStartWorld = null, selBoxAdd = false;
+
+    var lastPointerCtrl = false;
+    canvas.addEventListener('mousedown', function (ev) { lastPointerCtrl = ev.ctrlKey || ev.metaKey; }, true);
+
+    // Wendet denselben Versatz (dx,dy) auf alle ÜBRIGEN Mitglieder der
+    // Mehrfachauswahl an (nur die Daten - sichtbar wird es nach dem
+    // Loslassen per render(), siehe persistGroupExcept).
+    function applyGroupDelta(exceptKey, dx, dy) {
+      if (state.multiSelect.indexOf(exceptKey) === -1 || state.multiSelect.length < 2) { return; }
+      state.multiSelect.forEach(function (k) {
+        if (k === exceptKey) { return; }
+        var parts = k.split(':'); var kind = parts[0], id = parseInt(parts[1], 10);
+        if (kind === 'photo') {
+          var op = state.photos.filter(function (o) { return o.id === id; })[0];
+          if (op) { op.canvasx += dx; op.canvasy += dy; }
+        } else {
+          var ot = ownThread();
+          var oi = ot ? ot.items.filter(function (o) { return o.itemtype === 'frame' && o.id === id; })[0] : null;
+          if (oi) { oi.framex += dx; oi.framey += dy; }
+        }
+      });
+    }
+    function persistGroupExcept(exceptKey) {
+      state.multiSelect.forEach(function (k) {
+        if (k === exceptKey) { return; }
+        var parts = k.split(':'); var kind = parts[0], id = parseInt(parts[1], 10);
+        if (kind === 'photo') {
+          var op = state.photos.filter(function (o) { return o.id === id; })[0];
+          if (op) { persistLayout(op); }
+        } else {
+          var ot = ownThread();
+          var oi = ot ? ot.items.filter(function (o) { return o.itemtype === 'frame' && o.id === id; })[0] : null;
+          if (oi) {
+            callAjax('mod_pinnwand_update_thread_frame', {
+              cmid: cfg.cmid, itemid: oi.id, framex: oi.framex, framey: oi.framey,
+              framew: oi.framew, frameh: oi.frameh, framerot: oi.framerot || 0, framez: oi.framez || 0
+            });
+          }
+        }
+      });
+    }
+    function toggleMultiSelect(key) {
+      var idx = state.multiSelect.indexOf(key);
+      if (idx === -1) { state.multiSelect.push(key); } else { state.multiSelect.splice(idx, 1); }
+      render();
+    }
+
+    function boardRectOf(idOrItem, kind) {
+      if (kind === 'photo') {
+        return { x: idOrItem.canvasx, y: idOrItem.canvasy, w: idOrItem.canvasw, h: idOrItem.canvasw * 0.75 };
+      }
+      return { x: idOrItem.framex, y: idOrItem.framey, w: idOrItem.framew, h: idOrItem.frameh };
+    }
+
+    function startSelectionBox(clientX, clientY, addMode) {
+      panDragging = false;
+      selBoxAdd = addMode;
+      selBoxStartWorld = screenToCanvas(clientX, clientY);
+      selectionBoxEl = el('div', { class: 'ic-selection-box' });
+      canvas.appendChild(selectionBoxEl);
+      updateSelectionBox(clientX, clientY);
+    }
+    function updateSelectionBox(clientX, clientY) {
+      if (!selectionBoxEl) { return; }
+      var cur = screenToCanvas(clientX, clientY);
+      var x = Math.min(selBoxStartWorld.x, cur.x), y = Math.min(selBoxStartWorld.y, cur.y);
+      var w = Math.abs(cur.x - selBoxStartWorld.x), h = Math.abs(cur.y - selBoxStartWorld.y);
+      selectionBoxEl.style.left = x + 'px'; selectionBoxEl.style.top = y + 'px';
+      selectionBoxEl.style.width = w + 'px'; selectionBoxEl.style.height = h + 'px';
+      selectionBoxEl._rect = { x: x, y: y, w: w, h: h };
+    }
+    function finishSelectionBox() {
+      if (!selectionBoxEl) { return; }
+      var box = selectionBoxEl._rect;
+      selectionBoxEl.remove();
+      selectionBoxEl = null;
+      if (!box || box.w < 4 || box.h < 4) { return; }
+      var found = [];
+      state.photos.forEach(function (p) {
+        if (p.hiddenfromboard || !p.boardplaced || (p.boardid || 0) !== state.currentBoard) { return; }
+        var r = boardRectOf(p, 'photo');
+        if (r.x < box.x + box.w && r.x + r.w > box.x && r.y < box.y + box.h && r.y + r.h > box.y) {
+          found.push('photo:' + p.id);
+        }
+      });
+      if (state.threadPanelOpen || state.layerPanelOpen) {
+        var ot = ownThread();
+        if (ot) {
+          ot.items.forEach(function (it) {
+            if (it.itemtype !== 'frame' || (it.boardid || 0) !== state.currentBoard) { return; }
+            var r = boardRectOf(it, 'frame');
+            if (r.x < box.x + box.w && r.x + r.w > box.x && r.y < box.y + box.h && r.y + r.h > box.y) {
+              found.push('frame:' + it.id);
+            }
+          });
+        }
+      }
+      if (selBoxAdd) {
+        found.forEach(function (k) { if (state.multiSelect.indexOf(k) === -1) { state.multiSelect.push(k); } });
+      } else {
+        state.multiSelect = found;
+      }
+      render();
+    }
+
     wrap.addEventListener('pointerdown', function (ev) {
       if (ev.pointerType === 'touch' && activeTouches > 1) { return; } // Pinch hat Vorrang
       if (!isEmptyAreaTarget(ev.target)) { return; }
       panDragging = true;
       panStartX = ev.clientX; panStartY = ev.clientY;
       panOrigX = state.boardPanX; panOrigY = state.boardPanY;
+      // Langes Halten ohne Bewegung -> Auswahlbox statt Verschieben.
+      longPressStartX = ev.clientX; longPressStartY = ev.clientY;
+      longPressTimer = setTimeout(function () {
+        longPressTimer = null;
+        startSelectionBox(ev.clientX, ev.clientY, ev.ctrlKey || ev.metaKey);
+      }, 450);
     });
     wrap.addEventListener('pointermove', function (ev) {
+      if (longPressTimer && (Math.abs(ev.clientX - longPressStartX) > 6 || Math.abs(ev.clientY - longPressStartY) > 6)) {
+        clearTimeout(longPressTimer); longPressTimer = null;
+      }
+      if (selectionBoxEl) { updateSelectionBox(ev.clientX, ev.clientY); return; }
       if (!panDragging) { return; }
       state.boardPanX = panOrigX + (ev.clientX - panStartX);
       state.boardPanY = panOrigY + (ev.clientY - panStartY);
       applyBoardTransform();
     });
-    window.addEventListener('pointerup', function () { panDragging = false; });
+    window.addEventListener('pointerup', function () {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      if (selectionBoxEl) { finishSelectionBox(); }
+      panDragging = false;
+    });
 
     // Pinch-Zoom (zwei Finger) - eigene touch-Behandlung, da Pointer Events
     // Mehrfingergesten nicht direkt abbilden.
@@ -2488,6 +2634,46 @@
 
     // Drop-Zone: Karte aus dem Post-Stream auf das Board ziehen = Kopie
     // anlegen (siehe renderStreamPanel/adopt_photo_to_board).
+    // Umrandung der Mehrfachauswahl mit Plus-Button oben rechts - Klick
+    // darauf startet eine weitere Auswahlbox, deren Treffer zur
+    // bestehenden Auswahl HINZUGEFÜGT werden (statt sie zu ersetzen).
+    if (state.multiSelect.length > 0) {
+      var selRects = state.multiSelect.map(function (k) {
+        var parts = k.split(':'); var kind = parts[0], id = parseInt(parts[1], 10);
+        if (kind === 'photo') {
+          var op = state.photos.filter(function (o) { return o.id === id; })[0];
+          return op ? boardRectOf(op, 'photo') : null;
+        }
+        var ot = ownThread();
+        var oi = ot ? ot.items.filter(function (o) { return o.itemtype === 'frame' && o.id === id; })[0] : null;
+        return oi ? boardRectOf(oi, 'frame') : null;
+      }).filter(Boolean);
+      if (selRects.length > 0) {
+        var minX = Math.min.apply(null, selRects.map(function (r) { return r.x; }));
+        var minY = Math.min.apply(null, selRects.map(function (r) { return r.y; }));
+        var maxX = Math.max.apply(null, selRects.map(function (r) { return r.x + r.w; }));
+        var maxY = Math.max.apply(null, selRects.map(function (r) { return r.y + r.h; }));
+        var selOverlay = el('div', {
+          class: 'ic-selection-overlay',
+          style: 'left:' + (minX - 6) + 'px;top:' + (minY - 6) + 'px;width:' + (maxX - minX + 12) + 'px;height:' + (maxY - minY + 12) + 'px;'
+        });
+        var selAddBtn = el('button', { class: 'ic-selection-add-btn', title: S.selection_add }, ['+']);
+        selAddBtn.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          startSelectionBox(ev.clientX, ev.clientY, true);
+        });
+        selOverlay.appendChild(selAddBtn);
+        canvas.appendChild(selOverlay);
+      }
+      // Klick auf leere Fläche (kein langes Halten) hebt die Auswahl auf.
+      wrap.addEventListener('click', function clearSel(ev) {
+        if (isEmptyAreaTarget(ev.target) && state.multiSelect.length > 0) {
+          state.multiSelect = [];
+          render();
+        }
+      }, { once: true });
+    }
+
     function screenToCanvas(clientX, clientY) {
       var rect = wrap.getBoundingClientRect();
       var offX = clientX - rect.left + wrap.scrollLeft;

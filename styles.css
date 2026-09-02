@@ -523,12 +523,27 @@
 .ic-arrange-item img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
 .ic-arrange-item.ic-in-thread img { outline: 3px solid #e0503f; outline-offset: 2px; border-radius: 4px; }
 .ic-arrange-item.selected img { outline: 3px solid var(--ic-accent); outline-offset: 3px; box-shadow: 0 0 0 6px rgba(224,80,63,.25); }
+.ic-arrange-item.multi-selected img { outline: 3px dashed #4f8cff; outline-offset: 3px; }
 .ic-thread-frame-onboard {
   position: absolute; border-style: dashed; border-radius: 6px; pointer-events: none;
   display: flex; align-items: flex-end; padding: 6px; box-sizing: border-box;
 }
 .ic-thread-frame-onboard.editable { pointer-events: auto; cursor: move; touch-action: none; }
 .ic-thread-frame-onboard.selected { box-shadow: 0 0 0 4px rgba(224,80,63,.35); }
+.ic-thread-frame-onboard.multi-selected { box-shadow: 0 0 0 3px #4f8cff; }
+.ic-selection-box {
+  position: absolute; z-index: 400; border: 2px dashed #4f8cff; background: rgba(79,140,255,.12);
+  pointer-events: none; border-radius: 4px;
+}
+.ic-selection-overlay {
+  position: absolute; z-index: 401; border: 2px dashed #4f8cff; border-radius: 8px; pointer-events: none;
+}
+.ic-selection-add-btn {
+  position: absolute; top: -14px; right: -14px; width: 28px; height: 28px; border-radius: 50%;
+  border: none; background: var(--ic-accent); color: #fff; font-size: 1rem; line-height: 1;
+  display: flex; align-items: center; justify-content: center; pointer-events: auto; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,.4);
+}
 .ic-thread-frame-onboard.editable .ic-resize {
   position: absolute; right: -10px; bottom: -10px; width: 26px; height: 26px;
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: nwse-resize;

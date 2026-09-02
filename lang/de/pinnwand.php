@@ -175,6 +175,7 @@ $string['pantool'] = 'Verschieben';
 $string['zoomin'] = 'Vergrößern';
 $string['zoomout'] = 'Verkleinern';
 $string['zoomtool'] = 'Zoom';
+$string['selection_add'] = 'Weitere Objekte zur Auswahl hinzufügen';
 $string['boardof'] = 'Board {$a->cur} von {$a->total}';
 $string['newboard'] = 'Neues Board';
 $string['renameboard'] = 'Titel antippen zum Umbenennen';

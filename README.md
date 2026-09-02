@@ -633,8 +633,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Pinch-Zoom für Touch-Geräte ergänzt (Pinnwand + Präsentation).
 - Zoomen/Verschieben jetzt auch während der Präsentation möglich - der
   nächste Schritt setzt von der angepassten Ansicht aus normal fort.
-- Bewusst noch nicht umgesetzt: Mehrfachauswahl per Auswahlbox (siehe
-  Scoping-Hinweis zu Phase 25 im IMPLEMENTATION_PLAN).
+
+### Dreißigste Überarbeitung — Mehrfachauswahl per Auswahlbox
+
+- **Neu: Auswahlbox** - langes Drücken auf leerer Fläche spannt eine Box
+  auf, alle Objekte darin werden ausgewählt.
+- Strg+Klick fügt einzelne Objekte hinzu/entfernt sie.
+- Ausgewählte Objekte lassen sich gemeinsam verschieben.
+- Plus-Button an der Auswahl-Umrandung fügt per weiterer Box mehr Objekte
+  hinzu.
+- Nur auf der Pinnwand/im Layersystem, nicht in der Präsentation.
 
 ## Bekannte Grenzen dieser Version
 
