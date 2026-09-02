@@ -679,6 +679,20 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Nebenbei gefunden: der Pin-Button war ab 900px Bildschirmbreite
   komplett unsichtbar - behoben.
 
+### Vierunddreißigste Überarbeitung — Mehrfach-Board-Platzierung: Server- und Client-Fundament
+
+- **Architekturumbau gegen Objekt-Duplizierung**: Objekte existieren jetzt
+  nur noch einmal in der Datenbank, auch wenn sie über mehrere Boards
+  (z.B. nach dem Klonen) hinweg erscheinen - "Meine Bilder" zeigt sie
+  dadurch strukturell nur noch einmal.
+- Geklonte Boards zeigen ihre zusätzlichen Objekte jetzt tatsächlich an
+  (verschiebbar, mit blauem Entfernen-Pin).
+- **Neu: Papierkorb-Seitenleiste** - gelöschte Objekte landen jetzt
+  reversibel dort statt sofort endgültig gelöscht zu werden.
+- Seitenleisten-Reihenfolge: Post-Stream, Faden, Layer, Papierkorb.
+- Noch offen: Rot/Gelb-Pin-Unterscheidung für 3+ Boards, Kopfzeilen-
+  Titel-Dropdown, Einstellung "Lernende können andere Boards sehen".
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

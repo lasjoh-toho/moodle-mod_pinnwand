@@ -1163,3 +1163,36 @@ zeigt jedes Objekt automatisch nur einmal.
   andere Lernende.
 - Neue Einstellung "Lernende können andere Boards sehen" (analog zu
   studentboardclone, Standard aus).
+
+---
+
+## Phase 31 — Client-Fundament: zusätzliche Platzierungen rendern, Trashbin-Panel (Teil 2/mehrere) ✅
+
+Vierundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`,
+neue Strings.
+
+- [x] Geklonte/zusätzliche Objekt-Platzierungen werden jetzt auf dem
+  jeweiligen Board tatsächlich angezeigt (`state.extraPlacements`, pro
+  Board nachgeladen) - als eigenständige, einfachere Kacheln (blaue
+  gestrichelte Umrandung zur Unterscheidung von "Heimat"-Objekten):
+  anzeigen, verschieben (persistiert über `update_object_placement`),
+  entfernen (blauer Pin am Objekt - landet im Trashbin über
+  `set_placement_status`). Zeichnen/Raster/Wortfeld-Bearbeitung auf
+  ihnen bewusst noch nicht unterstützt (Scoping).
+- [x] **Neue Trashbin-Seitenleiste** ergänzt, Reihenfolge der
+  Seitenleisten-Buttons wie gewünscht auf Post/Faden/Layer/Trashbin
+  umgestellt. Zeigt eigene gelöschte Objekte und entfernte
+  Zusatz-Platzierungen, gruppiert nach Board. Wiederherstellen-Button
+  überall; "Endgültig löschen" nur bei ganzen Objekten, die auf keinem
+  anderen Board mehr aktiv sind.
+
+**Bewusst noch nicht umgesetzt (nächster Durchgang):**
+- Rot/Gelb-Pin-Unterscheidung (aktuell nur ein blauer "Entfernen"-Pin für
+  Zusatz-Platzierungen; die Unterscheidung Master- vs. eigenes Board sowie
+  das Modal bei 3+ Boards fehlen noch).
+- Kopfzeilen-Titel-Dropdown (Doppelklick=umbenennen, Klick=Board-Liste mit
+  Bearbeiter*innen, Augen-Symbol zum Ausblenden für andere Lernende).
+- Neue Einstellung "Lernende können andere Boards sehen".
+- Für Zusatz-Platzierungen gibt es noch kein "endgültig löschen" im
+  Trashbin (nur Wiederherstellen) - im Vergleich zu ganzen Objekten ein
+  bewusst kleinerer Funktionsumfang, da eine Platzierung ohnehin leichtgewichtig ist.

@@ -84,7 +84,11 @@
     boardNames: {}, // boardid -> eigener Titel (Standard: Aktivitätsname [+ Nummer], siehe boardDisplayName)
     multiSelect: [], // Mehrfachauswahl per Auswahlbox/Strg+Klick, z.B. ['photo:12','frame:3']
     multiSelectAddMode: false, // nach Klick auf den Plus-Button: normale Klicks schalten die Auswahl um, bis auf leere Fläche geklickt wird
-    boardFilter: '' // Filterleiste: blendet Fotos aus, die in keinem Feld (Titel/Jahr/Epoche/Autor der Vorlage/Autor) übereinstimmen
+    boardFilter: '', // Filterleiste: blendet Fotos aus, die in keinem Feld (Titel/Jahr/Epoche/Autor der Vorlage/Autor) übereinstimmen
+    extraPlacements: [], // zusätzliche Objekt-Platzierungen des aktuellen Boards (z.B. nach Klonen) - siehe loadExtraPlacements
+    extraPlacementsBoard: null, // zu welchem Board extraPlacements gerade gehört (löst Neuladen bei Board-Wechsel aus)
+    trashPanelOpen: false,
+    trashItems: []
   };
 
   // ------------------------------------------------------------------
@@ -1722,6 +1726,7 @@
     circle: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>',
     eye: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
     trash: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+    undo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.4L3 7"/></svg>',
     grid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg>',
     camera: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg>',
@@ -2003,6 +2008,20 @@
       callAjax('mod_pinnwand_get_board_ink', { cmid: cfg.cmid, boardid: state.currentBoard }).then(function (res) {
         if (state.currentBoard !== state.boardInkBoard) { return; }
         try { state.boardInkStrokes = JSON.parse(res.strokedata || '[]'); } catch (e) { state.boardInkStrokes = []; }
+        render();
+      });
+    }
+    // Zusätzliche Objekt-Platzierungen dieses Boards (z.B. nach Klonen) -
+    // separat von state.photos gehalten, damit die bestehende, überall
+    // verwendete Foto-Logik unangetastet bleibt. Werden unten als
+    // eigenständige, einfachere Kacheln gerendert (anzeigen/verschieben/
+    // entfernen - kein Zeichnen/Raster/Wortfeld-Bearbeiten auf ihnen).
+    if (state.extraPlacementsBoard !== state.currentBoard) {
+      state.extraPlacementsBoard = state.currentBoard;
+      state.extraPlacements = [];
+      callAjax('mod_pinnwand_get_object_placements', { cmid: cfg.cmid, boardid: state.currentBoard }).then(function (res) {
+        if (state.currentBoard !== state.extraPlacementsBoard) { return; }
+        state.extraPlacements = res.placements || [];
         render();
       });
     }
@@ -2695,34 +2714,39 @@
     });
     fabRow.appendChild(zoomBtn);
 
-    // Seitenleisten-Buttons (Roter Faden / Post-Stream / Schichtung) in der
-    // oberen rechten Ecke der Pinnwand - schließen sich gegenseitig, da sie
-    // sich denselben rechten Rand teilen.
-    var SIDEBAR_PANELS = ['threadPanelOpen', 'streamPanelOpen', 'layerPanelOpen'];
+    // Seitenleisten-Buttons (Post-Stream / Roter Faden / Schichtung /
+    // Trashbin, in dieser Reihenfolge) in der oberen rechten Ecke der
+    // Pinnwand - schließen sich gegenseitig, da sie sich denselben rechten
+    // Rand teilen.
+    var SIDEBAR_PANELS = ['streamPanelOpen', 'threadPanelOpen', 'layerPanelOpen', 'trashPanelOpen'];
     function openSidebar(key) {
       SIDEBAR_PANELS.forEach(function (k) { state[k] = (k === key); });
       if (key === 'streamPanelOpen') { loadStreamPhotos(); }
+      if (key === 'trashPanelOpen') { loadTrash(); }
       render();
     }
     function toggleSidebar(key) {
       if (state[key]) { state[key] = false; render(); } else { openSidebar(key); }
     }
     var sidebarBar = el('div', { class: 'ic-sidebar-toggle-bar' });
-    if (state.canusethreads || state.threads.length > 0) {
-      var threadBtn = el('button', { class: 'ic-icon-btn' + (state.threadPanelOpen ? ' active' : ''), title: S.thread }, [icon('thread')]);
-      threadBtn.addEventListener('click', function () { toggleSidebar('threadPanelOpen'); });
-      sidebarBar.appendChild(threadBtn);
-    }
     if (state.canusepoststream) {
       var streamBtn = el('button', { class: 'ic-icon-btn' + (state.streamPanelOpen ? ' active' : ''), title: S.poststream }, [icon('stream')]);
       streamBtn.addEventListener('click', function () { toggleSidebar('streamPanelOpen'); });
       sidebarBar.appendChild(streamBtn);
+    }
+    if (state.canusethreads || state.threads.length > 0) {
+      var threadBtn = el('button', { class: 'ic-icon-btn' + (state.threadPanelOpen ? ' active' : ''), title: S.thread }, [icon('thread')]);
+      threadBtn.addEventListener('click', function () { toggleSidebar('threadPanelOpen'); });
+      sidebarBar.appendChild(threadBtn);
     }
     if (state.canuselayers) {
       var layerBtn = el('button', { class: 'ic-icon-btn' + (state.layerPanelOpen ? ' active' : ''), title: S.layers }, [icon('layers')]);
       layerBtn.addEventListener('click', function () { toggleSidebar('layerPanelOpen'); });
       sidebarBar.appendChild(layerBtn);
     }
+    var trashBtn = el('button', { class: 'ic-icon-btn' + (state.trashPanelOpen ? ' active' : ''), title: S.trashbin }, [icon('trash')]);
+    trashBtn.addEventListener('click', function () { toggleSidebar('trashPanelOpen'); });
+    sidebarBar.appendChild(trashBtn);
     body.appendChild(sidebarBar);
 
     // Stylus: eigener Button unten links, direkt mit den Annotationswerkzeugen
@@ -2764,6 +2788,7 @@
     if (state.threadPanelOpen) { body.appendChild(renderThreadPanel()); }
     if (state.streamPanelOpen) { body.appendChild(renderStreamPanel()); }
     if (state.layerPanelOpen) { body.appendChild(renderLayerPanel()); }
+    if (state.trashPanelOpen) { body.appendChild(renderTrashPanel()); }
 
     // Drop-Zone: Karte aus dem Post-Stream auf das Board ziehen = Kopie
     // anlegen (siehe renderStreamPanel/adopt_photo_to_board).
@@ -2835,6 +2860,42 @@
       window.addEventListener('pointerup', up);
     }
 
+
+    // Zusätzliche Objekt-Platzierungen (z.B. nach Klonen) - einfache
+    // Kacheln: anzeigen, verschieben, entfernen (blauer Pin = "von diesem
+    // Board entfernen", landet im Trashbin). Referenzieren die Bilddaten
+    // aus state.photos (dort bereits vollständig geladen, unabhängig vom
+    // Board), OHNE dort selbst einen Eintrag anzulegen.
+    state.extraPlacements.forEach(function (pl) {
+      var srcPhoto = state.photos.filter(function (o) { return o.id === pl.photoid; })[0];
+      if (!srcPhoto) { return; }
+      var plItem = el('div', {
+        class: 'ic-arrange-item ic-extra-placement',
+        style: 'left:' + pl.canvasx + 'px;top:' + pl.canvasy + 'px;width:' + pl.canvasw + 'px;' +
+          'transform:rotate(' + (pl.canvasrot || 0) + 'deg)'
+      });
+      plItem.style.zIndex = pl.canvasz || 0;
+      plItem.appendChild(el('img', { src: srcPhoto.url, alt: '' }));
+      var unpinBtn = el('button', { class: 'ic-extra-placement-unpin', title: S.unpintooltip }, [icon('thumbtack')]);
+      unpinBtn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        callAjax('mod_pinnwand_set_placement_status', { cmid: cfg.cmid, placementid: pl.id, status: 'trash' }).then(function () {
+          state.extraPlacements = state.extraPlacements.filter(function (o) { return o.id !== pl.id; });
+          render();
+        });
+      });
+      plItem.appendChild(unpinBtn);
+      makeMovable(plItem, canvas, function (x, y) {
+        pl.canvasx = x; pl.canvasy = y;
+      }, function (moved) {
+        if (!moved) { return; }
+        callAjax('mod_pinnwand_update_object_placement', {
+          cmid: cfg.cmid, placementid: pl.id, x: pl.canvasx, y: pl.canvasy, w: pl.canvasw,
+          rot: pl.canvasrot || 0, z: pl.canvasz || 0
+        });
+      });
+      canvas.appendChild(plItem);
+    });
 
     // Umrandung der Mehrfachauswahl mit Plus-Button oben rechts - Klick
     // darauf aktiviert den Hinzufügen/Entfernen-Modus: normale Klicks auf
@@ -2922,6 +2983,13 @@
   // Karten stapeln sich von unten (neu) nach oben (älter, kollabiert).
   // ------------------------------------------------------------------
   var streamPollTimer = null;
+  function loadTrash() {
+    callAjax('mod_pinnwand_get_trash', { cmid: cfg.cmid }).then(function (res) {
+      state.trashItems = res.items || [];
+      if (state.step === 'arrange' && state.trashPanelOpen) { render(); }
+    }).catch(function () { /* Trashbin bleibt leer */ });
+  }
+
   function loadStreamPhotos() {
     callAjax('mod_pinnwand_get_stream_photos', { cmid: cfg.cmid }).then(function (res) {
       state.streamPhotos = res.photos || [];
@@ -3071,6 +3139,59 @@
   // SCHICHTUNG: Reihenfolge (Z-Ebene) der platzierten Fotos auf dem
   // aktuellen Board - oben in der Liste = ganz vorne (höchstes canvasz).
   // ------------------------------------------------------------------
+  // Trashbin: eigene gelöschte Objekte und entfernte Zusatz-Platzierungen,
+  // gruppiert nach Board (auf dem sie zuletzt waren). Objekte, die noch auf
+  // einem anderen Board aktiv sind, können hier nicht endgültig gelöscht
+  // werden - nur ihre eigene Zeile lässt sich wiederherstellen.
+  function renderTrashPanel() {
+    var panel = el('div', { class: 'ic-thread-panel' });
+    panel.appendChild(el('h3', { class: 'ic-thread-panel-title' }, [S.trashbin]));
+    if (!state.trashItems.length) {
+      panel.appendChild(el('p', { class: 'ic-hint' }, [S.trashbin_empty]));
+      return panel;
+    }
+    var byBoard = {};
+    state.trashItems.forEach(function (it) {
+      (byBoard[it.boardid] = byBoard[it.boardid] || []).push(it);
+    });
+    Object.keys(byBoard).sort(function (a, b) { return a - b; }).forEach(function (boardKey) {
+      var boardId = parseInt(boardKey, 10);
+      panel.appendChild(el('h4', { class: 'ic-thread-panel-subtitle' }, [boardDisplayName(boardId)]));
+      byBoard[boardKey].forEach(function (it) {
+        var row = el('div', { class: 'ic-thread-item' });
+        row.appendChild(el('span', { class: 'ic-thread-item-label' }, [
+          it.kind === 'object' ? (it.sourcetitle || S.emptyframe) : S.trashbin_placement_label
+        ]));
+        var restoreBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.trashbin_restore }, [icon('undo')]);
+        restoreBtn.addEventListener('click', function () {
+          var call = it.kind === 'object'
+            ? callAjax('mod_pinnwand_restore_photo', { cmid: cfg.cmid, photoid: it.id })
+            : callAjax('mod_pinnwand_set_placement_status', { cmid: cfg.cmid, placementid: it.id, status: 'active' });
+          call.then(function () {
+            state.trashItems = state.trashItems.filter(function (o) { return !(o.kind === it.kind && o.id === it.id); });
+            refreshPhotos();
+            state.extraPlacementsBoard = null; // erzwingt Neuladen der Platzierungen
+            render();
+          });
+        });
+        row.appendChild(restoreBtn);
+        if (it.kind === 'object' && !it.usedelsewhere) {
+          var delBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.trashbin_delete_forever }, ['\u2715']);
+          delBtn.addEventListener('click', function () {
+            if (!confirm(S.trashbin_delete_forever_confirm)) { return; }
+            callAjax('mod_pinnwand_permanently_delete_photo', { cmid: cfg.cmid, photoid: it.id }).then(function () {
+              state.trashItems = state.trashItems.filter(function (o) { return !(o.kind === it.kind && o.id === it.id); });
+              render();
+            });
+          });
+          row.appendChild(delBtn);
+        }
+        panel.appendChild(row);
+      });
+    });
+    return panel;
+  }
+
   function renderLayerPanel() {
     var panel = el('div', { class: 'ic-thread-panel' });
     panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.layers]));
