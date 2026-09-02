@@ -335,5 +335,39 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083025, 'pinnwand');
     }
 
+    if ($oldversion < 2026083031) {
+        // Feedback-Durchgang: Mehrfach-Board-Platzierung ohne Duplizierung
+        // (Trash-System + zusätzliche Board-Platzierungen für geklonte
+        // Boards, statt beim Klonen komplette Kopien anzulegen).
+        $table = new xmldb_table('pinnwand_photos');
+        $field = new xmldb_field('status', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'active', 'wordfielddata');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $table2 = new xmldb_table('pinnwand_object_placements');
+        if (!$dbman->table_exists($table2)) {
+            $table2->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table2->add_field('pinnwandid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table2->add_field('photoid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table2->add_field('boardid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table2->add_field('canvasx', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0');
+            $table2->add_field('canvasy', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0');
+            $table2->add_field('canvasw', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '200');
+            $table2->add_field('canvasrot', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0');
+            $table2->add_field('canvasz', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table2->add_field('boardplaced', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1');
+            $table2->add_field('status', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'active');
+            $table2->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table2->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table2->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table2->add_key('pinnwandid', XMLDB_KEY_FOREIGN, ['pinnwandid'], 'pinnwand', ['id']);
+            $table2->add_key('photoid', XMLDB_KEY_FOREIGN, ['photoid'], 'pinnwand_photos', ['id']);
+            $table2->add_index('photoboard', XMLDB_INDEX_UNIQUE, ['photoid', 'boardid']);
+            $dbman->create_table($table2);
+        }
+        upgrade_mod_savepoint(true, 2026083031, 'pinnwand');
+    }
+
     return true;
 }

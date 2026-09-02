@@ -1112,3 +1112,54 @@ neue Strings.
   dieser Umstellung, als dort stattdessen die Checkbox erschien) - jetzt
   bleibt der Pin auf allen Bildschirmgrößen sichtbar, nur der separate
   Löschen-Button in der breiten Spalte bleibt größenabhängig.
+
+---
+
+## Phase 30 — Server-Fundament: additive Mehrfach-Board-Platzierung + Trashbin (Teil 1/mehrere) ✅ (Server-Seite)
+
+Dreiundzwanzigster Feedback-Durchgang. Betrifft: `db/install.xml`,
+`db/upgrade.php`, `classes/external.php`, `db/services.php`.
+
+**Architekturentscheidung** (nach Rücksprache mit Nutzer, siehe Chat):
+statt eines vollen Normalisierungs-Umbaus (Objekt-Kern und Platzierung in
+zwei Tabellen für ALLE Fotos trennen - hätte ~70 Server-Stellen berührt)
+ein additiver Ansatz: `pinnwand_photos` bleibt für die "Heimat"-Platzierung
+unverändert; eine neue, schlanke Tabelle `pinnwand_object_placements`
+speichert NUR zusätzliche Platzierungen auf weiteren Boards (z.B. nach dem
+Klonen). Ein Objekt existiert dadurch weiterhin nur einmal in der
+Datenbank - "Meine Bilder" fragt unverändert nur `pinnwand_photos` ab und
+zeigt jedes Objekt automatisch nur einmal.
+
+- [x] Neue Tabelle `pinnwand_object_placements` (photoid, boardid,
+  Position/Größe/Rotation/Ebene, status active|trash).
+- [x] Neues Feld `status` auf `pinnwand_photos` (active|trash) - Löschen
+  landet jetzt im Trashbin statt sofort endgültig zu sein.
+- [x] **`clone_board` komplett umgebaut**: legt keine Kopien mehr an
+  (weder Datei noch Datenbankzeile), sondern für jedes Objekt eine
+  zusätzliche Platzierung auf dem neuen Board. Behebt den Kern der
+  gemeldeten Verdopplung strukturell (nicht nur den Doppelklick-Auslöser
+  aus dem letzten Durchgang).
+- [x] Neue Endpunkte: `get_object_placements`, `update_object_placement`,
+  `set_placement_status` (Trashbin/Wiederherstellen für zusätzliche
+  Platzierungen), `restore_photo`, `permanently_delete_photo` (nur
+  möglich, wenn das Objekt auf keinem anderen Board mehr aktiv
+  referenziert ist), `get_trash` (Trashbin-Inhalt).
+- [x] `delete_photo` verschiebt jetzt in den Trashbin statt sofort
+  endgültig zu löschen.
+- [x] **Kritischer Begleit-Fix**: `get_photos`, `get_all_photos`
+  (Klassenansicht) und `get_stream_photos` (Post-Stream) filterten
+  bisher nicht nach `status` - ohne diesen Fix wären trashte Objekte
+  weiterhin überall sichtbar geblieben.
+
+**Noch offen (Client-Seite, für die nächsten Durchgänge):**
+- Zusätzliche Platzierungen tatsächlich auf dem Board rendern (aktuell
+  lädt die Pinnwand nur die "Heimat"-Objekte - geklonte Boards zeigen
+  ihre zusätzlichen Objekte noch nicht an).
+- Rot/Blau/Gelb-Pin-System (Master entfernen / eigenes Board entfernen /
+  Modal bei 3+ Boards).
+- Trashbin-Seitenleiste (Reihenfolge: Post, Faden, Layer, Trashbin).
+- Kopfzeilen-Titel: Doppelklick zum Umbenennen, einfacher Klick öffnet
+  Board-Dropdown mit Bearbeiter*innen, Augen-Symbol zum Ausblenden für
+  andere Lernende.
+- Neue Einstellung "Lernende können andere Boards sehen" (analog zu
+  studentboardclone, Standard aus).

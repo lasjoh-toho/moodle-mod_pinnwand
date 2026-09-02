@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/pinnwand/db" VERSION="2026083025" COMMENT="XMLDB file for module pinnwand">
+<XMLDB PATH="mod/pinnwand/db" VERSION="2026083031" COMMENT="XMLDB file for module pinnwand">
   <TABLES>
     <TABLE NAME="pinnwand" COMMENT="Instances of the pinnwand activity">
       <FIELDS>
@@ -59,6 +59,7 @@
         <FIELD NAME="showingback" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Welche Seite aktuell oben liegt: 0=Vorderseite, 1=Rückseite"/>
         <FIELD NAME="boardplaced" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Erst wenn 1: Foto hat reale Board-Koordinaten und erscheint auf der Leinwand - vorher liegt es im Post-Stream bereit"/>
         <FIELD NAME="wordfielddata" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Falls dieses 'Foto' ein Wortfeld ist: die strukturierten Daten (JSON: Preset, Maße, Texte) für erneutes Bearbeiten als Text statt als Bild"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="active" SEQUENCE="false" COMMENT="active|trash - gelöschte Objekte landen im Trashbin statt sofort endgültig gelöscht zu werden"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>
@@ -139,6 +140,31 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="userboard" UNIQUE="true" FIELDS="pinnwandid, userid, boardid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="pinnwand_object_placements" COMMENT="Zusätzliche Platzierung eines Objekts auf einem WEITEREN Board (z.B. geklontes Board) - die 'Heimat'-Platzierung bleibt weiterhin direkt in pinnwand_photos. Ein Objekt existiert dadurch nur einmal (keine Datei-/Zeilen-Duplizierung), erscheint aber auf mehreren Boards.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="pinnwandid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="photoid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Verweist auf das Objekt in pinnwand_photos"/>
+        <FIELD NAME="boardid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="canvasx" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="canvasy" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="canvasw" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="200" SEQUENCE="false"/>
+        <FIELD NAME="canvasrot" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="canvasz" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="boardplaced" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="active" SEQUENCE="false" COMMENT="active|trash - entfernte Platzierungen landen im Trashbin statt sofort gelöscht zu werden"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="pinnwandid" TYPE="foreign" FIELDS="pinnwandid" REFTABLE="pinnwand" REFFIELDS="id"/>
+        <KEY NAME="photoid" TYPE="foreign" FIELDS="photoid" REFTABLE="pinnwand_photos" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="photoboard" UNIQUE="true" FIELDS="photoid, boardid"/>
       </INDEXES>
     </TABLE>
   </TABLES>

@@ -173,7 +173,7 @@ class mod_pinnwand_external extends external_api {
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
 
         $records = $DB->get_records('pinnwand_photos', [
-            'pinnwandid' => $instance->id, 'userid' => $USER->id,
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'status' => 'active',
         ], 'sortorder ASC');
 
         $fs = get_file_storage();
@@ -515,6 +515,153 @@ class mod_pinnwand_external extends external_api {
     // Nummer], wird clientseitig berechnet, falls kein eigener Name gesetzt
     // ist) - sowie Board-Klonen (eigene Kopie der Pinnwand als neues Board).
     // ---------------------------------------------------------------
+    // Zusätzliche Board-Platzierungen: ein Objekt (Foto/Zettel/WordArt)
+    // kann über mehrere Boards derselben Person hinweg erscheinen (z.B.
+    // nach dem Klonen eines Boards), ohne dass die Objekt-Zeile selbst
+    // dupliziert wird - siehe clone_board().
+    // ---------------------------------------------------------------
+    public static function get_object_placements_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'boardid' => new external_value(PARAM_INT, 'Board-ID'),
+        ]);
+    }
+
+    public static function get_object_placements($cmid, $boardid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::get_object_placements_parameters(), ['cmid' => $cmid, 'boardid' => $boardid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+
+        $sql = "SELECT pl.*, p.userid AS objectuserid
+                  FROM {pinnwand_object_placements} pl
+                  JOIN {pinnwand_photos} p ON p.id = pl.photoid
+                 WHERE pl.pinnwandid = :icid AND pl.boardid = :boardid
+                   AND pl.status = 'active' AND p.userid = :userid";
+        $records = $DB->get_records_sql($sql, ['icid' => $instance->id, 'boardid' => $params['boardid'], 'userid' => $USER->id]);
+
+        $out = [];
+        foreach ($records as $r) {
+            $out[] = [
+                'id' => (int) $r->id,
+                'photoid' => (int) $r->photoid,
+                'boardid' => (int) $r->boardid,
+                'canvasx' => (float) $r->canvasx,
+                'canvasy' => (float) $r->canvasy,
+                'canvasw' => (float) $r->canvasw,
+                'canvasrot' => (float) $r->canvasrot,
+                'canvasz' => (int) $r->canvasz,
+                'boardplaced' => (bool) $r->boardplaced,
+            ];
+        }
+        return ['placements' => $out];
+    }
+
+    public static function get_object_placements_returns() {
+        return new external_single_structure([
+            'placements' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Platzierungs-ID'),
+                'photoid' => new external_value(PARAM_INT, 'Verweist auf das Objekt'),
+                'boardid' => new external_value(PARAM_INT, 'Board-ID'),
+                'canvasx' => new external_value(PARAM_FLOAT, 'x'),
+                'canvasy' => new external_value(PARAM_FLOAT, 'y'),
+                'canvasw' => new external_value(PARAM_FLOAT, 'Breite'),
+                'canvasrot' => new external_value(PARAM_FLOAT, 'Rotation'),
+                'canvasz' => new external_value(PARAM_INT, 'Z-Reihenfolge'),
+                'boardplaced' => new external_value(PARAM_BOOL, 'Hat reale Board-Koordinaten'),
+            ])),
+        ]);
+    }
+
+    public static function update_object_placement_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'placementid' => new external_value(PARAM_INT, 'Platzierungs-ID'),
+            'x' => new external_value(PARAM_FLOAT, 'x'),
+            'y' => new external_value(PARAM_FLOAT, 'y'),
+            'w' => new external_value(PARAM_FLOAT, 'Breite'),
+            'rot' => new external_value(PARAM_FLOAT, 'Rotation', VALUE_DEFAULT, 0),
+            'z' => new external_value(PARAM_INT, 'Z-Reihenfolge', VALUE_DEFAULT, 0),
+        ]);
+    }
+
+    public static function update_object_placement($cmid, $placementid, $x, $y, $w, $rot = 0, $z = 0) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::update_object_placement_parameters(), [
+            'cmid' => $cmid, 'placementid' => $placementid, 'x' => $x, 'y' => $y, 'w' => $w, 'rot' => $rot, 'z' => $z,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $placement = self::require_own_placement($params['placementid'], $instance->id, $USER->id);
+        $placement->canvasx = $params['x'];
+        $placement->canvasy = $params['y'];
+        $placement->canvasw = $params['w'];
+        $placement->canvasrot = $params['rot'];
+        $placement->canvasz = $params['z'];
+        $placement->boardplaced = 1;
+        $placement->timemodified = time();
+        $DB->update_record('pinnwand_object_placements', $placement);
+
+        return ['success' => true];
+    }
+
+    public static function update_object_placement_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function set_placement_status_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'placementid' => new external_value(PARAM_INT, 'Platzierungs-ID'),
+            'status' => new external_value(PARAM_ALPHA, 'active oder trash'),
+        ]);
+    }
+
+    /**
+     * Entfernt eine zusätzliche Platzierung von ihrem Board (status=trash,
+     * über den Trashbin wiederherstellbar) oder stellt sie wieder her
+     * (status=active). Das referenzierte Objekt selbst bleibt in jedem
+     * Fall unangetastet - es kann ja noch auf anderen Boards aktiv sein.
+     */
+    public static function set_placement_status($cmid, $placementid, $status) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_placement_status_parameters(), [
+            'cmid' => $cmid, 'placementid' => $placementid, 'status' => $status,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+        if (!in_array($params['status'], ['active', 'trash'], true)) {
+            throw new moodle_exception('error_save', 'pinnwand');
+        }
+
+        $placement = self::require_own_placement($params['placementid'], $instance->id, $USER->id);
+        $placement->status = $params['status'];
+        $placement->timemodified = time();
+        $DB->update_record('pinnwand_object_placements', $placement);
+
+        return ['success' => true];
+    }
+
+    public static function set_placement_status_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    /**
+     * Lädt eine Platzierung und prüft, dass sie zu dieser Aktivität gehört
+     * und das referenzierte Objekt der aufrufenden Person gehört.
+     */
+    protected static function require_own_placement($placementid, $instanceid, $userid) {
+        global $DB;
+        $placement = $DB->get_record('pinnwand_object_placements', ['id' => $placementid], '*', MUST_EXIST);
+        if ($placement->pinnwandid != $instanceid) {
+            throw new moodle_exception('nopermissions', 'error', '', 'placement');
+        }
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $placement->photoid], '*', MUST_EXIST);
+        if ($photo->userid != $userid) {
+            throw new moodle_exception('nopermissions', 'error', '', 'placement');
+        }
+        return $placement;
+    }
+
+    // ---------------------------------------------------------------
     public static function get_board_names_parameters() {
         return new external_function_parameters(['cmid' => new external_value(PARAM_INT, 'Course module id')]);
     }
@@ -604,28 +751,22 @@ class mod_pinnwand_external extends external_api {
         );
         $newboardid = max($maxboard, $params['boardid']) + 1;
 
-        $fs = get_file_storage();
+        // Kein Kopieren mehr: für jedes Objekt auf dem Quell-Board wird nur
+        // eine ZUSÄTZLICHE Platzierung auf dem neuen Board angelegt (gleiche
+        // Position). Das Objekt selbst (Datei, Titel, Zeichnung, Wortfeld...)
+        // existiert weiterhin nur einmal - dadurch erscheint es in "Meine
+        // Bilder" auch weiterhin nur einmal.
         $photos = $DB->get_records('pinnwand_photos', [
-            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $params['boardid'],
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $params['boardid'], 'status' => 'active',
         ]);
         foreach ($photos as $source) {
-            $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $source->id, 'filename', false);
-            $file = reset($files);
-            if (!$file) {
-                continue;
-            }
-            $copy = clone $source;
-            unset($copy->id);
-            $copy->boardid = $newboardid;
-            $copy->sourcephotoid = $source->id;
-            $copy->backphotoid = null;
-            $copy->showingback = 0;
-            $copy->timecreated = time();
-            $newid = $DB->insert_record('pinnwand_photos', $copy);
-            $fs->create_file_from_storedfile([
-                'contextid' => $context->id, 'component' => 'mod_pinnwand', 'filearea' => 'photo',
-                'itemid' => $newid, 'filepath' => '/', 'filename' => $file->get_filename(),
-            ], $file);
+            $DB->insert_record('pinnwand_object_placements', (object) [
+                'pinnwandid' => $instance->id, 'photoid' => $source->id, 'boardid' => $newboardid,
+                'canvasx' => $source->canvasx, 'canvasy' => $source->canvasy, 'canvasw' => $source->canvasw,
+                'canvasrot' => $source->canvasrot, 'canvasz' => $source->canvasz,
+                'boardplaced' => $source->boardplaced, 'status' => 'active',
+                'timecreated' => time(), 'timemodified' => time(),
+            ]);
         }
 
         // Eigenen Board-Namen mitkopieren, falls gesetzt.
@@ -902,15 +1043,131 @@ class mod_pinnwand_external extends external_api {
         if (!$ok) {
             throw new moodle_exception('nopermissions', 'error', '', 'delete_photo');
         }
-        $fs = get_file_storage();
-        $fs->delete_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id);
-        $DB->delete_records('pinnwand_photos', ['id' => $photo->id]);
+        // Landet zunächst im Trashbin (reversibel), statt sofort endgültig
+        // gelöscht zu werden - siehe permanently_delete_photo/restore_photo.
+        $photo->status = 'trash';
+        $DB->update_record('pinnwand_photos', $photo);
 
         return ['success' => true];
     }
 
     public static function delete_photo_returns() {
         return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function restore_photo_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+        ]);
+    }
+
+    public static function restore_photo($cmid, $photoid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::restore_photo_parameters(), ['cmid' => $cmid, 'photoid' => $photoid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->pinnwandid != $instance->id || $photo->userid != $USER->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'restore_photo');
+        }
+        $photo->status = 'active';
+        $DB->update_record('pinnwand_photos', $photo);
+
+        return ['success' => true];
+    }
+
+    public static function restore_photo_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function permanently_delete_photo_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+        ]);
+    }
+
+    /**
+     * Löscht ein Objekt endgültig - nur möglich, wenn es im Trashbin liegt
+     * UND auf keinem anderen Board mehr aktiv platziert ist (sonst würde es
+     * dort verschwinden, obwohl die Person das nicht angefordert hat).
+     */
+    public static function permanently_delete_photo($cmid, $photoid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::permanently_delete_photo_parameters(), ['cmid' => $cmid, 'photoid' => $photoid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->pinnwandid != $instance->id || $photo->userid != $USER->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'permanently_delete_photo');
+        }
+        $stillused = $DB->count_records('pinnwand_object_placements', ['photoid' => $photo->id, 'status' => 'active']);
+        if ($stillused > 0) {
+            throw new moodle_exception('error_save', 'pinnwand');
+        }
+        $fs = get_file_storage();
+        $fs->delete_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id);
+        $DB->delete_records('pinnwand_photos', ['id' => $photo->id]);
+        $DB->delete_records('pinnwand_object_placements', ['photoid' => $photo->id]);
+
+        return ['success' => true];
+    }
+
+    public static function permanently_delete_photo_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function get_trash_parameters() {
+        return new external_function_parameters(['cmid' => new external_value(PARAM_INT, 'Course module id')]);
+    }
+
+    /**
+     * Trashbin-Inhalt: eigene Objekte mit status=trash sowie eigene
+     * Platzierungen mit status=trash (von einem Board entfernt, Objekt
+     * selbst aber noch aktiv) - gruppiert nach Board im Client.
+     */
+    public static function get_trash($cmid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::get_trash_parameters(), ['cmid' => $cmid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+
+        $trashedphotos = $DB->get_records('pinnwand_photos', [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'status' => 'trash',
+        ]);
+        $out = [];
+        foreach ($trashedphotos as $r) {
+            $activecount = $DB->count_records('pinnwand_object_placements', ['photoid' => $r->id, 'status' => 'active']);
+            $out[] = [
+                'kind' => 'object', 'id' => (int) $r->id, 'boardid' => (int) $r->boardid,
+                'sourcetitle' => (string) $r->sourcetitle, 'usedelsewhere' => $activecount > 0,
+            ];
+        }
+        $trashedplacements = $DB->get_records_sql(
+            "SELECT pl.* FROM {pinnwand_object_placements} pl
+              JOIN {pinnwand_photos} p ON p.id = pl.photoid
+             WHERE pl.pinnwandid = :icid AND pl.status = 'trash' AND p.userid = :userid",
+            ['icid' => $instance->id, 'userid' => $USER->id]
+        );
+        foreach ($trashedplacements as $r) {
+            $out[] = [
+                'kind' => 'placement', 'id' => (int) $r->id, 'boardid' => (int) $r->boardid,
+                'sourcetitle' => '', 'usedelsewhere' => true,
+            ];
+        }
+        return ['items' => $out];
+    }
+
+    public static function get_trash_returns() {
+        return new external_single_structure([
+            'items' => new external_multiple_structure(new external_single_structure([
+                'kind' => new external_value(PARAM_ALPHA, 'object (Foto komplett im Trash) oder placement (nur eine Board-Platzierung)'),
+                'id' => new external_value(PARAM_INT, 'ID des Objekts bzw. der Platzierung'),
+                'boardid' => new external_value(PARAM_INT, 'Board, von dem entfernt wurde'),
+                'sourcetitle' => new external_value(PARAM_TEXT, 'Titel (nur bei kind=object)'),
+                'usedelsewhere' => new external_value(PARAM_BOOL, 'Objekt ist noch auf mind. einem anderen Board aktiv'),
+            ])),
+        ]);
     }
 
     // ---------------------------------------------------------------
@@ -944,7 +1201,7 @@ class mod_pinnwand_external extends external_api {
         $sql = "SELECT p.*, u.firstname, u.lastname
                   FROM {pinnwand_photos} p
                   JOIN {user} u ON u.id = p.userid
-                 WHERE p.pinnwandid = :icid
+                 WHERE p.pinnwandid = :icid AND p.status = 'active'
               ORDER BY u.lastname, u.firstname, p.sortorder";
         $records = $DB->get_records_sql($sql, ['icid' => $instance->id]);
 
@@ -1616,8 +1873,8 @@ class mod_pinnwand_external extends external_api {
         // Lernende nur mit der Instanzeinstellung "studentpoststream".
         $canusepoststream = has_capability('mod/pinnwand:viewall', $context) || !empty($instance->studentpoststream);
         $own = $canusepoststream ? $DB->get_records_select(
-            'pinnwand_photos', 'pinnwandid = ? AND userid = ? AND hiddenfromboard = 0 AND boardplaced = 0',
-            [$instance->id, $USER->id], 'timecreated DESC', '*', 0, 100
+            'pinnwand_photos', 'pinnwandid = ? AND userid = ? AND hiddenfromboard = 0 AND boardplaced = 0 AND status = ?',
+            [$instance->id, $USER->id, 'active'], 'timecreated DESC', '*', 0, 100
         ) : [];
         foreach ($own as $r) {
             $r->firstname = $USER->firstname; $r->lastname = $USER->lastname;
@@ -1631,7 +1888,7 @@ class mod_pinnwand_external extends external_api {
                       FROM {pinnwand_photos} p
                       JOIN {user} u ON u.id = p.userid
                      WHERE p.pinnwandid = :icid AND p.userid <> :ownid
-                       AND p.hiddenfromboard = 0 AND p.boardplaced = 0
+                       AND p.hiddenfromboard = 0 AND p.boardplaced = 0 AND p.status = 'active'
                   ORDER BY p.timecreated DESC";
             $records = $DB->get_records_sql($sql, ['icid' => $instance->id, 'ownid' => $USER->id], 0, 100);
             foreach ($records as $r) {
