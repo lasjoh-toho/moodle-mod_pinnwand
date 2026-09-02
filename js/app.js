@@ -2377,7 +2377,7 @@
               'transform:rotate(' + it.framerot + 'deg);border-color:' + lineColor + ';border-width:' + lineWidth + 'px'
           });
           frameEl.style.zIndex = it.framez || 0;
-          var stepNum = threadForCanvas.items.indexOf(it) + 1;
+          var stepNum = boardItems.indexOf(it) + 1;
           frameEl.appendChild(el('span', { style: 'color:' + lineColor }, [it.framelabel || String(stepNum)]));
           canvas.appendChild(frameEl);
 

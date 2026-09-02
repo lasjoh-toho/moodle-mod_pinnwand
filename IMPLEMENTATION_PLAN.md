@@ -1252,3 +1252,21 @@ Sechsundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`.
   konsistent auf die nach Board gefilterte Liste umgestellt werden, sonst
   wäre bei Fäden mit Stationen auf mehreren Boards der falsche Schritt
   angesprungen worden.
+
+---
+
+## Phase 34 — Schrittnummer-Konsistenz-Bugfix ✅
+
+Siebenundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`.
+
+- [x] **Bugfix**: die auf dem Rahmen angezeigte Schrittnummer bezog sich
+  noch auf die ungefilterte Gesamtliste aller Fadenstationen (über alle
+  Boards hinweg), nicht auf die nach Board gefilterte Liste, die seit dem
+  Bugfix in Phase 33 der tatsächlichen Präsentations-Reihenfolge
+  entspricht - dadurch stimmte die angezeigte Nummer nicht mit der
+  echten Position in der Präsentation überein.
+
+**Noch zu klären:** Die gemeldete "falsche Stelle" könnte sich auch auf
+die tatsächliche Kamera-Zielposition während der Präsentation beziehen
+(nicht nur die Nummer) - dafür bräuchte es mehr Details, welches konkrete
+Verhalten beobachtet wurde, um gezielt nachzubessern.
