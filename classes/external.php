@@ -225,6 +225,7 @@ class mod_pinnwand_external extends external_api {
                 'boardplaced' => (bool) $r->boardplaced,
                 'wordfielddata' => (string) ($r->wordfielddata ?? ''),
                 'otherboardcount' => $placementcounts[$r->id] ?? 0,
+                'userfullname' => fullname($USER),
             ];
         }
         return [
@@ -345,6 +346,7 @@ class mod_pinnwand_external extends external_api {
                 'boardplaced' => new external_value(PARAM_BOOL, 'Hat reale Board-Koordinaten (ist auf der Leinwand platziert)'),
                 'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON) oder leer'),
                 'otherboardcount' => new external_value(PARAM_INT, 'Anzahl zusätzlicher aktiver Platzierungen auf anderen Boards'),
+                'userfullname' => new external_value(PARAM_TEXT, 'Name der hochladenden Person (auf dem eigenen Board immer man selbst)'),
             ])),
         ]);
     }

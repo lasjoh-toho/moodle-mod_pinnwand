@@ -1359,3 +1359,34 @@ Strings.
 - Label: Hochladende Person soll rechts erscheinen, wenn sie nicht
   bereits Autor ist.
 - Rahmen-/Überblick-Icon größer und in Fadenfarbe.
+
+---
+
+## Phase 38 — Faden-Panel-Neuordnung, Stylus-Erweiterungen, Label, Icons, Augen-Button (Teil 2/2) ✅
+
+Einunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`,
+`classes/external.php`, neue Strings.
+
+- [x] **Faden-Panel neu geordnet**: Gewählt (Präsentieren-Button + Stationen-
+  Liste) zuerst, dann Rahmen+Überblick in einer Zeile, dann Hintergrund/
+  Fadenfarbe/-dicke (Überschrift jetzt über dem Regler statt daneben,
+  Zeile dadurch schmaler), dann die nicht gewählten Objekte, Faden-
+  löschen separat am Ende.
+- [x] **Stylus-/Annotationsmenü erweitert**: Ausblenden-Funktion (rein
+  visuell, reversibel), komplettes Löschen (mit Rückfrage, endgültig),
+  Palettenbutton für freie Farbwahl zusätzlich zur festen Farbliste.
+- [x] Label (`itemCaptionText`) zeigt jetzt die hochladende Person, wenn
+  sie nicht bereits als Autor genannt ist - neues Feld `userfullname`
+  auch in `get_photos` ergänzt (auf dem eigenen Board immer die
+  aufrufende Person selbst), damit das einheitlich mit der Klassenansicht
+  funktioniert.
+- [x] Rahmen-/Überblicksicon größer gemacht, in die Fadenfarbe umgestellt
+  (neue CSS-Variable `--ic-thread-color`) und optisch unterschieden
+  (unterschiedliche Symbole).
+- [x] **Augen-Button im Zoom-Popup fertiggestellt**: mit Auswahl zoomt er
+  auf die Auswahl; ohne Auswahl zeigt der erste Klick den Standard-Zoom
+  (alle Objekte + Hintergrund sichtbar), ein weiterer Klick direkt danach
+  zoomt gezielt auf den Hintergrundbereich.
+
+Damit ist der große Feedback-Block aus den letzten beiden Durchgängen
+vollständig abgearbeitet.

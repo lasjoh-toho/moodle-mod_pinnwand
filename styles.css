@@ -326,6 +326,7 @@
   position: absolute; left: 0; top: 0; width: 1400px; height: 1000px; z-index: 500; pointer-events: none;
 }
 .ic-board-ink-layer.active { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.ic-board-ink-layer.ic-hidden { display: none; }
 .ic-board-full-hint {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 15;
   max-width: 80%; padding: 8px 14px; border-radius: 10px; font-size: .8rem;
@@ -375,7 +376,7 @@
 }
 .ic-thread-frame-thumb {
   display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.08);
-  color: var(--ic-muted); font-size: 1.1rem;
+  color: var(--ic-thread-color, #e0503f); font-size: 1.5rem; width: 42px; height: 42px;
 }
 .ic-thread-item-label {
   font-size: .78rem; color: var(--ic-text); flex: 1 1 auto; overflow: hidden;

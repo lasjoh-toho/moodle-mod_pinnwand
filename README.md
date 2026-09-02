@@ -733,6 +733,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Bugfix: das Masterboard fehlte im Kopfzeilen-Dropdown, wenn es aktuell
   keine Fotos hat.
 
+### Vierzigste Überarbeitung — Faden-Panel-Neuordnung, Stylus-Erweiterungen, Label, Icons
+
+- Faden-Panel neu geordnet (Gewählt zuerst, dann Rahmen+Überblick,
+  Hintergrund/Fadenfarbe/-dicke, dann die nicht gewählten Objekte).
+- Stylus-Menü: Ausblenden, komplettes Löschen, Palettenbutton ergänzt.
+- Label zeigt jetzt die hochladende Person, wenn sie nicht bereits Autor ist.
+- Rahmen-/Überblicksicon größer, in Fadenfarbe, optisch unterschieden.
+- Augen-Button: Standard-Zoom ohne Auswahl, zweiter Klick zoomt aufs
+  Hintergrundbild.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

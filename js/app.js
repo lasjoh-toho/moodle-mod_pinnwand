@@ -111,6 +111,7 @@
     boardDrawColor: null,  // wird beim ersten Öffnen des Stylus-Panels auf INK_COLORS[0] gesetzt
     boardDrawWidth: 0.01,
     boardDrawErase: false,
+    boardInkHidden: false, // eigene Stylus-Anmerkungen ausgeblendet (rein visuell, nicht gelöscht)
     threadObjectFilter: 'all',
     boardNames: {}, // boardid -> eigener Titel (Standard: Aktivitätsname [+ Nummer], siehe boardDisplayName)
     multiSelect: [], // Mehrfachauswahl per Auswahlbox/Strg+Klick, z.B. ['photo:12','frame:3']
@@ -2196,7 +2197,9 @@
         render();
       });
     }
-    var inkCanvas = el('canvas', { class: 'ic-board-ink-layer', width: String(BOARD_W), height: String(BOARD_H) });
+    var inkCanvas = el('canvas', {
+      class: 'ic-board-ink-layer' + (state.boardInkHidden ? ' ic-hidden' : ''), width: String(BOARD_W), height: String(BOARD_H)
+    });
     canvas.appendChild(inkCanvas);
     var inkCtx = inkCanvas.getContext('2d');
     redrawInk(inkCanvas, inkCtx, state.boardInkStrokes || []);
@@ -2609,6 +2612,14 @@
 
     // Springt mit Kamera-Zoom/-Position exakt auf den Ausschnitt, in dem
     // alle aktuell ausgewählten Objekte zu sehen sind.
+    function fitViewToRect(minX, minY, maxX, maxY) {
+      var rect = wrap.getBoundingClientRect();
+      var fit = Math.min(rect.width / (maxX - minX), rect.height / (maxY - minY), 3);
+      state.boardZoom = Math.max(0.1, fit);
+      state.boardPanX = rect.width / 2 - (minX + maxX) / 2 * state.boardZoom;
+      state.boardPanY = rect.height / 2 - (minY + maxY) / 2 * state.boardZoom;
+      applyBoardTransform();
+    }
     function fitViewToSelection() {
       if (!state.multiSelect.length) { return; }
       var rects = state.multiSelect.map(function (k) {
@@ -2626,12 +2637,21 @@
       var minY = Math.min.apply(null, rects.map(function (r) { return r.y; })) - 30;
       var maxX = Math.max.apply(null, rects.map(function (r) { return r.x + r.w; })) + 30;
       var maxY = Math.max.apply(null, rects.map(function (r) { return r.y + r.h; })) + 30;
-      var rect = wrap.getBoundingClientRect();
-      var fit = Math.min(rect.width / (maxX - minX), rect.height / (maxY - minY), 3);
-      state.boardZoom = Math.max(0.1, fit);
-      state.boardPanX = rect.width / 2 - (minX + maxX) / 2 * state.boardZoom;
-      state.boardPanY = rect.height / 2 - (minY + maxY) / 2 * state.boardZoom;
-      applyBoardTransform();
+      fitViewToRect(minX, minY, maxX, maxY);
+    }
+    // Ohne Auswahl: erster Klick zeigt alle Objekte + Hintergrund (Standard-
+    // Zoom), ein weiterer Klick direkt danach zoomt gezielt auf den
+    // Hintergrundbereich selbst.
+    function fitViewDefault() {
+      var rects = visible.map(function (p) { return boardRectOf(p, 'photo'); });
+      var minX = Math.min(0, Math.min.apply(null, rects.map(function (r) { return r.x; }).concat([0]))) - 20;
+      var minY = Math.min(0, Math.min.apply(null, rects.map(function (r) { return r.y; }).concat([0]))) - 20;
+      var maxX = Math.max(BOARD_W, Math.max.apply(null, rects.map(function (r) { return r.x + r.w; }).concat([BOARD_W]))) + 20;
+      var maxY = Math.max(BOARD_H, Math.max.apply(null, rects.map(function (r) { return r.y + r.h; }).concat([BOARD_H]))) + 20;
+      fitViewToRect(minX, minY, maxX, maxY);
+    }
+    function fitViewToBackground() {
+      fitViewToRect(0, 0, BOARD_W, BOARD_H);
     }
 
     // Mausrad zoomt (zentriert auf den Mauszeiger) - unabhängig von der
@@ -2899,7 +2919,12 @@
       var fitSelBtn = el('button', { class: 'ic-icon-btn', title: S.selection_fit }, [icon('eye')]);
       fitSelBtn.addEventListener('click', function () {
         popup.remove();
-        fitViewToSelection();
+        if (state.multiSelect.length > 0) { fitViewToSelection(); return; }
+        // Ohne Auswahl: erster Klick zeigt alles (Standard-Zoom), ein
+        // weiterer Klick direkt danach zoomt gezielt auf den
+        // Hintergrundbereich selbst.
+        if (state._eyeShowedDefault) { fitViewToBackground(); state._eyeShowedDefault = false; }
+        else { fitViewDefault(); state._eyeShowedDefault = true; }
       });
       var row2 = el('div', { class: 'ic-zoom-popup-row' });
       row2.appendChild(boxSelBtn); row2.appendChild(addSelBtn); row2.appendChild(fitSelBtn);
@@ -2984,6 +3009,15 @@
         sw.addEventListener('click', function () { state.boardDrawColor = c; state.boardDrawErase = false; render(); });
         stylusTools.appendChild(sw);
       });
+      // Palettenbutton: freie Farbwahl über den nativen Farbwähler, für
+      // mehr Auswahl als die feste Farbliste.
+      var stylusCustomColor = el('input', {
+        type: 'color', value: state.boardDrawColor || INK_COLORS[0], class: 'ic-textframe-custom-color'
+      });
+      stylusCustomColor.addEventListener('change', function () {
+        state.boardDrawColor = stylusCustomColor.value; state.boardDrawErase = false; render();
+      });
+      stylusTools.appendChild(stylusCustomColor);
       var eraseBtn = el('button', { class: 'ic-icon-btn' + (state.boardDrawErase ? ' active' : ''), title: S.erase }, [icon('eraser')]);
       eraseBtn.addEventListener('click', function () { state.boardDrawErase = !state.boardDrawErase; render(); });
       stylusTools.appendChild(eraseBtn);
@@ -2992,6 +3026,24 @@
       });
       sizeSlider.addEventListener('input', function () { state.boardDrawWidth = parseFloat(sizeSlider.value); });
       stylusTools.appendChild(sizeSlider);
+      // Ausblenden: blendet die eigenen Anmerkungen aus, ohne sie zu
+      // löschen (rein visuell, clientseitig) - ein erneuter Klick blendet
+      // sie wieder ein.
+      var hideInkBtn = el('button', {
+        class: 'ic-icon-btn' + (state.boardInkHidden ? ' active' : ''), title: state.boardInkHidden ? S.showannotations : S.hideannotations
+      }, [icon('eye')]);
+      hideInkBtn.addEventListener('click', function () { state.boardInkHidden = !state.boardInkHidden; render(); });
+      stylusTools.appendChild(hideInkBtn);
+      // Komplett löschen: entfernt alle eigenen Striche auf diesem Board
+      // endgültig (mit Rückfrage, da nicht rückgängig machbar).
+      var clearInkBtn = el('button', { class: 'ic-icon-btn', title: S.clearannotations }, [icon('trash')]);
+      clearInkBtn.addEventListener('click', function () {
+        if (!confirm(S.clearannotations_confirm)) { return; }
+        state.boardInkStrokes = [];
+        callAjax('mod_pinnwand_save_board_ink', { cmid: cfg.cmid, boardid: state.currentBoard, strokes: '[]' });
+        render();
+      });
+      stylusTools.appendChild(clearInkBtn);
       stylusBar.appendChild(stylusTools);
     }
     body.appendChild(stylusBar);
@@ -3650,7 +3702,7 @@
       if (photo) {
         row.appendChild(el('img', { src: photo.url, alt: '' }));
       } else {
-        row.appendChild(el('div', { class: 'ic-thread-frame-thumb' }, ['\u2b1a']));
+        row.appendChild(el('div', { class: 'ic-thread-frame-thumb' }, [item.itemtype === 'overview' ? '\u26f6' : '\u2b1a']));
       }
       if (editable && item.itemtype === 'frame') {
         var frameLabelEl2 = el('span', {
@@ -3791,6 +3843,7 @@
     var own = ownThread();
     var shared = sharedThread();
 
+    // 1. Gewählt: Präsentieren-Button + die Stationen-Liste des eigenen Fadens.
     if (own && own.items.length > 0) {
       var presentBtn = el('button', {
         class: 'ic-btn ic-thread-present-btn', style: 'background:' + (own.color || '#e0503f') + ';color:#fff'
@@ -3799,54 +3852,9 @@
       panel.appendChild(presentBtn);
     }
     panel.appendChild(renderThreadList(own, true));
-    if (state.canusethreads) {
-      var bgLabel = el('label', { class: 'ic-me-check', style: 'margin:10px 0' });
-      var bgCheck = el('input', { type: 'checkbox' });
-      bgCheck.checked = !!(own && own.bgmoves);
-      bgCheck.addEventListener('change', function () {
-        if (own) { own.bgmoves = bgCheck.checked; }
-        callAjax('mod_pinnwand_set_thread_bgmoves', { cmid: cfg.cmid, bgmoves: bgCheck.checked });
-      });
-      bgLabel.appendChild(bgCheck);
-      bgLabel.appendChild(document.createTextNode(S.bgmoves_with_zoom));
-      panel.appendChild(bgLabel);
-      panel.appendChild(renderThreadObjectList(own));
-
-      // Fadenfarbe + Dicke - wirkt auf die Verbindungslinie UND die
-      // Rahmen-Umrandung auf dem Board.
-      var styleBox = el('div', { class: 'ic-thread-style' });
-      styleBox.appendChild(el('h3', { class: 'ic-thread-panel-subtitle' }, [S.threadstyle]));
-      var styleRow = el('div', { class: 'ic-textframe-edit' });
-      var colorInput = el('input', { type: 'color', value: (own && own.color) || '#e0503f', class: 'ic-textframe-custom-color' });
-      var widthInput = el('input', { type: 'range', min: '1', max: '12', step: '0.5', value: String((own && own.linewidth) || 3) });
-      function persistThreadStyle() {
-        var color = colorInput.value, width = parseFloat(widthInput.value);
-        if (own) { own.color = color; own.linewidth = width; }
-        callAjax('mod_pinnwand_set_thread_style', { cmid: cfg.cmid, color: color, linewidth: width });
-      }
-      var styleDebounce = null;
-      function persistThreadStyleDebounced() {
-        if (styleDebounce) { clearTimeout(styleDebounce); }
-        styleDebounce = setTimeout(persistThreadStyle, 400);
-      }
-      colorInput.addEventListener('input', function () {
-        if (own) { own.color = colorInput.value; }
-        persistThreadStyleDebounced();
-      });
-      colorInput.addEventListener('change', function () { persistThreadStyle(); render(); });
-      widthInput.addEventListener('input', function () {
-        if (own) { own.linewidth = parseFloat(widthInput.value); }
-        persistThreadStyleDebounced();
-      });
-      widthInput.addEventListener('change', function () { persistThreadStyle(); render(); });
-      styleRow.appendChild(colorInput);
-      styleRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.threadwidth]));
-      styleRow.appendChild(widthInput);
-      styleBox.appendChild(styleRow);
-      panel.appendChild(styleBox);
-    }
 
     if (state.canusethreads) {
+      // 2. Rahmen + Überblick hinzufügen in einer Zeile.
       var actions = el('div', { class: 'ic-thread-actions' });
       var addFrameBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.addframetothread]);
       addFrameBtn.addEventListener('click', function () {
@@ -3874,8 +3882,61 @@
         });
       });
       actions.appendChild(addOverviewBtn);
+      panel.appendChild(actions);
+
+      // 3. Hintergrund + Fadenfarbe/-dicke - Überschrift über dem Regler
+      // statt daneben, damit die Zeile selbst schmaler bleibt.
+      var bgLabel = el('label', { class: 'ic-me-check', style: 'margin:10px 0' });
+      var bgCheck = el('input', { type: 'checkbox' });
+      bgCheck.checked = !!(own && own.bgmoves);
+      bgCheck.addEventListener('change', function () {
+        if (own) { own.bgmoves = bgCheck.checked; }
+        callAjax('mod_pinnwand_set_thread_bgmoves', { cmid: cfg.cmid, bgmoves: bgCheck.checked });
+      });
+      bgLabel.appendChild(bgCheck);
+      bgLabel.appendChild(document.createTextNode(S.bgmoves_with_zoom));
+      panel.appendChild(bgLabel);
+
+      var styleBox = el('div', { class: 'ic-thread-style' });
+      styleBox.appendChild(el('h3', { class: 'ic-thread-panel-subtitle' }, [S.threadstyle]));
+      var styleRow = el('div', { class: 'ic-textframe-edit' });
+      var colorInput = el('input', { type: 'color', value: (own && own.color) || '#e0503f', class: 'ic-textframe-custom-color' });
+      var widthInput = el('input', { type: 'range', min: '1', max: '12', step: '0.5', value: String((own && own.linewidth) || 3) });
+      function persistThreadStyle() {
+        var color = colorInput.value, width = parseFloat(widthInput.value);
+        if (own) { own.color = color; own.linewidth = width; }
+        callAjax('mod_pinnwand_set_thread_style', { cmid: cfg.cmid, color: color, linewidth: width });
+      }
+      var styleDebounce = null;
+      function persistThreadStyleDebounced() {
+        if (styleDebounce) { clearTimeout(styleDebounce); }
+        styleDebounce = setTimeout(persistThreadStyle, 400);
+      }
+      colorInput.addEventListener('input', function () {
+        if (own) { own.color = colorInput.value; }
+        persistThreadStyleDebounced();
+      });
+      colorInput.addEventListener('change', function () { persistThreadStyle(); render(); });
+      widthInput.addEventListener('input', function () {
+        if (own) { own.linewidth = parseFloat(widthInput.value); }
+        persistThreadStyleDebounced();
+      });
+      widthInput.addEventListener('change', function () { persistThreadStyle(); render(); });
+      // Überschrift "Fadenfarbe/-dicke" (S.threadwidth) über den Regler statt
+      // in derselben Zeile - die Zeile selbst enthält dadurch nur noch
+      // Farbwähler + Regler und bleibt schmaler.
+      styleBox.appendChild(el('div', { class: 'ic-textframe-label', style: 'margin-bottom:4px' }, [S.threadwidth]));
+      styleRow.appendChild(colorInput);
+      styleRow.appendChild(widthInput);
+      styleBox.appendChild(styleRow);
+      panel.appendChild(styleBox);
+
+      // 4. Die noch nicht gewählten Objekte (nicht im Faden enthalten).
+      panel.appendChild(renderThreadObjectList(own));
+
+      // Faden komplett löschen - separat am Ende.
       if (own && own.items.length > 0) {
-        var delBtn = el('button', { class: 'ic-btn ic-btn-danger' }, [S.deletethread]);
+        var delBtn = el('button', { class: 'ic-btn ic-btn-danger', style: 'margin-top:10px' }, [S.deletethread]);
         delBtn.addEventListener('click', function () {
           if (confirm(S.confirmdeletethread)) {
             callAjax('mod_pinnwand_delete_thread', { cmid: cfg.cmid }).then(function () {
@@ -3884,9 +3945,8 @@
             });
           }
         });
-        actions.appendChild(delBtn);
+        panel.appendChild(delBtn);
       }
-      panel.appendChild(actions);
     }
 
     if (shared) {
@@ -5543,6 +5603,7 @@
   function itemCaptionText(p) {
     var lines = [];
     var top = [p.sourcetitle, p.sourceauthor].filter(Boolean).join(' — ');
+    if (p.userfullname && p.userfullname !== p.sourceauthor) { top = (top ? top + ' ' : '') + '(' + p.userfullname + ')'; }
     if (top) { lines.push(top); }
     var rest = [p.sourceyear, p.sourceepoch, p.sourceplace].filter(Boolean).join(' · ');
     if (rest) { lines.push(rest); }
