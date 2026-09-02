@@ -1196,3 +1196,35 @@ neue Strings.
 - Für Zusatz-Platzierungen gibt es noch kein "endgültig löschen" im
   Trashbin (nur Wiederherstellen) - im Vergleich zu ganzen Objekten ein
   bewusst kleinerer Funktionsumfang, da eine Platzierung ohnehin leichtgewichtig ist.
+
+---
+
+## Phase 32 — Rahmen-Bugfix, Schrittnummer, Kopfzeilen-Dropdown, Rot/Gelb-Pin ✅
+
+Fünfundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`,
+`classes/external.php`, `db/services.php`, `db/install.xml`,
+`db/upgrade.php`, `mod_form.php`, neue Strings.
+
+- [x] **Kern-Bugfix Rahmen-Erstellung**: der native `prompt()`-Dialog beim
+  Anlegen eines Rahmens kann in eingebetteten Moodle-Kontexten blockiert
+  sein oder eine Exception werfen - dann bricht der komplette
+  Klick-Handler ab, BEVOR der Rahmen überhaupt angelegt wird. Das war
+  vermutlich sowohl die Ursache für den als hinderlich empfundenen Dialog
+  als auch für die verschwundenen neuen Rahmen. Rahmen werden jetzt sofort
+  ohne Titelabfrage angelegt.
+- [x] Rahmen ohne Titel zeigen jetzt eine reine Zahl (Beispiel: "3") als
+  Platzhalter statt "leerer Rahmen" - sowohl auf dem Board als auch im
+  Faden-Panel. Titel bleibt jederzeit nachträglich vergebbar.
+- [x] Neue Einstellung "Lernende dürfen Boards anderer Lernender sehen"
+  (Standard aus) + neues `hidden`-Feld pro Board (Augen-Symbol).
+- [x] **Kopfzeilen-Titel umgebaut**: Doppelklick zum Umbenennen, einfacher
+  Klick öffnet ein Dropdown mit allen sichtbaren Boards (eigene wechselbar
+  + Augen-Symbol zum Ausblenden; fremde vorerst nur informativ gelistet -
+  echter Wechsel zu fremden Boards bräuchte ein "als andere Person
+  ansehen"-Konzept quer durch mehrere Endpunkte und ist zurückgestellt).
+- [x] **Rot/Gelb-Kennzeichnung** für Objekte auf mehreren Boards: der
+  Löschen-Button in "Meine Bilder" wird rot, wenn das Objekt noch auf
+  genau einem weiteren Board existiert (einfache Bestätigung reicht), und
+  gelb, wenn es auf mehreren weiteren Boards existiert (öffnet ein Modal
+  mit Übersicht aller Verwendungen, aus dem gezielt einzelne
+  Platzierungen entfernt werden können).

@@ -690,8 +690,17 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - **Neu: Papierkorb-Seitenleiste** - gelöschte Objekte landen jetzt
   reversibel dort statt sofort endgültig gelöscht zu werden.
 - Seitenleisten-Reihenfolge: Post-Stream, Faden, Layer, Papierkorb.
-- Noch offen: Rot/Gelb-Pin-Unterscheidung für 3+ Boards, Kopfzeilen-
-  Titel-Dropdown, Einstellung "Lernende können andere Boards sehen".
+
+### Sechsunddreißigste Überarbeitung — Rahmen-Bugfix, Kopfzeilen-Dropdown, Rot/Gelb-Pin
+
+- **Kern-Bugfix**: der prompt()-Dialog beim Rahmen-Erstellen konnte in
+  eingebetteten Kontexten die komplette Erstellung verhindern - behoben,
+  Rahmen werden jetzt sofort ohne Titelabfrage angelegt.
+- Rahmen ohne Titel zeigen jetzt eine reine Zahl statt "leerer Rahmen".
+- Kopfzeilen-Titel: Doppelklick zum Umbenennen, Klick öffnet Board-
+  Dropdown mit Augen-Symbol zum Ausblenden.
+- Rot/Gelb-Kennzeichnung für Objekte auf mehreren Boards beim Löschen.
+- Noch offen: echter Wechsel zu fremden Boards im Dropdown.
 
 ## Bekannte Grenzen dieser Version
 

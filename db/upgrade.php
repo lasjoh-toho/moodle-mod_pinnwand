@@ -369,5 +369,21 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083031, 'pinnwand');
     }
 
+    if ($oldversion < 2026083033) {
+        // Feedback-Durchgang: Kopfzeilen-Board-Dropdown mit Sichtbarkeit
+        // für andere Lernende.
+        $table = new xmldb_table('pinnwand');
+        $field = new xmldb_field('studentseeotherboards', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'studentboardclone');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $table2 = new xmldb_table('pinnwand_board_names');
+        $field2 = new xmldb_field('hidden', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'name');
+        if (!$dbman->field_exists($table2, $field2)) {
+            $dbman->add_field($table2, $field2);
+        }
+        upgrade_mod_savepoint(true, 2026083033, 'pinnwand');
+    }
+
     return true;
 }

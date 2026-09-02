@@ -50,6 +50,22 @@
   max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text;
 }
 .ic-board-title-edit:hover, .ic-board-title-edit:focus { background: rgba(255,255,255,.08); outline: none; white-space: normal; }
+.ic-board-dropdown {
+  position: fixed; top: 50px; left: 50%; transform: translateX(-50%); z-index: 210;
+  width: min(320px, 90vw); max-height: 60vh; overflow-y: auto;
+  background: var(--ic-panel); border-radius: 12px; padding: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
+.ic-board-dropdown-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 8px; border-radius: 8px;
+}
+.ic-board-dropdown-row.active { background: rgba(79,140,255,.2); }
+.ic-board-dropdown-label {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  font-size: .85rem;
+}
+.ic-board-dropdown-label.ic-board-dropdown-foreign { cursor: default; color: var(--ic-muted); }
 .ic-icon-btn {
   width: 34px; height: 34px; border-radius: 50%; border: none; flex: 0 0 auto;
   background: rgba(20,21,24,.55); color: var(--ic-text);
@@ -193,6 +209,8 @@
   background: rgba(0,0,0,.6); color: #fff; border: none;
   width: 26px; height: 26px; border-radius: 50%; font-size: .9rem; line-height: 1;
 }
+.ic-gallery .ic-thumb .ic-del.ic-del-shared { background: #e0503f; }
+.ic-gallery .ic-thumb .ic-del.ic-del-multi { background: #d9a520; color: #1a1a1a; }
 .ic-gallery .ic-thumb .ic-pin {
   position: absolute; top: -16px; left: 50%; transform: translateX(-50%); z-index: 2;
   background: rgba(0,0,0,.6); color: #888; border: none;

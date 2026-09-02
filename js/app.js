@@ -247,6 +247,46 @@
   // ==================================================================
   // HOME: Galerie der eigenen Fotos + Start-Buttons
   // ==================================================================
+  // Modal für Objekte auf 3+ Boards (Heimat + 2 oder mehr zusätzliche
+  // Platzierungen) - eine einfache Rot/Blau-Pin-Unterscheidung reicht hier
+  // nicht mehr aus, da unklar wäre, von welchem der mehreren Boards
+  // entfernt werden soll.
+  function openMultiBoardDeleteModal(p, idx) {
+    var overlay = el('div', { class: 'ic-modal-overlay' });
+    overlay.addEventListener('click', function (ev) { if (ev.target === overlay) { overlay.remove(); } });
+    var panel = el('div', { class: 'ic-add-modal' });
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.objectusage_title]));
+    var list = el('div', {});
+    panel.appendChild(list);
+    callAjax('mod_pinnwand_get_object_usage', { cmid: cfg.cmid, photoid: p.id }).then(function (res) {
+      (res.usages || []).forEach(function (u) {
+        var row = el('div', { class: 'ic-thread-item' });
+        row.appendChild(el('span', { class: 'ic-thread-item-label' }, [boardDisplayName(u.boardid)]));
+        var rmBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('trash')]);
+        rmBtn.addEventListener('click', function () {
+          var call = u.kind === 'home'
+            ? callAjax('mod_pinnwand_delete_photo', { cmid: cfg.cmid, photoid: u.id })
+            : callAjax('mod_pinnwand_set_placement_status', { cmid: cfg.cmid, placementid: u.id, status: 'trash' });
+          call.then(function () {
+            row.remove();
+            if (u.kind === 'home') {
+              overlay.remove();
+              state.photos.splice(idx, 1);
+              render();
+            }
+          });
+        });
+        row.appendChild(rmBtn);
+        list.appendChild(row);
+      });
+    });
+    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel }, ['\u2715']);
+    closeBtn.addEventListener('click', function () { overlay.remove(); });
+    panel.appendChild(closeBtn);
+    overlay.appendChild(panel);
+    root.appendChild(overlay);
+  }
+
   function renderHome(body) {
     var wrap = el('div', { class: 'ic-home' });
     var maxreached = state.maxpictures > 0 && state.photos.length >= state.maxpictures;
@@ -279,10 +319,15 @@
         });
         thumb.appendChild(pin);
       }
-      var del = el('button', { class: 'ic-del', html: '&times;' });
+      var multiClass = p.otherboardcount >= 2 ? ' ic-del-multi' : p.otherboardcount === 1 ? ' ic-del-shared' : '';
+      var del = el('button', {
+        class: 'ic-del' + multiClass, html: '&times;',
+        title: p.otherboardcount > 0 ? S.deletephoto_multi_hint : null
+      });
       del.addEventListener('click', function (ev) {
         ev.stopPropagation();
-        if (confirm(S.confirmdelete)) {
+        if (p.otherboardcount >= 2) { openMultiBoardDeleteModal(p, idx); return; }
+        if (confirm(p.otherboardcount === 1 ? S.confirmdelete_shared : S.confirmdelete)) {
           callAjax('mod_pinnwand_delete_photo', { cmid: cfg.cmid, photoid: p.id }).then(function () {
             state.photos.splice(idx, 1);
             render();
@@ -1876,6 +1921,60 @@
   // Kombinierter Board-Titel + Umschalter für die Kopfzeile (ersetzt die
   // vormals separate Board-Leiste auf der Leinwand). Titel per Klick auf
   // den Text bearbeitbar (contenteditable) - speichert bei "blur"/Enter.
+  // Board-Dropdown (Klick auf den Kopfzeilen-Titel): listet alle
+  // sichtbaren Boards. Eigene sind anklickbar (wechselt dorthin) und haben
+  // ein Augen-Symbol zum Aus-/Einblenden für andere Lernende. Fremde Boards
+  // werden vorerst nur informativ gelistet (Wechsel zu fremden Boards ist
+  // ein größeres, eigenständiges Feature - siehe Scoping-Hinweis im Plan).
+  function closeBoardDropdown() {
+    var existing = document.getElementById('ic-board-dropdown');
+    if (existing) { existing.remove(); }
+  }
+  function toggleBoardDropdown(anchorEl) {
+    var existing = document.getElementById('ic-board-dropdown');
+    if (existing) { existing.remove(); return; }
+    var dropdown = el('div', { class: 'ic-board-dropdown', id: 'ic-board-dropdown' });
+    dropdown.appendChild(el('p', { class: 'ic-hint' }, [S.boardswitcher]));
+    callAjax('mod_pinnwand_get_all_boards', { cmid: cfg.cmid }).then(function (res) {
+      (res.boards || []).forEach(function (b) {
+        var row = el('div', { class: 'ic-board-dropdown-row' + (b.isown && b.boardid === state.currentBoard ? ' active' : '') });
+        var label = el('span', { class: 'ic-board-dropdown-label' + (b.isown ? '' : ' ic-board-dropdown-foreign') },
+          [(b.name || (b.isown ? boardDisplayName(b.boardid) : b.ownername)) + (b.isown ? '' : ' (' + b.ownername + ')')]);
+        if (b.isown) {
+          label.addEventListener('click', function () {
+            state.currentBoard = b.boardid;
+            closeBoardDropdown();
+            render();
+          });
+        }
+        row.appendChild(label);
+        if (b.isown) {
+          var eyeBtn = el('button', {
+            class: 'ic-icon-btn' + (b.hidden ? ' active' : ''), title: b.hidden ? S.boardshow : S.boardhide
+          }, [icon('eye')]);
+          eyeBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            var newHidden = !b.hidden;
+            callAjax('mod_pinnwand_set_board_hidden', { cmid: cfg.cmid, boardid: b.boardid, hidden: newHidden }).then(function () {
+              b.hidden = newHidden;
+              eyeBtn.classList.toggle('active', newHidden);
+              eyeBtn.title = newHidden ? S.boardshow : S.boardhide;
+            });
+          });
+          row.appendChild(eyeBtn);
+        }
+        dropdown.appendChild(row);
+      });
+    });
+    root.appendChild(dropdown);
+    setTimeout(function () {
+      document.addEventListener('click', function closeOnce(ev) {
+        if (!dropdown.contains(ev.target)) { dropdown.remove(); }
+        document.removeEventListener('click', closeOnce);
+      });
+    }, 0);
+  }
+
   function renderBoardTitleBar() {
     var boards = boardList();
     var boardIdx = boards.indexOf(state.currentBoard);
@@ -1886,13 +1985,36 @@
     wrap.appendChild(prevBoard);
 
     var titleEl = el('span', {
-      class: 'ic-board-title-edit', contenteditable: 'true', title: S.renameboard
+      class: 'ic-board-title-edit', contenteditable: 'true', title: S.boardrename_hint
     }, [boardDisplayName(state.currentBoard)]);
-    titleEl.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    // Kein Fokus/Bearbeitungsmodus bei einfachem Klick (Standardverhalten
+    // von contenteditable) - der ist für das Dropdown reserviert. Erst ein
+    // Doppelklick aktiviert das Umbenennen.
+    var titleEditing = false;
+    titleEl.addEventListener('mousedown', function (ev) {
+      if (!titleEditing) { ev.preventDefault(); }
+    });
+    titleEl.addEventListener('click', function (ev) {
+      if (titleEditing) { return; }
+      ev.stopPropagation();
+      toggleBoardDropdown(titleEl);
+    });
+    titleEl.addEventListener('dblclick', function (ev) {
+      ev.stopPropagation();
+      closeBoardDropdown();
+      titleEditing = true;
+      titleEl.focus();
+      var range = document.createRange();
+      range.selectNodeContents(titleEl);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
     titleEl.addEventListener('keydown', function (ev) {
       if (ev.key === 'Enter') { ev.preventDefault(); titleEl.blur(); }
     });
     titleEl.addEventListener('blur', function () {
+      titleEditing = false;
       var text = titleEl.textContent.trim();
       var boardId = state.currentBoard;
       if (!text || text === boardDisplayName(boardId)) { titleEl.textContent = boardDisplayName(boardId); return; }
@@ -2255,7 +2377,8 @@
               'transform:rotate(' + it.framerot + 'deg);border-color:' + lineColor + ';border-width:' + lineWidth + 'px'
           });
           frameEl.style.zIndex = it.framez || 0;
-          if (it.framelabel) { frameEl.appendChild(el('span', { style: 'color:' + lineColor }, [it.framelabel])); }
+          var stepNum = threadForCanvas.items.indexOf(it) + 1;
+          frameEl.appendChild(el('span', { style: 'color:' + lineColor }, [it.framelabel || String(stepNum)]));
           canvas.appendChild(frameEl);
 
           if (!threadForCanvas.isown) { return; }
@@ -3392,7 +3515,7 @@
       if (editable && item.itemtype === 'frame') {
         var frameLabelEl2 = el('span', {
           class: 'ic-thread-item-label ic-thread-item-label-editable', contenteditable: 'true'
-        }, [item.framelabel || S.emptyframe]);
+        }, [item.framelabel || String(idx + 1)]);
         frameLabelEl2.addEventListener('click', function (ev) { ev.stopPropagation(); });
         frameLabelEl2.addEventListener('focus', function () {
           if (!item.framelabel) { frameLabelEl2.textContent = ''; }
@@ -3400,7 +3523,7 @@
         frameLabelEl2.addEventListener('blur', function () {
           var text = frameLabelEl2.textContent.trim();
           item.framelabel = text;
-          if (!text) { frameLabelEl2.textContent = S.emptyframe; }
+          if (!text) { frameLabelEl2.textContent = String(idx + 1); }
           callAjax('mod_pinnwand_set_frame_label', { cmid: cfg.cmid, itemid: item.id, framelabel: text });
         });
         row.appendChild(frameLabelEl2);
@@ -3571,10 +3694,14 @@
       var actions = el('div', { class: 'ic-thread-actions' });
       var addFrameBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.addframetothread]);
       addFrameBtn.addEventListener('click', function () {
-        var label = prompt(S.addframetothread, '') || '';
+        // Kein prompt()-Dialog mehr - der kann in eingebetteten Kontexten
+        // blockiert sein/werfen und dadurch die Rahmen-Erstellung komplett
+        // verhindern. Rahmen wird sofort ohne Titel angelegt; ein Titel
+        // lässt sich danach jederzeit hier im Panel oder direkt am Rahmen
+        // auf dem Board vergeben (siehe contenteditable-Beschriftung).
         callAjax('mod_pinnwand_add_thread_item', {
           cmid: cfg.cmid, itemtype: 'frame', boardid: state.currentBoard,
-          framex: 40, framey: 40, framew: 240, frameh: 180, framelabel: label
+          framex: 40, framey: 40, framew: 240, frameh: 180, framelabel: ''
         }).then(function (res) {
           replaceOwnThread(res);
           render();

@@ -64,6 +64,10 @@ class mod_pinnwand_mod_form extends moodleform_mod {
         $mform->setDefault('studentboardclone', 0);
         $mform->addHelpButton('studentboardclone', 'studentboardclone', 'pinnwand');
 
+        $mform->addElement('advcheckbox', 'studentseeotherboards', get_string('studentseeotherboards', 'pinnwand'));
+        $mform->setDefault('studentseeotherboards', 0);
+        $mform->addHelpButton('studentseeotherboards', 'studentseeotherboards', 'pinnwand');
+
         $mform->addElement('advcheckbox', 'studentthreads', get_string('studentthreads', 'pinnwand'));
         $mform->setDefault('studentthreads', 0);
         $mform->addHelpButton('studentthreads', 'studentthreads', 'pinnwand');

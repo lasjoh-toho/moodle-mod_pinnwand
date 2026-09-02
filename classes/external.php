@@ -177,6 +177,17 @@ class mod_pinnwand_external extends external_api {
         ], 'sortorder ASC');
 
         $fs = get_file_storage();
+        $placementcounts = [];
+        if ($records) {
+            list($insql, $inparams) = $DB->get_in_or_equal(array_keys($records));
+            $counts = $DB->get_records_sql(
+                "SELECT photoid, COUNT(*) AS cnt FROM {pinnwand_object_placements}
+                  WHERE status = 'active' AND photoid $insql GROUP BY photoid", $inparams
+            );
+            foreach ($counts as $c) {
+                $placementcounts[$c->photoid] = (int) $c->cnt;
+            }
+        }
         $out = [];
         foreach ($records as $r) {
             $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $r->id, 'filename', false);
@@ -213,6 +224,7 @@ class mod_pinnwand_external extends external_api {
                 'showingback' => (bool) $r->showingback,
                 'boardplaced' => (bool) $r->boardplaced,
                 'wordfielddata' => (string) ($r->wordfielddata ?? ''),
+                'otherboardcount' => $placementcounts[$r->id] ?? 0,
             ];
         }
         return [
@@ -332,6 +344,7 @@ class mod_pinnwand_external extends external_api {
                 'showingback' => new external_value(PARAM_BOOL, 'Rückseite zeigt gerade nach oben'),
                 'boardplaced' => new external_value(PARAM_BOOL, 'Hat reale Board-Koordinaten (ist auf der Leinwand platziert)'),
                 'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON) oder leer'),
+                'otherboardcount' => new external_value(PARAM_INT, 'Anzahl zusätzlicher aktiver Platzierungen auf anderen Boards'),
             ])),
         ]);
     }
@@ -648,6 +661,49 @@ class mod_pinnwand_external extends external_api {
      * Lädt eine Platzierung und prüft, dass sie zu dieser Aktivität gehört
      * und das referenzierte Objekt der aufrufenden Person gehört.
      */
+    public static function get_object_usage_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Objekt-ID'),
+        ]);
+    }
+
+    /**
+     * Listet alle Boards, auf denen ein Objekt der aufrufenden Person
+     * aktiv erscheint (Heimat-Board + zusätzliche Platzierungen) - für
+     * das Übersichts-Modal, wenn ein Objekt auf 3+ Boards liegt.
+     */
+    public static function get_object_usage($cmid, $photoid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::get_object_usage_parameters(), ['cmid' => $cmid, 'photoid' => $photoid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->pinnwandid != $instance->id || $photo->userid != $USER->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'get_object_usage');
+        }
+
+        $out = [];
+        if ($photo->status === 'active') {
+            $out[] = ['kind' => 'home', 'id' => (int) $photo->id, 'boardid' => (int) $photo->boardid];
+        }
+        $placements = $DB->get_records('pinnwand_object_placements', ['photoid' => $photo->id, 'status' => 'active']);
+        foreach ($placements as $pl) {
+            $out[] = ['kind' => 'placement', 'id' => (int) $pl->id, 'boardid' => (int) $pl->boardid];
+        }
+        return ['usages' => $out];
+    }
+
+    public static function get_object_usage_returns() {
+        return new external_single_structure([
+            'usages' => new external_multiple_structure(new external_single_structure([
+                'kind' => new external_value(PARAM_ALPHA, 'home (Heimat-Board) oder placement (zusätzliche Platzierung)'),
+                'id' => new external_value(PARAM_INT, 'ID des Objekts bzw. der Platzierung'),
+                'boardid' => new external_value(PARAM_INT, 'Board-ID'),
+            ])),
+        ]);
+    }
+
     protected static function require_own_placement($placementid, $instanceid, $userid) {
         global $DB;
         $placement = $DB->get_record('pinnwand_object_placements', ['id' => $placementid], '*', MUST_EXIST);
@@ -722,6 +778,109 @@ class mod_pinnwand_external extends external_api {
 
     public static function set_board_name_returns() {
         return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function set_board_hidden_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'boardid' => new external_value(PARAM_INT, 'Board-ID'),
+            'hidden' => new external_value(PARAM_BOOL, 'Für andere Lernende ausgeblendet'),
+        ]);
+    }
+
+    public static function set_board_hidden($cmid, $boardid, $hidden) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_board_hidden_parameters(), [
+            'cmid' => $cmid, 'boardid' => $boardid, 'hidden' => $hidden,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $row = $DB->get_record('pinnwand_board_names', [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $params['boardid'],
+        ]);
+        if ($row) {
+            $row->hidden = (int) $params['hidden'];
+            $row->timemodified = time();
+            $DB->update_record('pinnwand_board_names', $row);
+        } else {
+            $DB->insert_record('pinnwand_board_names', (object) [
+                'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $params['boardid'],
+                'name' => null, 'hidden' => (int) $params['hidden'], 'timemodified' => time(),
+            ]);
+        }
+        return ['success' => true];
+    }
+
+    public static function set_board_hidden_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function get_all_boards_parameters() {
+        return new external_function_parameters(['cmid' => new external_value(PARAM_INT, 'Course module id')]);
+    }
+
+    /**
+     * Liste aller Boards für den Kopfzeilen-Dropdown: immer die eigenen,
+     * dazu die Boards anderer Personen, wenn die aufrufende Person die
+     * Lehrkraft ist (sieht immer alles, auch ausgeblendete) oder wenn
+     * "studentseeotherboards" aktiviert ist (dann ohne ausgeblendete).
+     */
+    public static function get_all_boards($cmid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::get_all_boards_parameters(), ['cmid' => $cmid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+        $isteacher = has_capability('mod/pinnwand:viewall', $context);
+        $seeothers = $isteacher || !empty($instance->studentseeotherboards);
+
+        $sql = "SELECT DISTINCT p.userid, p.boardid, u.firstname, u.lastname
+                  FROM {pinnwand_photos} p
+                  JOIN {user} u ON u.id = p.userid
+                 WHERE p.pinnwandid = :icid";
+        $params2 = ['icid' => $instance->id];
+        if (!$seeothers) {
+            $sql .= " AND p.userid = :ownid";
+            $params2['ownid'] = $USER->id;
+        }
+        $rows = $DB->get_records_sql($sql, $params2);
+
+        $names = $DB->get_records('pinnwand_board_names', ['pinnwandid' => $instance->id]);
+        $namekey = function ($userid, $boardid) { return $userid . ':' . $boardid; };
+        $namemap = [];
+        foreach ($names as $n) {
+            $namemap[$namekey($n->userid, $n->boardid)] = $n;
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            $isown = $r->userid == $USER->id;
+            $entry = $namemap[$namekey($r->userid, $r->boardid)] ?? null;
+            $hidden = $entry ? (bool) $entry->hidden : false;
+            if ($hidden && !$isown && !$isteacher) {
+                continue;
+            }
+            $out[] = [
+                'userid' => (int) $r->userid,
+                'boardid' => (int) $r->boardid,
+                'ownername' => fullname($r),
+                'isown' => $isown,
+                'name' => $entry && $entry->name !== null ? (string) $entry->name : '',
+                'hidden' => $hidden,
+            ];
+        }
+        return ['boards' => $out];
+    }
+
+    public static function get_all_boards_returns() {
+        return new external_single_structure([
+            'boards' => new external_multiple_structure(new external_single_structure([
+                'userid' => new external_value(PARAM_INT, 'Besitzer*in des Boards'),
+                'boardid' => new external_value(PARAM_INT, 'Board-ID'),
+                'ownername' => new external_value(PARAM_TEXT, 'Name der besitzenden Person'),
+                'isown' => new external_value(PARAM_BOOL, 'Gehört der aufrufenden Person'),
+                'name' => new external_value(PARAM_TEXT, 'Eigener Titel, falls gesetzt'),
+                'hidden' => new external_value(PARAM_BOOL, 'Für andere Lernende ausgeblendet'),
+            ])),
+        ]);
     }
 
     public static function clone_board_parameters() {

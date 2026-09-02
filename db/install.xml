@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/pinnwand/db" VERSION="2026083031" COMMENT="XMLDB file for module pinnwand">
+<XMLDB PATH="mod/pinnwand/db" VERSION="2026083033" COMMENT="XMLDB file for module pinnwand">
   <TABLES>
     <TABLE NAME="pinnwand" COMMENT="Instances of the pinnwand activity">
       <FIELDS>
@@ -17,6 +17,7 @@
         <FIELD NAME="boardpannable" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Pinnwand ist per Hand-Werkzeug verschiebbar und per Slider zoombar"/>
         <FIELD NAME="sidebaropacity" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="92" SEQUENCE="false" COMMENT="Deckkraft des Seitenleisten-Hintergrunds in Prozent (0-100)"/>
         <FIELD NAME="studentboardclone" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Lernende dürfen eine eigene Kopie (weiteres Board) der Pinnwand erstellen"/>
+        <FIELD NAME="studentseeotherboards" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Lernende dürfen im Board-Dropdown auch die Boards anderer Lernender sehen/wechseln (sofern nicht von diesen ausgeblendet)"/>
         <FIELD NAME="studentthreads" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Lernende dürfen eigene Rote Fäden über die Pinnwand legen"/>
         <FIELD NAME="studentpoststream" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Lernende dürfen den Post-Stream (eigenen Warteraum) nutzen"/>
         <FIELD NAME="studentlayers" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Lernende dürfen das Schichtung-Panel (Z-Reihenfolge) nutzen"/>
@@ -132,6 +133,7 @@
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="boardid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="hidden" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Board für andere Lernende im Dropdown ausgeblendet (Lehrkraft sieht es trotzdem)"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>
