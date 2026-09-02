@@ -60,6 +60,10 @@ class mod_pinnwand_mod_form extends moodleform_mod {
         $mform->setDefault('sidebaropacity', 92);
         $mform->addHelpButton('sidebaropacity', 'sidebaropacity', 'pinnwand');
 
+        $mform->addElement('advcheckbox', 'studentboardclone', get_string('studentboardclone', 'pinnwand'));
+        $mform->setDefault('studentboardclone', 0);
+        $mform->addHelpButton('studentboardclone', 'studentboardclone', 'pinnwand');
+
         $mform->addElement('advcheckbox', 'studentthreads', get_string('studentthreads', 'pinnwand'));
         $mform->setDefault('studentthreads', 0);
         $mform->addHelpButton('studentthreads', 'studentthreads', 'pinnwand');

@@ -605,8 +605,27 @@ Details und Scoping-Entscheidungen. In Kurzform:
   immer verfügbar (nicht mehr nur bei aktivierter Verschiebbarkeit).
 - Schmale Scrollbalken app-weit.
 
+### Achtundzwanzigste Überarbeitung — Galerie-Feinschliff, Pin-Symbolik, Board-Titel, Board-Klonen
+
+- **Kern-Bugfix**: der Raster-Button verschwand nach dem Setzen eines
+  Rasters dauerhaft mit - jetzt zusätzlicher, immer erreichbarer
+  Raster-Button oben links.
+- Pin- und Löschen-Button weiter in die Ecken; gepinnte Fotos werden
+  visuell leicht angehoben (Pin-Metapher).
+- Einheitliches Thumbtack-Symbol überall (auch als Pinnwand-Icon in der
+  Hauptmenüleiste).
+- Bugfix: Kamera-Eintrag in der Hauptmenüleiste öffnet jetzt konsistent
+  das Hinzufügen-Modal.
+- **Board-Titel/-Umschalter in die Kopfzeile verschmolzen**, per Klick
+  bearbeitbar; Standardtitel ist jetzt der Aktivitätsname statt "Board 1".
+- **Neu: Board klonen** - eigene Kopie der Pinnwand (für Lehrkraft immer,
+  für Lernende per neuer Einstellung).
+
 ## Bekannte Grenzen dieser Version
 
+- Die Tabellen `pinnwand_board_ink` (Stylus-Anmerkungen) und
+  `pinnwand_board_names` (Board-Titel) sind noch nicht ins Kurs-Backup/
+  -Restore eingebunden.
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
 - Die Leinwand hat pro Board eine feste Größe (1400×1000px, Querformat); ein
   Export als Bild/PDF ist nicht enthalten und wäre ein guter nächster

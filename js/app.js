@@ -80,7 +80,8 @@
     boardDrawColor: null,  // wird beim ersten Öffnen des Stylus-Panels auf INK_COLORS[0] gesetzt
     boardDrawWidth: 0.01,
     boardDrawErase: false,
-    threadObjectFilter: 'all'
+    threadObjectFilter: 'all',
+    boardNames: {} // boardid -> eigener Titel (Standard: Aktivitätsname [+ Nummer], siehe boardDisplayName)
   };
 
   // ------------------------------------------------------------------
@@ -194,27 +195,34 @@
     left.appendChild(fsBtn);
     bar.appendChild(left);
 
-    var center = el('div', { class: 'ic-topbar-center' }, [
-      el('span', { class: 'ic-topbar-title' }, [root.dataset.title || '']),
-      el('span', { class: 'ic-topbar-sub' }, [VIEW_LABELS[state.step] || ''])
-    ]);
+    var center = el('div', { class: 'ic-topbar-center' });
+    if (state.step === 'arrange') {
+      center.appendChild(renderBoardTitleBar());
+    } else {
+      center.appendChild(el('span', { class: 'ic-topbar-title' }, [root.dataset.title || '']));
+      center.appendChild(el('span', { class: 'ic-topbar-sub' }, [VIEW_LABELS[state.step] || '']));
+    }
     bar.appendChild(center);
 
     var right = el('div', { class: 'ic-topbar-right' });
     var navItems = [
-      ['arrange', 'pin', S.pinboard],
-      ['home', 'person', S.mygallery],
-      ['capture', 'camera', S.addphoto]
+      ['arrange', 'thumbtack', S.pinboard],
+      ['home', 'person', S.mygallery]
     ];
     if (state.canmoderate) { navItems.push(['moderate', 'group', S.moderate_mode]); }
     navItems.forEach(function (item) {
-      var isActive = state.step === item[0] || (item[0] === 'capture' && ADD_WIZARD_STEPS[state.step]);
+      var isActive = state.step === item[0];
       var b = el('button', {
         class: 'ic-icon-btn' + (isActive ? ' active' : ''), title: item[2], 'aria-label': item[2]
       }, [icon(item[1])]);
       b.addEventListener('click', goToView(item[0]));
       right.appendChild(b);
     });
+    var addNavBtn = el('button', {
+      class: 'ic-icon-btn' + (ADD_WIZARD_STEPS[state.step] ? ' active' : ''), title: S.addphoto, 'aria-label': S.addphoto
+    }, [icon('camera')]);
+    addNavBtn.addEventListener('click', function () { openAddModal(); });
+    right.appendChild(addNavBtn);
     bar.appendChild(right);
 
     return bar;
@@ -250,7 +258,7 @@
         var pin = el('button', {
           class: 'ic-pin' + (p.hiddenfromboard ? '' : ' active'),
           title: p.hiddenfromboard ? S.sendtoboard : S.removefromboard
-        }, ['\u{1F4CC}']);
+        }, [icon('thumbtack')]);
         pin.addEventListener('click', function (ev) {
           ev.stopPropagation();
           var newHidden = !p.hiddenfromboard;
@@ -1701,6 +1709,7 @@
   var ICON_SVG = {
     pen: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>',
     eraser: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H8l-6-6a2 2 0 0 1 0-2.8l8-8a2 2 0 0 1 2.8 0l7 7a2 2 0 0 1 0 2.8L13 20"/><path d="M6 13l6 6"/></svg>',
+    clone: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
     trash: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
     grid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg>',
@@ -1846,6 +1855,73 @@
     state.photos.forEach(function (p) { ids[p.boardid || 0] = true; });
     ids[state.currentBoard] = true; // frisch angelegtes, noch leeres Board sichtbar halten
     return Object.keys(ids).map(Number).sort(function (a, b) { return a - b; });
+  }
+
+  // Kombinierter Board-Titel + Umschalter für die Kopfzeile (ersetzt die
+  // vormals separate Board-Leiste auf der Leinwand). Titel per Klick auf
+  // den Text bearbeitbar (contenteditable) - speichert bei "blur"/Enter.
+  function renderBoardTitleBar() {
+    var boards = boardList();
+    var boardIdx = boards.indexOf(state.currentBoard);
+    var wrap = el('div', { class: 'ic-board-title-bar' });
+
+    var prevBoard = el('button', { class: 'ic-icon-btn', title: S.back, disabled: boardIdx <= 0 ? 'disabled' : null }, ['\u2039']);
+    prevBoard.addEventListener('click', function () { state.currentBoard = boards[boardIdx - 1]; render(); });
+    wrap.appendChild(prevBoard);
+
+    var titleEl = el('span', {
+      class: 'ic-board-title-edit', contenteditable: 'true', title: S.renameboard
+    }, [boardDisplayName(state.currentBoard)]);
+    titleEl.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    titleEl.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); titleEl.blur(); }
+    });
+    titleEl.addEventListener('blur', function () {
+      var text = titleEl.textContent.trim();
+      var boardId = state.currentBoard;
+      if (!text || text === boardDisplayName(boardId)) { titleEl.textContent = boardDisplayName(boardId); return; }
+      state.boardNames[boardId] = text;
+      callAjax('mod_pinnwand_set_board_name', { cmid: cfg.cmid, boardid: boardId, name: text });
+    });
+    wrap.appendChild(titleEl);
+
+    var nextBoard = el('button', { class: 'ic-icon-btn', title: S.next, disabled: boardIdx >= boards.length - 1 ? 'disabled' : null }, ['\u203A']);
+    nextBoard.addEventListener('click', function () { state.currentBoard = boards[boardIdx + 1]; render(); });
+    wrap.appendChild(nextBoard);
+
+    var addBoard = el('button', { class: 'ic-icon-btn', title: S.newboard }, ['+']);
+    addBoard.addEventListener('click', function () {
+      state.currentBoard = Math.max.apply(null, boards) + 1;
+      render();
+    });
+    wrap.appendChild(addBoard);
+
+    if (state.canmoderate || cfg.studentboardclone) {
+      var cloneBoard = el('button', { class: 'ic-icon-btn', title: S.cloneboard }, [icon('clone')]);
+      cloneBoard.addEventListener('click', function () {
+        if (!confirm(S.cloneboard_confirm)) { return; }
+        callAjax('mod_pinnwand_clone_board', { cmid: cfg.cmid, boardid: state.currentBoard }).then(function (res) {
+          refreshPhotos().then(function () {
+            state.currentBoard = res.newboardid;
+            render();
+          });
+        });
+      });
+      wrap.appendChild(cloneBoard);
+    }
+
+    return wrap;
+  }
+
+
+  // mit fortlaufender Nummer ("Klassenfoto", "Klassenfoto 2", ...) - außer
+  // die Person hat dem Board über set_board_name einen eigenen Titel gegeben.
+  function boardDisplayName(boardId) {
+    if (state.boardNames && state.boardNames[boardId]) { return state.boardNames[boardId]; }
+    var boards = boardList();
+    var idx = boards.indexOf(boardId);
+    var base = root.dataset.title || S.pinboard;
+    return idx > 0 ? (base + ' ' + (idx + 1)) : base;
   }
 
   function renderArrange(body) {
@@ -2219,26 +2295,9 @@
       }
     }
 
-    // ---- Board-Leiste: Umschalten zwischen mehreren Pinnwänden ----
+    // Board-Titel/-Umschalter sitzt jetzt in der Kopfzeile (siehe
+    // renderBoardTitleBar) - hier nur noch die Liste für den Voll-Hinweis.
     var boards = boardList();
-    var boardIdx = boards.indexOf(state.currentBoard);
-    var boardBar = el('div', { class: 'ic-board-bar' });
-    var prevBoard = el('button', { class: 'ic-icon-btn', title: S.back }, ['\u2039']);
-    prevBoard.disabled = boardIdx <= 0;
-    prevBoard.addEventListener('click', function () { state.currentBoard = boards[boardIdx - 1]; render(); });
-    var boardLabel = el('span', { class: 'ic-board-label' },
-      [S.boardof.replace('{cur}', boardIdx + 1).replace('{total}', boards.length)]);
-    var nextBoard = el('button', { class: 'ic-icon-btn', title: S.next }, ['\u203A']);
-    nextBoard.disabled = boardIdx >= boards.length - 1;
-    nextBoard.addEventListener('click', function () { state.currentBoard = boards[boardIdx + 1]; render(); });
-    var addBoard = el('button', { class: 'ic-icon-btn', title: S.newboard }, ['+']);
-    addBoard.addEventListener('click', function () {
-      state.currentBoard = Math.max.apply(null, boards) + 1;
-      render();
-    });
-    boardBar.appendChild(prevBoard); boardBar.appendChild(boardLabel);
-    boardBar.appendChild(nextBoard); boardBar.appendChild(addBoard);
-    body.appendChild(boardBar);
     if (visible.length >= BOARD_CAPACITY) {
       var fullHint = el('div', { class: 'ic-board-full-hint' }, [S.boardfull_confirm]);
       fullHint.addEventListener('click', function () {
@@ -3359,7 +3418,7 @@
         var pinOverlay = el('button', {
           class: 'ic-thumb-btn ic-thumb-btn-pin' + (p.hiddenfromboard ? '' : ' active'),
           title: p.hiddenfromboard ? S.sendtoboard : S.removefromboard
-        }, [icon('pin')]);
+        }, [icon('thumbtack')]);
         pinOverlay.addEventListener('click', function () {
           var newHidden = !p.hiddenfromboard;
           callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: newHidden }).then(function () {
@@ -3944,6 +4003,14 @@
     backsideBtn.addEventListener('click', function () { closeAllPanels('back'); toggleBackPanel(); });
     leftDock.appendChild(gridBtn); leftDock.appendChild(dataBtn); leftDock.appendChild(editBtn); leftDock.appendChild(backsideBtn);
 
+    // Zusätzlicher, immer sichtbarer (sehr transparenter) Raster-Button oben
+    // links - bleibt auch im Fokus-Modus erreichbar (der reguläre gridBtn im
+    // leftDock verschwindet dort, siehe updateFocusMode), damit ein bereits
+    // gesetztes Raster nachträglich bearbeitet werden kann.
+    var gridFab = el('button', { class: 'ic-lb-grid-fab', title: S.gridtoggle }, [icon('grid')]);
+    gridFab.addEventListener('click', function () { closeAllPanels('grid'); toggleGridPanel(); });
+    lb.appendChild(gridFab);
+
     // Stylus-Knopf unten links: einziger Schalter für die Zeichenwerkzeuge
     // (senkrecht am linken Rand gestapelt, siehe enterDrawing()).
     var stylusBtn = el('button', { class: 'ic-stylus-btn' }, ['\u270E']);
@@ -4284,7 +4351,7 @@
       var onboardBtn = el('button', {
         class: 'ic-btn ' + (p0.annotationonboard !== false ? 'ic-btn-primary' : 'ic-btn-ghost'),
         title: S.overlay_onboard
-      }, [icon('pin')]);
+      }, [icon('thumbtack')]);
       onboardBtn.addEventListener('click', function () {
         var newState = !(p0.annotationonboard !== false);
         callAjax('mod_pinnwand_set_annotation_onboard', { cmid: cfg.cmid, photoid: p0.id, onboard: newState }).then(function (res) {
@@ -4539,6 +4606,11 @@
       if (state.step === 'arrange') { render(); }
     }).catch(function () { /* Fäden bleiben leer, Board funktioniert trotzdem */ });
     loadStreamPhotos();
+    callAjax('mod_pinnwand_get_board_names', { cmid: cfg.cmid }).then(function (res) {
+      state.boardNames = {};
+      (res.names || []).forEach(function (n) { state.boardNames[n.boardid] = n.name; });
+      if (state.step === 'arrange') { render(); }
+    }).catch(function () { /* Standardtitel bleiben in Kraft */ });
   }).catch(function () {
     render();
   });

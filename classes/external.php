@@ -511,6 +511,142 @@ class mod_pinnwand_external extends external_api {
     }
 
     // ---------------------------------------------------------------
+    // Board-Namen: eigener Titel je Board (Standard: Aktivitätstitel [+
+    // Nummer], wird clientseitig berechnet, falls kein eigener Name gesetzt
+    // ist) - sowie Board-Klonen (eigene Kopie der Pinnwand als neues Board).
+    // ---------------------------------------------------------------
+    public static function get_board_names_parameters() {
+        return new external_function_parameters(['cmid' => new external_value(PARAM_INT, 'Course module id')]);
+    }
+
+    public static function get_board_names($cmid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::get_board_names_parameters(), ['cmid' => $cmid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+
+        $rows = $DB->get_records('pinnwand_board_names', ['pinnwandid' => $instance->id, 'userid' => $USER->id]);
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = ['boardid' => (int) $r->boardid, 'name' => (string) $r->name];
+        }
+        return ['names' => $out];
+    }
+
+    public static function get_board_names_returns() {
+        return new external_single_structure([
+            'names' => new external_multiple_structure(new external_single_structure([
+                'boardid' => new external_value(PARAM_INT, 'Board-ID'),
+                'name' => new external_value(PARAM_TEXT, 'Eigener Titel'),
+            ])),
+        ]);
+    }
+
+    public static function set_board_name_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'boardid' => new external_value(PARAM_INT, 'Board-ID'),
+            'name' => new external_value(PARAM_TEXT, 'Eigener Titel'),
+        ]);
+    }
+
+    public static function set_board_name($cmid, $boardid, $name) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_board_name_parameters(), [
+            'cmid' => $cmid, 'boardid' => $boardid, 'name' => $name,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $name = clean_param($params['name'], PARAM_TEXT);
+        $row = $DB->get_record('pinnwand_board_names', [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $params['boardid'],
+        ]);
+        if ($row) {
+            $row->name = $name;
+            $row->timemodified = time();
+            $DB->update_record('pinnwand_board_names', $row);
+        } else {
+            $DB->insert_record('pinnwand_board_names', (object) [
+                'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $params['boardid'],
+                'name' => $name, 'timemodified' => time(),
+            ]);
+        }
+        return ['success' => true];
+    }
+
+    public static function set_board_name_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function clone_board_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'boardid' => new external_value(PARAM_INT, 'Zu klonendes Board'),
+        ]);
+    }
+
+    /**
+     * Klont das angegebene Board der aktuellen Person: kopiert alle
+     * platzierten Fotos (inkl. Dateien) und Rahmen des eigenen Fadens auf
+     * diesem Board in ein neues Board. Stylus-Anmerkungen und der Faden
+     * selbst werden bewusst NICHT mitkopiert (Scoping).
+     */
+    public static function clone_board($cmid, $boardid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::clone_board_parameters(), ['cmid' => $cmid, 'boardid' => $boardid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+        if (!has_capability('mod/pinnwand:viewall', $context) && empty($instance->studentboardclone)) {
+            throw new moodle_exception('nopermissions', 'error', '', 'clone_board');
+        }
+
+        $maxboard = (int) $DB->get_field_sql(
+            'SELECT MAX(boardid) FROM {pinnwand_photos} WHERE pinnwandid = ? AND userid = ?',
+            [$instance->id, $USER->id]
+        );
+        $newboardid = max($maxboard, $params['boardid']) + 1;
+
+        $fs = get_file_storage();
+        $photos = $DB->get_records('pinnwand_photos', [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $params['boardid'],
+        ]);
+        foreach ($photos as $source) {
+            $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $source->id, 'filename', false);
+            $file = reset($files);
+            if (!$file) {
+                continue;
+            }
+            $copy = clone $source;
+            unset($copy->id);
+            $copy->boardid = $newboardid;
+            $copy->sourcephotoid = $source->id;
+            $copy->backphotoid = null;
+            $copy->showingback = 0;
+            $copy->timecreated = time();
+            $newid = $DB->insert_record('pinnwand_photos', $copy);
+            $fs->create_file_from_storedfile([
+                'contextid' => $context->id, 'component' => 'mod_pinnwand', 'filearea' => 'photo',
+                'itemid' => $newid, 'filepath' => '/', 'filename' => $file->get_filename(),
+            ], $file);
+        }
+
+        // Eigenen Board-Namen mitkopieren, falls gesetzt.
+        $sourcename = $DB->get_record('pinnwand_board_names', [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $params['boardid'],
+        ]);
+        if ($sourcename) {
+            $DB->insert_record('pinnwand_board_names', (object) [
+                'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $newboardid,
+                'name' => $sourcename->name, 'timemodified' => time(),
+            ]);
+        }
+
+        return ['newboardid' => $newboardid];
+    }
+
+    public static function clone_board_returns() {
+        return new external_single_structure(['newboardid' => new external_value(PARAM_INT, 'ID des neuen Boards')]);
+    }
+
+    // ---------------------------------------------------------------
     // save_background: Hintergrund der Anordnungs-Leinwand (pro Nutzer*in
     // und Aktivität), entweder Farbe oder eines der eigenen Fotos als Bild.
     // ---------------------------------------------------------------

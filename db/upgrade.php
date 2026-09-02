@@ -311,5 +311,29 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083019, 'pinnwand');
     }
 
+    if ($oldversion < 2026083025) {
+        // Feedback-Durchgang: Board-Namen (Standard: Aktivitätstitel [+
+        // Nummer]) + Klon-Button für Lernende.
+        $table = new xmldb_table('pinnwand');
+        $field = new xmldb_field('studentboardclone', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'sidebaropacity');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $table2 = new xmldb_table('pinnwand_board_names');
+        if (!$dbman->table_exists($table2)) {
+            $table2->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table2->add_field('pinnwandid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table2->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table2->add_field('boardid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table2->add_field('name', XMLDB_TYPE_CHAR, '255', null, null, null, null);
+            $table2->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table2->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table2->add_key('pinnwandid', XMLDB_KEY_FOREIGN, ['pinnwandid'], 'pinnwand', ['id']);
+            $table2->add_index('userboard', XMLDB_INDEX_UNIQUE, ['pinnwandid', 'userid', 'boardid']);
+            $dbman->create_table($table2);
+        }
+        upgrade_mod_savepoint(true, 2026083025, 'pinnwand');
+    }
+
     return true;
 }

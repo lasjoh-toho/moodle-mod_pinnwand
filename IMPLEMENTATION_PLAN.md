@@ -916,3 +916,52 @@ Sechzehnter Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
   Bildschirmstelle stehen.
 - [x] Schmale Scrollbalken app-weit (Firefox: `scrollbar-width:thin`;
   Chrome/Safari: `::-webkit-scrollbar`).
+
+---
+
+## Phase 24 — Galerie-Feinschliff, Pin-Symbolik vereinheitlicht, Board-Titel in der Kopfzeile, Board-Klonen ✅
+
+Siebzehnter Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`, neue
+Tabelle `pinnwand_board_names`, neue Einstellung `studentboardclone`, drei
+neue Endpunkte.
+
+- [x] **Kern-Bugfix Raster-Button**: sobald ein Foto ein Raster hatte,
+  verschwand im Fokus-Modus der GESAMTE linke Dock inklusive des
+  Raster-Buttons selbst - das Raster ließ sich danach nie wieder
+  bearbeiten. Neuer, zusätzlicher, sehr transparenter Raster-Button oben
+  links bleibt jetzt auch im Fokus-Modus erreichbar.
+- [x] Pin- und Löschen-Button in "Meine Bilder" weiter in die Ecken gerückt.
+- [x] **Visuelle Pin-Metapher**: gepinnte Fotos werden jetzt leicht
+  angehoben (Richtung Betrachter) und werfen einen stärkeren Schatten, als
+  würde der Pin sie festhalten - nicht gepinnte liegen flach, der Pin
+  schwebt sichtbar darüber.
+- [x] **Einheitliches Pin-Symbol**: das echte Thumbtack-SVG ersetzt jetzt
+  überall (Hauptmenüleiste, Galerie, Klassenansicht, Overlay-Sichtbarkeit)
+  das bisherige Kartenmarker-Icon bzw. das Emoji.
+- [x] **Nebenbei gefundener Bugfix**: der Kamera-Eintrag in der
+  Hauptmenüleiste sprang noch direkt in die Kamera-Ansicht (Rest aus der
+  Modal-Umstellung in Phase 22) statt konsistent das Hinzufügen-Modal zu
+  öffnen.
+- [x] **Board-Titel/-Umschalter in die Kopfzeile verschmolzen** (ersetzt
+  die vormals separate Leiste auf der Leinwand) - Titel per Klick direkt
+  bearbeitbar (contenteditable), speichert über neuen Endpunkt
+  `set_board_name`. Bleibt auch auf schmalen Bildschirmen sichtbar
+  (anders als der reine Aktivitätstitel, der dort bewusst ausgeblendet
+  ist).
+- [x] **Standardtitel eines Boards ist jetzt der Aktivitätsname** (ab dem
+  zweiten Board mit fortlaufender Nummer, z.B. "Klassenfoto 2") statt
+  "Board 1" - außer es wurde bereits ein eigener Titel vergeben.
+- [x] **Board-Klonen**: neuer Button neben "+" (nur sichtbar für die
+  Lehrkraft oder, falls per neuer Instanzeinstellung
+  `studentboardclone` erlaubt, auch für Lernende) - kopiert alle
+  platzierten Fotos (inkl. Dateien) des aktuellen Boards in ein neues
+  Board.
+
+**Scoping-Hinweise:**
+- Board-Klonen kopiert bewusst NICHT den Roten Faden und die Stylus-
+  Anmerkungen mit - nur die platzierten Fotos/Rahmen-Inhalte
+  (Kern-Anwendungsfall: "eine weitere Version zum Ausprobieren").
+- Die neuen Tabellen `pinnwand_board_ink` (Phase 18) und
+  `pinnwand_board_names` (diese Phase) sind noch nicht ins Kurs-Backup/
+  -Restore eingebunden - ein bekannter, zu schließender Nachholbedarf für
+  einen künftigen Durchgang.

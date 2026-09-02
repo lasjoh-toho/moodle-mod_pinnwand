@@ -41,6 +41,15 @@
 }
 .ic-topbar-sub { font-size: .72rem; color: var(--ic-muted); }
 @media (min-width: 560px) { .ic-topbar-center { display: flex; } }
+.ic-topbar-center:has(.ic-board-title-bar) { display: flex; }
+.ic-board-title-bar {
+  display: flex; align-items: center; justify-content: center; gap: 2px; min-width: 0;
+}
+.ic-board-title-edit {
+  font-size: .88rem; font-weight: 600; color: var(--ic-text); padding: 2px 8px; border-radius: 6px;
+  max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text;
+}
+.ic-board-title-edit:hover, .ic-board-title-edit:focus { background: rgba(255,255,255,.08); outline: none; white-space: normal; }
 .ic-icon-btn {
   width: 34px; height: 34px; border-radius: 50%; border: none; flex: 0 0 auto;
   background: rgba(20,21,24,.55); color: var(--ic-text);
@@ -179,16 +188,20 @@
 }
 .ic-gallery .ic-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .ic-gallery .ic-thumb .ic-del {
-  position: absolute; top: 4px; right: 4px;
+  position: absolute; top: -4px; right: -4px;
   background: rgba(0,0,0,.6); color: #fff; border: none;
   width: 26px; height: 26px; border-radius: 50%; font-size: .9rem; line-height: 1;
 }
 .ic-gallery .ic-thumb .ic-pin {
-  position: absolute; top: 4px; left: 4px;
+  position: absolute; top: -4px; left: -4px;
   background: rgba(0,0,0,.6); color: #888; border: none;
   width: 26px; height: 26px; border-radius: 50%; font-size: .85rem; line-height: 1;
 }
 .ic-gallery .ic-thumb .ic-pin.active { color: var(--ic-accent); }
+.ic-gallery .ic-thumb img { transition: transform .15s ease, box-shadow .15s ease; }
+.ic-gallery .ic-thumb:has(.ic-pin.active) img {
+  transform: translateY(-6px) scale(1.04); box-shadow: 0 10px 14px rgba(0,0,0,.5);
+}
 
 /* Slider-Panel (Farbe/Raster) */
 .ic-panel {
@@ -279,14 +292,8 @@
   position: absolute; left: 0; top: 0; width: 1400px; height: 1000px; z-index: 500; pointer-events: none;
 }
 .ic-board-ink-layer.active { pointer-events: auto; touch-action: none; cursor: crosshair; }
-.ic-board-bar {
-  position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 15;
-  display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 20px;
-  background: rgba(20,21,24,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-}
-.ic-board-label { font-size: .8rem; color: var(--ic-text); min-width: 84px; text-align: center; }
 .ic-board-full-hint {
-  position: absolute; top: 100px; left: 50%; transform: translateX(-50%); z-index: 15;
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 15;
   max-width: 80%; padding: 8px 14px; border-radius: 10px; font-size: .8rem;
   background: rgba(224,80,63,.85); color: #fff; text-align: center;
 }
@@ -592,6 +599,14 @@
   position: absolute; top: 14px; left: 14px; z-index: 12;
   display: flex; flex-direction: column; gap: 8px;
 }
+.ic-lb-grid-fab {
+  position: absolute; top: 14px; left: 14px; z-index: 11;
+  width: 40px; height: 40px; border-radius: 50%; border: none; padding: 0;
+  background: rgba(60,62,70,.25); color: rgba(255,255,255,.5);
+  display: flex; align-items: center; justify-content: center;
+  opacity: .45; transition: opacity .15s, background .15s;
+}
+.ic-lb-grid-fab:hover, .ic-lb-grid-fab:focus { opacity: 1; background: rgba(60,62,70,.85); color: #fff; }
 
 /* Zeichen-/Schreib-Ebene: exakt auf das Foto gemappt, unabhängig vom Raster
    auch im Anordnungsmodus sichtbar. */
