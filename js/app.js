@@ -82,7 +82,8 @@
     boardDrawErase: false,
     threadObjectFilter: 'all',
     boardNames: {}, // boardid -> eigener Titel (Standard: Aktivitätsname [+ Nummer], siehe boardDisplayName)
-    multiSelect: [] // Mehrfachauswahl per Auswahlbox/Strg+Klick, z.B. ['photo:12','frame:3']
+    multiSelect: [], // Mehrfachauswahl per Auswahlbox/Strg+Klick, z.B. ['photo:12','frame:3']
+    multiSelectAddMode: false // nach Klick auf den Plus-Button: normale Klicks schalten die Auswahl um, bis auf leere Fläche geklickt wird
   };
 
   // ------------------------------------------------------------------
@@ -2158,7 +2159,7 @@
           // Fotos ändert - sonst "hinkt" die Linie der neuen Position
           // hinterher, bis irgendein anderer Grund einen Re-Render auslöst.
           if (state.threadPanelOpen) { render(); }
-        } else if (lastPointerCtrl) {
+        } else if (lastPointerCtrl || state.multiSelectAddMode) {
           toggleMultiSelect(groupKey);
         } else if (state.threadPanelOpen || state.layerPanelOpen) {
           // Im Layer-/Faden-Modus: einfacher Klick markiert das Objekt statt
@@ -2229,7 +2230,7 @@
                 persistGroupExcept(frameGroupKey);
               }
               render();
-            } else if (lastPointerCtrl) { toggleMultiSelect(frameGroupKey); }
+            } else if (lastPointerCtrl || state.multiSelectAddMode) { toggleMultiSelect(frameGroupKey); }
             else { selectItem(frameGroupKey); }
           });
           frameEl.addEventListener('dblclick', function (ev) {
@@ -2635,8 +2636,9 @@
     // Drop-Zone: Karte aus dem Post-Stream auf das Board ziehen = Kopie
     // anlegen (siehe renderStreamPanel/adopt_photo_to_board).
     // Umrandung der Mehrfachauswahl mit Plus-Button oben rechts - Klick
-    // darauf startet eine weitere Auswahlbox, deren Treffer zur
-    // bestehenden Auswahl HINZUGEFÜGT werden (statt sie zu ersetzen).
+    // darauf aktiviert den Hinzufügen/Entfernen-Modus: normale Klicks auf
+    // Objekte schalten deren Zugehörigkeit zur Auswahl um (wie Strg+Klick),
+    // bis auf leere Fläche geklickt wird (siehe Klick-Logik weiter unten).
     if (state.multiSelect.length > 0) {
       var selRects = state.multiSelect.map(function (k) {
         var parts = k.split(':'); var kind = parts[0], id = parseInt(parts[1], 10);
@@ -2654,23 +2656,31 @@
         var maxX = Math.max.apply(null, selRects.map(function (r) { return r.x + r.w; }));
         var maxY = Math.max.apply(null, selRects.map(function (r) { return r.y + r.h; }));
         var selOverlay = el('div', {
-          class: 'ic-selection-overlay',
+          class: 'ic-selection-overlay' + (state.multiSelectAddMode ? ' add-mode' : ''),
           style: 'left:' + (minX - 6) + 'px;top:' + (minY - 6) + 'px;width:' + (maxX - minX + 12) + 'px;height:' + (maxY - minY + 12) + 'px;'
         });
-        var selAddBtn = el('button', { class: 'ic-selection-add-btn', title: S.selection_add }, ['+']);
+        var selAddBtn = el('button', {
+          class: 'ic-selection-add-btn' + (state.multiSelectAddMode ? ' active' : ''), title: S.selection_add
+        }, ['+']);
         selAddBtn.addEventListener('click', function (ev) {
           ev.stopPropagation();
-          startSelectionBox(ev.clientX, ev.clientY, true);
+          state.multiSelectAddMode = true;
+          render();
         });
         selOverlay.appendChild(selAddBtn);
         canvas.appendChild(selOverlay);
       }
-      // Klick auf leere Fläche (kein langes Halten) hebt die Auswahl auf.
+      // Klick auf leere Fläche: im Hinzufügen-Modus beendet der erste Klick
+      // nur diesen Modus (Auswahl bleibt bestehen) - ein weiterer Klick auf
+      // leere Fläche löst danach die gesamte Auswahl auf.
       wrap.addEventListener('click', function clearSel(ev) {
-        if (isEmptyAreaTarget(ev.target) && state.multiSelect.length > 0) {
+        if (!isEmptyAreaTarget(ev.target)) { return; }
+        if (state.multiSelectAddMode) {
+          state.multiSelectAddMode = false;
+        } else if (state.multiSelect.length > 0) {
           state.multiSelect = [];
-          render();
         }
+        render();
       }, { once: true });
     }
 

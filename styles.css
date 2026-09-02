@@ -538,12 +538,14 @@
 .ic-selection-overlay {
   position: absolute; z-index: 401; border: 2px dashed #4f8cff; border-radius: 8px; pointer-events: none;
 }
+.ic-selection-overlay.add-mode { border-style: solid; }
 .ic-selection-add-btn {
   position: absolute; top: -14px; right: -14px; width: 28px; height: 28px; border-radius: 50%;
   border: none; background: var(--ic-accent); color: #fff; font-size: 1rem; line-height: 1;
   display: flex; align-items: center; justify-content: center; pointer-events: auto; cursor: pointer;
   box-shadow: 0 2px 6px rgba(0,0,0,.4);
 }
+.ic-selection-add-btn.active { background: #22c55e; transform: rotate(45deg); }
 .ic-thread-frame-onboard.editable .ic-resize {
   position: absolute; right: -10px; bottom: -10px; width: 26px; height: 26px;
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: nwse-resize;

@@ -640,9 +640,17 @@ Details und Scoping-Entscheidungen. In Kurzform:
   auf, alle Objekte darin werden ausgewählt.
 - Strg+Klick fügt einzelne Objekte hinzu/entfernt sie.
 - Ausgewählte Objekte lassen sich gemeinsam verschieben.
-- Plus-Button an der Auswahl-Umrandung fügt per weiterer Box mehr Objekte
-  hinzu.
+- Plus-Button an der Auswahl-Umrandung aktiviert einen Hinzufügen/
+  Entfernen-Modus (danach angetippte Objekte werden hinzugefügt/entfernt).
 - Nur auf der Pinnwand/im Layersystem, nicht in der Präsentation.
+
+### Einunddreißigste Überarbeitung — Plus-Button überarbeitet
+
+- Plus-Button startet keine weitere Auswahlbox mehr, sondern einen
+  Hinzufügen/Entfernen-Modus: angetippte Objekte werden zur Auswahl
+  hinzugefügt bzw. entfernt.
+- Zweistufiges Beenden: erster Klick auf leere Fläche verlässt nur den
+  Modus, ein weiterer löst die Auswahl auf.
 
 ## Bekannte Grenzen dieser Version
 

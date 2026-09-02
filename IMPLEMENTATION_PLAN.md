@@ -1027,3 +1027,20 @@ Neunzehnter Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
 - [x] Nur auf der Pinnwand/im Layersystem verfügbar, bewusst NICHT in der
   Präsentation (dort hat Ziehen bereits eine andere Bedeutung - manuelles
   Kamera-Schwenken, siehe Phase 25).
+
+---
+
+## Phase 27 — Plus-Button: Tippen statt weiterer Auswahlbox ✅
+
+Zwanzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] Plus-Button an der Auswahl-Umrandung startet keine weitere
+  Auswahlbox mehr, sondern aktiviert einen Hinzufügen/Entfernen-Modus:
+  danach angetippte Objekte werden zur Auswahl hinzugefügt bzw. wieder
+  entfernt (wie Strg+Klick), bis auf leere Fläche getippt wird.
+- [x] Zweistufiges Beenden: der erste Klick auf leere Fläche verlässt nur
+  den Hinzufügen/Entfernen-Modus (Auswahl bleibt bestehen), ein weiterer
+  Klick auf leere Fläche löst danach die gesamte Auswahl auf.
+- [x] Visuelles Feedback: im aktiven Modus wird der Rand der Umrandung
+  durchgezogen statt gestrichelt, der Plus-Button dreht sich zu einem "×"
+  und wird grün.
