@@ -1270,3 +1270,25 @@ Siebenundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`.
 die tatsächliche Kamera-Zielposition während der Präsentation beziehen
 (nicht nur die Nummer) - dafür bräuchte es mehr Details, welches konkrete
 Verhalten beobachtet wurde, um gezielt nachzubessern.
+
+---
+
+## Phase 35 — Präsentations-Kamera-Rotations-Bugfix ✅
+
+Achtundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`.
+
+- [x] **Kern-Bugfix gefunden**: `applyTransform` (Kamera-Transformation der
+  Präsentation) berechnete die Verschiebung (translate) ohne die eigene
+  Kamera-Rotation zu berücksichtigen. Die CSS-Transformation ist
+  `translate(tx,ty) rotate(rot) scale(scale)` mit transform-origin 0 0 -
+  das bedeutet, der Zielpunkt (cx,cy) muss VOR der
+  Verschiebungsberechnung selbst um "rot" gedreht werden (Rotationsmatrix),
+  sonst landet er bei einem gedrehten Rahmen nicht in der Bildschirmmitte.
+  Bei rot=0 war der Fehler unsichtbar (cos(0)=1, sin(0)=0) - trat aber bei
+  jedem gedrehten Rahmen auf, exakt wie gemeldet ("Präsentation zeigt bei
+  gedrehten Rahmen nicht die korrekte Position").
+- [x] Dieselbe fehlende Rotationsberücksichtigung auch in `manualZoomAt`
+  (Mausrad/Pinch während der Präsentation) und beim manuellen Verschieben
+  (Ziehen) gefunden und mit derselben Rotationsmatrix-Logik behoben -
+  beide hätten sonst bei gedrehter Kamera auf/zu den falschen Punkt
+  gezoomt bzw. verschoben.

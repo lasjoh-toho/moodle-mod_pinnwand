@@ -711,6 +711,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Präsentation heraus, obwohl sie im Faden-Panel normal erschienen.
   Referenz ist jetzt das gerade angezeigte Board.
 
+### Achtunddreißigste Überarbeitung — Präsentations-Kamera-Rotations-Bugfix
+
+- **Kern-Bugfix**: die Kamera-Verschiebung berücksichtigte die eigene
+  Rotation nicht - bei gedrehten Rahmen landete der Zielpunkt dadurch
+  nicht in der Bildschirmmitte. Betraf auch manuelles Zoomen/Verschieben
+  während der Präsentation. Alle drei Stellen jetzt mit korrekter
+  Rotationsmatrix behoben.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

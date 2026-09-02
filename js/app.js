@@ -3903,8 +3903,16 @@
     }
 
     function applyTransform(scale, cx, cy, rot) {
-      var tx = window.innerWidth / 2 - scale * cx;
-      var ty = window.innerHeight / 2 - scale * cy;
+      // Die Kamera-Transformation ist translate(tx,ty) rotate(rot) scale(scale)
+      // mit transform-origin 0 0 - das bedeutet, cx/cy müssen VOR der
+      // Verschiebungsberechnung ebenfalls um "rot" gedreht werden, sonst
+      // landet der Zielpunkt bei gedrehten Rahmen nicht in der Bildschirm-
+      // mitte (bei rot=0 war der Fehler unsichtbar, da cos(0)=1/sin(0)=0).
+      var rad = (rot || 0) * Math.PI / 180;
+      var rx = cx * Math.cos(rad) - cy * Math.sin(rad);
+      var ry = cx * Math.sin(rad) + cy * Math.cos(rad);
+      var tx = window.innerWidth / 2 - scale * rx;
+      var ty = window.innerHeight / 2 - scale * ry;
       canvasEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) rotate(' + (rot || 0) + 'deg) scale(' + scale + ')';
     }
 
@@ -3967,11 +3975,16 @@
     function manualZoomAt(newScale, clientX, clientY) {
       if (!currentTransform) { return; }
       newScale = Math.max(0.05, Math.min(8, newScale));
-      var wx = currentTransform.cx + (clientX - window.innerWidth / 2) / currentTransform.scale;
-      var wy = currentTransform.cy + (clientY - window.innerHeight / 2) / currentTransform.scale;
+      var rad = (currentTransform.rot || 0) * Math.PI / 180;
+      var cos = Math.cos(rad), sin = Math.sin(rad);
+      var dx = clientX - window.innerWidth / 2, dy = clientY - window.innerHeight / 2;
+      // Bildschirm-Versatz -> Welt-Versatz: inverse Rotation (R(-rot)) anwenden,
+      // da die Kamera selbst um "rot" gedreht ist (siehe applyTransform).
+      var wx = currentTransform.cx + (dx * cos + dy * sin) / currentTransform.scale;
+      var wy = currentTransform.cy + (-dx * sin + dy * cos) / currentTransform.scale;
       currentTransform.scale = newScale;
-      currentTransform.cx = wx - (clientX - window.innerWidth / 2) / newScale;
-      currentTransform.cy = wy - (clientY - window.innerHeight / 2) / newScale;
+      currentTransform.cx = wx - (dx * cos + dy * sin) / newScale;
+      currentTransform.cy = wy - (-dx * sin + dy * cos) / newScale;
       applyTransform(currentTransform.scale, currentTransform.cx, currentTransform.cy, currentTransform.rot);
     }
     var presentPanDragging = false, presentPanStartX = 0, presentPanStartY = 0, presentPanStartCx = 0, presentPanStartCy = 0;
@@ -3984,8 +3997,13 @@
     stageEl.addEventListener('pointermove', function (ev) {
       if (!presentPanDragging || !currentTransform) { return; }
       var scale = currentTransform.scale;
-      currentTransform.cx = presentPanStartCx - (ev.clientX - presentPanStartX) / scale;
-      currentTransform.cy = presentPanStartCy - (ev.clientY - presentPanStartY) / scale;
+      var rad = (currentTransform.rot || 0) * Math.PI / 180;
+      var cos = Math.cos(rad), sin = Math.sin(rad);
+      var dx = ev.clientX - presentPanStartX, dy = ev.clientY - presentPanStartY;
+      // Bildschirm-Versatz -> Welt-Versatz: inverse Rotation (R(-rot))
+      // anwenden, da die Kamera selbst um "rot" gedreht ist.
+      currentTransform.cx = presentPanStartCx - (dx * cos + dy * sin) / scale;
+      currentTransform.cy = presentPanStartCy - (-dx * sin + dy * cos) / scale;
       applyTransform(currentTransform.scale, currentTransform.cx, currentTransform.cy, currentTransform.rot);
     });
     window.addEventListener('pointerup', function () { presentPanDragging = false; });
