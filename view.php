@@ -125,6 +125,8 @@ $config = [
         'confirmdelete_shared' => get_string('confirmdelete_shared', 'pinnwand'),
         'deletephoto_multi_hint' => get_string('deletephoto_multi_hint', 'pinnwand'),
         'objectusage_title' => get_string('objectusage_title', 'pinnwand'),
+        'undo' => get_string('undo', 'pinnwand'),
+        'redo' => get_string('redo', 'pinnwand'),
         'photocount' => get_string('photocount', 'pinnwand', ['count' => '{count}', 'max' => '{max}']),
         'photocount_unlimited' => get_string('photocount_unlimited', 'pinnwand', '{count}'),
         'loading' => get_string('loading', 'pinnwand'),

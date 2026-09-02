@@ -1319,3 +1319,43 @@ Neunundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
   fehlte im Kopfzeilen-Dropdown, da die Server-Abfrage nur Boards mit
   mindestens einem Foto findet - eigene Boards aus der lokal bekannten
   Liste werden jetzt ergänzt, falls sie in der Server-Antwort fehlen.
+
+---
+
+## Phase 37 — Hintergrundfarbe-Absicherung, Präsentations-Sprung-Robustheit, Play-Button, Undo/Redo (Teil 1/mehrere) ✅
+
+Dreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`, neue
+Strings.
+
+- [x] Gewählte Hintergrundfarbe zusätzlich aufs Präsentations-Overlay
+  selbst gelegt, damit sie in jedem Fall sichtbar bleibt (vorher zeigte
+  sich unter Umständen die feste dunkle Overlay-Farbe statt der
+  gewählten Hintergrundfarbe).
+- [x] Rahmen-Beschriftung im Faden-/Layer-Panel: Bearbeiten jetzt per
+  Doppelklick statt einfachem Klick, damit ein einfacher Klick auf den
+  (meist genutzten) sichtbaren Text normal zur Zeile durchgereicht wird
+  und in die Präsentation springt, statt vom Beschriftungsfeld
+  abgefangen zu werden.
+- [x] `openPresentation`/`openPresentationAtItem` geben jetzt den echten
+  Erfolg zurück (z.B. `false` bei zu schmalem Bildschirm), statt immer
+  "erfolgreich" zu melden - macht den Rückfall auf reines Markieren
+  korrekt, falls die Präsentation aus irgendeinem Grund nicht öffnen kann.
+- [x] Neuer Play-Button im zentralen Menü - startet die Präsentation des
+  eigenen Fadens direkt.
+- [x] **Undo/Redo ergänzt** (pragmatisch auf Positions-/Größen-/
+  Rotationsänderungen von Fotos und Rahmen begrenzt, nicht auf jede
+  denkbare Aktion) - Buttons links vom zentralen Menü, zusätzlich
+  Strg+Z/Strg+Y.
+
+**Noch offen (nächster Durchgang):**
+- Reihenfolge im Faden-Panel (Gewählt-Bereich, Rahmen+Überblick in eine
+  Zeile, Hintergrund/Fadenfarbe/-dicke mit Überschrift über dem Regler,
+  dann die nicht gewählten Objekte).
+- Stylus-/Annotationsmenü: Funktion zum Ausblenden und kompletten
+  Löschen, Palettenbutton für mehr Farbauswahl.
+- Augen-Button im Zoom-Popup: ohne Auswahl erst Standard-Zoom (alle
+  Objekte+Hintergrund sichtbar), zweiter Klick zoomt aufs
+  Hintergrundbild.
+- Label: Hochladende Person soll rechts erscheinen, wenn sie nicht
+  bereits Autor ist.
+- Rahmen-/Überblick-Icon größer und in Fadenfarbe.

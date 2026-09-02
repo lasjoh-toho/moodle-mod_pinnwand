@@ -286,6 +286,11 @@
   position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
   z-index: 15; display: flex; gap: 10px;
 }
+.ic-undo-bar {
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(calc(-50% - 140px));
+  z-index: 15; display: flex; gap: 8px;
+}
+.ic-undo-bar .ic-fab.disabled { opacity: .35; pointer-events: none; }
 .ic-fab {
   width: 46px; height: 46px; border-radius: 50%;
   border: none; background: rgba(20,21,24,.55); color: #fff; font-size: 1.15rem;

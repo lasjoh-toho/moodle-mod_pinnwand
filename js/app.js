@@ -5,6 +5,37 @@
   var cfg = window.pinnwandConfig || {};
   var S = cfg.strings || {};
   var root = document.getElementById('pinnwand-app');
+
+  // Undo/Redo: pragmatisch auf Positions-/Größen-/Rotationsänderungen von
+  // Fotos und Rahmen begrenzt (die häufigsten versehentlichen Änderungen) -
+  // kein vollständiges Undo für jede denkbare Aktion. Command-Pattern: jeder
+  // Eintrag kennt seine eigene undo()/redo()-Funktion.
+  var undoStack = [], redoStack = [];
+  function pushUndo(entry) {
+    undoStack.push(entry);
+    if (undoStack.length > 50) { undoStack.shift(); }
+    redoStack = [];
+  }
+  function performUndo() {
+    var entry = undoStack.pop();
+    if (!entry) { return; }
+    entry.undo();
+    redoStack.push(entry);
+    render();
+  }
+  function performRedo() {
+    var entry = redoStack.pop();
+    if (!entry) { return; }
+    entry.redo();
+    undoStack.push(entry);
+    render();
+  }
+  document.addEventListener('keydown', function (ev) {
+    if (!(ev.ctrlKey || ev.metaKey)) { return; }
+    if (ev.key === 'z' || ev.key === 'Z') { ev.preventDefault(); performUndo(); }
+    else if (ev.key === 'y' || ev.key === 'Y') { ev.preventDefault(); performRedo(); }
+  });
+
   if (!root) { return; }
 
   // Deckkraft der Seitenleisten (Faden/Post-Stream/Schichtung) - konfigurierbar
@@ -1772,6 +1803,8 @@
     eye: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
     trash: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
     undo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.4L3 7"/></svg>',
+    redo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7.4L21 7"/></svg>',
+    play: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>',
     grid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg>',
     camera: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg>',
@@ -2327,13 +2360,36 @@
 
       var moved = false;
       var groupKey = 'photo:' + p.id;
+      var undoBefore = null;
+      function captureUndoBefore() {
+        if (undoBefore) { return; }
+        undoBefore = { x: p.canvasx, y: p.canvasy, w: p.canvasw, rot: p.canvasrot || 0 };
+      }
+      function pushPhotoUndoIfChanged() {
+        if (!undoBefore) { return; }
+        var before = undoBefore, after = { x: p.canvasx, y: p.canvasy, w: p.canvasw, rot: p.canvasrot || 0 };
+        undoBefore = null;
+        if (before.x === after.x && before.y === after.y && before.w === after.w && before.rot === after.rot) { return; }
+        pushUndo({
+          undo: function () {
+            p.canvasx = before.x; p.canvasy = before.y; p.canvasw = before.w; p.canvasrot = before.rot;
+            persistLayout(p);
+          },
+          redo: function () {
+            p.canvasx = after.x; p.canvasy = after.y; p.canvasw = after.w; p.canvasrot = after.rot;
+            persistLayout(p);
+          }
+        });
+      }
       makeMovable(item, canvas, function (x, y) {
+        captureUndoBefore();
         var dx = x - p.canvasx, dy = y - p.canvasy;
         p.canvasx = x; p.canvasy = y; moved = true;
         applyGroupDelta(groupKey, dx, dy);
       }, function () {
         if (moved) {
           persistLayout(p);
+          pushPhotoUndoIfChanged();
           if (state.multiSelect.indexOf(groupKey) !== -1 && state.multiSelect.length > 1) {
             persistGroupExcept(groupKey);
             render();
@@ -2361,11 +2417,13 @@
         }
       });
       makeResizable(resize, item, function (w) {
+        captureUndoBefore();
         p.canvasw = w;
-      }, function () { persistLayout(p); if (state.threadPanelOpen) { render(); } });
+      }, function () { persistLayout(p); pushPhotoUndoIfChanged(); if (state.threadPanelOpen) { render(); } });
       makeRotatable(rotateHandle, item, function (deg) {
+        captureUndoBefore();
         p.canvasrot = deg;
-      }, function () { persistLayout(p); if (state.threadPanelOpen) { render(); } });
+      }, function () { persistLayout(p); pushPhotoUndoIfChanged(); if (state.threadPanelOpen) { render(); } });
     });
 
     // Roter Faden auf dem Board: gesetzte Leerrahmen anzeigen + eine Linie,
@@ -2406,13 +2464,25 @@
             });
           }
           var frameGroupKey = 'frame:' + it.id;
+          var frameUndoBefore = null;
           makeMovable(frameEl, canvas, function (x, y) {
+            if (!frameUndoBefore) { frameUndoBefore = { x: it.framex, y: it.framey }; }
             var dx = x - it.framex, dy = y - it.framey;
             it.framex = x; it.framey = y;
             applyGroupDelta(frameGroupKey, dx, dy);
           }, function (moved) {
             if (moved) {
               persistFrame();
+              if (frameUndoBefore && (frameUndoBefore.x !== it.framex || frameUndoBefore.y !== it.framey)) {
+                (function (before, itRef) {
+                  var after = { x: itRef.framex, y: itRef.framey };
+                  pushUndo({
+                    undo: function () { itRef.framex = before.x; itRef.framey = before.y; persistFrame(); },
+                    redo: function () { itRef.framex = after.x; itRef.framey = after.y; persistFrame(); }
+                  });
+                })(frameUndoBefore, it);
+              }
+              frameUndoBefore = null;
               if (state.multiSelect.indexOf(frameGroupKey) !== -1 && state.multiSelect.length > 1) {
                 persistGroupExcept(frameGroupKey);
               }
@@ -2853,6 +2923,15 @@
     });
     fabRow.appendChild(zoomBtn);
 
+    // Play-Button: startet die Präsentation des eigenen Fadens direkt, ohne
+    // erst das Faden-Panel öffnen zu müssen.
+    var ownForPlay = ownThread();
+    if (ownForPlay && ownForPlay.items.length > 0) {
+      var playBtn = el('button', { class: 'ic-fab', title: S.presentthread }, [icon('play')]);
+      playBtn.addEventListener('click', function () { openPresentation(ownForPlay); });
+      fabRow.appendChild(playBtn);
+    }
+
     // Seitenleisten-Buttons (Post-Stream / Roter Faden / Schichtung /
     // Trashbin, in dieser Reihenfolge) in der oberen rechten Ecke der
     // Pinnwand - schließen sich gegenseitig, da sie sich denselben rechten
@@ -2923,6 +3002,15 @@
     fabRow.appendChild(addBtn);
 
     body.appendChild(fabRow);
+
+    // Undo/Redo links neben dem zentralen Menü.
+    var undoBar = el('div', { class: 'ic-undo-bar' });
+    var undoBtn = el('button', { class: 'ic-fab' + (undoStack.length ? '' : ' disabled'), title: S.undo }, [icon('undo')]);
+    undoBtn.addEventListener('click', function () { performUndo(); });
+    var redoBtn = el('button', { class: 'ic-fab' + (redoStack.length ? '' : ' disabled'), title: S.redo }, [icon('redo')]);
+    redoBtn.addEventListener('click', function () { performRedo(); });
+    undoBar.appendChild(undoBtn); undoBar.appendChild(redoBtn);
+    body.appendChild(undoBar);
 
     if (state.threadPanelOpen) { body.appendChild(renderThreadPanel()); }
     if (state.streamPanelOpen) { body.appendChild(renderStreamPanel()); }
@@ -3390,11 +3478,23 @@
         var frameLabelEl = el('span', {
           class: 'ic-thread-item-label ic-thread-item-label-editable', contenteditable: 'true'
         }, [entry.ref.framelabel || S.emptyframe]);
-        frameLabelEl.addEventListener('click', function (ev) { ev.stopPropagation(); });
+        var layerLabelEditing = false;
+        frameLabelEl.addEventListener('mousedown', function (ev) { if (!layerLabelEditing) { ev.preventDefault(); } });
+        frameLabelEl.addEventListener('dblclick', function (ev) {
+          ev.stopPropagation();
+          layerLabelEditing = true;
+          frameLabelEl.focus();
+          var range = document.createRange();
+          range.selectNodeContents(frameLabelEl);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        });
         frameLabelEl.addEventListener('focus', function () {
           if (!entry.ref.framelabel) { frameLabelEl.textContent = ''; }
         });
         frameLabelEl.addEventListener('blur', function () {
+          layerLabelEditing = false;
           var text = frameLabelEl.textContent.trim();
           entry.ref.framelabel = text;
           if (!text) { frameLabelEl.textContent = S.emptyframe; }
@@ -3485,8 +3585,7 @@
       if (kind === 'frame' && it.itemtype === 'frame' && it.id === id) { idx = i; break; }
     }
     if (idx === -1) { return false; }
-    openPresentation(own, idx);
-    return true;
+    return openPresentation(own, idx);
   }
 
   function ownThread() {
@@ -3557,11 +3656,27 @@
         var frameLabelEl2 = el('span', {
           class: 'ic-thread-item-label ic-thread-item-label-editable', contenteditable: 'true'
         }, [item.framelabel || String(idx + 1)]);
-        frameLabelEl2.addEventListener('click', function (ev) { ev.stopPropagation(); });
+        // Bearbeiten per Doppelklick (nicht einfacher Klick) - ein
+        // einfacher Klick auf den Text soll normal zur Zeile durchgereicht
+        // werden und in die Präsentation springen (siehe row-Klick-Handler
+        // oben), statt das Bearbeiten zu blockieren.
+        var frameLabelEditing = false;
+        frameLabelEl2.addEventListener('mousedown', function (ev) { if (!frameLabelEditing) { ev.preventDefault(); } });
+        frameLabelEl2.addEventListener('dblclick', function (ev) {
+          ev.stopPropagation();
+          frameLabelEditing = true;
+          frameLabelEl2.focus();
+          var range = document.createRange();
+          range.selectNodeContents(frameLabelEl2);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        });
         frameLabelEl2.addEventListener('focus', function () {
           if (!item.framelabel) { frameLabelEl2.textContent = ''; }
         });
         frameLabelEl2.addEventListener('blur', function () {
+          frameLabelEditing = false;
           var text = frameLabelEl2.textContent.trim();
           item.framelabel = text;
           if (!text) { frameLabelEl2.textContent = String(idx + 1); }
@@ -3790,11 +3905,17 @@
   }
 
   function openPresentation(thread, startIndex) {
-    if (window.innerWidth < 900) { alert(S.present_smallscreen); return; }
+    if (window.innerWidth < 900) { alert(S.present_smallscreen); return false; }
     var overlay = el('div', { class: 'ic-present-overlay' });
     var stageEl = el('div', { class: 'ic-present-stage' });
     var bgLayer = el('div', { class: 'ic-present-bg' + (thread.bgmoves ? ' ic-present-bg-moves' : '') });
     applyBackground(bgLayer);
+    // Die gewählte Hintergrundfarbe zusätzlich aufs Overlay selbst legen,
+    // damit sie in jedem Fall sichtbar bleibt (z.B. wenn "Füllen" einen
+    // Rand lässt oder beim Herauszoomen der 1400x1000-Bereich nicht die
+    // ganze Bildschirmfläche ausfüllt) - sonst zeigte sich dort die feste
+    // dunkle Overlay-Farbe statt der gewählten Hintergrundfarbe.
+    overlay.style.backgroundColor = (state.background && state.background.color) || '#2b2d33';
     var canvasEl = el('div', { class: 'ic-present-canvas' });
     // Hintergrund bewegt sich beim Zoom mit (Checkbox im Faden-Panel): Teil
     // der gezoomten Leinwand, exakt 1400x1000 - dasselbe Koordinatensystem
@@ -4181,6 +4302,7 @@
         });
       }
     }
+    return true;
   }
 
   // ==================================================================
