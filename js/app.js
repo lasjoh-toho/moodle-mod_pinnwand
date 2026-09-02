@@ -70,7 +70,7 @@
     streamPhotos: [],      // Post-Stream: eigene unplatzierte Fotos + (Lehrkraft) fremde Einreichungen
     streamPanelOpen: false,
     streamFilter: '',
-    streamWidth: 220,
+    sidebarWidth: 260, // gemeinsame, verstellbare Breite für Post-Stream/Faden/Layer/Trashbin
     canusepoststream: true, // darf den Post-Stream nutzen (Instanzeinstellung)
     canuselayers: false,    // darf das Schichtung-Panel nutzen (Instanzeinstellung)
     layerPanelOpen: false,
@@ -1936,7 +1936,17 @@
     var dropdown = el('div', { class: 'ic-board-dropdown', id: 'ic-board-dropdown' });
     dropdown.appendChild(el('p', { class: 'ic-hint' }, [S.boardswitcher]));
     callAjax('mod_pinnwand_get_all_boards', { cmid: cfg.cmid }).then(function (res) {
-      (res.boards || []).forEach(function (b) {
+      var boards = res.boards || [];
+      // Eigene Boards ohne Fotos (z.B. das Masterboard, wenn gerade alles
+      // aufs geklonte Board verschoben wurde) fehlen in der Server-Antwort,
+      // da diese nur Boards mit mindestens einem Foto findet - hier aus der
+      // lokal bekannten Liste ergänzen.
+      boardList().forEach(function (bid) {
+        if (!boards.some(function (b) { return b.isown && b.boardid === bid; })) {
+          boards.unshift({ userid: 0, boardid: bid, ownername: '', isown: true, name: '', hidden: false });
+        }
+      });
+      boards.forEach(function (b) {
         var row = el('div', { class: 'ic-board-dropdown-row' + (b.isown && b.boardid === state.currentBoard ? ' active' : '') });
         var label = el('span', { class: 'ic-board-dropdown-label' + (b.isown ? '' : ' ic-board-dropdown-foreign') },
           [(b.name || (b.isown ? boardDisplayName(b.boardid) : b.ownername)) + (b.isown ? '' : ' (' + b.ownername + ')')]);
@@ -2074,6 +2084,12 @@
   }
 
   function renderArrange(body) {
+    // Fadenfarbe als CSS-Variable bereitstellen - die Umrandung der
+    // Mehrfachauswahl soll der Fadenfarbe entsprechen statt einem fest
+    // verdrahteten Blau.
+    var ownThreadForColor = ownThread();
+    root.style.setProperty('--ic-thread-color', (ownThreadForColor && ownThreadForColor.color) || '#4f8cff');
+
     var wrap = el('div', { class: 'ic-canvas-wrap' + (cfg.boardpannable ? ' pannable' : '') });
     // Tapete: AUSSERHALB der gezoomten .ic-canvas-panzoom-Ebene, sonst würde
     // sie mit skaliert und bei einem Zoom < 1 (typischer Fall) nur einen Teil
@@ -3158,10 +3174,34 @@
     });
   }
 
-  function renderStreamPanel() {
-    var panel = el('div', { class: 'ic-stream-panel', style: 'width:' + state.streamWidth + 'px' });
+  // Breite per Drag am linken Rand des Panels änderbar - gemeinsam für alle
+  // vier Seitenleisten (Post-Stream/Faden/Layer/Trashbin), die sich
+  // dieselbe state.sidebarWidth teilen.
+  function attachSidebarResize(panel) {
+    panel.style.width = state.sidebarWidth + 'px';
     var resizeHandle = el('div', { class: 'ic-stream-resize' });
-    panel.appendChild(resizeHandle);
+    panel.insertBefore(resizeHandle, panel.firstChild);
+    var resizing = false, startX = 0, startW = 0;
+    resizeHandle.addEventListener('mousedown', function (ev) {
+      resizing = true; startX = ev.clientX; startW = state.sidebarWidth; ev.preventDefault();
+    });
+    resizeHandle.addEventListener('touchstart', function (ev) {
+      resizing = true; startX = ev.touches[0].clientX; startW = state.sidebarWidth;
+    }, { passive: true });
+    function move(clientX) {
+      if (!resizing) { return; }
+      state.sidebarWidth = Math.max(160, Math.min(420, startW - (clientX - startX)));
+      panel.style.width = state.sidebarWidth + 'px';
+    }
+    window.addEventListener('mousemove', function (ev) { move(ev.clientX); });
+    window.addEventListener('touchmove', function (ev) { if (resizing) { move(ev.touches[0].clientX); } }, { passive: true });
+    window.addEventListener('mouseup', function () { resizing = false; });
+    window.addEventListener('touchend', function () { resizing = false; });
+  }
+
+  function renderStreamPanel() {
+    var panel = el('div', { class: 'ic-stream-panel' });
+    attachSidebarResize(panel);
 
     var filterBar = el('input', {
       type: 'text', class: 'ic-stream-filter', placeholder: S.stream_filter_placeholder, value: state.streamFilter
@@ -3206,7 +3246,7 @@
           // Der Post-Stream selbst deckt einen Teil rechts ab - "Mitte" auf
           // den davon freien Bereich beziehen, sonst landet das Foto hinter
           // der eigenen Leiste (unsichtbar/unklickbar, bis sie geschlossen wird).
-          var usableWidth = Math.max(100, rect.width - (state.streamWidth || 0));
+          var usableWidth = Math.max(100, rect.width - (state.sidebarWidth || 0));
           return {
             x: (usableWidth / 2 - state.boardPanX) / (state.boardZoom || 1) - 100,
             y: (rect.height / 2 - state.boardPanY) / (state.boardZoom || 1) - 100
@@ -3243,18 +3283,6 @@
     }
     renderCards();
 
-    // Breite per Drag am linken Rand des Panels änderbar.
-    var resizing = false, startX = 0, startW = 0;
-    resizeHandle.addEventListener('mousedown', function (ev) {
-      resizing = true; startX = ev.clientX; startW = state.streamWidth; ev.preventDefault();
-    });
-    window.addEventListener('mousemove', function (ev) {
-      if (!resizing) { return; }
-      state.streamWidth = Math.max(160, Math.min(420, startW - (ev.clientX - startX)));
-      panel.style.width = state.streamWidth + 'px';
-    });
-    window.addEventListener('mouseup', function () { resizing = false; });
-
     return panel;
   }
 
@@ -3268,6 +3296,7 @@
   // werden - nur ihre eigene Zeile lässt sich wiederherstellen.
   function renderTrashPanel() {
     var panel = el('div', { class: 'ic-thread-panel' });
+    attachSidebarResize(panel);
     panel.appendChild(el('h3', { class: 'ic-thread-panel-title' }, [S.trashbin]));
     if (!state.trashItems.length) {
       panel.appendChild(el('p', { class: 'ic-hint' }, [S.trashbin_empty]));
@@ -3317,6 +3346,7 @@
 
   function renderLayerPanel() {
     var panel = el('div', { class: 'ic-thread-panel' });
+    attachSidebarResize(panel);
     panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.layers]));
 
     var photoItems = state.photos.filter(function (p) {
@@ -3349,6 +3379,7 @@
       });
       row.addEventListener('click', function (ev) {
         if (ev.ctrlKey || ev.metaKey || state.multiSelectAddMode) { toggleMultiSelectGlobal(key); return; }
+        if (openPresentationAtItem(entry.kind, entry.ref.id)) { return; }
         selectItem(key);
       });
       if (entry.kind === 'photo') {
@@ -3506,6 +3537,12 @@
       if (itemKey) {
         row.addEventListener('click', function (ev) {
           if (ev.ctrlKey || ev.metaKey || state.multiSelectAddMode) { toggleMultiSelectGlobal(itemKey); return; }
+          // Kurzer Klick (kein Ziehen - ein echter Drag löst kein click-Event
+          // aus) springt im eigenen, bearbeitbaren Faden direkt zu dieser
+          // Station in der Präsentation.
+          if (editable && item.itemtype !== 'overview' && openPresentationAtItem(item.itemtype, item.itemtype === 'photo' ? item.photoid : item.id)) {
+            return;
+          }
           selectItem(itemKey);
         });
       }
@@ -3635,10 +3672,10 @@
 
   function renderThreadPanel() {
     var panel = el('div', { class: 'ic-thread-panel' });
+    attachSidebarResize(panel);
     var own = ownThread();
     var shared = sharedThread();
 
-    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.thread]));
     if (own && own.items.length > 0) {
       var presentBtn = el('button', {
         class: 'ic-btn ic-thread-present-btn', style: 'background:' + (own.color || '#e0503f') + ';color:#fff'
@@ -3864,7 +3901,10 @@
         canvasEl.appendChild(fEl);
         return {
           el: fEl, cx: it.framex + it.framew / 2, cy: it.framey + it.frameh / 2,
-          w: it.framew, h: it.frameh, rot: it.framerot || 0, frame: true
+          // Die Kamera muss der Rahmen-Drehung ENTGEGENGESETZT drehen, damit
+          // der eingerahmte Bereich am Ende gerade (nicht schief) erscheint -
+          // sonst würde sich die Neigung verdoppeln statt aufgehoben zu werden.
+          w: it.framew, h: it.frameh, rot: -(it.framerot || 0), frame: true
         };
       }
       var rec = photoRecs[it.photoid];

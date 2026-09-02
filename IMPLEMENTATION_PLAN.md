@@ -1292,3 +1292,30 @@ Achtundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`.
   (Ziehen) gefunden und mit derselben Rotationsmatrix-Logik behoben -
   beide hätten sonst bei gedrehter Kamera auf/zu den falschen Punkt
   gezoomt bzw. verschoben.
+
+---
+
+## Phase 36 — Rahmen-Rotationsrichtung, Präsentations-Sprung per Klick, gemeinsame Panel-Breite, Fadenfarbe, Dropdown-Fix ✅
+
+Neunundzwanzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Zweiter Rotations-Bugfix**: die Kamera muss der Rahmen-Drehung
+  ENTGEGENGESETZT drehen, damit der eingerahmte Bereich am Ende gerade
+  erscheint - das Vorzeichen war gleichgerichtet (verdoppelte die
+  Neigung statt sie aufzuheben). War vorher durch den zusätzlichen
+  Positions-Bug aus Phase 35 verdeckt.
+- [x] Klick auf eine Zeile im eigenen Faden- oder Layer-Panel springt
+  jetzt direkt zu dieser Station in der Präsentation (statt nur zu
+  markieren) - Ziehen zum Umsortieren funktioniert weiterhin normal, da
+  ein echter HTML5-Drag kein click-Event auslöst.
+- [x] Post-Stream/Faden/Layer/Trashbin teilen sich jetzt eine gemeinsame,
+  per Drag verstellbare Breite (`state.sidebarWidth`, Logik in
+  `attachSidebarResize` gebündelt).
+- [x] Überschrift "Roter Faden" oben im Faden-Panel entfernt.
+- [x] Umrandung der Mehrfachauswahl (Box, Auswahl-Overlay, Foto-/Rahmen-
+  Hervorhebung) folgt jetzt der Fadenfarbe statt eines fest verdrahteten
+  Blaus (neue CSS-Variable `--ic-thread-color`).
+- [x] **Bugfix**: das Masterboard (bzw. jedes eigene Board ohne Fotos)
+  fehlte im Kopfzeilen-Dropdown, da die Server-Abfrage nur Boards mit
+  mindestens einem Foto findet - eigene Boards aus der lokal bekannten
+  Liste werden jetzt ergänzt, falls sie in der Server-Antwort fehlen.

@@ -347,7 +347,7 @@
   display: flex; align-items: center; justify-content: center; z-index: 5;
 }
 .ic-thread-panel {
-  position: absolute; top: 48px; right: 0; bottom: 0; width: 260px; max-width: 80vw; z-index: 25;
+  position: absolute; top: 48px; right: 0; bottom: 0; max-width: 80vw; z-index: 25;
   background: rgba(20,21,24,var(--ic-sidebar-opacity,.92)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   padding: 12px; overflow-y: auto; box-shadow: -4px 0 16px rgba(0,0,0,.4);
 }
@@ -364,7 +364,7 @@
 .ic-thread-item.dragging { opacity: .4; }
 .ic-thread-item { cursor: pointer; }
 .ic-thread-item.selected { background: rgba(224,80,63,.25); outline: 2px solid var(--ic-accent); }
-.ic-thread-item.multi-selected { background: rgba(79,140,255,.2); outline: 2px dashed #4f8cff; }
+.ic-thread-item.multi-selected { background: rgba(79,140,255,.2); outline: 2px dashed var(--ic-thread-color, #4f8cff); }
 .ic-thread-item img, .ic-thread-frame-thumb {
   width: 36px; height: 36px; object-fit: cover; border-radius: 4px; flex: 0 0 auto;
 }
@@ -567,20 +567,20 @@
 }
 .ic-extra-placement:hover .ic-extra-placement-unpin { opacity: 1; }
 .ic-arrange-item.selected img { outline: 3px solid var(--ic-accent); outline-offset: 3px; box-shadow: 0 0 0 6px rgba(224,80,63,.25); }
-.ic-arrange-item.multi-selected img { outline: 3px dashed #4f8cff; outline-offset: 3px; }
+.ic-arrange-item.multi-selected img { outline: 3px dashed var(--ic-thread-color, #4f8cff); outline-offset: 3px; }
 .ic-thread-frame-onboard {
   position: absolute; border-style: dashed; border-radius: 6px; pointer-events: none;
   display: flex; align-items: flex-end; padding: 6px; box-sizing: border-box;
 }
 .ic-thread-frame-onboard.editable { pointer-events: auto; cursor: move; touch-action: none; }
 .ic-thread-frame-onboard.selected { box-shadow: 0 0 0 4px rgba(224,80,63,.35); }
-.ic-thread-frame-onboard.multi-selected { box-shadow: 0 0 0 3px #4f8cff; }
+.ic-thread-frame-onboard.multi-selected { box-shadow: 0 0 0 3px var(--ic-thread-color, #4f8cff); }
 .ic-selection-box {
-  position: absolute; z-index: 400; border: 2px dashed #4f8cff; background: rgba(79,140,255,.12);
+  position: absolute; z-index: 400; border: 2px dashed var(--ic-thread-color, #4f8cff); background: rgba(79,140,255,.12);
   pointer-events: none; border-radius: 4px;
 }
 .ic-selection-overlay {
-  position: absolute; z-index: 401; border: 2px dashed #4f8cff; border-radius: 8px; pointer-events: none;
+  position: absolute; z-index: 401; border: 2px dashed var(--ic-thread-color, #4f8cff); border-radius: 8px; pointer-events: none;
 }
 .ic-selection-overlay.add-mode { border-style: solid; }
 .ic-selection-add-btn {

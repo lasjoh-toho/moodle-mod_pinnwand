@@ -719,6 +719,20 @@ Details und Scoping-Entscheidungen. In Kurzform:
   während der Präsentation. Alle drei Stellen jetzt mit korrekter
   Rotationsmatrix behoben.
 
+### Neununddreißigste Überarbeitung — Rahmen-Rotationsrichtung, Präsentations-Sprung, gemeinsame Panel-Breite
+
+- **Zweiter Rotations-Bugfix**: die Kamera muss der Rahmen-Drehung
+  entgegengesetzt drehen, damit der eingerahmte Bereich gerade erscheint -
+  war vorher durch den Positions-Bug verdeckt.
+- Klick auf eine Zeile im eigenen Faden-/Layer-Panel springt jetzt direkt
+  zu dieser Station in der Präsentation.
+- Post-Stream/Faden/Layer/Trashbin teilen sich jetzt eine gemeinsame,
+  verstellbare Breite.
+- "Roter Faden"-Überschrift oben im Panel entfernt.
+- Umrandung der Mehrfachauswahl folgt jetzt der Fadenfarbe.
+- Bugfix: das Masterboard fehlte im Kopfzeilen-Dropdown, wenn es aktuell
+  keine Fotos hat.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
