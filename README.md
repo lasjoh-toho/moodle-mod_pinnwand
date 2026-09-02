@@ -743,6 +743,18 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Augen-Button: Standard-Zoom ohne Auswahl, zweiter Klick zoomt aufs
   Hintergrundbild.
 
+### Einundvierzigste Überarbeitung — Pin-Positions-Bugfixes, Trashbin-Symbol, zweispaltige Klassenansicht
+
+- **Kern-Bugfix**: die Klickzone in der Klassenansicht lag durch eine
+  invertierte Bedingung immer an derselben Stelle wie der Pin selbst -
+  behoben.
+- "Nicht befestigt"-Position liegt jetzt wirklich außerhalb (links neben)
+  dem Bild statt auf einer Bildecke, kann dadurch nicht mehr mit dem
+  Löschen-Button kollidieren.
+- Pin-Position in "Meine Bilder" präzisiert (2mm Abstand/Bildoberkante).
+- Löschen-Button in der Klassenansicht zeigt jetzt ein Papierkorb-Symbol.
+- Neu: zweispaltige Ansicht in der Klassenübersicht ab 1100px Breite.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

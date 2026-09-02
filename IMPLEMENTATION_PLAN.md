@@ -1390,3 +1390,26 @@ Einunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`,
 
 Damit ist der große Feedback-Block aus den letzten beiden Durchgängen
 vollständig abgearbeitet.
+
+---
+
+## Phase 39 — Pin-Positions-Bugfixes, Trashbin-Symbol, zweispaltige Klassenansicht ✅
+
+Zweiunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **"Meine Bilder"-Pin präzisiert**: ca. 2mm (~8px) Abstand über dem
+  Bild, wenn nicht befestigt; straddelt die Bildoberkante (halb darüber,
+  halb darauf), wenn befestigt - Zeilenabstand im Grid entsprechend
+  vergrößert.
+- [x] **Kern-Bugfix Klassenansicht**: die Klickzone (die jeweils
+  gegenüberliegende Position zum Pin) hatte eine invertierte Bedingung -
+  lag dadurch immer an DERSELBEN Stelle wie der Pin selbst statt an der
+  jeweils anderen Position. Behoben.
+- [x] Die "nicht befestigt"-Position lag bisher auf der Bildecke (konnte
+  je nach Thumbnail-Breite mit dem Löschen-Button kollidieren) - liegt
+  jetzt wirklich außerhalb (links neben) dem Bild.
+- [x] Löschen-Button in der Klassenansicht zeigt jetzt ein
+  Papierkorb-Symbol statt eines Kreuzes.
+- [x] **Zweispaltige Ansicht** in der Klassenübersicht ab 1100px
+  Bildschirmbreite - jeder Nutzer-Block bleibt zusammenhängend
+  (`break-inside: avoid-column`), unabhängig von der gewählten Sortierung.

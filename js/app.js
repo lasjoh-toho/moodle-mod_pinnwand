@@ -4468,7 +4468,7 @@
           title: p.hiddenfromboard ? S.pintooltip : S.unpintooltip
         }, [icon('thumbtack')]);
         var pinOtherZone = el('div', {
-          class: 'ic-thumb-pin-otherzone' + (p.hiddenfromboard ? ' pinned' : ''),
+          class: 'ic-thumb-pin-otherzone' + (p.hiddenfromboard ? '' : ' pinned'),
           title: p.hiddenfromboard ? S.pintooltip : S.unpintooltip
         });
         function togglePin() {
@@ -4477,7 +4477,7 @@
             p.hiddenfromboard = newHidden;
             pinOverlay.classList.toggle('active', !p.hiddenfromboard);
             pinOverlay.classList.toggle('pinned', !p.hiddenfromboard);
-            pinOtherZone.classList.toggle('pinned', p.hiddenfromboard);
+            pinOtherZone.classList.toggle('pinned', !p.hiddenfromboard);
             pinOverlay.title = pinOtherZone.title = p.hiddenfromboard ? S.pintooltip : S.unpintooltip;
             loadStreamPhotos();
           });
@@ -4488,7 +4488,7 @@
         thumbWrap.appendChild(pinOtherZone);
       }
       if (candelete) {
-        var delOverlay = el('button', { class: 'ic-thumb-btn ic-thumb-btn-del', html: '&times;' });
+        var delOverlay = el('button', { class: 'ic-thumb-btn ic-thumb-btn-del' }, [icon('trash')]);
         delOverlay.addEventListener('click', function () {
           if (!confirm(S.deletephoto_confirm_other)) { return; }
           callAjax('mod_pinnwand_delete_photo', { cmid: cfg.cmid, photoid: p.id }).then(function () {
