@@ -297,11 +297,12 @@
   max-width: 80%; padding: 8px 14px; border-radius: 10px; font-size: .8rem;
   background: rgba(224,80,63,.85); color: #fff; text-align: center;
 }
-.ic-pan-bar {
+.ic-zoom-popup {
   position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%); z-index: 15;
   display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 20px;
-  background: rgba(20,21,24,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  background: rgba(20,21,24,.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
+.ic-zoom-popup input[type=range] { width: 130px; }
 
 /* Roter Faden: Seitenpanel + Buttons */
 .ic-thread-add-toggle {

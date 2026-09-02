@@ -174,6 +174,7 @@ $string['zoom_reset'] = 'Zoom zurücksetzen';
 $string['pantool'] = 'Verschieben';
 $string['zoomin'] = 'Vergrößern';
 $string['zoomout'] = 'Verkleinern';
+$string['zoomtool'] = 'Zoom';
 $string['boardof'] = 'Board {$a->cur} von {$a->total}';
 $string['newboard'] = 'Neues Board';
 $string['renameboard'] = 'Titel antippen zum Umbenennen';

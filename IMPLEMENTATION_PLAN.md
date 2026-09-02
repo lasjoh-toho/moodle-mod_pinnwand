@@ -965,3 +965,41 @@ neue Endpunkte.
   `pinnwand_board_names` (diese Phase) sind noch nicht ins Kurs-Backup/
   -Restore eingebunden - ein bekannter, zu schließender Nachholbedarf für
   einen künftigen Durchgang.
+
+---
+
+## Phase 25 — Backup/Restore nachgezogen, Zoom-Lupe, universelles Verschieben, Pinch, Präsentations-Pan/Zoom ✅
+
+Achtzehnter Feedback-Durchgang. Betrifft: `backup/moodle2/*` (vollständig
+nachgezogen), `js/app.js`, `styles.css`.
+
+- [x] **Backup/Restore vervollständigt**: fehlende Instanzeinstellungen
+  (`sidebaropacity`, `studentboardclone`, `studentpoststream`,
+  `studentlayers` waren nicht im Backup enthalten - Lücke aus früheren
+  Phasen) sowie die beiden neueren Tabellen `pinnwand_board_ink` und
+  `pinnwand_board_names` jetzt vollständig in Backup UND Restore
+  eingebunden.
+- [x] **Zoom-Button-Gruppe durch eine Lupe im zentralen Menü ersetzt** -
+  öffnet ein Mini-Popup mit Regler + Plus/Minus; die Buttons wirken auch
+  über den Regler-Bereich (25-200%) hinaus (Regler zeigt dann einfach
+  seinen Maximal-/Minimalwert, der tatsächliche Zoom geht weiter, bis
+  10%/300%).
+- [x] **Verschieben auf leerer Fläche jetzt immer möglich** (nicht mehr an
+  die Instanzeinstellung "Pinnwand verschiebbar" oder ein Hand-Werkzeug
+  gebunden) - erkennt automatisch, ob auf einem Foto/Rahmen/Bedienelement
+  oder auf leerer Fläche gedrückt wurde.
+- [x] **Pinch-Zoom** (zwei Finger) für Touch-Geräte ergänzt - sowohl auf
+  der Pinnwand als auch in der Präsentation.
+- [x] **Zoomen/Verschieben jetzt auch während der Präsentation möglich**
+  (Mausrad, Ziehen, Pinch) - aktualisiert die interne Kameraposition
+  direkt, sodass der nächste Vorwärts-/Zurück-Impuls von der manuell
+  angepassten Ansicht aus normal fortsetzt statt zur automatischen
+  Position zurückzuspringen.
+
+**Bewusst noch nicht umgesetzt:** Mehrfachauswahl per Auswahlbox (langes
+Drücken auf leerer Fläche, um mehrere Objekte gleichzeitig zu markieren
+und zu verschieben) - das ist ein eigenständiges, größeres
+Interaktionssystem (Auswahlbox-Rendering, Hit-Testing gegen alle
+Objekte, gemeinsames Verschieben mehrerer Elemente) und wurde für einen
+eigenen, sauberen Durchgang zurückgestellt statt in dieser bereits sehr
+umfangreichen Antwort überstürzt mit umgesetzt zu werden.

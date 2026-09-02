@@ -621,11 +621,23 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - **Neu: Board klonen** - eigene Kopie der Pinnwand (für Lehrkraft immer,
   für Lernende per neuer Einstellung).
 
+### Neunundzwanzigste Überarbeitung — Backup/Restore vervollständigt, Zoom-Lupe, universelles Verschieben
+
+- **Backup/Restore vervollständigt**: fehlende Instanzeinstellungen und
+  die beiden neueren Tabellen (Stylus-Anmerkungen, Board-Titel) sind jetzt
+  vollständig eingebunden.
+- Zoom-Button-Gruppe durch eine Lupe mit Mini-Popup ersetzt (Regler +
+  Plus/Minus, die auch über den Regler-Bereich hinaus wirken).
+- Verschieben auf leerer Fläche jetzt immer möglich, nicht mehr an eine
+  Einstellung/ein Werkzeug gebunden.
+- Pinch-Zoom für Touch-Geräte ergänzt (Pinnwand + Präsentation).
+- Zoomen/Verschieben jetzt auch während der Präsentation möglich - der
+  nächste Schritt setzt von der angepassten Ansicht aus normal fort.
+- Bewusst noch nicht umgesetzt: Mehrfachauswahl per Auswahlbox (siehe
+  Scoping-Hinweis zu Phase 25 im IMPLEMENTATION_PLAN).
+
 ## Bekannte Grenzen dieser Version
 
-- Die Tabellen `pinnwand_board_ink` (Stylus-Anmerkungen) und
-  `pinnwand_board_names` (Board-Titel) sind noch nicht ins Kurs-Backup/
-  -Restore eingebunden.
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
 - Die Leinwand hat pro Board eine feste Größe (1400×1000px, Querformat); ein
   Export als Bild/PDF ist nicht enthalten und wäre ein guter nächster

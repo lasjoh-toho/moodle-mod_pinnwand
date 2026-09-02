@@ -1710,6 +1710,7 @@
     pen: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>',
     eraser: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H8l-6-6a2 2 0 0 1 0-2.8l8-8a2 2 0 0 1 2.8 0l7 7a2 2 0 0 1 0 2.8L13 20"/><path d="M6 13l6 6"/></svg>',
     clone: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+    search: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
     trash: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
     grid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg>',
@@ -2306,9 +2307,10 @@
       body.appendChild(fullHint);
     }
 
-    // ---- Zoom (immer verfügbar) + Hand-Werkzeug (nur wenn Aktivität es erlaubt) ----
-    // Zoomt so, dass der angegebene Bildschirmpunkt (Mauszeiger bzw. bei den
-    // +/- Buttons die Board-Mitte) an derselben Stelle stehen bleibt.
+    // ---- Zoom: Lupe im zentralen Menü öffnet ein Mini-Popup mit Regler +
+    // Plus/Minus (siehe fabRow weiter unten) ----
+    // Zoomt so, dass der angegebene Bildschirmpunkt (Mauszeiger/Finger bzw.
+    // bei den Buttons die Board-Mitte) an derselben Stelle stehen bleibt.
     function zoomBoardBy(factor, clientX, clientY) {
       var newZoom = Math.max(0.1, Math.min(3, state.boardZoom * factor));
       var rect = wrap.getBoundingClientRect();
@@ -2321,29 +2323,13 @@
       state.boardPanY = cy - wy * newZoom;
       applyBoardTransform();
     }
-    var zoomBar = el('div', { class: 'ic-pan-bar' });
-    if (cfg.boardpannable) {
-      var handBtn = el('button', {
-        class: 'ic-icon-btn' + (state.boardPanMode ? ' active' : ''), title: S.pantool
-      }, [icon('hand')]);
-      handBtn.addEventListener('click', function () {
-        state.boardPanMode = !state.boardPanMode;
-        wrap.classList.toggle('pan-active', state.boardPanMode);
-        handBtn.classList.toggle('active', state.boardPanMode);
-      });
-      zoomBar.appendChild(handBtn);
+    function zoomBoardTo(zoomValue, clientX, clientY) {
+      zoomBoardBy(Math.max(0.1, zoomValue) / state.boardZoom, clientX, clientY);
     }
-    var zoomOutBtn = el('button', { class: 'ic-icon-btn', title: S.zoomout }, ['\u2212']);
-    zoomOutBtn.addEventListener('click', function () { zoomBoardBy(0.85); });
-    var zoomInBtn = el('button', { class: 'ic-icon-btn', title: S.zoomin }, ['+']);
-    zoomInBtn.addEventListener('click', function () { zoomBoardBy(1 / 0.85); });
-    zoomBar.appendChild(zoomOutBtn);
-    zoomBar.appendChild(zoomInBtn);
-    body.appendChild(zoomBar);
 
     // Mausrad zoomt (zentriert auf den Mauszeiger) - unabhängig von der
     // "Pinnwand verschiebbar"-Einstellung, da Zoomen ein grundlegendes
-    // Bedürfnis ist, das nicht an das Hand-Werkzeug gebunden sein muss.
+    // Bedürfnis ist, das nicht an ein Werkzeug gebunden sein muss.
     wrap.addEventListener('wheel', function (ev) {
       if (!ev.ctrlKey && Math.abs(ev.deltaY) < Math.abs(ev.deltaX)) { return; } // horizontales Scrollen ignorieren
       ev.preventDefault();
@@ -2351,22 +2337,51 @@
       zoomBoardBy(factor, ev.clientX, ev.clientY);
     }, { passive: false });
 
-    if (cfg.boardpannable) {
-      var panDragging = false, panStartX = 0, panStartY = 0, panOrigX = 0, panOrigY = 0;
-      wrap.addEventListener('pointerdown', function (ev) {
-        if (!state.boardPanMode) { return; }
-        panDragging = true;
-        panStartX = ev.clientX; panStartY = ev.clientY;
-        panOrigX = state.boardPanX; panOrigY = state.boardPanY;
-      });
-      wrap.addEventListener('pointermove', function (ev) {
-        if (!panDragging) { return; }
-        state.boardPanX = panOrigX + (ev.clientX - panStartX);
-        state.boardPanY = panOrigY + (ev.clientY - panStartY);
-        applyBoardTransform();
-      });
-      window.addEventListener('pointerup', function () { panDragging = false; });
+    // Verschieben auf leerer Fläche (nicht auf einem Foto/Rahmen/Bedienelement)
+    // funktioniert jetzt immer - unabhängig von Instanzeinstellung/Werkzeug.
+    var panDragging = false, panStartX = 0, panStartY = 0, panOrigX = 0, panOrigY = 0;
+    function isEmptyAreaTarget(target) {
+      return !target.closest('.ic-arrange-item, .ic-thread-frame-onboard, button, input, a, .ic-board-ink-layer.active');
     }
+    wrap.addEventListener('pointerdown', function (ev) {
+      if (ev.pointerType === 'touch' && activeTouches > 1) { return; } // Pinch hat Vorrang
+      if (!isEmptyAreaTarget(ev.target)) { return; }
+      panDragging = true;
+      panStartX = ev.clientX; panStartY = ev.clientY;
+      panOrigX = state.boardPanX; panOrigY = state.boardPanY;
+    });
+    wrap.addEventListener('pointermove', function (ev) {
+      if (!panDragging) { return; }
+      state.boardPanX = panOrigX + (ev.clientX - panStartX);
+      state.boardPanY = panOrigY + (ev.clientY - panStartY);
+      applyBoardTransform();
+    });
+    window.addEventListener('pointerup', function () { panDragging = false; });
+
+    // Pinch-Zoom (zwei Finger) - eigene touch-Behandlung, da Pointer Events
+    // Mehrfingergesten nicht direkt abbilden.
+    var activeTouches = 0, pinchStartDist = 0, pinchStartZoom = 1, pinchMidX = 0, pinchMidY = 0;
+    function touchDist(t) {
+      var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    wrap.addEventListener('touchstart', function (ev) {
+      activeTouches = ev.touches.length;
+      if (ev.touches.length === 2) {
+        panDragging = false;
+        pinchStartDist = touchDist(ev.touches) || 1;
+        pinchStartZoom = state.boardZoom;
+        pinchMidX = (ev.touches[0].clientX + ev.touches[1].clientX) / 2;
+        pinchMidY = (ev.touches[0].clientY + ev.touches[1].clientY) / 2;
+      }
+    }, { passive: true });
+    wrap.addEventListener('touchmove', function (ev) {
+      if (ev.touches.length !== 2) { return; }
+      ev.preventDefault();
+      var dist = touchDist(ev.touches) || 1;
+      zoomBoardTo(pinchStartZoom * (dist / pinchStartDist), pinchMidX, pinchMidY);
+    }, { passive: false });
+    wrap.addEventListener('touchend', function (ev) { activeTouches = ev.touches.length; });
 
     // Schwebende runde Icon-Buttons unten mittig (transparent/geblurrt,
     // siehe .ic-fab in CSS) - Overlay-Werkzeuge der Galerie (Raster/Daten/
@@ -2380,6 +2395,26 @@
     var dataBtn = el('button', { class: 'ic-fab' + (state.showData ? ' active' : ''), title: state.showData ? S.hidedata : S.showdata }, ['\u{1F3F7}']);
     dataBtn.addEventListener('click', function () { state.showData = !state.showData; render(); });
     fabRow.appendChild(dataBtn);
+
+    // Lupe: öffnet ein kleines Zoom-Popup (Regler + Plus/Minus) statt einer
+    // permanent sichtbaren Button-Gruppe.
+    var zoomBtn = el('button', { class: 'ic-fab', title: S.zoomtool }, [icon('search')]);
+    zoomBtn.addEventListener('click', function () {
+      var existing = document.getElementById('ic-zoom-popup');
+      if (existing) { existing.remove(); return; }
+      var popup = el('div', { class: 'ic-zoom-popup', id: 'ic-zoom-popup' });
+      var zoomOutBtn = el('button', { class: 'ic-icon-btn', title: S.zoomout }, ['\u2212']);
+      zoomOutBtn.addEventListener('click', function () { zoomBoardBy(0.85); zoomSlider.value = Math.round(state.boardZoom * 100); });
+      var zoomSlider = el('input', {
+        type: 'range', min: '25', max: '200', step: '5', value: String(Math.round(state.boardZoom * 100))
+      });
+      zoomSlider.addEventListener('input', function () { zoomBoardTo(parseInt(zoomSlider.value, 10) / 100); });
+      var zoomInBtn = el('button', { class: 'ic-icon-btn', title: S.zoomin }, ['+']);
+      zoomInBtn.addEventListener('click', function () { zoomBoardBy(1 / 0.85); zoomSlider.value = Math.round(state.boardZoom * 100); });
+      popup.appendChild(zoomOutBtn); popup.appendChild(zoomSlider); popup.appendChild(zoomInBtn);
+      body.appendChild(popup);
+    });
+    fabRow.appendChild(zoomBtn);
 
     // Seitenleisten-Buttons (Roter Faden / Post-Stream / Schichtung) in der
     // oberen rechten Ecke der Pinnwand - schließen sich gegenseitig, da sie
@@ -3208,6 +3243,62 @@
 
     var currentIdx = 0;
     var currentTransform = null; // { scale, cx, cy, rot } - letzter tatsächlich erreichter Zustand
+
+    // Manuelles Zoomen/Verschieben während der Präsentation (Mausrad, Ziehen
+    // auf leerer Fläche, Pinch) - aktualisiert currentTransform direkt, damit
+    // der nächste Vorwärts-/Zurück-Schritt von der manuell angepassten
+    // Ansicht aus normal fortsetzt, statt zur automatischen Position
+    // zurückzuspringen.
+    function manualZoomAt(newScale, clientX, clientY) {
+      if (!currentTransform) { return; }
+      newScale = Math.max(0.05, Math.min(8, newScale));
+      var wx = currentTransform.cx + (clientX - window.innerWidth / 2) / currentTransform.scale;
+      var wy = currentTransform.cy + (clientY - window.innerHeight / 2) / currentTransform.scale;
+      currentTransform.scale = newScale;
+      currentTransform.cx = wx - (clientX - window.innerWidth / 2) / newScale;
+      currentTransform.cy = wy - (clientY - window.innerHeight / 2) / newScale;
+      applyTransform(currentTransform.scale, currentTransform.cx, currentTransform.cy, currentTransform.rot);
+    }
+    var presentPanDragging = false, presentPanStartX = 0, presentPanStartY = 0, presentPanStartCx = 0, presentPanStartCy = 0;
+    stageEl.addEventListener('pointerdown', function (ev) {
+      if (ev.target.closest('.ic-present-close, .ic-present-nav') || !currentTransform) { return; }
+      presentPanDragging = true;
+      presentPanStartX = ev.clientX; presentPanStartY = ev.clientY;
+      presentPanStartCx = currentTransform.cx; presentPanStartCy = currentTransform.cy;
+    });
+    stageEl.addEventListener('pointermove', function (ev) {
+      if (!presentPanDragging || !currentTransform) { return; }
+      var scale = currentTransform.scale;
+      currentTransform.cx = presentPanStartCx - (ev.clientX - presentPanStartX) / scale;
+      currentTransform.cy = presentPanStartCy - (ev.clientY - presentPanStartY) / scale;
+      applyTransform(currentTransform.scale, currentTransform.cx, currentTransform.cy, currentTransform.rot);
+    });
+    window.addEventListener('pointerup', function () { presentPanDragging = false; });
+    stageEl.addEventListener('wheel', function (ev) {
+      ev.preventDefault();
+      var factor = ev.deltaY < 0 ? 1.1 : 1 / 1.1;
+      manualZoomAt((currentTransform ? currentTransform.scale : 1) * factor, ev.clientX, ev.clientY);
+    }, { passive: false });
+    var presentPinchDist = 0, presentPinchScale = 1, presentPinchMidX = 0, presentPinchMidY = 0;
+    function presentTouchDist(t) {
+      var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    stageEl.addEventListener('touchstart', function (ev) {
+      if (ev.touches.length === 2 && currentTransform) {
+        presentPanDragging = false;
+        presentPinchDist = presentTouchDist(ev.touches) || 1;
+        presentPinchScale = currentTransform.scale;
+        presentPinchMidX = (ev.touches[0].clientX + ev.touches[1].clientX) / 2;
+        presentPinchMidY = (ev.touches[0].clientY + ev.touches[1].clientY) / 2;
+      }
+    }, { passive: true });
+    stageEl.addEventListener('touchmove', function (ev) {
+      if (ev.touches.length !== 2) { return; }
+      ev.preventDefault();
+      var dist = presentTouchDist(ev.touches) || 1;
+      manualZoomAt(presentPinchScale * (dist / presentPinchDist), presentPinchMidX, presentPinchMidY);
+    }, { passive: false });
 
     function goToStep(idx, skipTransition) {
       var fromIdx = currentIdx;

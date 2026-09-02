@@ -17,6 +17,8 @@ class restore_pinnwand_activity_structure_step extends restore_activity_structur
             $paths[] = new restore_path_element('photo', '/activity/pinnwand/photos/photo');
             $paths[] = new restore_path_element('thread', '/activity/pinnwand/threads/thread');
             $paths[] = new restore_path_element('threaditem', '/activity/pinnwand/threads/thread/threaditems/threaditem');
+            $paths[] = new restore_path_element('boardink', '/activity/pinnwand/boardinks/boardink');
+            $paths[] = new restore_path_element('boardname', '/activity/pinnwand/boardnames/boardname');
         }
 
         return $this->prepare_activity_structure($paths);
@@ -69,6 +71,26 @@ class restore_pinnwand_activity_structure_step extends restore_activity_structur
         }
 
         $DB->insert_record('pinnwand_thread_items', $data);
+    }
+
+    protected function process_boardink($data) {
+        global $DB;
+
+        $data = (object) $data;
+        $data->pinnwandid = $this->get_new_parentid('pinnwand');
+        $data->userid = $this->get_mappingid('user', $data->userid);
+
+        $DB->insert_record('pinnwand_board_ink', $data);
+    }
+
+    protected function process_boardname($data) {
+        global $DB;
+
+        $data = (object) $data;
+        $data->pinnwandid = $this->get_new_parentid('pinnwand');
+        $data->userid = $this->get_mappingid('user', $data->userid);
+
+        $DB->insert_record('pinnwand_board_names', $data);
     }
 
     protected function after_execute() {

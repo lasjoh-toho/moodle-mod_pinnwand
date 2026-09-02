@@ -174,6 +174,7 @@ $string['zoom_reset'] = 'Reset zoom';
 $string['pantool'] = 'Pan';
 $string['zoomin'] = 'Zoom in';
 $string['zoomout'] = 'Zoom out';
+$string['zoomtool'] = 'Zoom';
 $string['boardof'] = 'Board {$a->cur} of {$a->total}';
 $string['newboard'] = 'New board';
 $string['renameboard'] = 'Tap title to rename';

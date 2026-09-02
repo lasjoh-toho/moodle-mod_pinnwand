@@ -16,7 +16,8 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
         $pinnwand = new backup_nested_element('pinnwand', ['id'], [
             'name', 'intro', 'introformat', 'maxpictures', 'allowconsent',
             'boarddefault', 'studentcansend', 'teachercansend', 'studentclassview',
-            'boardpannable', 'studentthreads', 'consenttext', 'timecreated', 'timemodified',
+            'boardpannable', 'sidebaropacity', 'studentboardclone', 'studentthreads',
+            'studentpoststream', 'studentlayers', 'consenttext', 'timecreated', 'timemodified',
         ]);
 
         // Fotos - personenbezogen, daher nur mit "userinfo" gesichert.
@@ -40,6 +41,19 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
             'framex', 'framey', 'framew', 'frameh', 'framerot', 'framez', 'framelabel', 'timecreated',
         ]);
 
+        // Stylus-Anmerkungen direkt auf dem Board-Hintergrund - ebenfalls
+        // personenbezogen (ein Datensatz je Person und Board).
+        $boardinks = new backup_nested_element('boardinks');
+        $boardink = new backup_nested_element('boardink', ['id'], [
+            'userid', 'boardid', 'strokedata', 'timecreated', 'timemodified',
+        ]);
+
+        // Eigene Board-Titel - ebenfalls personenbezogen.
+        $boardnames = new backup_nested_element('boardnames');
+        $boardname = new backup_nested_element('boardname', ['id'], [
+            'userid', 'boardid', 'name', 'timemodified',
+        ]);
+
         $pinnwand->add_child($photos);
         $photos->add_child($photo);
 
@@ -48,16 +62,26 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
         $thread->add_child($threaditems);
         $threaditems->add_child($threaditem);
 
+        $pinnwand->add_child($boardinks);
+        $boardinks->add_child($boardink);
+
+        $pinnwand->add_child($boardnames);
+        $boardnames->add_child($boardname);
+
         $pinnwand->set_source_table('pinnwand', ['id' => backup::VAR_ACTIVITYID]);
 
         if ($userinfo) {
             $photo->set_source_table('pinnwand_photos', ['pinnwandid' => backup::VAR_PARENTID]);
             $thread->set_source_table('pinnwand_threads', ['pinnwandid' => backup::VAR_PARENTID]);
             $threaditem->set_source_table('pinnwand_thread_items', ['threadid' => backup::VAR_PARENTID]);
+            $boardink->set_source_table('pinnwand_board_ink', ['pinnwandid' => backup::VAR_PARENTID]);
+            $boardname->set_source_table('pinnwand_board_names', ['pinnwandid' => backup::VAR_PARENTID]);
         }
 
         $photo->annotate_ids('user', 'userid');
         $thread->annotate_ids('user', 'userid');
+        $boardink->annotate_ids('user', 'userid');
+        $boardname->annotate_ids('user', 'userid');
         // photoid verweist auf ein Foto derselben Aktivität - wird beim
         // Restore über die 'pinnwand_photo'-Zuordnung aufgelöst (siehe
         // restore_pinnwand_stepslib.php process_threaditem()).
