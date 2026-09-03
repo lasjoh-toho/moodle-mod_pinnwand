@@ -1837,3 +1837,22 @@ serverseitig noch nicht auffindbar, bevor irgendetwas dort passiert ist -
 der allererste Pin-Klick in "Meine Bilder" auf ein solches taufrisches
 Board würde fehlschlagen. In der Praxis dürfte das selten vorkommen, da
 meist zuerst ein Titel vergeben oder etwas auf dem Board platziert wird.
+
+---
+
+## Phase 57 — Provisorischer Board-Name = eigener Name, wird zum Untertitel ✅
+
+Fünfzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+Löst die zuvor benannte Grenze elegant: ein neu angelegtes Board bekommt
+sofort den eigenen Namen als provisorischen Titel - dadurch serverseitig
+sofort auffindbar (siehe `toggle_own_board_placement`), noch bevor
+irgendetwas darauf liegt.
+
+- [x] Neues Board (per Plus) bekommt sofort den eigenen Namen als
+  provisorischen Titel gesetzt.
+- [x] Geklontes Board ebenfalls abgesichert (falls das Quellboard leer
+  war und daher kein Name mitkopiert wurde).
+- [x] **Neu: Untertitel-Anzeige** - sobald ein echter (vom eigenen Namen
+  abweichender) Titel vergeben wird, erscheint der eigene Name als
+  kleinerer Untertitel darunter/daneben, statt einfach zu verschwinden.

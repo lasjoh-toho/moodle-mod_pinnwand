@@ -905,8 +905,13 @@ Details und Scoping-Entscheidungen. In Kurzform:
   abhängig (Lehrkraft immer erlaubt).
 - "Eigenes Board finden" robuster gemacht (erkennt jetzt auch frisch
   angelegte, noch leere Boards mit Namen oder Zusatz-Platzierung).
-- Noch offen: Kategorien Audio/Video und Datei im Hinzufügen-Modal
-  (noch keine zugrundeliegende Funktion).
+
+### Einundsechzigste Überarbeitung — Provisorischer Board-Name, Untertitel
+
+- Neu angelegte/geklonte Boards bekommen sofort den eigenen Namen als
+  provisorischen Titel - dadurch sofort auffindbar.
+- Sobald ein echter Titel vergeben wird, erscheint der eigene Name als
+  kleinerer Untertitel, statt einfach zu verschwinden.
 
 ## Bekannte Grenzen dieser Version
 

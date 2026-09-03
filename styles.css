@@ -43,8 +43,13 @@
 @media (min-width: 560px) { .ic-topbar-center { display: flex; } }
 .ic-topbar-center:has(.ic-board-title-bar) { display: flex; }
 .ic-board-title-bar {
-  display: flex; align-items: center; justify-content: center; gap: 2px; min-width: 0;
+  display: flex; align-items: baseline; justify-content: center; gap: 2px; min-width: 0;
 }
+.ic-board-title-subtitle {
+  font-size: .7rem; color: var(--ic-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 25vw;
+}
+.ic-board-title-subtitle:empty { display: none; }
 .ic-board-title-edit {
   font-size: .88rem; font-weight: 600; color: var(--ic-text); padding: 2px 8px; border-radius: 6px;
   max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text;

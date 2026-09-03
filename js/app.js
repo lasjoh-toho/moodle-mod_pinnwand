@@ -2286,8 +2286,13 @@
       if (!text || text === boardDisplayName(boardId)) { titleEl.textContent = boardDisplayName(boardId); return; }
       state.boardNames[boardId] = text;
       callAjax('mod_pinnwand_set_board_name', { cmid: cfg.cmid, boardid: boardId, name: text });
+      subtitleEl.textContent = boardSubtitle(boardId);
     });
     wrap.appendChild(titleEl);
+    // Untertitel: zeigt den eigenen Namen, sobald ein echter (vom
+    // provisorischen Namen abweichender) Titel vergeben wurde.
+    var subtitleEl = el('span', { class: 'ic-board-title-subtitle' }, [boardSubtitle(state.currentBoard)]);
+    wrap.appendChild(subtitleEl);
 
     var nextBoard = el('button', { class: 'ic-icon-btn', title: S.next, disabled: boardIdx >= boards.length - 1 ? 'disabled' : null }, ['\u203A']);
     nextBoard.addEventListener('click', function () { state.currentBoard = boards[boardIdx + 1]; render(); });
@@ -2296,7 +2301,16 @@
     if (state.canmoderate || cfg.studentboardcreate) {
       var addBoard = el('button', { class: 'ic-icon-btn', title: S.newboard }, ['+']);
       addBoard.addEventListener('click', function () {
-        state.currentBoard = Math.max.apply(null, boards) + 1;
+        var newBoardId = Math.max.apply(null, boards) + 1;
+        state.currentBoard = newBoardId;
+        // Provisorischer Titel = eigener Name, damit das taufrische Board
+        // sofort serverseitig auffindbar ist (siehe
+        // toggle_own_board_placement) - wird automatisch zum Untertitel,
+        // sobald ein echter Titel vergeben wird.
+        if (cfg.currentuserfullname) {
+          state.boardNames[newBoardId] = cfg.currentuserfullname;
+          callAjax('mod_pinnwand_set_board_name', { cmid: cfg.cmid, boardid: newBoardId, name: cfg.currentuserfullname });
+        }
         render();
       });
       wrap.appendChild(addBoard);
@@ -2311,6 +2325,13 @@
         callAjax('mod_pinnwand_clone_board', { cmid: cfg.cmid, boardid: state.currentBoard }).then(function (res) {
           refreshPhotos().then(function () {
             state.currentBoard = res.newboardid;
+            // Absicherung: falls das Quellboard leer war (nichts kopiert,
+            // kein Name übernommen), eigenen Namen als provisorischen
+            // Titel setzen, damit das Board trotzdem sofort auffindbar ist.
+            if (cfg.currentuserfullname && !state.boardNames[res.newboardid]) {
+              state.boardNames[res.newboardid] = cfg.currentuserfullname;
+              callAjax('mod_pinnwand_set_board_name', { cmid: cfg.cmid, boardid: res.newboardid, name: cfg.currentuserfullname });
+            }
             render();
           });
         }).catch(function () { cloneBoard.disabled = false; });
@@ -2339,6 +2360,17 @@
     var idx = boards.indexOf(boardId);
     var base = root.dataset.title || S.pinboard;
     return idx > 0 ? (base + ' ' + (idx + 1)) : base;
+  }
+
+  // Sobald ein eigenes Board einen ECHTEN, vom provisorischen Namen
+  // abweichenden Titel bekommt, wird der eigene Name als Untertitel
+  // angezeigt (damit ein taufrisches, nur nach der Person benanntes
+  // Board weiterhin auffindbar bleibt UND erkennbar bleibt, wem es
+  // gehört, auch nachdem ein "richtiger" Titel vergeben wurde).
+  function boardSubtitle(boardId) {
+    var name = state.boardNames && state.boardNames[boardId];
+    if (name && cfg.currentuserfullname && name !== cfg.currentuserfullname) { return cfg.currentuserfullname; }
+    return '';
   }
 
   function renderArrange(body) {
