@@ -1377,7 +1377,7 @@
       var plain = t.text || '';
       var lines = Math.max(1, (html.match(/<div|<li|<br/gi) || []).length + (plain ? 1 : 0));
       var textW = Math.min(tf.w * 0.9, fitCtx && plain ? (function () {
-        fitCtx.font = t.size + 'px ' + fontDef.css;
+        fitCtx.font = t.size + 'px ' + fontCss;
         return fitCtx.measureText(plain).width + 24;
       })() : tf.w * 0.5);
       var boxW = Math.max(60, textW);
@@ -1389,7 +1389,12 @@
         html + '</div></foreignObject>';
     }).join('');
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + tf.w + '" height="' + tf.h +
-      '" viewBox="0 0 ' + tf.w + ' ' + tf.h + '">' + defs + bgRect + textEls + '</svg>';
+      '" viewBox="0 0 ' + tf.w + ' ' + tf.h + '"><style>' +
+      '.ic-frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;' +
+      'font-size:.82em;line-height:1.1;margin:0 2px}' +
+      '.ic-frac-num{border-bottom:1.5px solid currentColor;padding:0 3px 1px}' +
+      '.ic-frac-den{padding:1px 3px 0}' +
+      '</style>' + defs + bgRect + textEls + '</svg>';
   }
 
   // Bettet die tatsächlich verwendeten Web-Fonts (aktuell nur "Handschrift")
@@ -1736,6 +1741,49 @@
           formatRow.appendChild(fb);
         });
         formBox.appendChild(formatRow);
+
+        // Formeleditor: Hoch-/Tiefstellen, Bruch, Symbol-Palette - bewusst
+        // als reines HTML (sup/sub, verschachtelte Spans) und Unicode-
+        // Zeichen umgesetzt statt mit einer externen Formel-Bibliothek wie
+        // KaTeX. Grund: der Zettel wird am Ende als statisches SVG-Bild
+        // exportiert (siehe buildTextFrameSVG/embedFontsInSVG) - externe
+        // Web-Fonts müssten dafür aufwendig als Base64 eingebettet werden
+        // und liefen Gefahr, im exportierten Bild nicht zu erscheinen.
+        // Hoch-/tiefgestellter Text und Unicode-Symbole nutzen dagegen
+        // einfach die bereits vorhandene Schriftart weiter.
+        var formulaRow = el('div', { class: 'ic-textframe-formatgrid' });
+        var supBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_superscript }, ['x\u00b2']);
+        supBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        supBtn.addEventListener('click', function () { document.execCommand('superscript', false, null); });
+        formulaRow.appendChild(supBtn);
+        var subBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_subscript }, ['x\u2082']);
+        subBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        subBtn.addEventListener('click', function () { document.execCommand('subscript', false, null); });
+        formulaRow.appendChild(subBtn);
+        var fracBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_fraction }, ['a/b']);
+        fracBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        fracBtn.addEventListener('click', function () {
+          // Fügt eine einfache, direkt editierbare Bruch-Struktur ein
+          // (zwei übereinanderliegende Spans mit Trennlinie) - Zähler/
+          // Nenner lassen sich danach ganz normal antippen und bearbeiten,
+          // da sie Teil desselben contenteditable-Bereichs sind.
+          var html = '<span class="ic-frac" contenteditable="false">' +
+            '<span class="ic-frac-num" contenteditable="true">a</span>' +
+            '<span class="ic-frac-den" contenteditable="true">b</span></span>&nbsp;';
+          document.execCommand('insertHTML', false, html);
+        });
+        formulaRow.appendChild(fracBtn);
+        formBox.appendChild(formulaRow);
+
+        var symbolRow = el('div', { class: 'ic-textframe-symbol-row' });
+        ['±', '×', '÷', '√', 'π', '∞', '≤', '≥', '≠', '≈', '∑', '∫', '∂', '∆',
+          'α', 'β', 'γ', 'θ', 'λ', 'μ', 'σ', 'φ', 'Ω', '→', '°', '‰'].forEach(function (sym) {
+          var sb = el('button', { class: 'ic-textframe-symbol-btn' }, [sym]);
+          sb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+          sb.addEventListener('click', function () { document.execCommand('insertText', false, sym); });
+          symbolRow.appendChild(sb);
+        });
+        formBox.appendChild(symbolRow);
       }
 
       // WordArt-Stile (Form/Rand/Schatten/Kontur) - nur im WordArt-Modus.

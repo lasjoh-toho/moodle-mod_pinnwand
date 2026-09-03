@@ -767,8 +767,17 @@ Details und Scoping-Entscheidungen. In Kurzform:
   starten sie eingeklappt.
 - Echte Werkzeugtrennung: Formatierungs-Werkzeuge nur im Zettel-Modus,
   WordArt zeigt stattdessen die WordArt-Stile.
-- Noch offen: Formeleditor für Zettel, Presets-Tabs mit Vorschau, selbst
-  gehostete Fonts als Alternative zum Google-Fonts-CDN.
+
+### Vierundvierzigste Überarbeitung — Formeleditor für den Zettel-Modus
+
+- **Neu: Formeleditor** - Hoch-/Tiefstellen, Bruch-Struktur, Symbol-
+  Palette (griechische Buchstaben, Rechenzeichen). Bewusst als reines
+  HTML/Unicode statt einer externen Formel-Bibliothek umgesetzt, damit es
+  im exportierten Bild zuverlässig funktioniert.
+- Nebenbei gefundener Bug behoben (tote Variablenreferenz hätte den
+  Export mehrteiliger Zettel zum Absturz gebracht).
+- Noch offen: Presets-Tabs mit Vorschau, selbst gehostete Fonts als
+  Alternative zum Google-Fonts-CDN.
 
 ## Bekannte Grenzen dieser Version
 

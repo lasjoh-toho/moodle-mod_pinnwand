@@ -548,6 +548,22 @@
 .ic-textframe-fmt-btn[title="Kursiv"], .ic-textframe-fmt-btn[title="Italic"] { font-style: italic; }
 .ic-textframe-fmt-btn[title="Unterstrichen"], .ic-textframe-fmt-btn[title="Underline"] { text-decoration: underline; }
 .ic-textframe-fmt-btn[title="Durchgestrichen"], .ic-textframe-fmt-btn[title="Strikethrough"] { text-decoration: line-through; }
+
+/* Bruch: Zähler über Nenner mit Trennlinie, beide direkt editierbar */
+.ic-frac {
+  display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle;
+  font-size: .82em; line-height: 1.1; margin: 0 2px;
+}
+.ic-frac-num { border-bottom: 1.5px solid currentColor; padding: 0 3px 1px; }
+.ic-frac-den { padding: 1px 3px 0; }
+
+/* Symbol-Palette: Griechische Buchstaben + gängige Rechenzeichen */
+.ic-textframe-symbol-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.ic-textframe-symbol-btn {
+  width: 30px; height: 30px; border-radius: 6px; border: none; background: #1b1d22;
+  color: var(--ic-text); font-size: 1rem; cursor: pointer;
+}
+.ic-textframe-symbol-btn:hover { background: #24262c; }
 .ic-textframe-palette { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .ic-color-swatch {
   width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; padding: 0;

@@ -1476,3 +1476,35 @@ Vierunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
 - Formeleditor für den Zettel-Editor - eigenständige, große neue
   Funktion (mathematische Notation rendern), noch nicht begonnen.
 - Selbst gehostete Fonts als Admin-Alternative zum Google-Fonts-CDN.
+
+---
+
+## Phase 42 — Formeleditor für den Zettel-Modus (Teil 3/mehrere) ✅
+
+Fünfunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`,
+neue Strings.
+
+**Architekturentscheidung**: statt einer echten LaTeX-Bibliothek wie
+KaTeX ein bewusst leichtgewichtiger Ansatz aus reinem HTML (`<sup>`/
+`<sub>`, verschachtelte Spans für Brüche) und Unicode-Symbolen. Grund:
+der Zettel wird am Ende als statisches SVG-Bild exportiert
+(`buildTextFrameSVG`/`embedFontsInSVG`) - eine externe Formel-Bibliothek
+würde eigene Web-Fonts benötigen, die aufwendig als Base64 eingebettet
+werden müssten und sonst im gespeicherten Bild nicht erscheinen würden.
+Hoch-/tiefgestellter Text und Unicode-Symbole nutzen dagegen einfach die
+bereits vorhandene Schriftart weiter - funktioniert dadurch zuverlässig
+sowohl live im Editor als auch im exportierten Bild.
+
+- [x] Hoch-/Tiefstellen-Buttons (native `execCommand`).
+- [x] Bruch-Button fügt eine direkt editierbare Zähler/Nenner-Struktur
+  ein (Trennlinie per CSS) - Bruch-CSS wird zusätzlich direkt ins
+  exportierte SVG eingebettet, damit die Darstellung auch im
+  gespeicherten Bild erhalten bleibt.
+- [x] Symbol-Palette mit griechischen Buchstaben und gängigen
+  Rechenzeichen.
+- [x] Nur im Zettel-Modus sichtbar (nicht in WordArt).
+- [x] **Nebenbei gefundener Bug behoben**: eine tote Referenz auf die bei
+  der Font-Katalog-Umstellung (Phase 40) entfernte Variable `fontDef`
+  hätte beim Export von Zetteln mit mehreren Textobjekten (Breiten-
+  Schätzung für sekundäre Textobjekte) eine ReferenceError ausgelöst und
+  das Speichern verhindert.
