@@ -864,6 +864,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Neuer Button im Lupenmenü blendet alle Medien aus, sodass nur Texte/
   Wortfelder sichtbar bleiben.
 
+### Sechsundfünfzigste Überarbeitung — Layout-Korrektur, Stylus öffnet nach oben, Einblenden vor Kameraschwenk
+
+- Zentrales Menü wieder unabhängig positioniert, Undo/Redo jetzt neben
+  dem Stylus-Button statt neben dem zentralen Menü.
+- Stylus-Werkzeugleiste auf der Pinnwand öffnet sich jetzt nach oben.
+- Präsentation: ein ausgeblendetes Objekt wird beim Fokuswechsel zuerst
+  eingeblendet, dann erst schwenkt die Kamera dorthin.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

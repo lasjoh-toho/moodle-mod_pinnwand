@@ -292,15 +292,12 @@
 }
 /* Schwebende runde Icon-Buttons, alle in einer Zeile unter der Pinnwand
    (oben ist jetzt die einheitliche Kopfzeile mit Titel + Schließen-Button). */
-.ic-bottom-bar {
-  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
-  z-index: 15; display: flex; align-items: center; gap: 24px;
-}
 .ic-fab-row {
-  display: flex; gap: 10px;
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 15; display: flex; gap: 10px;
 }
 .ic-undo-bar {
-  display: flex; gap: 8px;
+  position: absolute; bottom: 14px; left: 70px; z-index: 15; display: flex; gap: 8px;
 }
 .ic-undo-bar .ic-fab.disabled { opacity: .35; pointer-events: none; }
 .ic-fab {
@@ -327,11 +324,12 @@
 }
 .ic-stylus-bar {
   position: absolute; bottom: 14px; left: 8px; z-index: 30;
-  display: flex; align-items: center; gap: 8px;
+  display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px;
 }
 .ic-stylus-tools {
-  display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 20px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 20px;
   background: rgba(20,21,24,.75); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  max-width: min(80vw, 420px);
 }
 .ic-stylus-size { width: 70px; }
 .ic-board-ink-layer {

@@ -1718,3 +1718,23 @@ Strings.
 - [x] Neuer Button im Lupenmenü (durchgestrichenes Bild-Symbol): blendet
   alle Medien (Fotos ohne Wortfeld-Daten) aus, sodass nur Texte/
   Wortfelder auf dem Board sichtbar bleiben.
+
+---
+
+## Phase 52 — Layout-Korrektur Undo/Redo/zentrales Menü, Stylus öffnet nach oben, Einblenden vor Kameraschwenk ✅
+
+Fünfundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] Der gemeinsame Flex-Container aus dem letzten Durchgang führte zu
+  einem unerwünschten Layout (Undo/Redo unter statt neben dem zentralen
+  Menü, dieses dadurch verschoben) - zurückgebaut. Zentrales Menü wieder
+  unabhängig und zentriert wie ursprünglich. Undo/Redo jetzt stattdessen
+  rechts neben dem Stylus-Button (unten links) positioniert.
+- [x] Stylus-Werkzeugleiste auf der Pinnwand öffnet sich jetzt nach oben
+  (column-reverse) statt zur Seite, ähnlich der Galerieansicht - macht
+  außerdem Platz für die neu positionierten Undo/Redo-Buttons.
+- [x] **Präsentation**: ein durch Z-Ebenen-Verdeckung ausgeblendetes
+  Objekt, das jetzt in den Fokus kommt, wird zuerst schnell eingeblendet
+  und ERST DANACH schwenkt die Kamera dorthin - vorher geschah das
+  Einblenden erst NACH Abschluss der Kamerafahrt, wodurch das Objekt
+  scheinbar aus dem Nichts auftauchte.

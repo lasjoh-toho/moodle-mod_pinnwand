@@ -3264,21 +3264,17 @@
     addBtn.addEventListener('click', function () { if (!maxreached) { openAddModal(); } });
     fabRow.appendChild(addBtn);
 
-    // Undo/Redo und zentrales Menü in einem gemeinsamen Flex-Container,
-    // damit sie sich nie überlagern können, egal wie viele Buttons im
-    // zentralen Menü gerade sichtbar sind (variiert je nach Kontext) -
-    // unabhängige absolute Positionierung mit geschätzten Offsets hatte
-    // zuvor zu Überlagerungen geführt.
-    var bottomBar = el('div', { class: 'ic-bottom-bar' });
+    body.appendChild(fabRow);
+
+    // Undo/Redo rechts neben dem Stylus-Button (unten links) statt neben
+    // dem zentralen Menü, damit sie sich nie überlagern können.
     var undoBar = el('div', { class: 'ic-undo-bar' });
     var undoBtn = el('button', { class: 'ic-fab' + (undoStack.length ? '' : ' disabled'), title: S.undo }, [icon('undo')]);
     undoBtn.addEventListener('click', function () { performUndo(); });
     var redoBtn = el('button', { class: 'ic-fab' + (redoStack.length ? '' : ' disabled'), title: S.redo }, [icon('redo')]);
     redoBtn.addEventListener('click', function () { performRedo(); });
     undoBar.appendChild(undoBtn); undoBar.appendChild(redoBtn);
-    bottomBar.appendChild(undoBar);
-    bottomBar.appendChild(fabRow);
-    body.appendChild(bottomBar);
+    body.appendChild(undoBar);
 
     if (state.threadPanelOpen) { body.appendChild(renderThreadPanel()); }
     if (state.streamPanelOpen) { body.appendChild(renderStreamPanel()); }
@@ -4498,17 +4494,22 @@
       if (!s) { return; }
       var target = targetFor(s);
 
+      // Das neue Ziel zuerst schnell einblenden (falls es zuvor wegen
+      // einer höheren Z-Ebene ausgeblendet war), DANN erst die Kamera
+      // dorthin schwenken - sorgt für Orientierung, da das Objekt beim
+      // Ankommen der Kamera schon sichtbar ist statt erst danach
+      // "aufzutauchen".
+      updateOcclusion();
+
       if (skipTransition || fromIdx === currentIdx || !currentTransform) {
         if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
         applyTransform(target.scale, target.cx, target.cy, target.rot);
         currentTransform = target;
-        updateOcclusion();
         return;
       }
 
       animateCamera(currentTransform, target, function () {
         currentTransform = target;
-        updateOcclusion();
       });
       currentTransform = target;
     }
