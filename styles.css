@@ -866,8 +866,8 @@
 .ic-moderate-row {
   display: flex; align-items: center; gap: 40px; padding: 6px 0;
 }
-.ic-moderate-thumb { position: relative; flex: 0 0 auto; align-self: stretch; display: flex; align-items: center; }
-.ic-thumb-cluster { display: flex; align-items: stretch; align-self: stretch; gap: 8px; flex: 0 0 auto; }
+.ic-moderate-thumb { position: relative; flex: 0 0 auto; }
+.ic-thumb-cluster { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .ic-thumb-cluster-controls { display: none; flex-direction: column; gap: 6px; align-items: flex-start; }
 .ic-thumb-cluster-controls .ic-me-check { font-size: .7rem; padding: 3px 8px; white-space: nowrap; }
 .ic-thumb-cluster-controls .ic-btn-danger { padding: 6px 10px; }
@@ -893,7 +893,8 @@
 }
 .ic-thumb-pin-otherzone.pinned { top: -15px; left: auto; right: -58px; transform: none; }
 .ic-thumb-btn-del {
-  top: auto; bottom: 0; right: 3px; background: none; padding: 0;
+  top: auto; bottom: 0; right: 0; background: none; padding: 0;
+  width: 26px; height: 26px;
   color: #e0342a; align-items: flex-end; filter: drop-shadow(0 2px 4px rgba(0,0,0,.7));
 }
 .ic-thumb-btn-del svg { width: 18px; height: 18px; }

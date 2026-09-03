@@ -1875,3 +1875,17 @@ werden kann.
   wie hoch die Zeile durch die Felder wird. Horizontale Position bleibt
   dabei nah am Bild (Buttons sind weiterhin Kinder des Thumbnails, nicht
   der ganzen, ggf. breiten Zeile).
+
+---
+
+## Phase 59 — Mülleimer-Position korrigiert: bündig, nicht außerhalb ✅
+
+Zweiundfünfzigster Feedback-Durchgang. Betrifft: `styles.css`.
+
+Der "align-self: stretch"-Ansatz aus dem letzten Durchgang führte zu
+unerwartetem Verhalten (Mülleimer landete am oberen statt unteren Rand) -
+zurückgebaut. Statt einer negativen Positionierung außerhalb der Box
+(wie fälschlich zwischenzeitlich versucht) jetzt einfach und robust
+`bottom: 0` relativ zum Thumbnail selbst - bündig mit dem unteren
+Bildrand, nicht darüber hinausragend. Rotes Icon auf transparentem
+Hintergrund bestätigt/beibehalten.

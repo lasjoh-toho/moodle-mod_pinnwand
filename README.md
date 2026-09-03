@@ -919,6 +919,12 @@ Details und Scoping-Entscheidungen. In Kurzform:
   relativ zum gesamten Eintrag - bei mehrzeiligen Feldern lag der
   untere Rand dadurch nicht am tatsächlichen Zeilenende. Jetzt korrekt.
 
+### Dreiundsechzigste Überarbeitung — Mülleimer-Position korrigiert
+
+- Der Stretch-Ansatz aus dem letzten Durchgang führte zu unerwartetem
+  Verhalten (Mülleimer am oberen statt unteren Rand) - zurückgebaut.
+  Jetzt einfach und robust bündig mit dem unteren Bildrand.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
