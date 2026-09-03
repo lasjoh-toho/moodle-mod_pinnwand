@@ -872,6 +872,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Präsentation: ein ausgeblendetes Objekt wird beim Fokuswechsel zuerst
   eingeblendet, dann erst schwenkt die Kamera dorthin.
 
+### Siebenundfünfzigste Überarbeitung — Undo/Redo-Kern-Bugfix, saubere Icons, vertikale Annotations-Ausrichtung
+
+- **Kern-Bugfix**: Undo/Redo-Buttons blieben nach einer einfachen
+  Verschiebung ohne offenes Faden-Panel fälschlich deaktiviert stehen
+  und reagierten nicht auf Klicks - jetzt werden sie direkt bei jeder
+  Aktion synchronisiert.
+- Undo/Redo-Icons durch sauberere Pfeil-Pfade ersetzt.
+- Stylus-Werkzeuge stapeln sich jetzt in echten Zeilen vertikal.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

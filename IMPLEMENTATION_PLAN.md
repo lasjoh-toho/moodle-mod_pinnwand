@@ -1738,3 +1738,23 @@ Fünfundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
   und ERST DANACH schwenkt die Kamera dorthin - vorher geschah das
   Einblenden erst NACH Abschluss der Kamerafahrt, wodurch das Objekt
   scheinbar aus dem Nichts auftauchte.
+
+---
+
+## Phase 53 — Undo/Redo-Kern-Bugfix, saubere Icons, echte vertikale Annotations-Ausrichtung ✅
+
+Sechsundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Kern-Bugfix Undo/Redo**: der aktivierte/deaktivierte Zustand der
+  Buttons wurde nur bei einem vollständigen Re-Render aktualisiert - das
+  passierte nach einer einfachen Verschiebung ohne offenes Faden-Panel
+  aber gar nicht. Der Button blieb dadurch fälschlich als "deaktiviert"
+  (`pointer-events:none`) stehen und reagierte nicht auf Klicks, obwohl
+  der Undo-Stack bereits einen gültigen Eintrag hatte. Jetzt werden die
+  Buttons direkt bei jeder Undo/Redo-relevanten Aktion synchronisiert,
+  unabhängig vom nächsten vollständigen Re-Render.
+- [x] Undo/Redo-Icons durch bewährte, sauberere Pfeil-Pfade ersetzt (die
+  vorherigen eigenen Pfade sahen unsauber/nicht ganz stimmig aus).
+- [x] Stylus-Werkzeuge auf der Pinnwand jetzt in echten Zeilen gegliedert
+  (Farben-Zeile, Werkzeuge-Zeile), die sich sauber vertikal stapeln -
+  vorher eine einzige breite, nur umbrechende Reihe.

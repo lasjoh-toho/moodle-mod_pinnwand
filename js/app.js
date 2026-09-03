@@ -11,16 +11,23 @@
   // kein vollständiges Undo für jede denkbare Aktion. Command-Pattern: jeder
   // Eintrag kennt seine eigene undo()/redo()-Funktion.
   var undoStack = [], redoStack = [];
+  var undoBtnEl = null, redoBtnEl = null;
+  function syncUndoRedoButtons() {
+    if (undoBtnEl) { undoBtnEl.classList.toggle('disabled', !undoStack.length); }
+    if (redoBtnEl) { redoBtnEl.classList.toggle('disabled', !redoStack.length); }
+  }
   function pushUndo(entry) {
     undoStack.push(entry);
     if (undoStack.length > 50) { undoStack.shift(); }
     redoStack = [];
+    syncUndoRedoButtons();
   }
   function performUndo() {
     var entry = undoStack.pop();
     if (!entry) { return; }
     entry.undo();
     redoStack.push(entry);
+    syncUndoRedoButtons();
     render();
   }
   function performRedo() {
@@ -28,6 +35,7 @@
     if (!entry) { return; }
     entry.redo();
     undoStack.push(entry);
+    syncUndoRedoButtons();
     render();
   }
   document.addEventListener('keydown', function (ev) {
@@ -1988,8 +1996,8 @@
     circle: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>',
     eye: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
     trash: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
-    undo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.4L3 7"/></svg>',
-    redo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7.4L21 7"/></svg>',
+    undo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>',
+    redo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
     fonts: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V6l4-4 4 4v14"/><path d="M4 14h8"/><path d="M15 20l4-9 4 9"/><path d="M16.5 16.5h5"/></svg>',
     nomedia: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M21 15l-5-5-5 5"/><line x1="3" y1="21" x2="21" y2="3"/></svg>',
     play: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>',
@@ -3213,12 +3221,13 @@
     stylusBar.appendChild(stylusBtn);
     if (state.boardDrawMode) {
       var stylusTools = el('div', { class: 'ic-stylus-tools' });
+      var stylusColorRow = el('div', { class: 'ic-stylus-tools-row' });
       INK_COLORS.forEach(function (c) {
         var sw = el('button', {
           class: 'ic-color-swatch' + (state.boardDrawColor === c && !state.boardDrawErase ? ' active' : ''), style: 'background:' + c
         });
         sw.addEventListener('click', function () { state.boardDrawColor = c; state.boardDrawErase = false; render(); });
-        stylusTools.appendChild(sw);
+        stylusColorRow.appendChild(sw);
       });
       // Palettenbutton: freie Farbwahl über den nativen Farbwähler, für
       // mehr Auswahl als die feste Farbliste.
@@ -3228,15 +3237,18 @@
       stylusCustomColor.addEventListener('change', function () {
         state.boardDrawColor = stylusCustomColor.value; state.boardDrawErase = false; render();
       });
-      stylusTools.appendChild(stylusCustomColor);
+      stylusColorRow.appendChild(stylusCustomColor);
+      stylusTools.appendChild(stylusColorRow);
+
+      var stylusActionRow = el('div', { class: 'ic-stylus-tools-row' });
       var eraseBtn = el('button', { class: 'ic-icon-btn' + (state.boardDrawErase ? ' active' : ''), title: S.erase }, [icon('eraser')]);
       eraseBtn.addEventListener('click', function () { state.boardDrawErase = !state.boardDrawErase; render(); });
-      stylusTools.appendChild(eraseBtn);
+      stylusActionRow.appendChild(eraseBtn);
       var sizeSlider = el('input', {
         type: 'range', min: '0.004', max: '0.03', step: '0.002', value: String(state.boardDrawWidth || 0.01), class: 'ic-stylus-size'
       });
       sizeSlider.addEventListener('input', function () { state.boardDrawWidth = parseFloat(sizeSlider.value); });
-      stylusTools.appendChild(sizeSlider);
+      stylusActionRow.appendChild(sizeSlider);
       // Ausblenden: blendet die eigenen Anmerkungen aus, ohne sie zu
       // löschen (rein visuell, clientseitig) - ein erneuter Klick blendet
       // sie wieder ein.
@@ -3244,7 +3256,7 @@
         class: 'ic-icon-btn' + (state.boardInkHidden ? ' active' : ''), title: state.boardInkHidden ? S.showannotations : S.hideannotations
       }, [icon('eye')]);
       hideInkBtn.addEventListener('click', function () { state.boardInkHidden = !state.boardInkHidden; render(); });
-      stylusTools.appendChild(hideInkBtn);
+      stylusActionRow.appendChild(hideInkBtn);
       // Komplett löschen: entfernt alle eigenen Striche auf diesem Board
       // endgültig (mit Rückfrage, da nicht rückgängig machbar).
       var clearInkBtn = el('button', { class: 'ic-icon-btn', title: S.clearannotations }, [icon('trash')]);
@@ -3254,7 +3266,8 @@
         callAjax('mod_pinnwand_save_board_ink', { cmid: cfg.cmid, boardid: state.currentBoard, strokes: '[]' });
         render();
       });
-      stylusTools.appendChild(clearInkBtn);
+      stylusActionRow.appendChild(clearInkBtn);
+      stylusTools.appendChild(stylusActionRow);
       stylusBar.appendChild(stylusTools);
     }
     body.appendChild(stylusBar);
@@ -3275,6 +3288,7 @@
     redoBtn.addEventListener('click', function () { performRedo(); });
     undoBar.appendChild(undoBtn); undoBar.appendChild(redoBtn);
     body.appendChild(undoBar);
+    undoBtnEl = undoBtn; redoBtnEl = redoBtn;
 
     if (state.threadPanelOpen) { body.appendChild(renderThreadPanel()); }
     if (state.streamPanelOpen) { body.appendChild(renderStreamPanel()); }
