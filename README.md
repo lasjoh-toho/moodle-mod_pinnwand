@@ -836,6 +836,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Beim Verlassen der Klassenübersicht werden eigene Fotos und Post-
   Stream jetzt frisch nachgeladen.
 
+### Dreiundfünfzigste Überarbeitung — Post-Stream: Thumbs bei älteren Einträgen, dreizeilige Beschriftung
+
+- Eingeklappte (ältere) Karten zeigen wieder einen kleinen Thumb links.
+- Dreizeilige, unten ausgerichtete Beschriftung: Titel/Autor+Jahr/
+  hochladende Person (je nur wenn vorhanden).
+- Vollständig dargestellte (neue) Karten zeigen nur die hochladende
+  Person - ersetzt den bisherigen "Eigenes Foto"-Platzhalter.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

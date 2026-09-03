@@ -1655,3 +1655,22 @@ Einundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
   und Post-Stream jetzt frisch nachgeladen, damit während der
   Klassenansicht vorgenommene Pin-Änderungen sofort in der eigenen
   Pinnwand/Seitenleiste ankommen, statt erst beim nächsten Zufallsauslöser.
+
+---
+
+## Phase 49 — Post-Stream: Thumbs bei älteren Einträgen, dreizeilige Beschriftung ✅
+
+Zweiundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`,
+`classes/external.php`.
+
+- [x] `get_stream_photos` liefert jetzt zusätzlich `sourceauthor` und
+  `sourceyear` (waren bisher nicht Teil der Antwort).
+- [x] Eingeklappte (ältere) Karten zeigen wieder einen kleinen Thumb
+  links (vorher komplett ausgeblendet), Kollaps-Höhe entsprechend
+  vergrößert (26px auf 48px).
+- [x] **Dreizeilige, unten ausgerichtete Beschriftung** bei eingeklappten
+  Karten: Titel (nur falls vergeben) / Autor+Jahr der Vorlage (nur falls
+  vorhanden) / hochladende Person (immer).
+- [x] Bei vollständig dargestellten (neuen) Karten erscheint nur die
+  hochladende Person - ersetzt den bisherigen "Eigenes Foto"-Platzhalter
+  bei eigenen Einreichungen durch den tatsächlichen eigenen Namen.

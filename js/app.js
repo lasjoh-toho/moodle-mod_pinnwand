@@ -3548,7 +3548,7 @@
         cardsWrap.appendChild(el('p', { class: 'ic-hint' }, [S.stream_empty]));
         return;
       }
-      var FULL_H = 220, COLLAPSED_H = 26, GAP = 6;
+      var FULL_H = 220, COLLAPSED_H = 48, GAP = 6;
       list.forEach(function (p, idx) {
         var collapsed = idx >= 2;
         var card = el('div', {
@@ -3570,8 +3570,21 @@
           if (cardImg.naturalHeight > cardImg.naturalWidth) { card.classList.add('ic-stream-card-portrait'); }
         });
         card.appendChild(cardImg);
-        card.appendChild(el('span', { class: 'ic-stream-card-label' },
-          [p.mine ? (p.sourcetitle || S.stream_own_label) : (p.userfullname + (p.sourcetitle ? ' · ' + p.sourcetitle : ''))]));
+        var labelWrap = el('div', { class: 'ic-stream-card-label' });
+        if (collapsed) {
+          // Eingeklappt (ältere Einreichung): bis zu drei Zeilen, unten
+          // ausgerichtet - Titel (falls vergeben), Autor/Jahr der Vorlage
+          // (falls vorhanden), zuletzt immer die hochladende Person.
+          if (p.sourcetitle) { labelWrap.appendChild(el('span', { class: 'ic-stream-label-title' }, [p.sourcetitle])); }
+          var authorYear = [p.sourceauthor, p.sourceyear].filter(Boolean).join(' · ');
+          if (authorYear) { labelWrap.appendChild(el('span', { class: 'ic-stream-label-authoryear' }, [authorYear])); }
+          labelWrap.appendChild(el('span', { class: 'ic-stream-label-uploader' }, [p.userfullname]));
+        } else {
+          // Vollständig dargestellt (neue Einreichung): nur die
+          // hochladende Person darunter.
+          labelWrap.appendChild(el('span', { class: 'ic-stream-label-uploader' }, [p.userfullname]));
+        }
+        card.appendChild(labelWrap);
 
         function centerPoint() {
           var wrapEl = document.querySelector('.ic-canvas-wrap');

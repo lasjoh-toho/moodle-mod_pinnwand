@@ -2025,6 +2025,8 @@ class mod_pinnwand_external extends external_api {
                     $context->id, 'mod_pinnwand', 'photo', $r->id, '/', $file->get_filename()
                 ),
                 'sourcetitle' => (string) $r->sourcetitle,
+                'sourceauthor' => (string) ($r->sourceauthor ?? ''),
+                'sourceyear' => (string) ($r->sourceyear ?? ''),
                 'timecreated' => (int) $r->timecreated,
             ];
         };
@@ -2069,6 +2071,8 @@ class mod_pinnwand_external extends external_api {
                 'mine' => new external_value(PARAM_BOOL, 'Eigenes Foto (sonst: fremde Einreichung für die Lehrkraft)'),
                 'url' => new external_value(PARAM_RAW, 'URL'),
                 'sourcetitle' => new external_value(PARAM_TEXT, 'Titel'),
+                'sourceauthor' => new external_value(PARAM_TEXT, 'Autor der Vorlage'),
+                'sourceyear' => new external_value(PARAM_TEXT, 'Jahr'),
                 'timecreated' => new external_value(PARAM_INT, 'Eingereicht am'),
             ])),
         ]);
