@@ -1596,12 +1596,22 @@
     // selbst (nicht nach der Bildschirmgröße), siehe CSS .ic-tf-landscape/
     // .ic-tf-portrait.
     var blocksWrap = el('div', { class: 'ic-textframe-blocks ' + (tf.w >= tf.h ? 'ic-tf-landscape' : 'ic-tf-portrait') });
-    var blockTemplates = el('div', { class: 'ic-textframe-block' });
-    blockTemplates.appendChild(el('h3', { class: 'ic-textframe-block-title' }, [S.tfblock_templates]));
-    var blockFonts = el('div', { class: 'ic-textframe-block' });
-    blockFonts.appendChild(el('h3', { class: 'ic-textframe-block-title' }, [S.tfblock_fonts]));
-    var blockForm = el('div', { class: 'ic-textframe-block' });
-    blockForm.appendChild(el('h3', { class: 'ic-textframe-block-title' }, [S.tfblock_form]));
+    // Akkordeon: Überschrift antippen klappt den jeweiligen Block ein/aus -
+    // auf dem Handy starten alle Blöcke eingeklappt (siehe CSS), auf
+    // größeren Bildschirmen bleiben sie offen.
+    function makeAccordionBlock(titleText) {
+      var blockEl = el('div', { class: 'ic-textframe-block' });
+      var titleEl = el('h3', { class: 'ic-textframe-block-title' }, [titleText]);
+      var contentEl = el('div', { class: 'ic-textframe-block-content' });
+      titleEl.addEventListener('click', function () { blockEl.classList.toggle('ic-tf-expanded'); });
+      blockEl.appendChild(titleEl);
+      blockEl.appendChild(contentEl);
+      blockEl.content = contentEl;
+      return blockEl;
+    }
+    var blockTemplates = makeAccordionBlock(S.tfblock_templates);
+    var blockFonts = makeAccordionBlock(S.tfblock_fonts);
+    var blockForm = makeAccordionBlock(S.tfblock_form);
     blocksWrap.appendChild(blockTemplates);
     blocksWrap.appendChild(blockFonts);
     blocksWrap.appendChild(blockForm);
@@ -1615,7 +1625,7 @@
       b.addEventListener('click', function () { tf.preset = p.id; render(); });
       presetRow.appendChild(b);
     });
-    blockTemplates.appendChild(presetRow);
+    blockTemplates.content.appendChild(presetRow);
 
     // Block 2 (Schriften) + Block 3 (Form/Rand/Schatten/Kontur + Farbpalette)
     // werden isoliert neu aufgebaut (refreshControls), NIE über ein volles
@@ -1623,8 +1633,8 @@
     // der Bearbeitung zerstört wird.
     var fontsBox = el('div', {});
     var formBox = el('div', {});
-    blockFonts.appendChild(fontsBox);
-    blockForm.appendChild(formBox);
+    blockFonts.content.appendChild(fontsBox);
+    blockForm.content.appendChild(formBox);
     function refreshControls() {
       fontsBox.innerHTML = '';
       formBox.innerHTML = '';
@@ -1708,22 +1718,25 @@
         objEl.style.cssText += ';' + (wordartCssFor(active, preset.text) || ('color:' + (active.color || preset.text) + ';'));
       }
 
-      // Fett/Kursiv/Unterstrichen/Durchgestrichen/Aufzählung wirken auf die
-      // aktuelle Textauswahl (execCommand) - mousedown+preventDefault hält
-      // die Selektion im contenteditable-Feld aktiv, obwohl auf einen
-      // Button außerhalb geklickt wird.
-      var formatRow = el('div', { class: 'ic-textframe-formatgrid' });
-      [
-        ['bold', 'B', S.format_bold], ['italic', 'I', S.format_italic],
-        ['underline', 'U', S.format_underline], ['strikeThrough', 'S', S.format_strike],
-        ['insertUnorderedList', '\u2022', S.format_bullets]
-      ].forEach(function (cmd) {
-        var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [cmd[1]]);
-        fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-        fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
-        formatRow.appendChild(fb);
-      });
-      formBox.appendChild(formatRow);
+      // Fett/Kursiv/Unterstrichen/Durchgestrichen/Aufzählung: nur im
+      // Zettel-Modus - dient der übersichtlichen Textstruktur. WordArt
+      // ("wilde" Formatierung) nutzt stattdessen die WordArt-Stile weiter
+      // unten (3D/Rand/Glow/Schatten) statt dieser feingliedrigen
+      // Text-Werkzeuge.
+      if (!state.wordArtMode) {
+        var formatRow = el('div', { class: 'ic-textframe-formatgrid' });
+        [
+          ['bold', 'B', S.format_bold], ['italic', 'I', S.format_italic],
+          ['underline', 'U', S.format_underline], ['strikeThrough', 'S', S.format_strike],
+          ['insertUnorderedList', '\u2022', S.format_bullets]
+        ].forEach(function (cmd) {
+          var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [cmd[1]]);
+          fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+          fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
+          formatRow.appendChild(fb);
+        });
+        formBox.appendChild(formatRow);
+      }
 
       // WordArt-Stile (Form/Rand/Schatten/Kontur) - nur im WordArt-Modus.
       // Jeder Button zeigt seinen eigenen Namen bereits im jeweiligen Stil -

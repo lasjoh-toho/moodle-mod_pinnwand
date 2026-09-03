@@ -503,7 +503,17 @@
 }
 .ic-textframe-block-title {
   font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-  color: var(--ic-muted); margin-bottom: 6px;
+  color: var(--ic-muted); margin-bottom: 6px; cursor: pointer; user-select: none;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.ic-textframe-block-title::after { content: '\2212'; font-size: .9rem; } /* Minus = offen */
+@media (max-width: 640px) {
+  /* Auf dem Handy starten alle Blöcke eingeklappt (Akkordeon) - Überschrift
+     antippen öffnet den jeweiligen Block. */
+  .ic-textframe-block-content { display: none; }
+  .ic-textframe-block.ic-tf-expanded .ic-textframe-block-content { display: block; }
+  .ic-textframe-block-title::after { content: '+'; }
+  .ic-textframe-block.ic-tf-expanded .ic-textframe-block-title::after { content: '\2212'; }
 }
 .ic-textframe-wordart-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
 .ic-wordart-preset-btn {

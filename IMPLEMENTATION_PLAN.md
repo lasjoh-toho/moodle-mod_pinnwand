@@ -1448,3 +1448,31 @@ neue Strings.
 - Selbst gehostete Fonts als admin-konfigurierbare Alternative zum
   Google-Fonts-CDN (eigene Infrastruktur-Aufgabe: Font-Dateien
   herunterladen/speichern/ausliefern).
+
+---
+
+## Phase 41 — Akkordeon-Blöcke, echte Zettel-/WordArt-Werkzeugtrennung (Teil 2/mehrere) ✅
+
+Vierunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Akkordeon-Verhalten für die drei Werkzeug-Blöcke** ergänzt:
+  Überschrift antippen klappt den jeweiligen Block ein/aus. Auf dem Handy
+  (≤640px) starten alle Blöcke eingeklappt, auf größeren Bildschirmen
+  bleiben sie offen. Eigener Inhalts-Wrapper pro Block, damit das
+  Ein-/Ausklappen nur dessen `display` umschaltet, ohne das interne
+  Flex-Layout der enthaltenen Zeilen zu zerstören.
+- [x] **Echte Werkzeugtrennung**: die Formatierungs-Werkzeuge (Fett/
+  Kursiv/Unterstrichen/Durchgestrichen/Aufzählung) erscheinen jetzt nur
+  im Zettel-Modus - WordArt zeigt stattdessen ausschließlich die
+  WordArt-Stile (3D/Rand/Glow/Schatten) und den Fonts-Katalog-Button.
+
+**Bewusst noch nicht umgesetzt:**
+- Eigene kleine Textarea oben links im WordArt-Editor (Tippen funktioniert
+  bereits direkt im WordArt-Textobjekt selbst - die zusätzliche Textarea
+  wäre ein rein redundanter Komfort-Zusatzweg).
+- "Presets" als eigener Button mit Tab-Vorschau (die 6 WordArt-Stile sind
+  aktuell direkt als Buttons mit eingebauter Live-Vorschau sichtbar, ohne
+  separates Tab-System - deckt den Kernbedarf einfacher ab).
+- Formeleditor für den Zettel-Editor - eigenständige, große neue
+  Funktion (mathematische Notation rendern), noch nicht begonnen.
+- Selbst gehostete Fonts als Admin-Alternative zum Google-Fonts-CDN.

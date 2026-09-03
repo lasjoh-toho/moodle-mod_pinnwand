@@ -760,9 +760,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - **Neu: kuratierte Google-Fonts-Bibliothek** (~220 Schriften, 16
   Kategorien) im WordArt-Modus - Kategorie antippen lädt deren Schriften
   erst dann nach, jede zeigt sich direkt in ihrer eigenen Schrift.
-- Noch offen: echte Trennung der Werkzeuge zwischen Zettel- und
-  WordArt-Editor, Akkordeon-Struktur fürs Handy, Presets-Tabs mit
-  Vorschau, selbst gehostete Fonts als Alternative zum Google-Fonts-CDN.
+
+### Dreiundvierzigste Überarbeitung — Akkordeon-Blöcke, echte Zettel-/WordArt-Trennung
+
+- Akkordeon-Verhalten für die drei Werkzeug-Blöcke - auf dem Handy
+  starten sie eingeklappt.
+- Echte Werkzeugtrennung: Formatierungs-Werkzeuge nur im Zettel-Modus,
+  WordArt zeigt stattdessen die WordArt-Stile.
+- Noch offen: Formeleditor für Zettel, Presets-Tabs mit Vorschau, selbst
+  gehostete Fonts als Alternative zum Google-Fonts-CDN.
 
 ## Bekannte Grenzen dieser Version
 
