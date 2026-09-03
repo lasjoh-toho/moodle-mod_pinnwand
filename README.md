@@ -827,6 +827,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Farbtausch: Pin in Meine Bilder/Klassenansicht jetzt blau, Entfernen-
   Button für zusätzliche Objekt-Platzierungen auf dem Board jetzt rot.
 
+### Zweiundfünfzigste Überarbeitung — Pin-Farblogik, Mülleimer Meine Bilder, Refresh nach Klassenübersicht
+
+- Befestigter (mittiger) Pin ist jetzt rot, unbefestigter bleibt blau -
+  in beiden Ansichten.
+- Mülleimer in "Meine Bilder" ebenfalls transparent/rot/unten
+  ausgerichtet.
+- Beim Verlassen der Klassenübersicht werden eigene Fotos und Post-
+  Stream jetzt frisch nachgeladen.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

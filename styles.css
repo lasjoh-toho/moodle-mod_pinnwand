@@ -209,13 +209,14 @@
 .ic-gallery .ic-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
 .ic-gallery .ic-thumb .ic-del {
   position: absolute; bottom: -34px; right: 0; z-index: 2;
-  background: rgba(0,0,0,.6); color: #fff; border: none;
-  width: 30px; height: 30px; border-radius: 50%; padding: 0;
-  display: flex; align-items: center; justify-content: center;
+  background: none; color: #e0342a; border: none;
+  width: 30px; height: 30px; padding: 0;
+  display: flex; align-items: flex-end; justify-content: center;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,.7));
 }
 .ic-gallery .ic-thumb .ic-del svg { width: 18px; height: 18px; }
-.ic-gallery .ic-thumb .ic-del.ic-del-shared { background: #e0503f; }
-.ic-gallery .ic-thumb .ic-del.ic-del-multi { background: #d9a520; color: #1a1a1a; }
+.ic-gallery .ic-thumb .ic-del.ic-del-shared { background: #e0503f; border-radius: 50%; filter: none; color: #fff; }
+.ic-gallery .ic-thumb .ic-del.ic-del-multi { background: #d9a520; border-radius: 50%; filter: none; color: #1a1a1a; }
 .ic-gallery .ic-thumb .ic-pin {
   position: absolute; top: -34px; right: 0; left: auto; transform: none; z-index: 2;
   background: none; border: none; padding: 0;
@@ -225,7 +226,7 @@
 }
 .ic-gallery .ic-thumb .ic-pin:hover { transform: translateY(-3px); }
 .ic-gallery .ic-thumb.ic-thumb-pinned .ic-pin {
-  top: -20px; left: 50%; right: auto; transform: translateX(-50%);
+  top: -20px; left: 50%; right: auto; transform: translateX(-50%); color: #e0342a;
 }
 .ic-gallery .ic-thumb.ic-thumb-pinned .ic-pin:hover { transform: translateX(-50%) translateY(-3px); }
 .ic-gallery .ic-thumb .ic-pin svg { width: 26px; height: 26px; }
@@ -847,7 +848,7 @@
 }
 .ic-thumb-btn-pin svg { width: 44px; height: 44px; }
 .ic-thumb-btn-pin:hover { transform: translateY(-3px); }
-.ic-thumb-btn-pin.pinned { top: -32px; left: 50%; right: auto; transform: translateX(-50%); }
+.ic-thumb-btn-pin.pinned { top: -32px; left: 50%; right: auto; transform: translateX(-50%); color: #e0342a; }
 .ic-thumb-btn-pin.pinned:hover { transform: translateX(-50%) translateY(-3px); }
 .ic-thumb-pin-otherzone {
   position: absolute; width: 64px; height: 64px; border-radius: 50%; cursor: pointer;

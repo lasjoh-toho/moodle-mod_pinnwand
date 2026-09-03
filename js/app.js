@@ -204,8 +204,18 @@
     return function () {
       if (state.step === step) { return; }
       if (ADD_WIZARD_STEPS[state.step] && !ADD_WIZARD_STEPS[step]) { resetCaptureState(); }
+      // Beim Verlassen der Klassenübersicht: eigene Fotos und Post-Stream
+      // frisch nachladen, damit während der Klassenansicht vorgenommene
+      // Pin-Änderungen (z.B. ein von der Lehrkraft neu angepinntes Foto)
+      // sofort in der eigenen Pinnwand/Seitenleiste ankommen, statt erst
+      // beim nächsten Zufallsauslöser.
+      var leavingModerate = state.step === 'moderate';
       state.step = step;
       render();
+      if (leavingModerate) {
+        refreshPhotos();
+        loadStreamPhotos();
+      }
     };
   }
 

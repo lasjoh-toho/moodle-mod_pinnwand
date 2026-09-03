@@ -1631,3 +1631,27 @@ Vierzigster Feedback-Durchgang. Betrifft: `styles.css`.
   blau (vorher rot), der Entfernen-Button für zusätzliche
   Objekt-Platzierungen auf dem Board ist jetzt rot (vorher blau) - der
   Mülleimer selbst bleibt separat davon rot, wie ausdrücklich gewünscht.
+
+---
+
+## Phase 48 — Pin-Farblogik (befestigt=rot/unbefestigt=blau), Mülleimer Meine Bilder, Refresh nach Klassenübersicht ✅
+
+Einundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] Mittiger (befestigter) Pin ist jetzt rot, unbefestigter bleibt blau
+  - sowohl in "Meine Bilder" als auch der Klassenansicht. Unterscheidet
+  visuell "aktiv auf dem Board" von "verfügbar zum Anpinnen".
+- [x] Mülleimer in "Meine Bilder" ebenfalls transparenter Hintergrund,
+  rot, unten ausgerichtet (analog zur Klassenansicht) - die
+  Mehrfach-Board-Warnfarben (rot/gelb bei mehreren Boards) bleiben als
+  Sonderfall mit eigenem Kreis-Hintergrund erhalten.
+- [x] **Bestätigt**: der Post-Stream (Warteraum) zeigt bereits nur
+  Objekte, die weder versteckt noch schon auf dem Board platziert sind
+  (`hiddenfromboard=0 AND boardplaced=0`) - ein bereits platziertes,
+  nur versehentlich verstecktes Objekt erscheint dadurch beim erneuten
+  Anpinnen korrekt NICHT im Warteraum, sondern direkt wieder auf dem
+  Board selbst. Kein Code-Bugfix nötig, nur verifiziert.
+- [x] **Neu**: beim Verlassen der Klassenübersicht werden eigene Fotos
+  und Post-Stream jetzt frisch nachgeladen, damit während der
+  Klassenansicht vorgenommene Pin-Änderungen sofort in der eigenen
+  Pinnwand/Seitenleiste ankommen, statt erst beim nächsten Zufallsauslöser.
