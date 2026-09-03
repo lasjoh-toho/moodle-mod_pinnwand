@@ -1534,3 +1534,27 @@ Sechsunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
   der bei befestigten Objekten nach oben herausragende Pin nicht mit der
   Zeile darüber kollidiert - beide Buttons bleiben dadurch zuverlässig
   einzeln anklickbar.
+
+---
+
+## Phase 44 — Pin-Größe/Bugfix, Post-Stream-Layout für neue Einreichungen ✅
+
+Siebenunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Kern-Bugfix "Meine Bilder"**: die Bewegung des Bildes beim
+  Anheften nutzte CSS `:has()`, das im Testkontext offenbar nicht
+  unterstützt wird - jetzt stattdessen über eine direkt am Thumbnail
+  gesetzte Klasse (`ic-thumb-pinned`), robuster und browserunabhängig.
+- [x] **Pins deutlich vergrößert** in "Meine Bilder" (26px auf 38px) und
+  der Klassenansicht (24px auf 32px) - dabei auch entdeckt, dass die
+  SVG-Icons feste Pixel-Maße mitbringen und `font-size` sie allein nicht
+  skaliert; jetzt per CSS direkt überschrieben. Zeilenabstände in beiden
+  Ansichten entsprechend vergrößert, damit die größeren Pins nicht mit
+  der Zeile darüber kollidieren.
+- [x] **Post-Stream: neues Karten-Layout für frisch angekommene
+  Einreichungen** - Bild füllt jetzt die volle Breite der Seitenleiste,
+  Beschriftung steht darunter (statt der bisherigen kleinen Reihen-
+  Darstellung mit Bild links/Text rechts). Die vorhandene Logik
+  "die neuesten zwei Elemente groß, der Rest eingeklappt" blieb
+  bestehen - nur das visuelle Format des "großen" Zustands wurde
+  entsprechend neu gestaltet.

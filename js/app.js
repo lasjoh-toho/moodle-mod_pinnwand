@@ -329,7 +329,7 @@
 
     var gallery = el('div', { class: 'ic-gallery' });
     state.photos.forEach(function (p, idx) {
-      var thumb = el('div', { class: 'ic-thumb' });
+      var thumb = el('div', { class: 'ic-thumb' + (!p.hiddenfromboard ? ' ic-thumb-pinned' : '') });
       var imgWrap = el('div', { class: 'ic-thumb-img-wrap' });
       var img = el('img', { src: p.url, alt: '' });
       img.addEventListener('click', function () { openLightbox(idx); });
@@ -3538,7 +3538,7 @@
         cardsWrap.appendChild(el('p', { class: 'ic-hint' }, [S.stream_empty]));
         return;
       }
-      var FULL_H = 90, COLLAPSED_H = 26, GAP = 6;
+      var FULL_H = 220, COLLAPSED_H = 26, GAP = 6;
       list.forEach(function (p, idx) {
         var collapsed = idx >= 2;
         var card = el('div', {

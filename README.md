@@ -788,6 +788,17 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Zwei-Spalten-Raster innerhalb jedes Nutzer-Blocks, Zeilenabstand
   vergrößert, damit herausragende Buttons nicht kollidieren.
 
+### Sechsundvierzigste Überarbeitung — Pin-Größe/Bugfix, neues Post-Stream-Layout
+
+- **Kern-Bugfix**: die Bild-Bewegung beim Anheften in "Meine Bilder"
+  nutzte CSS `:has()`, offenbar im Testkontext nicht unterstützt - jetzt
+  über eine direkt gesetzte Klasse, robuster.
+- Pins deutlich vergrößert (SVG-Icons haben feste Pixel-Maße, `font-size`
+  allein skaliert sie nicht - jetzt per CSS überschrieben).
+- Post-Stream: neue Einreichungen füllen jetzt die volle Breite der
+  Seitenleiste mit Beschriftung darunter, bis sie sich zur kompakten
+  Ansicht zusammenschieben.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
