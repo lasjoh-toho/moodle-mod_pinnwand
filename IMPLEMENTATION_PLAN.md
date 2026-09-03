@@ -1610,3 +1610,24 @@ Klassenansicht:
   einer Zeile und Pin der nächsten Zeile ragen von entgegengesetzten
   Seiten in denselben Zwischenraum hinein - der Abstand musste beide
   Ausdehnungen zusammen aufnehmen, nicht nur eine.
+
+---
+
+## Phase 47 — Pixel-genaue Feinjustierung Klassenansicht, Farbtausch Pin/Mülleimer ✅
+
+Vierzigster Feedback-Durchgang. Betrifft: `styles.css`.
+
+- [x] Mittiger Pin (befestigt) 10px weiter nach oben.
+- [x] Pin über dem Mülleimer (unbefestigt) 30px weiter nach rechts und
+  15px weiter nach oben.
+- [x] Ecken der Klassenansicht-Thumbnails eckig (kein `border-radius`
+  mehr).
+- [x] Mülleimer unten ausgerichtet (`align-items: flex-end`), rot,
+  transparenter Hintergrund statt Kreis-Hintergrund.
+- [x] Zeilenabstand im Zwei-Spalten-Raster um 15px verringert (34px auf
+  19px) - auf ausdrücklichen Wunsch, auch wenn das bei befestigten
+  Objekten (Pin ragt 32px nach oben) etwas knapp werden kann.
+- [x] **Farbtausch**: der Pin in Meine Bilder/Klassenansicht ist jetzt
+  blau (vorher rot), der Entfernen-Button für zusätzliche
+  Objekt-Platzierungen auf dem Board ist jetzt rot (vorher blau) - der
+  Mülleimer selbst bleibt separat davon rot, wie ausdrücklich gewünscht.

@@ -819,6 +819,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Zeilenabstände in beiden Ansichten nachgerechnet, da sich
   gegenüberliegende Buttons benachbarter Zeilen sonst überlappt hätten.
 
+### Einundfünfzigste Überarbeitung — Pixel-genaue Feinjustierung, Farbtausch
+
+- Klassenansicht: Pin-Positionen pixelgenau nachjustiert, eckige Ecken,
+  Mülleimer unten ausgerichtet/rot/transparenter Hintergrund,
+  Zeilenabstand verringert.
+- Farbtausch: Pin in Meine Bilder/Klassenansicht jetzt blau, Entfernen-
+  Button für zusätzliche Objekt-Platzierungen auf dem Board jetzt rot.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
