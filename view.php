@@ -64,6 +64,7 @@ $config = [
     'boardpannable' => (bool) $instance->boardpannable,
     'sidebaropacity' => (int) $instance->sidebaropacity,
     'studentboardclone' => (bool) $instance->studentboardclone,
+    'studentboardcreate' => (bool) $instance->studentboardcreate,
     'studentseeotherboards' => (bool) $instance->studentseeotherboards,
     'studentpoststream' => (bool) $instance->studentpoststream,
     'studentlayers' => (bool) $instance->studentlayers,

@@ -663,9 +663,24 @@ class mod_pinnwand_external extends external_api {
         }
 
         // Eigenes Board = das kleinste eigene Board ungleich 0 (Master).
+        // Berücksichtigt auch frisch angelegte, noch leere Boards (nur
+        // durch einen gesetzten Namen oder eine bestehende
+        // Zusatz-Platzierung bekannt, noch bevor dort ein erstes
+        // "Heimat"-Foto liegt) - nicht nur Fotos mit bereits gesetztem
+        // boardid.
         $ownboardid = (int) $DB->get_field_sql(
-            'SELECT MIN(boardid) FROM {pinnwand_photos} WHERE pinnwandid = ? AND userid = ? AND boardid != 0',
-            [$instance->id, $USER->id]
+            'SELECT MIN(boardid) FROM (
+                SELECT boardid FROM {pinnwand_photos} WHERE pinnwandid = ? AND userid = ? AND boardid != 0
+                UNION
+                SELECT boardid FROM {pinnwand_object_placements} WHERE pinnwandid = ? AND boardid != 0
+                    AND photoid IN (SELECT id FROM {pinnwand_photos} WHERE pinnwandid = ? AND userid = ?)
+                UNION
+                SELECT boardid FROM {pinnwand_board_names} WHERE pinnwandid = ? AND userid = ? AND boardid != 0
+            ) allboards',
+            [
+                $instance->id, $USER->id, $instance->id, $instance->id, $USER->id,
+                $instance->id, $USER->id,
+            ]
         );
         if (!$ownboardid) {
             throw new moodle_exception('nopermissions', 'error', '', 'toggle_own_board_placement');

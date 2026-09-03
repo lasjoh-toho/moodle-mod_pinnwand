@@ -2293,12 +2293,14 @@
     nextBoard.addEventListener('click', function () { state.currentBoard = boards[boardIdx + 1]; render(); });
     wrap.appendChild(nextBoard);
 
-    var addBoard = el('button', { class: 'ic-icon-btn', title: S.newboard }, ['+']);
-    addBoard.addEventListener('click', function () {
-      state.currentBoard = Math.max.apply(null, boards) + 1;
-      render();
-    });
-    wrap.appendChild(addBoard);
+    if (state.canmoderate || cfg.studentboardcreate) {
+      var addBoard = el('button', { class: 'ic-icon-btn', title: S.newboard }, ['+']);
+      addBoard.addEventListener('click', function () {
+        state.currentBoard = Math.max.apply(null, boards) + 1;
+        render();
+      });
+      wrap.appendChild(addBoard);
+    }
 
     if (state.canmoderate || cfg.studentboardclone) {
       var cloneBoard = el('button', { class: 'ic-icon-btn', title: S.cloneboard }, [icon('clone')]);

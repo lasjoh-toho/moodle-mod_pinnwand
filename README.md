@@ -897,8 +897,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
   visuell zu wirken. Sende-Button übernimmt die bisherige Funktion.
 - Hinzufügen-Modal neu strukturiert: Überschrift "Objekt hinzufügen",
   Kategorien (Bild, Text) mit Trennlinien.
-- Noch offen: eigenes Board auch per Plus erstellbar, Kategorien
-  Audio/Video und Datei (noch keine zugrundeliegende Funktion).
+
+### Sechzigste Überarbeitung — Neues, leeres eigenes Board per Plus
+
+- Neue Einstellung "Lernende dürfen ein neues, leeres eigenes Board
+  anlegen" - der bisher ungeschützte Plus-Button ist jetzt davon
+  abhängig (Lehrkraft immer erlaubt).
+- "Eigenes Board finden" robuster gemacht (erkennt jetzt auch frisch
+  angelegte, noch leere Boards mit Namen oder Zusatz-Platzierung).
+- Noch offen: Kategorien Audio/Video und Datei im Hinzufügen-Modal
+  (noch keine zugrundeliegende Funktion).
 
 ## Bekannte Grenzen dieser Version
 

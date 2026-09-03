@@ -385,5 +385,16 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083033, 'pinnwand');
     }
 
+    if ($oldversion < 2026083057) {
+        // Feedback-Durchgang: neues, leeres eigenes Board per Plus
+        // anlegen - eigene Einstellung analog zum Klonen.
+        $table = new xmldb_table('pinnwand');
+        $field = new xmldb_field('studentboardcreate', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'studentboardclone');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026083057, 'pinnwand');
+    }
+
     return true;
 }

@@ -1812,3 +1812,28 @@ Achtundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`,
   eine eigenständige, neue Funktion.
 - Kategorien "Audio und Video" sowie "Datei" im Hinzufügen-Modal - dafür
   gibt es noch keine zugrundeliegenden Funktionen (Aufnahme/Upload).
+
+---
+
+## Phase 56 — Neues, leeres eigenes Board per Plus (eigene Einstellung) ✅
+
+Neunundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`classes/external.php`, `db/install.xml`, `db/upgrade.php`,
+`mod_form.php`, neue Strings.
+
+- [x] Es gab bereits einen "+"-Button zum Wechseln auf ein neues Board -
+  war bisher aber ungeschützt für alle sichtbar. Neue Einstellung
+  `studentboardcreate` ergänzt (analog zu `studentboardclone`) -
+  Lehrkraft immer, Lernende nur mit aktivierter Einstellung.
+- [x] Die "eigenes Board finden"-Logik von `toggle_own_board_placement`
+  robuster gemacht: berücksichtigt jetzt auch frisch angelegte, noch
+  leere Boards (erkennbar an einem gesetzten Namen oder einer
+  bestehenden Zusatz-Platzierung), nicht nur Boards mit bereits
+  vorhandenen "Heimat"-Fotos.
+
+**Bekannte Grenze:** ein komplett unberührtes, gerade erst per Plus
+gewechseltes Board (noch kein Name gesetzt, noch kein Objekt dort) ist
+serverseitig noch nicht auffindbar, bevor irgendetwas dort passiert ist -
+der allererste Pin-Klick in "Meine Bilder" auf ein solches taufrisches
+Board würde fehlschlagen. In der Praxis dürfte das selten vorkommen, da
+meist zuerst ein Titel vergeben oder etwas auf dem Board platziert wird.
