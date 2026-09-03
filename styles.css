@@ -66,6 +66,8 @@
   font-size: .85rem;
 }
 .ic-board-dropdown-label.ic-board-dropdown-foreign { cursor: default; color: var(--ic-muted); }
+.ic-icon-btn.ic-nav-pin { color: #e0342a; }
+.ic-icon-btn.ic-nav-pin svg { width: 24px; height: 24px; }
 .ic-icon-btn {
   width: 34px; height: 34px; border-radius: 50%; border: none; flex: 0 0 auto;
   background: rgba(20,21,24,.55); color: var(--ic-text);
@@ -192,7 +194,7 @@
 .ic-gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 8px 8px;
+  gap: 44px 8px;
   row-gap: 80px;
   margin-top: 44px;
 }
@@ -225,6 +227,15 @@
   transition: top .15s ease, left .15s ease, right .15s ease, transform .15s ease;
 }
 .ic-gallery .ic-thumb .ic-pin:hover { transform: translateY(-3px); }
+.ic-gallery .ic-thumb .ic-send {
+  position: absolute; top: 50%; right: -34px; transform: translateY(-50%); z-index: 2;
+  background: none; border: none; padding: 0;
+  color: #4f8cff; filter: drop-shadow(0 2px 4px rgba(0,0,0,.7));
+  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+  transition: transform .15s ease;
+}
+.ic-gallery .ic-thumb .ic-send:hover { transform: translateY(-50%) translateX(3px); }
+.ic-gallery .ic-thumb .ic-send svg { width: 20px; height: 20px; }
 .ic-gallery .ic-thumb.ic-thumb-pinned .ic-pin {
   top: -20px; left: 50%; right: auto; transform: translateX(-50%); color: #e0342a;
 }
@@ -308,6 +319,7 @@
 }
 .ic-fab.active { background: var(--ic-accent); }
 .ic-fab-primary { background: var(--ic-accent); }
+.ic-fab-biglabel { font-size: 1.7rem; }
 .ic-tablet-up { display: none; }
 @media (min-width: 600px) { .ic-tablet-up { display: flex; } }
 .ic-home-add-fab {
@@ -322,6 +334,11 @@
   position: absolute; bottom: 14px; right: 8px; z-index: 30;
   display: flex; flex-direction: row; gap: 6px;
 }
+.ic-sidebar-toggle-bar .ic-icon-btn {
+  width: 46px; height: 46px;
+  box-shadow: 0 0 10px 2px var(--ic-board-bg-color, rgba(79,140,255,.5));
+}
+.ic-sidebar-toggle-bar .ic-icon-btn svg { width: 22px; height: 22px; }
 .ic-stylus-bar {
   position: absolute; bottom: 14px; left: 8px; z-index: 30;
   display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px;
@@ -866,7 +883,7 @@
 }
 .ic-thumb-pin-otherzone.pinned { top: -15px; left: auto; right: -58px; transform: none; }
 .ic-thumb-btn-del {
-  top: auto; bottom: 3px; right: 3px; background: none; padding: 0;
+  top: auto; bottom: 0; right: 3px; background: none; padding: 0;
   color: #e0342a; align-items: flex-end; filter: drop-shadow(0 2px 4px rgba(0,0,0,.7));
 }
 .ic-thumb-btn-del svg { width: 18px; height: 18px; }

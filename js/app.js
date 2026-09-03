@@ -271,7 +271,8 @@
     navItems.forEach(function (item) {
       var isActive = state.step === item[0];
       var b = el('button', {
-        class: 'ic-icon-btn' + (isActive ? ' active' : ''), title: item[2], 'aria-label': item[2]
+        class: 'ic-icon-btn' + (item[0] === 'arrange' ? ' ic-nav-pin' : '') + (isActive ? ' active' : ''),
+        title: item[2], 'aria-label': item[2]
       }, [icon(item[1])]);
       b.addEventListener('click', goToView(item[0]));
       right.appendChild(b);
@@ -355,6 +356,26 @@
       imgWrap.appendChild(img);
       thumb.appendChild(imgWrap);
       if (state.studentcansend) {
+        var sendBtn = el('button', {
+          class: 'ic-send' + (p.hiddenfromboard ? '' : ' active'),
+          title: p.hiddenfromboard ? S.pintooltip : S.unpintooltip
+        }, [icon('send')]);
+        sendBtn.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          var newHidden = !p.hiddenfromboard;
+          callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: newHidden }).then(function () {
+            p.hiddenfromboard = newHidden;
+            loadStreamPhotos();
+            render();
+          });
+        });
+        thumb.appendChild(sendBtn);
+      }
+      // Pin: Befestigung am eigenen (geklonten) Board - nur sichtbar, wenn
+      // ein solches überhaupt existiert. Vorerst noch ohne eigene
+      // Serverlogik (siehe Rückfrage) - zeigt/verwendet übergangsweise
+      // denselben Sende-Status wie oben.
+      if (state.studentcansend && boardList().length > 1) {
         var pin = el('button', {
           class: 'ic-pin' + (p.hiddenfromboard ? '' : ' active'),
           title: p.hiddenfromboard ? S.pintooltip : S.unpintooltip
@@ -2000,6 +2021,7 @@
     redo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
     fonts: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V6l4-4 4 4v14"/><path d="M4 14h8"/><path d="M15 20l4-9 4 9"/><path d="M16.5 16.5h5"/></svg>',
     nomedia: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M21 15l-5-5-5 5"/><line x1="3" y1="21" x2="21" y2="3"/></svg>',
+    send: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
     play: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>',
     grid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg>',
@@ -3075,7 +3097,7 @@
     // Zeichnen) bleiben davon bewusst getrennt (eigene linke Dock-Leiste dort).
     var fabRow = el('div', { class: 'ic-fab-row' });
 
-    var gearBtn = el('button', { class: 'ic-fab ic-tablet-up', title: S.options }, ['\u2699']);
+    var gearBtn = el('button', { class: 'ic-fab ic-tablet-up ic-fab-biglabel', title: S.options }, ['\u2699']);
     gearBtn.addEventListener('click', function () { openBackgroundPanel(body); });
     fabRow.appendChild(gearBtn);
 
@@ -3273,7 +3295,7 @@
     body.appendChild(stylusBar);
 
     var maxreached = state.maxpictures > 0 && state.photos.length >= state.maxpictures;
-    var addBtn = el('button', { class: 'ic-fab ic-fab-primary', title: S.addphoto, disabled: maxreached ? 'disabled' : null }, ['+']);
+    var addBtn = el('button', { class: 'ic-fab ic-fab-primary ic-fab-biglabel', title: S.addphoto, disabled: maxreached ? 'disabled' : null }, ['+']);
     addBtn.addEventListener('click', function () { if (!maxreached) { openAddModal(); } });
     fabRow.appendChild(addBtn);
 
@@ -4942,6 +4964,9 @@
     // als 1400x1000) sichtbare Fläche als Tapete.
     bgEl.style.backgroundImage = 'none';
     bgEl.style.backgroundColor = bg.color || '#2b2d33';
+    // Zusätzlich als CSS-Variable bereitstellen - wird für den Glow-Effekt
+    // der Sidebar-Umschalter-Buttons verwendet (siehe .ic-sidebar-toggle-bar).
+    root.style.setProperty('--ic-board-bg-color', bg.color || '#2b2d33');
 
     // Inneres 1400x1000-Element trägt das eigentliche Bild - exakt auf die
     // Board-Koordinatenfläche gemappt (NICHT auf die ggf. größere äußere

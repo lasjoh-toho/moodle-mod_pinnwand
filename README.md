@@ -881,6 +881,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Undo/Redo-Icons durch sauberere Pfeil-Pfade ersetzt.
 - Stylus-Werkzeuge stapeln sich jetzt in echten Zeilen vertikal.
 
+### Achtundfünfzigste Überarbeitung — Icon-Größen/Glow, Senden-Button
+
+- Pinnwand-Navigations-Icon größer und rot, Sidebar-Umschalter-Buttons
+  so groß wie im zentralen Menü mit Glow in der Hintergrundfarbe.
+- Klassenansicht: Mülleimer bündig mit dem unteren Rand.
+- "Meine Bilder": neuer Senden-Button (blaue Papierschwalbe) zwischen
+  Pin und Mülleimer - Pin jetzt nur sichtbar mit eigenem Board.
+- Nebenbei gefundener CSS-Bug behoben (fehlende Selektor-Zeile).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -1758,3 +1758,33 @@ Sechsundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
 - [x] Stylus-Werkzeuge auf der Pinnwand jetzt in echten Zeilen gegliedert
   (Farben-Zeile, Werkzeuge-Zeile), die sich sauber vertikal stapeln -
   vorher eine einzige breite, nur umbrechende Reihe.
+
+---
+
+## Phase 54 — Icon-Größen/Glow-Anpassungen, Klassenansicht-Mülleimer bündig, Senden-Button in Meine Bilder ✅
+
+Siebenundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] Pin-Symbol der Pinnwand-Navigation (Kopfzeile) deutlich größer und
+  rot.
+- [x] Sidebar-Umschalter-Buttons (Post/Faden/Layer/Trashbin) so groß wie
+  im zentralen Menü (34px auf 46px), mit Glow-Effekt in der jeweiligen
+  Hintergrundfarbe des Boards (neue CSS-Variable `--ic-board-bg-color`).
+- [x] Zahnrad- und Plus-Symbol im zentralen Menü vergrößert.
+- [x] Klassenansicht: Mülleimer jetzt exakt bündig mit dem unteren Rand
+  (statt 3px Abstand).
+- [x] **"Meine Bilder" um einen Senden-Button (blaue Papierschwalbe)
+  ergänzt**, positioniert zwischen Pin und Mülleimer - übernimmt vorerst
+  die bisherige "Senden"-Funktion (hiddenfromboard-Umschaltung). Der
+  Pin-Button ist jetzt nur noch sichtbar, wenn mindestens ein eigenes
+  (geklontes) Board existiert.
+- [x] **Nebenbei gefundener Bug behoben**: eine frühere CSS-Einfügung
+  hatte versehentlich die öffnende `.ic-icon-btn {`-Zeile mit entfernt,
+  wodurch die komplette restliche Datei mit falscher Verschachtelung
+  geparst worden wäre.
+
+**Offene Rückfrage (siehe Antworttext):** die genaue neue Bedeutung des
+Pin-Buttons ("Befestigung an der eigenen Pinnwand") ist noch nicht
+serverseitig als eigene Funktion abgebildet - er nutzt aktuell
+übergangsweise denselben Umschalter wie der Senden-Button.
