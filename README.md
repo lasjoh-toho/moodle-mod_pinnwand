@@ -934,6 +934,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
   versehen. Ersatzlos entfernt, der korrekt gestaltete Button zeigt
   sich jetzt einheitlich auf allen Bildschirmgrößen.
 
+### Fünfundsechzigste Überarbeitung — Pixel-Feinschliff, Format übertragen, schmale Reihe auf dem Smartphone
+
+- Klassenansicht: Mülleimer 25px rechts + 1,2x größer, Pins 15px/5px
+  höher.
+- Format exakt auf "Meine Bilder" übertragen, neuer Senden-Button
+  mittig zwischen Pin und Mülleimer.
+- Schmale, senkrechte Reihe auf dem Smartphone in beiden Ansichten.
+- Zurückgestellt: "Daten daneben" in Meine Bilder (größerer
+  Strukturumbau, siehe Rückfrage).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

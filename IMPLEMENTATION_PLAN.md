@@ -1911,3 +1911,27 @@ auf breiten Bildschirmen (vermutlich der Testkontext) unsichtbar.
 - [x] Der bereits korrekt gestaltete kompakte Button (`bottom:0; right:0;
   background:none; color:#e0342a;`) zeigt sich jetzt einheitlich auf
   allen Bildschirmgrößen.
+
+---
+
+## Phase 61 — Pixel-Feinschliff, Format exakt auf Meine Bilder übertragen, schmale Reihe auf dem Smartphone ✅
+
+Vierundfünfzigster Feedback-Durchgang. Betrifft: `styles.css`.
+
+- [x] Klassenansicht: Mülleimer 25px nach rechts + 1,2x größer, blauer
+  (unbefestigter) Pin 15px höher, roter (befestigter) Pin 5px höher.
+- [x] **Format exakt auf "Meine Bilder" übertragen**: identische Werte
+  wie in der Klassenansicht für Pin/Mülleimer. Neuer Senden-Button
+  (blaue Papierschwalbe) jetzt mittig zwischen Pin und Mülleimer
+  positioniert (rechter Versatz gemittelt zwischen beiden).
+- [x] Spaltenabstände in beiden Rastern entsprechend vergrößert, da die
+  Buttons jetzt weiter herausragen.
+- [x] **Schmale, senkrechte Reihe auf dem Smartphone** (≤480px) - Pin/
+  Senden/Mülleimer rücken näher ans Bild heran statt weit auszugreifen,
+  in beiden Ansichten.
+
+**Zurückgestellt:** "inklusive Daten daneben" (Meine Bilder bekommt
+Datenfelder neben dem Bild wie die Klassenansicht-Zeilen) wäre ein
+größerer Strukturumbau (Raster → Liste) - noch nicht umgesetzt, um kein
+Risiko für eine falsche Annahme einzugehen. Siehe Rückfrage im
+Antworttext.
