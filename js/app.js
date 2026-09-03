@@ -120,6 +120,7 @@
     extraPlacements: [], // zusätzliche Objekt-Platzierungen des aktuellen Boards (z.B. nach Klonen) - siehe loadExtraPlacements
     extraPlacementsBoard: null, // zu welchem Board extraPlacements gerade gehört (löst Neuladen bei Board-Wechsel aus)
     trashPanelOpen: false,
+    boardHideMedia: false, // Lupenmenü: alle Medien (Fotos ohne Wortfeld-Daten) ausblenden, nur Texte/Wortfelder zeigen
     trashItems: []
   };
 
@@ -1990,6 +1991,7 @@
     undo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.4L3 7"/></svg>',
     redo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7.4L21 7"/></svg>',
     fonts: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V6l4-4 4 4v14"/><path d="M4 14h8"/><path d="M15 20l4-9 4 9"/><path d="M16.5 16.5h5"/></svg>',
+    nomedia: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M21 15l-5-5-5 5"/><line x1="3" y1="21" x2="21" y2="3"/></svg>',
     play: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>',
     grid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg>',
@@ -2450,6 +2452,12 @@
           return (v || '').toLowerCase().indexOf(fq) !== -1;
         });
       });
+    }
+    if (state.boardHideMedia) {
+      // Lupenmenü "Medien ausblenden": nur Texte/Wortfelder bleiben
+      // sichtbar (technisch Fotos mit wordfielddata), reine Bild-Medien
+      // werden ausgeblendet.
+      visible = visible.filter(function (p) { return !!p.wordfielddata; });
     }
 
     // Roter Faden: wenn das Faden-Panel offen ist, bekommen enthaltene
@@ -3121,8 +3129,16 @@
         if (state._eyeShowedDefault) { fitViewToBackground(); state._eyeShowedDefault = false; }
         else { fitViewDefault(); state._eyeShowedDefault = true; }
       });
+      var hideMediaBtn = el('button', {
+        class: 'ic-icon-btn' + (state.boardHideMedia ? ' active' : ''), title: S.hidemedia
+      }, [icon('nomedia')]);
+      hideMediaBtn.addEventListener('click', function () {
+        popup.remove();
+        state.boardHideMedia = !state.boardHideMedia;
+        render();
+      });
       var row2 = el('div', { class: 'ic-zoom-popup-row' });
-      row2.appendChild(boxSelBtn); row2.appendChild(addSelBtn); row2.appendChild(fitSelBtn);
+      row2.appendChild(boxSelBtn); row2.appendChild(addSelBtn); row2.appendChild(fitSelBtn); row2.appendChild(hideMediaBtn);
 
       // Filterleiste (Titel/Jahr/Epoche/Autor der Vorlage/Autor) direkt
       // hier statt eines eigenen Buttons.
@@ -4306,7 +4322,7 @@
           // Die Kamera muss der Rahmen-Drehung ENTGEGENGESETZT drehen, damit
           // der eingerahmte Bereich am Ende gerade (nicht schief) erscheint -
           // sonst würde sich die Neigung verdoppeln statt aufgehoben zu werden.
-          w: it.framew, h: it.frameh, rot: -(it.framerot || 0), frame: true
+          w: it.framew, h: it.frameh, rot: -(it.framerot || 0), z: it.framez || 0, frame: true
         };
       }
       var rec = photoRecs[it.photoid];
@@ -4502,17 +4518,18 @@
     // (auch Hintergrund und nicht überlappende Fotos) bleiben sichtbar.
     function updateOcclusion() {
       var active = steps[currentIdx];
-      if (!active || !active.el || active.frame) {
-        // Kein echtes Foto als aktive Station (Rahmen oder Überblick) -
-        // alles bleibt sichtbar, nichts wird ausgeblendet.
+      if (!active || active.overview) {
+        // Überblick (reiner Kamera-Haltepunkt ohne eigenes Element, zoomt
+        // aufs ganze Board) - hier ergibt eine Verdeckung nach Z keinen
+        // Sinn, alles bleibt sichtbar.
         Object.keys(photoRecs).forEach(function (pid) { photoRecs[pid].el.classList.remove('ic-present-occluded'); });
         return;
       }
       var activeZ = active.z || 0;
-      // Alle Objekte mit höherem Z-Wert als das fokussierte Objekt werden
-      // ausgeblendet - unabhängig von räumlicher Überlappung. Ermöglicht
-      // ein schrittweises "Freilegen" der darunterliegenden Ebenen beim
-      // Durchgehen der Präsentation.
+      // Alle Objekte mit höherem Z-Wert als das fokussierte Objekt/den
+      // fokussierten Rahmen werden ausgeblendet - unabhängig von
+      // räumlicher Überlappung. Gilt jetzt auch, wenn ein Rahmen (nicht
+      // nur ein Foto) der aktuelle Schritt ist (siehe z bei buildStep).
       Object.keys(photoRecs).forEach(function (pid) {
         var rec = photoRecs[pid];
         if (rec.el === active.el) { rec.el.classList.remove('ic-present-occluded'); return; }

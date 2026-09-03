@@ -856,6 +856,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
   nominalen Board-Fläche abgeschnitten - jetzt mit Rand.
 - Zahlen in den Rahmen verdoppelt.
 
+### Fünfundfünfzigste Überarbeitung — Z-Ebenen-Verdeckung auch bei Rahmen, Medien-ausblenden-Button
+
+- Kern-Bugfix: die Z-Ebenen-Verdeckung aus dem letzten Durchgang griff
+  nicht, wenn ein Rahmen der aktuelle Präsentationsschritt war - Rahmen
+  hatten dafür auch keinen eigenen Z-Wert. Jetzt behoben.
+- Neuer Button im Lupenmenü blendet alle Medien aus, sodass nur Texte/
+  Wortfelder sichtbar bleiben.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

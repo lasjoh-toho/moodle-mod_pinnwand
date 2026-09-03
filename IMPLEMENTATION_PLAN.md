@@ -1702,3 +1702,19 @@ Dreiundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
   begrenzt - Linien zu Objekten außerhalb dieser Fläche wurden
   abgeschnitten. Jetzt mit 800px Rand in jede Richtung.
 - [x] Zahlen in den Rahmen verdoppelt (0.85rem auf 1.7rem).
+
+---
+
+## Phase 51 — Z-Ebenen-Verdeckung gilt jetzt auch für Rahmen, Medien-ausblenden-Button ✅
+
+Vierundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`, neue
+Strings.
+
+- [x] **Kern-Bugfix**: die Z-Ebenen-Verdeckung aus Phase 50 war bisher
+  explizit ausgenommen, wenn ein RAHMEN der aktuelle Präsentationsschritt
+  war (nur bei Fotos aktiv). Rahmen hatten dafür bisher auch gar keinen
+  eigenen Z-Wert im Präsentations-Schritt. Beides ergänzt/behoben - die
+  Verdeckung greift jetzt auch, wenn ein Rahmen fokussiert ist.
+- [x] Neuer Button im Lupenmenü (durchgestrichenes Bild-Symbol): blendet
+  alle Medien (Fotos ohne Wortfeld-Daten) aus, sodass nur Texte/
+  Wortfelder auf dem Board sichtbar bleiben.

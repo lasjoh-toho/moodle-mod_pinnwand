@@ -167,6 +167,7 @@ $string['showannotations'] = 'Show annotations';
 $string['clearannotations'] = 'Clear all annotations';
 $string['clearannotations_confirm'] = 'Permanently delete all your annotations on this board?';
 $string['wordart_fonts'] = 'Fonts';
+$string['hidemedia'] = 'Hide media (show text only)';
 $string['manage_title'] = 'Submitted photos';
 $string['manage_nosubmissions'] = 'No photos submitted yet.';
 $string['manage_consent'] = 'Consent';

@@ -167,6 +167,7 @@ $string['showannotations'] = 'Anmerkungen einblenden';
 $string['clearannotations'] = 'Alle Anmerkungen löschen';
 $string['clearannotations_confirm'] = 'Alle eigenen Anmerkungen auf diesem Board endgültig löschen?';
 $string['wordart_fonts'] = 'Schriften';
+$string['hidemedia'] = 'Medien ausblenden (nur Texte zeigen)';
 $string['manage_title'] = 'Eingereichte Fotos';
 $string['manage_nosubmissions'] = 'Noch keine Fotos eingereicht.';
 $string['manage_consent'] = 'Einwilligung';
