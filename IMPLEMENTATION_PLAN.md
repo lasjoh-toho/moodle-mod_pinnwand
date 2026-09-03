@@ -1889,3 +1889,25 @@ zurückgebaut. Statt einer negativen Positionierung außerhalb der Box
 `bottom: 0` relativ zum Thumbnail selbst - bündig mit dem unteren
 Bildrand, nicht darüber hinausragend. Rotes Icon auf transparentem
 Hintergrund bestätigt/beibehalten.
+
+---
+
+## Phase 60 — Der eigentliche Grund gefunden: zweiter, nie angepasster Löschen-Button auf breiten Bildschirmen ✅
+
+Dreiundfünfzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+**Der eigentliche Grund für die wiederholten Fehlschläge**: Es gab die
+ganze Zeit ZWEI verschiedene Löschen-Buttons in der Klassenansicht - den
+kompakten, direkt auf dem Thumbnail liegenden (den ich wiederholt
+angepasst hatte), und einen ZWEITEN, "ausführlichen" Button
+(`ic-btn ic-btn-danger`) in einer separaten Spalte, der ab 900px
+Bildschirmbreite den kompakten per `display:none` VOLLSTÄNDIG ersetzt.
+Dieser zweite Button wurde nie mit der gewünschten Optik (rot,
+transparent, bündig) versehen - jede Änderung am kompakten Button war
+auf breiten Bildschirmen (vermutlich der Testkontext) unsichtbar.
+
+- [x] Zweiten, redundanten Button ersatzlos entfernt.
+- [x] Der bereits korrekt gestaltete kompakte Button (`bottom:0; right:0;
+  background:none; color:#e0342a;`) zeigt sich jetzt einheitlich auf
+  allen Bildschirmgrößen.

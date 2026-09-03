@@ -925,6 +925,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Verhalten (Mülleimer am oberen statt unteren Rand) - zurückgebaut.
   Jetzt einfach und robust bündig mit dem unteren Bildrand.
 
+### Vierundsechzigste Überarbeitung — Der eigentliche Grund: zweiter Löschen-Button
+
+- **Gefunden**: es gab die ganze Zeit einen ZWEITEN Löschen-Button in
+  der Klassenansicht, der ab 900px Bildschirmbreite den kompakten
+  (den ich wiederholt angepasst hatte) per display:none vollständig
+  ersetzte - dieser zweite Button wurde nie mit der gewünschten Optik
+  versehen. Ersatzlos entfernt, der korrekt gestaltete Button zeigt
+  sich jetzt einheitlich auf allen Bildschirmgrößen.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

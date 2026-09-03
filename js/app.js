@@ -4820,22 +4820,6 @@
         thumbWrap.appendChild(pinOtherZone);
       }
       thumbCluster.appendChild(thumbWrap);
-
-      // Auf breiten Bildschirmen: Löschen-Button zusätzlich hier (der Pin
-      // sitzt jetzt direkt auf dem Thumbnail, siehe oben - keine separate
-      // Checkbox/Beschriftung mehr nötig).
-      var wideControls = el('div', { class: 'ic-thumb-cluster-controls ic-wide-only' });
-      if (candelete) {
-        var del = el('button', { class: 'ic-btn ic-btn-danger' }, [icon('trash')]);
-        del.addEventListener('click', function () {
-          if (!confirm(S.deletephoto_confirm_other)) { return; }
-          callAjax('mod_pinnwand_delete_photo', { cmid: cfg.cmid, photoid: p.id }).then(function () {
-            row.remove();
-          });
-        });
-        wideControls.appendChild(del);
-      }
-      thumbCluster.appendChild(wideControls);
       row.appendChild(thumbCluster);
       var meta = el('div', { class: 'ic-moderate-meta' });
       if (sortMode !== 'user') {

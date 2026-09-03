@@ -916,15 +916,14 @@
 .ic-moderate-fields .ic-field-inline .ic-moderate-input { height: 100%; }
 .ic-moderate-fields .ic-me-check { font-size: .68rem; padding: 3px 8px; white-space: nowrap; }
 
-/* Unter 900px: kompakter Löschen-Button direkt auf dem Thumbnail statt der
-   ausführlichen Löschen-Button-Spalte (spart Platz für die Felder). Der Pin
-   selbst bleibt auf allen Bildschirmgrößen sichtbar (siehe .ic-thumb-btn-pin
-   oben) - er ersetzt die frühere Checkbox vollständig, nicht nur mobil. */
+/* Ab 900px zeigt sich das Thumbnail größer - der Löschen-Button (siehe
+   .ic-thumb-btn-del) bleibt dabei unverändert auf allen Bildschirm-
+   größen sichtbar und einheitlich gestylt (kein separater "breiter"
+   Button mehr, der bisher nie an dieselbe Optik angepasst wurde und so
+   für Verwirrung sorgte). */
 .ic-wide-only { display: none; }
 @media (min-width: 900px) {
   .ic-moderate-thumb img { width: 110px; height: 110px; }
-  .ic-thumb-btn-del { display: none; }
-  .ic-wide-only { display: inline-flex; }
 }
 
 /* Anordnung: Metadaten-Overlay ("Daten anzeigen") */
