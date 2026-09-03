@@ -890,6 +890,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Pin und Mülleimer - Pin jetzt nur sichtbar mit eigenem Board.
 - Nebenbei gefundener CSS-Bug behoben (fehlende Selektor-Zeile).
 
+### Neunundfünfzigste Überarbeitung — Echte Pin-Funktion, Hinzufügen-Modal in Kategorien
+
+- Der Pin in "Meine Bilder" platziert/entfernt ein Objekt jetzt
+  tatsächlich auf dem eigenen Board (neuer Endpunkt), statt nur
+  visuell zu wirken. Sende-Button übernimmt die bisherige Funktion.
+- Hinzufügen-Modal neu strukturiert: Überschrift "Objekt hinzufügen",
+  Kategorien (Bild, Text) mit Trennlinien.
+- Noch offen: eigenes Board auch per Plus erstellbar, Kategorien
+  Audio/Video und Datei (noch keine zugrundeliegende Funktion).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

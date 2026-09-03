@@ -98,6 +98,14 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:submit',
     ],
+    'mod_pinnwand_toggle_own_board_placement' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'toggle_own_board_placement',
+        'description' => 'Pin in Meine Bilder: platziert/entfernt ein Objekt auf dem eigenen Board',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:submit',
+    ],
     'mod_pinnwand_get_board_names' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'get_board_names',

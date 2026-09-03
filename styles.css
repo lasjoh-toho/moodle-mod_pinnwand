@@ -181,6 +181,11 @@
   box-shadow: 0 12px 40px rgba(0,0,0,.5);
 }
 .ic-add-modal-grid { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.ic-add-modal-category {
+  font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--ic-muted); margin: 16px 0 4px; padding-top: 10px; border-top: 1px solid #2c2e34;
+}
+.ic-add-modal-category:first-of-type { margin-top: 6px; padding-top: 0; border-top: none; }
 .ic-add-modal .ic-url-row { display: flex; padding: 0; margin-top: -2px; }
 .ic-modal-close { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; }
 

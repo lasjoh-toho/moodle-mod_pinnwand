@@ -1788,3 +1788,27 @@ Siebenundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`,
 Pin-Buttons ("Befestigung an der eigenen Pinnwand") ist noch nicht
 serverseitig als eigene Funktion abgebildet - er nutzt aktuell
 übergangsweise denselben Umschalter wie der Senden-Button.
+
+---
+
+## Phase 55 — Echte Pin-Funktion (eigenes Board), Hinzufügen-Modal in Kategorien ✅
+
+Achtundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`classes/external.php`, `db/services.php`, neue Strings.
+
+- [x] **Neuer Endpunkt `toggle_own_board_placement`**: der Pin in "Meine
+  Bilder" platziert/entfernt ein Objekt jetzt tatsächlich auf dem
+  eigenen (ersten eigenen, nicht dem Master-)Board - findet automatisch
+  das richtige Board, legt bei Bedarf eine neue Zusatz-Platzierung an
+  oder stellt eine zuvor entfernte wieder her, statt zu duplizieren. Der
+  Sende-Button (Papierschwalbe) übernimmt dafür die bisherige
+  "Senden ans Post-Stream"-Funktion des alten Pins.
+- [x] **Hinzufügen-Modal umstrukturiert**: neue Überschrift "Objekt
+  hinzufügen", Optionen in Kategorien (Bild, Text) mit Trennlinien
+  gegliedert.
+
+**Noch offen:**
+- "Eigenes Board auch mit Plus erstellbar" (aktuell nur per Klonen) -
+  eine eigenständige, neue Funktion.
+- Kategorien "Audio und Video" sowie "Datei" im Hinzufügen-Modal - dafür
+  gibt es noch keine zugrundeliegenden Funktionen (Aufnahme/Upload).

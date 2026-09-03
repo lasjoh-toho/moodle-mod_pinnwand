@@ -349,7 +349,7 @@
 
     var gallery = el('div', { class: 'ic-gallery' });
     state.photos.forEach(function (p, idx) {
-      var thumb = el('div', { class: 'ic-thumb' + (!p.hiddenfromboard ? ' ic-thumb-pinned' : '') });
+      var thumb = el('div', { class: 'ic-thumb' + (p.otherboardcount > 0 ? ' ic-thumb-pinned' : '') });
       var imgWrap = el('div', { class: 'ic-thumb-img-wrap' });
       var img = el('img', { src: p.url, alt: '' });
       img.addEventListener('click', function () { openLightbox(idx); });
@@ -371,21 +371,20 @@
         });
         thumb.appendChild(sendBtn);
       }
-      // Pin: Befestigung am eigenen (geklonten) Board - nur sichtbar, wenn
-      // ein solches überhaupt existiert. Vorerst noch ohne eigene
-      // Serverlogik (siehe Rückfrage) - zeigt/verwendet übergangsweise
-      // denselben Sende-Status wie oben.
+      // Pin: platziert/entfernt das Objekt auf dem eigenen Board (nicht
+      // dem Master-Board) - nur sichtbar, wenn ein solches überhaupt
+      // existiert. Der aktive Zustand ergibt sich aus otherboardcount > 0,
+      // da das eigene Board die einzig mögliche Zusatz-Platzierung ist,
+      // solange nur ein eigenes Board existiert.
       if (state.studentcansend && boardList().length > 1) {
         var pin = el('button', {
-          class: 'ic-pin' + (p.hiddenfromboard ? '' : ' active'),
-          title: p.hiddenfromboard ? S.pintooltip : S.unpintooltip
+          class: 'ic-pin' + (p.otherboardcount > 0 ? ' active' : ''),
+          title: p.otherboardcount > 0 ? S.unpintooltip : S.pintooltip
         }, [icon('thumbtack')]);
         pin.addEventListener('click', function (ev) {
           ev.stopPropagation();
-          var newHidden = !p.hiddenfromboard;
-          callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: p.id, hidden: newHidden }).then(function () {
-            p.hiddenfromboard = newHidden;
-            loadStreamPhotos();
+          callAjax('mod_pinnwand_toggle_own_board_placement', { cmid: cfg.cmid, photoid: p.id }).then(function (res) {
+            p.otherboardcount = Math.max(0, (p.otherboardcount || 0) + (res.placed ? 1 : -1));
             render();
           });
         });
@@ -433,7 +432,7 @@
     var overlay = el('div', { class: 'ic-modal-overlay', id: 'ic-add-modal-overlay' });
     overlay.addEventListener('click', function (ev) { if (ev.target === overlay) { overlay.remove(); } });
     var panel = el('div', { class: 'ic-add-modal' });
-    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.addphoto]));
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.addobject]));
 
     function closeAndGo(step, prep) {
       overlay.remove();
@@ -470,7 +469,10 @@
     });
     urlRow.appendChild(urlInput); urlRow.appendChild(urlGo);
 
-    var grid = el('div', { class: 'ic-add-modal-grid' });
+    // In Kategorien gegliedert, mit Trennlinien: Bild, Text (Audio/Video
+    // und Datei sind noch keine vorhandenen Funktionen).
+    panel.appendChild(el('div', { class: 'ic-add-modal-category' }, [S.category_image]));
+    var gridImage = el('div', { class: 'ic-add-modal-grid' });
     var camBtn = el('button', { class: 'ic-choice-btn ic-btn-primary' }, [icon('camera'), el('span', {}, [S.takephoto])]);
     camBtn.addEventListener('click', function () { closeAndGo('capture', function () { state.captureMode = 'camera'; }); });
     var uploadBtn = el('button', { class: 'ic-choice-btn' }, [icon('upload'), el('span', {}, [S.uploadphoto])]);
@@ -479,6 +481,14 @@
     urlBtn.addEventListener('click', function () {
       urlRow.style.display = urlRow.style.display === 'none' ? 'flex' : 'none';
     });
+    gridImage.appendChild(camBtn);
+    gridImage.appendChild(uploadBtn);
+    gridImage.appendChild(urlBtn);
+    panel.appendChild(gridImage);
+    panel.appendChild(urlRow);
+
+    panel.appendChild(el('div', { class: 'ic-add-modal-category' }, [S.category_text]));
+    var gridText = el('div', { class: 'ic-add-modal-grid' });
     var textFrameBtn = el('button', { class: 'ic-choice-btn' }, [icon('text'), el('span', {}, [S.addtextframe])]);
     textFrameBtn.addEventListener('click', function () {
       closeAndGo('textframe', function () { state.textFrame = null; state.wordArtMode = false; });
@@ -487,14 +497,9 @@
     wordArtBtn.addEventListener('click', function () {
       closeAndGo('textframe', function () { state.textFrame = null; state.wordArtMode = true; });
     });
-
-    grid.appendChild(camBtn);
-    grid.appendChild(uploadBtn);
-    grid.appendChild(urlBtn);
-    grid.appendChild(textFrameBtn);
-    grid.appendChild(wordArtBtn);
-    panel.appendChild(grid);
-    panel.appendChild(urlRow);
+    gridText.appendChild(textFrameBtn);
+    gridText.appendChild(wordArtBtn);
+    panel.appendChild(gridText);
 
     var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel, 'aria-label': S.cancel }, ['\u2715']);
     closeBtn.addEventListener('click', function () { overlay.remove(); });

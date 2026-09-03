@@ -637,6 +637,69 @@ class mod_pinnwand_external extends external_api {
      * (status=active). Das referenzierte Objekt selbst bleibt in jedem
      * Fall unangetastet - es kann ja noch auf anderen Boards aktiv sein.
      */
+    /**
+     * Pin-Umschaltung in "Meine Bilder": platziert/entfernt ein Objekt auf
+     * dem eigenen (ersten eigenen, nicht dem Master-)Board. Legt bei
+     * Bedarf eine neue Zusatz-Platzierung an oder stellt eine zuvor
+     * entfernte wieder her, statt zu duplizieren.
+     */
+    public static function toggle_own_board_placement_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Objekt-ID'),
+        ]);
+    }
+
+    public static function toggle_own_board_placement($cmid, $photoid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::toggle_own_board_placement_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->pinnwandid != $instance->id || $photo->userid != $USER->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'toggle_own_board_placement');
+        }
+
+        // Eigenes Board = das kleinste eigene Board ungleich 0 (Master).
+        $ownboardid = (int) $DB->get_field_sql(
+            'SELECT MIN(boardid) FROM {pinnwand_photos} WHERE pinnwandid = ? AND userid = ? AND boardid != 0',
+            [$instance->id, $USER->id]
+        );
+        if (!$ownboardid) {
+            throw new moodle_exception('nopermissions', 'error', '', 'toggle_own_board_placement');
+        }
+
+        $existing = $DB->get_record('pinnwand_object_placements', [
+            'pinnwandid' => $instance->id, 'photoid' => $photo->id, 'boardid' => $ownboardid,
+        ]);
+        $nowplaced = false;
+        if ($existing) {
+            $existing->status = $existing->status === 'active' ? 'trash' : 'active';
+            $existing->timemodified = time();
+            $DB->update_record('pinnwand_object_placements', $existing);
+            $nowplaced = $existing->status === 'active';
+        } else {
+            $DB->insert_record('pinnwand_object_placements', (object) [
+                'pinnwandid' => $instance->id, 'photoid' => $photo->id, 'boardid' => $ownboardid,
+                'canvasx' => 300, 'canvasy' => 300, 'canvasw' => 220, 'canvasrot' => 0, 'canvasz' => 0,
+                'boardplaced' => 1, 'status' => 'active',
+                'timecreated' => time(), 'timemodified' => time(),
+            ]);
+            $nowplaced = true;
+        }
+
+        return ['placed' => $nowplaced, 'boardid' => $ownboardid];
+    }
+
+    public static function toggle_own_board_placement_returns() {
+        return new external_single_structure([
+            'placed' => new external_value(PARAM_BOOL, 'Jetzt auf dem eigenen Board platziert'),
+            'boardid' => new external_value(PARAM_INT, 'ID des eigenen Boards'),
+        ]);
+    }
+
     public static function set_placement_status($cmid, $placementid, $status) {
         global $DB, $USER;
         $params = self::validate_parameters(self::set_placement_status_parameters(), [
