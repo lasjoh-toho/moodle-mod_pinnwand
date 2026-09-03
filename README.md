@@ -810,6 +810,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Post-Stream: Hochformat-Bilder werden jetzt vollständig statt
   ausschnittsweise dargestellt.
 
+### Fünfzigste Überarbeitung — "Meine Bilder" komplett neu aufgebaut
+
+- Nach Rückmeldung mit Screenshots komplette Neugestaltung nach dem
+  Muster der Klassenansicht: eckige Ecken, kein Hintergrund mehr an
+  irgendeiner Stelle, Pin und Mülleimer klar außerhalb der Bildfläche
+  (Pin oben rechts/oben Mitte, Mülleimer unten rechts statt X).
+- Zeilenabstände in beiden Ansichten nachgerechnet, da sich
+  gegenüberliegende Buttons benachbarter Zeilen sonst überlappt hätten.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -1584,3 +1584,29 @@ Achtunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
 - [x] Bestätigt: der Post-Stream aktualisiert sich bereits alle 15
   Sekunden, aber nur solange das Panel geöffnet ist - ein sinnvoller
   Mittelweg zwischen Aktualität und Serverlast, keine Änderung nötig.
+
+---
+
+## Phase 46 — "Meine Bilder" komplett nach dem Klassenansicht-Muster neu aufgebaut ✅
+
+Neununddreißigster Feedback-Durchgang (mit Screenshots). Betrifft:
+`js/app.js`, `styles.css`.
+
+Nach mehreren Anläufen, die laut Rückmeldung/Screenshots nicht wie
+gewünscht funktionierten, komplette Neugestaltung von "Meine Bilder"
+nach exakt demselben, bereits funktionierenden Muster wie die
+Klassenansicht:
+
+- [x] **Eckige Ecken** (kein `border-radius` mehr) - die Rundung hatte
+  laut Screenshot zu sichtbaren Artefakten geführt ("dysfunktional").
+- [x] **Kein Hintergrund mehr an irgendeiner Stelle** (weder Thumb noch
+  Bild-Wrapper) - verhindert jede Möglichkeit eines sichtbaren
+  Farbunterschieds zum Bild.
+- [x] Pin und Mülleimer liegen nicht mehr in einem reservierten
+  Innenbereich, sondern klar AUSSERHALB der Bildfläche: Pin oben rechts
+  (unbefestigt, wandert zu oben Mitte bei befestigt), Mülleimer unten
+  rechts, ersetzt das X-Symbol.
+- [x] **Zeilenabstände in beiden Ansichten nachgerechnet**: Mülleimer
+  einer Zeile und Pin der nächsten Zeile ragen von entgegengesetzten
+  Seiten in denselben Zwischenraum hinein - der Abstand musste beide
+  Ausdehnungen zusammen aufnehmen, nicht nur eine.

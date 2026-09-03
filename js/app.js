@@ -353,9 +353,9 @@
       }
       var multiClass = p.otherboardcount >= 2 ? ' ic-del-multi' : p.otherboardcount === 1 ? ' ic-del-shared' : '';
       var del = el('button', {
-        class: 'ic-del' + multiClass, html: '&times;',
+        class: 'ic-del' + multiClass,
         title: p.otherboardcount > 0 ? S.deletephoto_multi_hint : null
-      });
+      }, [icon('trash')]);
       del.addEventListener('click', function (ev) {
         ev.stopPropagation();
         if (p.otherboardcount >= 2) { openMultiBoardDeleteModal(p, idx); return; }
