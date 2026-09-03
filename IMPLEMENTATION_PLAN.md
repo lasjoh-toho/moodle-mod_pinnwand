@@ -1856,3 +1856,22 @@ irgendetwas darauf liegt.
 - [x] **Neu: Untertitel-Anzeige** - sobald ein echter (vom eigenen Namen
   abweichender) Titel vergeben wird, erscheint der eigene Name als
   kleinerer Untertitel darunter/daneben, statt einfach zu verschwinden.
+
+---
+
+## Phase 58 — Klassenansicht: Mülleimer/Pin wirklich bündig mit dem gesamten Eintrag ✅
+
+Einundfünfzigster Feedback-Durchgang. Betrifft: `styles.css`.
+
+Kein echtes technisches Hindernis - der Mülleimer war bisher relativ zum
+KLEINEN Thumbnail positioniert statt relativ zum GESAMTEN Eintrag
+(Zeile), die durch mehrzeilige Felder auch höher als das Thumbnail
+werden kann.
+
+- [x] `.ic-thumb-cluster` und `.ic-moderate-thumb` strecken sich jetzt
+  über die volle Zeilenhöhe (`align-self: stretch`), statt nur vertikal
+  zentriert zu sein - "bottom: 0" auf den Buttons landet dadurch
+  tatsächlich am unteren Rand des gesamten Eintrags, unabhängig davon,
+  wie hoch die Zeile durch die Felder wird. Horizontale Position bleibt
+  dabei nah am Bild (Buttons sind weiterhin Kinder des Thumbnails, nicht
+  der ganzen, ggf. breiten Zeile).

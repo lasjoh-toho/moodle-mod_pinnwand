@@ -913,6 +913,12 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Sobald ein echter Titel vergeben wird, erscheint der eigene Name als
   kleinerer Untertitel, statt einfach zu verschwinden.
 
+### Zweiundsechzigste Überarbeitung — Klassenansicht: Buttons wirklich bündig mit dem gesamten Eintrag
+
+- Mülleimer/Pin waren relativ zum kleinen Thumbnail positioniert statt
+  relativ zum gesamten Eintrag - bei mehrzeiligen Feldern lag der
+  untere Rand dadurch nicht am tatsächlichen Zeilenende. Jetzt korrekt.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
