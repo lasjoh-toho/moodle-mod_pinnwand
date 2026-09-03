@@ -3551,7 +3551,15 @@
           bottomOffset = FULL_H * 2 + GAP * 2 + (idx - 2) * (COLLAPSED_H + GAP);
         }
         card.style.bottom = bottomOffset + 'px';
-        card.appendChild(el('img', { src: p.url, alt: '' }));
+        var cardImg = el('img', { src: p.url, alt: '' });
+        // Bildmaße kommen nicht vom Server - nach dem Laden clientseitig
+        // prüfen, ob es sich um ein Hochformat-Bild handelt, und dann
+        // vollständig (statt ausschnittsweise) sowie etwas schmaler und
+        // zentriert darstellen (siehe .ic-stream-card-portrait).
+        cardImg.addEventListener('load', function () {
+          if (cardImg.naturalHeight > cardImg.naturalWidth) { card.classList.add('ic-stream-card-portrait'); }
+        });
+        card.appendChild(cardImg);
         card.appendChild(el('span', { class: 'ic-stream-card-label' },
           [p.mine ? (p.sourcetitle || S.stream_own_label) : (p.userfullname + (p.sourcetitle ? ' · ' + p.sourcetitle : ''))]));
 
@@ -4687,7 +4695,7 @@
       // Checkbox/Beschriftung mehr nötig).
       var wideControls = el('div', { class: 'ic-thumb-cluster-controls ic-wide-only' });
       if (candelete) {
-        var del = el('button', { class: 'ic-btn ic-btn-danger' }, ['\u2715']);
+        var del = el('button', { class: 'ic-btn ic-btn-danger' }, [icon('trash')]);
         del.addEventListener('click', function () {
           if (!confirm(S.deletephoto_confirm_other)) { return; }
           callAjax('mod_pinnwand_delete_photo', { cmid: cfg.cmid, photoid: p.id }).then(function () {

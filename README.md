@@ -799,6 +799,17 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Seitenleiste mit Beschriftung darunter, bis sie sich zur kompakten
   Ansicht zusammenschieben.
 
+### Neunundvierzigste Überarbeitung — Pin-Feinschliff, Rahmen ohne Farbe, Hochformat im Post-Stream
+
+- Klassenansicht: Pin doppelt so groß, deutlich mehr Bewegung beim
+  Umschalten. Zweiten, bisher übersehenen Löschen-Button (nur breite
+  Bildschirme) auf Papierkorb-Symbol umgestellt.
+- "Meine Bilder": kein eigener Hintergrund mehr auf dem Rahmen, Pin
+  kann durch reservierten Platz statt negativer Positionierung nicht
+  mehr abgeschnitten werden.
+- Post-Stream: Hochformat-Bilder werden jetzt vollständig statt
+  ausschnittsweise dargestellt.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

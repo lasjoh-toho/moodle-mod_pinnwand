@@ -1558,3 +1558,29 @@ Siebenunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
   "die neuesten zwei Elemente groß, der Rest eingeklappt" blieb
   bestehen - nur das visuelle Format des "großen" Zustands wurde
   entsprechend neu gestaltet.
+
+---
+
+## Phase 45 — Pin-Feinschliff, Rahmen ohne Farbe, Hochformat im Post-Stream ✅
+
+Achtunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] Klassenansicht: Pin doppelt so groß (32px auf 64px), deutlich mehr
+  Bewegung beim Wechsel zwischen den Zuständen (unbefestigt jetzt
+  außerhalb des Bildes rechts statt am Rand). Zeilen-/Spaltenabstände
+  entsprechend vergrößert, damit nichts mehr überlappt.
+- [x] **Zweiten, bisher übersehenen Löschen-Button gefunden** (nur auf
+  breiten Bildschirmen sichtbar) - zeigte noch das X-Zeichen statt des
+  Papierkorb-Symbols, jetzt korrigiert.
+- [x] **"Meine Bilder" umstrukturiert**: kein eigener Hintergrund mehr auf
+  dem äußeren Rahmen (wirkte wie Teil des Bildes) - stattdessen echter
+  reservierter Platz oben (padding-top) für den Pin statt negativer
+  Positionierung außerhalb der Box. Der Pin kann dadurch nicht mehr
+  abgeschnitten werden, unabhängig von Zeilenabstand oder Scroll-Position.
+- [x] **Post-Stream: Hochformat-Bilder** werden jetzt vollständig (statt
+  ausschnittsweise) dargestellt, dafür etwas schmaler und zentriert -
+  Erkennung clientseitig nach dem Laden (Bildmaße kommen nicht vom
+  Server).
+- [x] Bestätigt: der Post-Stream aktualisiert sich bereits alle 15
+  Sekunden, aber nur solange das Panel geöffnet ist - ein sinnvoller
+  Mittelweg zwischen Aktualität und Serverlast, keine Änderung nötig.
