@@ -1674,3 +1674,31 @@ Zweiundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`,
 - [x] Bei vollständig dargestellten (neuen) Karten erscheint nur die
   hochladende Person - ersetzt den bisherigen "Eigenes Foto"-Platzhalter
   bei eigenen Einreichungen durch den tatsächlichen eigenen Namen.
+
+---
+
+## Phase 50 — Undo/Redo-Überlagerung, Annotations-Werkzeug erweitert, reine Z-Ebenen-Verdeckung, Faden-Linien-Rand, größere Rahmen-Zahlen ✅
+
+Dreiundvierzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Kern-Bugfix**: Undo/Redo und das zentrale Menü lagen unabhängig
+  voneinander mit geschätzten Pixel-Offsets - bei variabler Anzahl
+  Buttons im zentralen Menü kam es zu Überlagerung. Jetzt in einem
+  gemeinsamen Flex-Container, der sich nie überlagern kann.
+- [x] Annotations-Werkzeug (Galerie/Lightbox) erweitert: freie Farbwahl
+  zusätzlich zur festen Palette, Größen-Regler statt der drei
+  Größen-Buttons (steuert Pinsel- UND Textobjekt-Größe gemeinsam, da
+  beide dieselbe Variable nutzen), Scheren- (Bearbeiten) und
+  Info-Button (Bild-Informationen) jetzt auch direkt im
+  Annotations-Werkzeug sichtbar (vorher nur außerhalb des Zeichenmodus).
+- [x] **Präsentation: reine Z-Ebenen-Verdeckung.** Es gab bereits eine
+  Verdeckungslogik, die aber nur räumlich überlappende höhere Objekte
+  ausblendete - jetzt werden grundsätzlich ALLE Objekte mit höherem
+  Z-Wert als das fokussierte Objekt ausgeblendet, unabhängig von
+  Überlappung. Ermöglicht ein schrittweises "Freilegen" darunterliegender
+  Ebenen unabhängig von der räumlichen Anordnung.
+- [x] **Kern-Bugfix Faden-Linie**: der Zeichenpuffer der roten
+  Verbindungslinie war exakt auf die nominale Board-Fläche (1400x1000)
+  begrenzt - Linien zu Objekten außerhalb dieser Fläche wurden
+  abgeschnitten. Jetzt mit 800px Rand in jede Richtung.
+- [x] Zahlen in den Rahmen verdoppelt (0.85rem auf 1.7rem).

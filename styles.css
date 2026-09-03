@@ -292,13 +292,15 @@
 }
 /* Schwebende runde Icon-Buttons, alle in einer Zeile unter der Pinnwand
    (oben ist jetzt die einheitliche Kopfzeile mit Titel + Schließen-Button). */
-.ic-fab-row {
+.ic-bottom-bar {
   position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
-  z-index: 15; display: flex; gap: 10px;
+  z-index: 15; display: flex; align-items: center; gap: 24px;
+}
+.ic-fab-row {
+  display: flex; gap: 10px;
 }
 .ic-undo-bar {
-  position: absolute; bottom: 14px; left: 50%; transform: translateX(calc(-50% - 140px));
-  z-index: 15; display: flex; gap: 8px;
+  display: flex; gap: 8px;
 }
 .ic-undo-bar .ic-fab.disabled { opacity: .35; pointer-events: none; }
 .ic-fab {
@@ -673,8 +675,8 @@
   opacity: 0; transition: opacity .15s;
 }
 .ic-thread-frame-onboard.editable:hover .ic-rotate-handle { opacity: 1; }
-.ic-thread-frame-onboard span { color: #e0503f; font-size: .85rem; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
-.ic-thread-line-canvas { position: absolute; left: 0; top: 0; width: 1400px; height: 1000px; pointer-events: none; z-index: 2; }
+.ic-thread-frame-onboard span { color: #e0503f; font-size: 1.7rem; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.ic-thread-line-canvas { position: absolute; pointer-events: none; z-index: 2; }
 .ic-arrange-item .ic-resize {
   position: absolute; right: -10px; bottom: -10px; width: 26px; height: 26px;
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff;
@@ -764,6 +766,7 @@
 }
 .ic-ink-size.active { border-color: var(--ic-accent); background: rgba(79,140,255,.15); }
 .ic-ink-size span { display: block; border-radius: 50%; background: #fff; border: 1.5px solid rgba(255,255,255,.5); }
+.ic-ink-size-slider { width: 100%; align-self: stretch; }
 
 /* Author "ich"-Kurzwahl */
 .ic-field-inline { display: flex; align-items: center; gap: 8px; }

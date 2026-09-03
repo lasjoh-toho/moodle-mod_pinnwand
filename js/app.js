@@ -2737,8 +2737,18 @@
           // <svg> ohne exakt übereinstimmendes viewBox/CSS entstehen kann -
           // das war die Ursache dafür, dass die Linie nur in einem
           // Teilbereich sichtbar/abgeschnitten war).
-          var lineCanvas = el('canvas', { class: 'ic-thread-line-canvas', width: String(BOARD_W), height: String(BOARD_H) });
+          // Zusätzlicher Rand (THREAD_LINE_MARGIN) rundherum, da Objekte
+          // außerhalb der nominalen Board-Fläche (0..BOARD_W/H) liegen
+          // können - ohne diesen Rand würde die Linie zu solchen Objekten
+          // an der Canvas-eigenen Boxgröße abgeschnitten.
+          var THREAD_LINE_MARGIN = 800;
+          var lineCanvas = el('canvas', {
+            class: 'ic-thread-line-canvas',
+            width: String(BOARD_W + THREAD_LINE_MARGIN * 2), height: String(BOARD_H + THREAD_LINE_MARGIN * 2),
+            style: 'left:-' + THREAD_LINE_MARGIN + 'px;top:-' + THREAD_LINE_MARGIN + 'px;'
+          });
           var lctx = lineCanvas.getContext('2d');
+          lctx.translate(THREAD_LINE_MARGIN, THREAD_LINE_MARGIN);
           lctx.strokeStyle = threadForCanvas.color || '#e0503f';
           lctx.lineWidth = threadForCanvas.linewidth || 3;
           lctx.lineCap = 'round';
@@ -3238,16 +3248,21 @@
     addBtn.addEventListener('click', function () { if (!maxreached) { openAddModal(); } });
     fabRow.appendChild(addBtn);
 
-    body.appendChild(fabRow);
-
-    // Undo/Redo links neben dem zentralen Menü.
+    // Undo/Redo und zentrales Menü in einem gemeinsamen Flex-Container,
+    // damit sie sich nie überlagern können, egal wie viele Buttons im
+    // zentralen Menü gerade sichtbar sind (variiert je nach Kontext) -
+    // unabhängige absolute Positionierung mit geschätzten Offsets hatte
+    // zuvor zu Überlagerungen geführt.
+    var bottomBar = el('div', { class: 'ic-bottom-bar' });
     var undoBar = el('div', { class: 'ic-undo-bar' });
     var undoBtn = el('button', { class: 'ic-fab' + (undoStack.length ? '' : ' disabled'), title: S.undo }, [icon('undo')]);
     undoBtn.addEventListener('click', function () { performUndo(); });
     var redoBtn = el('button', { class: 'ic-fab' + (redoStack.length ? '' : ' disabled'), title: S.redo }, [icon('redo')]);
     redoBtn.addEventListener('click', function () { performRedo(); });
     undoBar.appendChild(undoBtn); undoBar.appendChild(redoBtn);
-    body.appendChild(undoBar);
+    bottomBar.appendChild(undoBar);
+    bottomBar.appendChild(fabRow);
+    body.appendChild(bottomBar);
 
     if (state.threadPanelOpen) { body.appendChild(renderThreadPanel()); }
     if (state.streamPanelOpen) { body.appendChild(renderStreamPanel()); }
@@ -4493,15 +4508,15 @@
         Object.keys(photoRecs).forEach(function (pid) { photoRecs[pid].el.classList.remove('ic-present-occluded'); });
         return;
       }
-      var activeRect = active.el.getBoundingClientRect();
       var activeZ = active.z || 0;
+      // Alle Objekte mit höherem Z-Wert als das fokussierte Objekt werden
+      // ausgeblendet - unabhängig von räumlicher Überlappung. Ermöglicht
+      // ein schrittweises "Freilegen" der darunterliegenden Ebenen beim
+      // Durchgehen der Präsentation.
       Object.keys(photoRecs).forEach(function (pid) {
         var rec = photoRecs[pid];
         if (rec.el === active.el) { rec.el.classList.remove('ic-present-occluded'); return; }
-        var r = rec.el.getBoundingClientRect();
-        var overlaps = !(r.right < activeRect.left || r.left > activeRect.right ||
-          r.bottom < activeRect.top || r.top > activeRect.bottom);
-        rec.el.classList.toggle('ic-present-occluded', overlaps && rec.z > activeZ);
+        rec.el.classList.toggle('ic-present-occluded', rec.z > activeZ);
       });
     }
 
@@ -5532,6 +5547,18 @@
       window.addEventListener('resize', sizeCanvas);
 
       var toolbar = el('div', { class: 'ic-ink-dock' });
+      // Scheren- (Bearbeiten) und Info-Button (Bild-Informationen) auch
+      // hier oben im Annotations-Werkzeug sichtbar, nicht nur im
+      // leftDock, der während des Zeichnens ausgeblendet ist (siehe
+      // .ic-lb-focus) - ruft die dortige, bereits vorhandene Logik per
+      // click() auf, statt sie zu duplizieren.
+      var annotTopRow = el('div', { class: 'ic-ink-dock-row' });
+      var annotEditBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.editphoto }, [icon('scissors')]);
+      annotEditBtn.addEventListener('click', function () { editBtn.click(); });
+      var annotInfoBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.databtn }, [icon('info')]);
+      annotInfoBtn.addEventListener('click', function () { dataBtn.click(); });
+      annotTopRow.appendChild(annotEditBtn); annotTopRow.appendChild(annotInfoBtn);
+      toolbar.appendChild(annotTopRow);
       var penBtn = el('button', { class: 'ic-btn ic-btn-primary', title: S.draw_pen }, [icon('pen')]);
       var eraserBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.draw_eraser }, [icon('eraser')]);
       var textBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.draw_text }, [icon('text')]);
@@ -5546,6 +5573,14 @@
       toolbar.appendChild(penBtn); toolbar.appendChild(eraserBtn); toolbar.appendChild(textBtn);
 
       var colorRow = el('div', { class: 'ic-ink-dock-row' });
+      // Freie Farbwahl zusätzlich zur festen Palette - direkter Zugriff
+      // statt nur per Doppelklick auf ein bestehendes Farbfeld.
+      var customColorInput = el('input', { type: 'color', value: inkColor, class: 'ic-textframe-custom-color' });
+      customColorInput.addEventListener('input', function () {
+        inkColor = customColorInput.value;
+        colorRow.querySelectorAll('.ic-ink-swatch').forEach(function (s) { s.classList.remove('active'); });
+        updateToolColor();
+      });
       // Stift, Text-Werkzeug und Größen-Punkte übernehmen die gewählte Farbe,
       // damit auf einen Blick klar ist, mit welcher Farbe gerade gezeichnet wird.
       function updateToolColor() {
@@ -5581,19 +5616,18 @@
         });
         colorRow.appendChild(sw);
       });
+      colorRow.appendChild(customColorInput);
       toolbar.appendChild(colorRow);
 
       var sizeRow = el('div', { class: 'ic-ink-dock-row' });
-      INK_SIZES.forEach(function (sz) {
-        var b = el('button', { class: 'ic-ink-size' + (sz === inkSize ? ' active' : '') },
-          [el('span', { style: 'width:' + Math.min(sz, 18) + 'px;height:' + Math.min(sz, 18) + 'px' })]);
-        b.addEventListener('click', function () {
-          inkSize = sz;
-          sizeRow.querySelectorAll('.ic-ink-size').forEach(function (x) { x.classList.remove('active'); });
-          b.classList.add('active');
-        });
-        sizeRow.appendChild(b);
+      // Ein Regler statt fester Größen-Stufen - steuert sowohl die
+      // Pinsel-/Radiergummi-Dicke als auch die Größe von Textobjekten
+      // (inkSize wird für beides verwendet, siehe unten bei "text").
+      var sizeSlider = el('input', {
+        type: 'range', min: '2', max: '40', step: '1', value: String(inkSize), class: 'ic-ink-size-slider'
       });
+      sizeSlider.addEventListener('input', function () { inkSize = parseFloat(sizeSlider.value); });
+      sizeRow.appendChild(sizeSlider);
       toolbar.appendChild(sizeRow);
       updateToolColor();
 

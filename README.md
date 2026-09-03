@@ -844,6 +844,18 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Vollständig dargestellte (neue) Karten zeigen nur die hochladende
   Person - ersetzt den bisherigen "Eigenes Foto"-Platzhalter.
 
+### Vierundfünfzigste Überarbeitung — Undo/Redo-Überlagerung, Annotations-Werkzeug, reine Z-Ebenen-Verdeckung
+
+- **Kern-Bugfix**: Undo/Redo überlagerte das zentrale Menü - jetzt in
+  einem gemeinsamen Flex-Container, der sich nie überlagern kann.
+- Annotations-Werkzeug: freie Farbwahl, Größen-Regler statt drei
+  Buttons, Scheren-/Info-Button jetzt auch im Zeichenmodus sichtbar.
+- Präsentation: Objekte auf höheren Z-Ebenen werden jetzt grundsätzlich
+  ausgeblendet, nicht mehr nur bei räumlicher Überlappung.
+- Kern-Bugfix: die rote Faden-Linie wurde zu Objekten außerhalb der
+  nominalen Board-Fläche abgeschnitten - jetzt mit Rand.
+- Zahlen in den Rahmen verdoppelt.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
