@@ -779,6 +779,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Noch offen: Presets-Tabs mit Vorschau, selbst gehostete Fonts als
   Alternative zum Google-Fonts-CDN.
 
+### Fünfundvierzigste Überarbeitung — Pin-Überarbeitung final, Zwei-Spalten-Raster pro Nutzer-Block
+
+- "Meine Bilder": Pin bleibt jetzt auf fester Höhe, nur das Bild bewegt
+  sich beim Anheften nach oben.
+- Klassenansicht: Pin unbefestigt oben rechts, Mülleimer unten rechts
+  und nur sichtbar, wenn nicht befestigt.
+- Zwei-Spalten-Raster innerhalb jedes Nutzer-Blocks, Zeilenabstand
+  vergrößert, damit herausragende Buttons nicht kollidieren.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

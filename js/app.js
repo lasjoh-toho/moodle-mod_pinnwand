@@ -4633,10 +4633,27 @@
       thumbWrap.appendChild(img);
 
       // Kompakte Overlay-Steuerung direkt auf dem Thumbnail - der Pin sitzt
-      // bei unbefestigten Bildern NEBEN dem Bild, bei befestigten mittig
-      // OBEN auf dem Bild (siehe CSS .ic-thumb-btn-pin.pinned). Sowohl ein
-      // Klick auf den Pin als auch auf die jeweils andere (aktuell nicht
-      // vom Pin belegte) Position schaltet den Status um.
+      // bei unbefestigten Bildern oben rechts, bei befestigten mittig oben
+      // auf dem Bild (siehe CSS .ic-thumb-btn-pin.pinned). Sowohl ein Klick
+      // auf den Pin als auch auf die jeweils andere (aktuell nicht vom Pin
+      // belegte) Position schaltet den Status um. Der Mülleimer (unten
+      // rechts) ist nur sichtbar, wenn das Objekt gerade NICHT befestigt
+      // ist - befestigte Objekte müssen erst gelöst werden, bevor sie
+      // gelöscht werden können (schützt aktiv platzierte Inhalte vor
+      // versehentlichem Löschen).
+      var delOverlay = null;
+      if (candelete) {
+        delOverlay = el('button', {
+          class: 'ic-thumb-btn ic-thumb-btn-del' + (state.teachercansend && !p.hiddenfromboard ? ' ic-hidden' : '')
+        }, [icon('trash')]);
+        delOverlay.addEventListener('click', function () {
+          if (!confirm(S.deletephoto_confirm_other)) { return; }
+          callAjax('mod_pinnwand_delete_photo', { cmid: cfg.cmid, photoid: p.id }).then(function () {
+            row.remove();
+          });
+        });
+        thumbWrap.appendChild(delOverlay);
+      }
       if (candelete && state.teachercansend) {
         var pinOverlay = el('button', {
           class: 'ic-thumb-btn ic-thumb-btn-pin' + (p.hiddenfromboard ? '' : ' active pinned'),
@@ -4654,6 +4671,7 @@
             pinOverlay.classList.toggle('pinned', !p.hiddenfromboard);
             pinOtherZone.classList.toggle('pinned', !p.hiddenfromboard);
             pinOverlay.title = pinOtherZone.title = p.hiddenfromboard ? S.pintooltip : S.unpintooltip;
+            if (delOverlay) { delOverlay.classList.toggle('ic-hidden', !p.hiddenfromboard); }
             loadStreamPhotos();
           });
         }
@@ -4661,16 +4679,6 @@
         pinOtherZone.addEventListener('click', togglePin);
         thumbWrap.appendChild(pinOverlay);
         thumbWrap.appendChild(pinOtherZone);
-      }
-      if (candelete) {
-        var delOverlay = el('button', { class: 'ic-thumb-btn ic-thumb-btn-del' }, [icon('trash')]);
-        delOverlay.addEventListener('click', function () {
-          if (!confirm(S.deletephoto_confirm_other)) { return; }
-          callAjax('mod_pinnwand_delete_photo', { cmid: cfg.cmid, photoid: p.id }).then(function () {
-            row.remove();
-          });
-        });
-        thumbWrap.appendChild(delOverlay);
       }
       thumbCluster.appendChild(thumbWrap);
 
@@ -4778,7 +4786,12 @@
           var group = byUser[uid];
           var section = el('div', { class: 'ic-moderate-group' });
           section.appendChild(el('h3', { class: 'ic-moderate-user' }, [group.name + ' (' + group.photos.length + ')']));
-          group.photos.forEach(function (p) { renderRow(section, p, lastRes.canedit, lastRes.candelete); });
+          // Innerhalb eines Nutzer-Blocks: zwei Spalten (1L 2R / 3L 4R / ...),
+          // damit mehr Objekte auf eine Bildschirmseite passen. Die
+          // Überschrift bleibt darüber über die volle Breite.
+          var grid = el('div', { class: 'ic-moderate-usergrid' });
+          group.photos.forEach(function (p) { renderRow(grid, p, lastRes.canedit, lastRes.candelete); });
+          section.appendChild(grid);
           list.appendChild(section);
         });
       } else {

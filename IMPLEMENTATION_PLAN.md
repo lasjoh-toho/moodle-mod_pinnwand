@@ -1508,3 +1508,29 @@ sowohl live im Editor als auch im exportierten Bild.
   hätte beim Export von Zetteln mit mehreren Textobjekten (Breiten-
   Schätzung für sekundäre Textobjekte) eine ReferenceError ausgelöst und
   das Speichern verhindert.
+
+---
+
+## Phase 43 — Pin-Überarbeitung final, Zwei-Spalten-Raster pro Nutzer-Block ✅
+
+Sechsunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **"Meine Bilder"**: Pin bleibt jetzt auf fester Höhe (bewegt sich
+  nicht mehr) - klar sichtbares rotes Symbol ohne Hintergrundkreis, mit
+  Schatten zur Hervorhebung, bewegt sich bei Hover leicht nach oben. Nur
+  noch das Bild selbst hebt sich beim Anheften dem feststehenden Pin
+  entgegen.
+- [x] **Klassenansicht neu geordnet**: Pin sitzt unbefestigt jetzt oben
+  rechts (statt außerhalb links), befestigt weiterhin mittig oben auf dem
+  Bild. Mülleimer ist auf unten rechts gewandert und nur noch sichtbar,
+  wenn das Objekt gerade NICHT befestigt ist (schützt aktiv platzierte
+  Inhalte vor versehentlichem Löschen) - blendet sich beim Umschalten
+  automatisch mit ein/aus.
+- [x] **Zwei-Spalten-Raster innerhalb jedes Nutzer-Blocks** (1L 2R / 3L
+  2R / ...) - Überschrift bleibt über die volle Breite. Ersetzt die
+  seitenweite Mehrspalten-Anordnung aus dem letzten Durchgang, die die
+  Anforderung nicht korrekt umgesetzt hatte.
+- [x] Zeilenabstand im Zwei-Spalten-Raster vergrößert (4px → 18px), damit
+  der bei befestigten Objekten nach oben herausragende Pin nicht mit der
+  Zeile darüber kollidiert - beide Buttons bleiben dadurch zuverlässig
+  einzeln anklickbar.
