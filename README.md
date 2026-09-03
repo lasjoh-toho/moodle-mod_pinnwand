@@ -941,8 +941,13 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Format exakt auf "Meine Bilder" übertragen, neuer Senden-Button
   mittig zwischen Pin und Mülleimer.
 - Schmale, senkrechte Reihe auf dem Smartphone in beiden Ansichten.
-- Zurückgestellt: "Daten daneben" in Meine Bilder (größerer
-  Strukturumbau, siehe Rückfrage).
+
+### Sechsundsechzigste Überarbeitung — "Meine Bilder" von Raster auf Liste mit Datenfeldern umgebaut
+
+- "Meine Bilder" zeigt jetzt editierbare Datenfelder direkt neben dem
+  Bild, wie die Klassenansicht - Liste statt Raster.
+- Auf schmalen Bildschirmen sind die Felder standardmäßig ausgeblendet
+  und lassen sich per Info-Button von rechts einblenden.
 
 ## Bekannte Grenzen dieser Version
 

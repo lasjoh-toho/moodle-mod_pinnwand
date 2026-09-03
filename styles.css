@@ -201,76 +201,89 @@
 .ic-btn-icon { flex: 0 0 auto; min-width: 0; width: 46px; height: 46px; padding: 0; display: flex; align-items: center; justify-content: center; }
 .ic-menu-row .ic-btn-icon { width: 52px; height: 52px; }
 .ic-menu-row .ic-btn-icon.active { background: var(--ic-accent); }
-.ic-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 44px 70px;
-  row-gap: 80px;
-  margin-top: 44px;
-}
-.ic-gallery .ic-thumb {
+.ic-home-list { display: flex; flex-direction: column; gap: 60px; padding-top: 44px; }
+.ic-home-row { display: flex; align-items: flex-start; gap: 70px; position: relative; }
+.ic-home-row .ic-thumb {
   position: relative;
-  aspect-ratio: 3/4;
+  width: 120px; aspect-ratio: 3/4; flex: 0 0 auto;
   /* Kein eigener Hintergrund und keine Rundung mehr - beides führte zu
      sichtbaren Farb-/Eckenabweichungen zum eigentlichen Bild. Pin und
      Mülleimer liegen jetzt klar AUSSERHALB der Bildfläche (siehe unten),
      nicht mehr in einem reservierten Innenbereich. */
   border-radius: 0;
 }
+.ic-home-fields { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+.ic-home-fields-toggle {
+  position: absolute; top: 0; right: -14px; width: 30px; height: 30px; border-radius: 50%;
+  border: none; background: rgba(20,21,24,.8); color: #fff; align-items: center; justify-content: center; padding: 0;
+}
 .ic-thumb-img-wrap { position: relative; width: 100%; height: 100%; border-radius: 0; overflow: hidden; }
-.ic-gallery .ic-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
-.ic-gallery .ic-thumb .ic-del {
+.ic-home-row .ic-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
+.ic-home-row .ic-thumb .ic-del {
   position: absolute; bottom: 0; right: -25px; z-index: 2;
   background: none; color: #e0342a; border: none;
   width: 31px; height: 31px; padding: 0;
   display: flex; align-items: flex-end; justify-content: center;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,.7));
 }
-.ic-gallery .ic-thumb .ic-del svg { width: 22px; height: 22px; }
-.ic-gallery .ic-thumb .ic-del.ic-del-shared { background: #e0503f; border-radius: 50%; filter: none; color: #fff; }
-.ic-gallery .ic-thumb .ic-del.ic-del-multi { background: #d9a520; border-radius: 50%; filter: none; color: #1a1a1a; }
-.ic-gallery .ic-thumb .ic-pin {
+.ic-home-row .ic-thumb .ic-del svg { width: 22px; height: 22px; }
+.ic-home-row .ic-thumb .ic-del.ic-del-shared { background: #e0503f; border-radius: 50%; filter: none; color: #fff; }
+.ic-home-row .ic-thumb .ic-del.ic-del-multi { background: #d9a520; border-radius: 50%; filter: none; color: #1a1a1a; }
+.ic-home-row .ic-thumb .ic-pin {
   position: absolute; top: -30px; right: -58px; left: auto; transform: none; z-index: 2;
   background: none; border: none; padding: 0;
   color: #4f8cff; filter: drop-shadow(0 2px 4px rgba(0,0,0,.7));
   width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;
   transition: top .15s ease, left .15s ease, right .15s ease, transform .15s ease;
 }
-.ic-gallery .ic-thumb .ic-pin:hover { transform: translateY(-3px); }
-.ic-gallery .ic-thumb .ic-send {
+.ic-home-row .ic-thumb .ic-pin:hover { transform: translateY(-3px); }
+.ic-home-row .ic-thumb .ic-send {
   position: absolute; top: 50%; right: -42px; transform: translateY(-50%); z-index: 2;
   background: none; border: none; padding: 0;
   color: #4f8cff; filter: drop-shadow(0 2px 4px rgba(0,0,0,.7));
   width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
   transition: transform .15s ease;
 }
-.ic-gallery .ic-thumb .ic-send:hover { transform: translateY(-50%) translateX(3px); }
-.ic-gallery .ic-thumb .ic-send svg { width: 20px; height: 20px; }
-.ic-gallery .ic-thumb.ic-thumb-pinned .ic-pin {
+.ic-home-row .ic-thumb .ic-send:hover { transform: translateY(-50%) translateX(3px); }
+.ic-home-row .ic-thumb .ic-send svg { width: 20px; height: 20px; }
+.ic-home-row .ic-thumb.ic-thumb-pinned .ic-pin {
   top: -37px; left: 50%; right: auto; transform: translateX(-50%); color: #e0342a;
 }
-.ic-gallery .ic-thumb.ic-thumb-pinned .ic-pin:hover { transform: translateX(-50%) translateY(-3px); }
-.ic-gallery .ic-thumb .ic-pin svg { width: 44px; height: 44px; }
+.ic-home-row .ic-thumb.ic-thumb-pinned .ic-pin:hover { transform: translateX(-50%) translateY(-3px); }
+.ic-home-row .ic-thumb .ic-pin svg { width: 44px; height: 44px; }
 @media (max-width: 480px) {
   /* Schmale, senkrechte Reihe statt weiter Ausgreifung, damit auf dem
      Smartphone nichts abgeschnitten wird oder mit der Nachbarspalte
      kollidiert. */
-  .ic-gallery { gap: 44px 40px; }
-  .ic-gallery .ic-thumb .ic-pin { right: -30px; width: 46px; height: 46px; }
-  .ic-gallery .ic-thumb .ic-pin svg { width: 32px; height: 32px; }
-  .ic-gallery .ic-thumb .ic-send { right: -22px; }
-  .ic-gallery .ic-thumb .ic-del { right: -14px; width: 24px; height: 24px; }
-  .ic-gallery .ic-thumb .ic-del svg { width: 17px; height: 17px; }
+  .ic-home-row { gap: 40px; }
+  .ic-home-row .ic-thumb .ic-pin { right: -30px; width: 46px; height: 46px; }
+  .ic-home-row .ic-thumb .ic-pin svg { width: 32px; height: 32px; }
+  .ic-home-row .ic-thumb .ic-send { right: -22px; }
+  .ic-home-row .ic-thumb .ic-del { right: -14px; width: 24px; height: 24px; }
+  .ic-home-row .ic-thumb .ic-del svg { width: 17px; height: 17px; }
+  /* Datenfelder werden neben dem kleinen Thumbnail zu schmal - deshalb
+     hier standardmäßig ausgeblendet (rechts außerhalb des Bildschirms)
+     und per Info-Button von rechts einblendbar, statt gequetscht immer
+     sichtbar zu sein. */
+  .ic-home-fields {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(86vw, 340px); z-index: 200;
+    background: rgba(20,21,24,.97); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    padding: 60px 14px 14px; overflow-y: auto; flex-direction: column;
+    transform: translateX(100%); transition: transform .2s ease;
+  }
+  .ic-home-fields.open { transform: translateX(0); }
+  .ic-home-fields-toggle { display: flex; }
 }
-.ic-gallery .ic-thumb img { transition: transform .15s ease; }
+.ic-home-fields-toggle { display: none; }
+.ic-home-row .ic-thumb img { transition: transform .15s ease; }
 .ic-thumb-img-wrap { transition: box-shadow .15s ease; }
-.ic-gallery .ic-thumb:not(.ic-thumb-pinned) .ic-thumb-img-wrap {
+.ic-home-row .ic-thumb:not(.ic-thumb-pinned) .ic-thumb-img-wrap {
   box-shadow: 0 14px 20px rgba(0,0,0,.6);
 }
-.ic-gallery .ic-thumb.ic-thumb-pinned img {
+.ic-home-row .ic-thumb.ic-thumb-pinned img {
   transform: translateY(-18px) scale(1.04);
 }
-.ic-gallery .ic-thumb.ic-thumb-pinned .ic-thumb-img-wrap {
+.ic-home-row .ic-thumb.ic-thumb-pinned .ic-thumb-img-wrap {
   box-shadow: 0 10px 14px rgba(0,0,0,.5);
 }
 

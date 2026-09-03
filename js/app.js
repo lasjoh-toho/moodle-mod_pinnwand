@@ -347,8 +347,9 @@
       wrap.appendChild(el('p', { class: 'ic-hint' }, [S.maxreached]));
     }
 
-    var gallery = el('div', { class: 'ic-gallery' });
+    var list = el('div', { class: 'ic-home-list' });
     state.photos.forEach(function (p, idx) {
+      var row = el('div', { class: 'ic-home-row' });
       var thumb = el('div', { class: 'ic-thumb' + (p.otherboardcount > 0 ? ' ic-thumb-pinned' : '') });
       var imgWrap = el('div', { class: 'ic-thumb-img-wrap' });
       var img = el('img', { src: p.url, alt: '' });
@@ -406,9 +407,74 @@
         }
       });
       thumb.appendChild(del);
-      gallery.appendChild(thumb);
+      row.appendChild(thumb);
+
+      // Datenfelder direkt neben dem Bild (wie in der Klassenansicht) -
+      // auf schmalen Bildschirmen standardmäßig ausgeblendet und per
+      // Info-Button von rechts einblendbar (siehe CSS), da neben dem
+      // Thumbnail sonst zu wenig Platz bliebe.
+      function persistSource() {
+        callAjax('mod_pinnwand_update_source', {
+          cmid: cfg.cmid, photoid: p.id,
+          sourcetitle: p.sourcetitle, sourceauthor: p.sourceauthor, sourceyear: p.sourceyear,
+          sourceepoch: p.sourceepoch, sourceplace: p.sourceplace, sourceorigauthor: p.sourceorigauthor
+        }).catch(function () { /* bleibt lokal sichtbar, Speichern fehlgeschlagen */ });
+      }
+      function editField(key, labelKey, sizeMod) {
+        var input = el('input', {
+          type: 'text', value: p[key] || '', placeholder: S[labelKey],
+          class: 'ic-moderate-input' + (sizeMod === 'narrow' ? ' ic-moderate-input-narrow' : '') +
+            (sizeMod === 'wide' ? ' ic-moderate-input-wide' : '')
+        });
+        input.addEventListener('change', function () { p[key] = input.value; persistSource(); });
+        return input;
+      }
+      var fields = el('div', { class: 'ic-home-fields' });
+      var fieldsRow1 = el('div', { class: 'ic-moderate-fields' });
+      var titleWrap = el('div', { class: 'ic-field-inline', style: 'flex:1 1 140px' });
+      titleWrap.appendChild(editField('sourcetitle', 'sourcetitle'));
+      fieldsRow1.appendChild(titleWrap);
+      var authorInput = editField('sourceauthor', 'sourceauthor');
+      var authorWrap = el('div', { class: 'ic-field-inline', style: 'flex:1 1 160px' });
+      authorWrap.appendChild(authorInput);
+      authorInput.disabled = !!(p.sourceauthor && p.sourceauthor === cfg.currentuserfullname);
+      var meLabel = el('label', { class: 'ic-me-check', title: S.student_is_author });
+      var meCheck = el('input', { type: 'checkbox', 'aria-label': S.student_is_author });
+      meCheck.checked = !!(p.sourceauthor && p.sourceauthor === cfg.currentuserfullname);
+      meCheck.addEventListener('change', function () {
+        if (meCheck.checked) {
+          authorInput.value = cfg.currentuserfullname;
+          p.sourceauthor = cfg.currentuserfullname;
+          authorInput.disabled = true;
+        } else {
+          authorInput.disabled = false;
+        }
+        persistSource();
+      });
+      meLabel.appendChild(meCheck);
+      authorWrap.appendChild(meLabel);
+      fieldsRow1.appendChild(authorWrap);
+      fields.appendChild(fieldsRow1);
+      var fieldsRow2 = el('div', { class: 'ic-moderate-fields' });
+      fieldsRow2.appendChild(editField('sourceyear', 'sourceyear', 'narrow'));
+      fieldsRow2.appendChild(editField('sourceepoch', 'sourceepoch', 'narrow'));
+      fieldsRow2.appendChild(editField('sourceplace', 'sourceplace', 'wide'));
+      fieldsRow2.appendChild(editField('sourceorigauthor', 'sourceorigauthor'));
+      fields.appendChild(fieldsRow2);
+      row.appendChild(fields);
+
+      // Nur auf schmalen Bildschirmen sichtbar (siehe CSS): Info-Button
+      // blendet die Datenfelder von rechts ein/aus.
+      var fieldsToggle = el('button', { class: 'ic-home-fields-toggle', title: S.databtn }, [icon('info')]);
+      fieldsToggle.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        fields.classList.toggle('open');
+      });
+      row.appendChild(fieldsToggle);
+
+      list.appendChild(row);
     });
-    wrap.appendChild(gallery);
+    wrap.appendChild(list);
     body.appendChild(wrap);
 
     // Deutlich sichtbarer +-Button unten rechts - die reine Icon-Navigation

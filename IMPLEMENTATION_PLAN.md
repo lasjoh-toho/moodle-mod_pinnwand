@@ -1935,3 +1935,24 @@ Datenfelder neben dem Bild wie die Klassenansicht-Zeilen) wäre ein
 größerer Strukturumbau (Raster → Liste) - noch nicht umgesetzt, um kein
 Risiko für eine falsche Annahme einzugehen. Siehe Rückfrage im
 Antworttext.
+
+---
+
+## Phase 62 — "Meine Bilder" von Raster auf Liste mit Datenfeldern umgebaut ✅
+
+Fünfundfünfzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] **"Meine Bilder" komplett umgebaut**: Liste statt Raster, mit
+  editierbaren Datenfeldern (Titel/Autor*in/Jahr/Epoche/Ort/Autor*in der
+  Vorlage) direkt neben dem Bild - exakt wie in der Klassenansicht,
+  reine Wiederverwendung des dort bereits vorhandenen
+  `mod_pinnwand_update_source`-Endpunkts.
+- [x] Pin/Senden/Mülleimer bleiben unverändert am Thumbnail, jetzt mit
+  fester Thumbnail-Breite (120px) statt Grid-Zellen-Breite.
+- [x] **Auf schmalen Bildschirmen** (≤480px) sind die Datenfelder
+  standardmäßig ausgeblendet (würden neben dem kleinen Thumbnail zu
+  schmal werden) und lassen sich per Info-Button von rechts einblenden
+  (fixiertes Panel, slide-in per CSS-Transition).
+- [x] Alle bisherigen `.ic-gallery`-Selektoren zu `.ic-home-row`
+  umbenannt (Grid-Definition entfernt, durch Flex-Zeile ersetzt).
