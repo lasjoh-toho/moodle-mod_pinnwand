@@ -755,6 +755,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Löschen-Button in der Klassenansicht zeigt jetzt ein Papierkorb-Symbol.
 - Neu: zweispaltige Ansicht in der Klassenübersicht ab 1100px Breite.
 
+### Zweiundvierzigste Überarbeitung — WordArt-Schriftbibliothek (Teil 1)
+
+- **Neu: kuratierte Google-Fonts-Bibliothek** (~220 Schriften, 16
+  Kategorien) im WordArt-Modus - Kategorie antippen lädt deren Schriften
+  erst dann nach, jede zeigt sich direkt in ihrer eigenen Schrift.
+- Noch offen: echte Trennung der Werkzeuge zwischen Zettel- und
+  WordArt-Editor, Akkordeon-Struktur fürs Handy, Presets-Tabs mit
+  Vorschau, selbst gehostete Fonts als Alternative zum Google-Fonts-CDN.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

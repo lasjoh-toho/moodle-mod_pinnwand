@@ -131,6 +131,7 @@ $config = [
         'showannotations' => get_string('showannotations', 'pinnwand'),
         'clearannotations' => get_string('clearannotations', 'pinnwand'),
         'clearannotations_confirm' => get_string('clearannotations_confirm', 'pinnwand'),
+        'wordart_fonts' => get_string('wordart_fonts', 'pinnwand'),
         'photocount' => get_string('photocount', 'pinnwand', ['count' => '{count}', 'max' => '{max}']),
         'photocount_unlimited' => get_string('photocount_unlimited', 'pinnwand', '{count}'),
         'loading' => get_string('loading', 'pinnwand'),

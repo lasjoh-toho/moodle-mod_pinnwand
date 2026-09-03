@@ -512,6 +512,15 @@
 }
 .ic-wordart-preset-btn.active { border-color: var(--ic-accent); }
 
+.ic-wordart-font-modal { max-height: 80vh; }
+.ic-wordart-cat-btn { width: 100%; justify-content: space-between; display: flex; margin-bottom: 6px; }
+.ic-wordart-font-grid { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-height: 55vh; overflow-y: auto; }
+.ic-wordart-font-btn {
+  text-align: left; padding: 10px 12px; border-radius: 8px; border: none; background: #1b1d22;
+  color: var(--ic-text); font-size: 1.15rem; cursor: pointer;
+}
+.ic-wordart-font-btn:hover { background: #24262c; }
+
 .ic-textframe-edit { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
 .ic-textframe-select {
   padding: 6px 8px; border-radius: 6px; border: 1px solid #3a3d44; background: var(--ic-panel); color: var(--ic-text);

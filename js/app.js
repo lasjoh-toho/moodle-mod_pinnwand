@@ -1151,6 +1151,109 @@
     document.head.appendChild(link);
   }
 
+  // WordArt-Schriftbibliothek: kuratierte Google-Fonts-Auswahl, thematisch
+  // in Kategorien geordnet - wird beim Öffnen einer Kategorie on-demand
+  // nachgeladen (siehe ensureWebfont), nicht alle ~220 Schriften auf
+  // einmal. "websafe" enthält bewusst reine System-/Standard-Schriften
+  // ohne Google-Fonts-Ladevorgang.
+  var WORDART_FONT_CATEGORIES = {
+    deko: ['Notable', 'Diplomata', 'Arbutus', 'Cookie', 'Jomhuria', 'Crushed', 'Limelight', 'Fascinate', 'Gorditas', 'Monoton', 'Modak', 'Mogra', 'Merienda', 'Tillana', 'Coustard', 'Fresca', 'Lobster', 'Codystar', 'Ranga', 'Skranji', 'Ultra', 'Foldit', 'Oi', 'Nabla', 'Texturina', 'Danfo'],
+    effect: ['Akronim', 'Neonderthaw', 'Rubik Maze', 'Rubik Distressed', 'Rubik 80s Fade', 'Rubik Gemstones', 'Rubik Iso', 'Rubik Dirt', 'Rubik Wet Paint', 'Rubik Puddles', 'Rubik Moonrocks', 'Rubik Microbe', 'Rubik Glitch', 'Rubik Beastly', 'Rubik Bubbles', 'Rubik Burned', 'Rubik Spray Paint', 'Rubik Storm', 'Rubik Vinyl', 'Rubik Marker Hatch', 'Black And White Picture', 'Moo Lah Lah', 'Faster One', 'Cabin Sketch'],
+    foreign: ['Smokum', 'Rye', 'Ewert', 'Bonbon', 'Sancreek', 'Kenia', 'Hanalei', 'Shojumaru', 'Joti One', 'Trochut', 'Ruslan Display', 'Stick', 'Eagle Lake', 'Uncial Antiqua', 'Caesar Dressing', 'Kings', 'Aladin'],
+    fraktur: ['Astloch', 'Fruktur', 'Iceberg', 'Bokor', 'UnifrakturMaguntia', 'UnifrakturCook', 'MedievalSharp', 'Texturina', 'Rakkas', 'Fondamento', 'Grenze Gotisch', 'Germania One', 'Pirata One', 'Nova Cut', 'New Rocker', 'Manufacturing Consent'],
+    hand: ['Meddon', 'Elsie', 'Bilbo', 'Unkempt', 'Pacifico', 'Knewave', 'Calligraffitti', 'Margarine', 'Allan', 'Borel', 'Charmonman', 'Leckerli One', 'Homemade Apple', 'Sedgwick Ave Display', 'Sedgwick Ave', 'Sail', 'Yellowtail', 'Kaushan Script', 'Festive'],
+    horror: ['Eater', 'Creepster', 'Nosifer', 'Flavors', 'Butcherman', 'Frijole', 'Piedra', 'Smythe', 'Grenze', 'Metal Mania', 'Special Elite', 'Trade Winds', 'Road Rage', 'Lacquer', 'Reggae One', 'Jolly Lodger'],
+    impro: ['Peralta', 'Bangers', 'Unkempt', 'Ranchers', 'Mansalva', 'Slackey', 'Barriecito', 'Barrio', 'Schoolbell', 'Dokdo', 'Underdog', 'Finger Paint', 'Rampart One', 'Freckle Face', 'Pangolin', 'Londrina Sketch'],
+    monospaced: ['Courier New', 'Arvo', 'Roboto', 'BioRhyme', 'Cinzel'],
+    narrow: ['Stint Ultra Condensed', 'Instrument Serif', 'Allan', 'Karantina', 'Mouse Memoirs', 'Acme', 'Staatliches', 'Dorsa', 'Bahiana', 'Smythe', 'Smokum', 'Bokor', 'Handjet', 'Ranga', 'Bangers', 'Jolly Lodger', 'Boogaloo', 'Bubblegum Sans', 'Amatic SC'],
+    party: ['Risque', 'Bonbon', 'Griffy', 'Miltonian', 'Kranky', 'Purple Purse', 'Kablammo', 'Fontdiner Swanky', 'Henny Penny', 'Princess Sofia'],
+    readable: ['Acme', 'Andika', 'Atkinson Hyperlegible', 'Cormorant Upright', 'Lexend', 'Lato', 'Ranchers'],
+    schlagzeile: ['Anton'],
+    scifi: ['VT323', 'Geo', 'Iceberg', 'Offside', 'Orbitron', 'Audiowide', 'Megrim', 'Baumans', 'Tomorrow', 'Vibes', 'Tektur', 'Press Start 2P', 'Foldit', 'Plaster', 'DotGothic16', 'Handjet', 'Monofett', 'Atomic Age', 'Bitcount Prop Single'],
+    sortfield: ['Kaushan Script', 'Ultra', 'Carter One', 'Raleway Dots', 'Bungee Shade', 'Original Surfer', 'Ceviche One', 'Vast Shadow', 'Coiny', 'Cherry Cream Soda', 'Passero One', 'Autour One', 'Train One', 'Tourney', 'Tilt Prism'],
+    stencil: ['Stick No Bills', 'Sirin Stencil', 'Emblema One', 'Saira Stencil One', 'Allerta Stencil', 'Stardos Stencil', 'Plaster'],
+    websafe: ['Open Sans', 'Courier New', 'Arial Narrow', 'Century Gothic', 'Georgia', 'Times New Roman', 'Palatino'],
+  };
+  var WORDART_WEBSAFE_FONTS = {
+    'Open Sans': '"Open Sans", sans-serif', 'Courier New': '"Courier New", monospace',
+    'Arial Narrow': '"Arial Narrow", Arial, sans-serif', 'Century Gothic': '"Century Gothic", sans-serif',
+    'Georgia': 'Georgia, serif', 'Times New Roman': '"Times New Roman", serif', 'Palatino': 'Palatino, serif'
+  };
+  // "Font Name" -> "Font+Name" für die Google-Fonts-CSS2-API.
+  function googleFontParam(name) { return name.replace(/ /g, '+'); }
+  // Liefert die einsetzbare font-family-CSS-Deklaration für einen
+  // WordArt-Katalogeintrag und lädt bei Bedarf die Google-Fonts-Datei nach.
+  function wordartFontCss(name) {
+    if (WORDART_WEBSAFE_FONTS[name]) { return WORDART_WEBSAFE_FONTS[name]; }
+    ensureWebfont(googleFontParam(name));
+    return '"' + name + '", sans-serif';
+  }
+  // Löst t.font in eine einsetzbare font-family-CSS-Deklaration auf -
+  // entweder eine der festen TEXTFRAME_FONTS-IDs oder ein Katalog-Font aus
+  // der WordArt-Schriftbibliothek (Präfix "google:").
+  function resolveFontCss(fontValue) {
+    if (fontValue && fontValue.indexOf('google:') === 0) { return wordartFontCss(fontValue.slice(7)); }
+    var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === fontValue; })[0] || TEXTFRAME_FONTS[0];
+    if (fontDef.webfont) { ensureWebfont(fontDef.webfont); }
+    return fontDef.css;
+  }
+
+  // WordArt-Schriftbibliothek: Kategorie-Browser als Modal - beim Öffnen
+  // einer Kategorie werden deren Google Fonts erst dann nachgeladen (nicht
+  // vorab alle ~220 auf einmal), jeder Font-Button zeigt sich direkt in
+  // der jeweiligen Schrift als Live-Vorschau.
+  var WORDART_CATEGORY_LABELS = {
+    deko: 'Deko', effect: 'Effekt', foreign: 'Fremd', fraktur: 'Fraktur', hand: 'Handschrift',
+    horror: 'Horror', impro: 'Improvisiert', monospaced: 'Monospaced', narrow: 'Schmal',
+    party: 'Party', readable: 'Gut lesbar', schlagzeile: 'Schlagzeile', scifi: 'Sci-Fi',
+    sortfield: 'Sortenfeld', stencil: 'Schablone', websafe: 'Websicher'
+  };
+  function openWordartFontBrowser(active, frame) {
+    var overlay = el('div', { class: 'ic-modal-overlay' });
+    overlay.addEventListener('click', function (ev) { if (ev.target === overlay) { overlay.remove(); } });
+    var panel = el('div', { class: 'ic-add-modal ic-wordart-font-modal' });
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.wordart_fonts]));
+    var body2 = el('div', {});
+    panel.appendChild(body2);
+
+    function applyFont(name) {
+      active.font = 'google:' + name;
+      var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+      if (objEl) { objEl.style.fontFamily = resolveFontCss(active.font); }
+      overlay.remove();
+    }
+
+    function showCategories() {
+      body2.innerHTML = '';
+      Object.keys(WORDART_FONT_CATEGORIES).forEach(function (cat) {
+        var catBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-wordart-cat-btn' },
+          [WORDART_CATEGORY_LABELS[cat] || cat, el('span', { class: 'ic-textframe-label' }, [' (' + WORDART_FONT_CATEGORIES[cat].length + ')'])]);
+        catBtn.addEventListener('click', function () { showFonts(cat); });
+        body2.appendChild(catBtn);
+      });
+    }
+    function showFonts(cat) {
+      body2.innerHTML = '';
+      var backBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, ['\u2039 ' + (WORDART_CATEGORY_LABELS[cat] || cat)]);
+      backBtn.addEventListener('click', showCategories);
+      body2.appendChild(backBtn);
+      var grid = el('div', { class: 'ic-wordart-font-grid' });
+      WORDART_FONT_CATEGORIES[cat].forEach(function (name) {
+        var fb = el('button', { class: 'ic-wordart-font-btn', style: 'font-family:' + resolveFontCss(name) }, [name]);
+        fb.addEventListener('click', function () { applyFont(name); });
+        grid.appendChild(fb);
+      });
+      body2.appendChild(grid);
+    }
+    showCategories();
+
+    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel }, ['\u2715']);
+    closeBtn.addEventListener('click', function () { overlay.remove(); });
+    panel.appendChild(closeBtn);
+    overlay.appendChild(panel);
+    root.appendChild(overlay);
+  }
+
   function newTextFrame() {
     return {
       w: 320, h: 220, preset: 'paper',
@@ -1257,8 +1360,8 @@
     var textEls = tf.texts.map(function (t, idx) {
       var html = t.html || (t.text ? escapeXml(t.text) : '');
       if (!html) { return ''; }
-      var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
-      var baseStyle = 'box-sizing:border-box;font-family:' + escapeXml(fontDef.css) + ';font-size:' + t.size +
+      var fontCss = resolveFontCss(t.font);
+      var baseStyle = 'box-sizing:border-box;font-family:' + escapeXml(fontCss) + ';font-size:' + t.size +
         'px;font-weight:' + (t.fontWeight || 700) + ';line-height:' + (t.lineHeight || 1.2) +
         ';letter-spacing:' + (t.letterSpacing || 0) + 'px;white-space:pre-wrap;word-wrap:break-word;overflow:hidden;' +
         (wordartCssFor(t, preset.text) || ('color:' + (t.color || preset.text) + ';'));
@@ -1428,13 +1531,13 @@
       t.lineHeight = t.lineHeight || 1.2;
       t.letterSpacing = t.letterSpacing || 0;
       t.fontWeight = t.fontWeight || 700;
-      var fontDef = TEXTFRAME_FONTS.filter(function (f) { return f.id === t.font; })[0] || TEXTFRAME_FONTS[0];
+      var fontCss = resolveFontCss(t.font);
       var el2 = el('div', {
         class: 'ic-textframe-obj' + (isPrimary ? ' primary' : '') + (t.id === activeId ? ' active' : ''),
         'data-textid': String(t.id),
         contenteditable: 'true',
         style: (isPrimary ? '' : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;') +
-          'font-family:' + fontDef.css + ';font-size:' + t.size + 'px;font-weight:' + t.fontWeight +
+          'font-family:' + fontCss + ';font-size:' + t.size + 'px;font-weight:' + t.fontWeight +
           ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px;' +
           (wordartCssFor(t, preset.text) || ('color:' + (t.color || preset.text) + ';'))
       });
@@ -1539,6 +1642,16 @@
         if (objEl) { objEl.style.fontFamily = (TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]).css; }
       });
       editRow.appendChild(fontSel);
+
+      // WordArt: eigener "Fonts"-Button öffnet die kuratierte, nach
+      // Kategorien geordnete Schriftbibliothek (siehe WORDART_FONT_CATEGORIES) -
+      // getrennt von der schlichten Basis-Auswahl oben, da "wilde"
+      // Formatierung hier im Vordergrund steht.
+      if (state.wordArtMode) {
+        var fontsBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('fonts'), el('span', {}, [S.wordart_fonts])]);
+        fontsBtn.addEventListener('click', function () { openWordartFontBrowser(active, frame); });
+        fontsBox.appendChild(fontsBtn);
+      }
 
       var sizeInput = el('input', { type: 'range', min: '14', max: '160', value: String(active.size) });
       sizeInput.addEventListener('input', function () {
@@ -1805,6 +1918,7 @@
     trash: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
     undo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.4L3 7"/></svg>',
     redo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7.4L21 7"/></svg>',
+    fonts: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V6l4-4 4 4v14"/><path d="M4 14h8"/><path d="M15 20l4-9 4 9"/><path d="M16.5 16.5h5"/></svg>',
     play: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>',
     grid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg>',

@@ -1413,3 +1413,38 @@ Zweiunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
 - [x] **Zweispaltige Ansicht** in der Klassenübersicht ab 1100px
   Bildschirmbreite - jeder Nutzer-Block bleibt zusammenhängend
   (`break-inside: avoid-column`), unabhängig von der gewählten Sortierung.
+
+---
+
+## Phase 40 — WordArt-Schriftbibliothek: Kategorien, On-Demand-Laden, Kategorie-Browser (Teil 1/mehrere) ✅
+
+Dreiunddreißigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`,
+neue Strings.
+
+- [x] **Kuratierte Google-Fonts-Bibliothek** (~220 Schriften, 16
+  thematische Kategorien wie vorgegeben) als Datenstruktur
+  `WORDART_FONT_CATEGORIES` hinterlegt.
+- [x] `resolveFontCss()` als gemeinsame Auflösung ergänzt - unterstützt
+  jetzt sowohl die festen `TEXTFRAME_FONTS`-IDs als auch beliebige
+  Katalog-Fonts (Präfix `google:`), an allen vier bisherigen
+  Font-Lookup-Stellen (Live-Rendering, SVG-Export) eingesetzt.
+- [x] **"Fonts"-Button im WordArt-Modus** öffnet einen Kategorie-Browser:
+  eine Kategorie antippen lädt deren Google Fonts erst dann nach (nicht
+  alle ~220 auf einmal) und zeigt sie als anklickbare, in der jeweiligen
+  Schrift gehaltene Buttons (Live-Vorschau ohne Zusatzschritt).
+  "websafe" nutzt bewusst reine System-Schriften ohne Google-Fonts-Ladevorgang.
+
+**Bewusst noch nicht umgesetzt (nächster Durchgang):**
+- Trennung der WERKZEUGE zwischen Zettel- und WordArt-Editor (aktuell nur
+  die WordArt-Stile/Fonts-Button zusätzlich sichtbar, sonst identisch).
+- Block-/Akkordeon-Struktur (hochkant/quer-Anordnung, auf dem Handy
+  eingeklappte Akkordions) - existiert aus einem früheren Durchgang nur in
+  einer einfacheren Form, noch nicht die beschriebene Akkordeon-Variante
+  fürs Handy.
+- WordArt-Layout exakt nach Vorlage (Textarea oben links, Buttons
+  "Presets"/"Fonts" als eigener Block).
+- "Presets"-Button mit Tabs/Vorschau (aktuell nur 6 CSS-Stile als
+  Buttons ohne Tab-System).
+- Selbst gehostete Fonts als admin-konfigurierbare Alternative zum
+  Google-Fonts-CDN (eigene Infrastruktur-Aufgabe: Font-Dateien
+  herunterladen/speichern/ausliefern).
