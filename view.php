@@ -241,6 +241,7 @@ $config = [
         'tfblock_templates' => get_string('tfblock_templates', 'pinnwand'),
         'tfblock_fonts' => get_string('tfblock_fonts', 'pinnwand'),
         'tfblock_form' => get_string('tfblock_form', 'pinnwand'),
+        'tfblock_formulas' => get_string('tfblock_formulas', 'pinnwand'),
         'textcolor' => get_string('textcolor', 'pinnwand'),
         'textframe_placeholder' => get_string('textframe_placeholder', 'pinnwand'),
         'backside' => get_string('backside', 'pinnwand'),

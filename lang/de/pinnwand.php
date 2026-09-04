@@ -103,6 +103,7 @@ $string['fontweight'] = 'Schriftstärke';
 $string['tfblock_templates'] = 'Vorlagen';
 $string['tfblock_fonts'] = 'Schriften';
 $string['tfblock_form'] = 'Form / Rand / Schatten / Kontur';
+$string['tfblock_formulas'] = 'Formeln';
 $string['textcolor'] = 'Farbe';
 $string['textframe_placeholder'] = 'Text eingeben…';
 $string['backside'] = 'Rückseite';

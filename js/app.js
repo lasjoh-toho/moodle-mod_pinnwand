@@ -1736,15 +1736,25 @@
     }
     var blockTemplates = makeAccordionBlock(S.tfblock_templates);
     var blockFonts = makeAccordionBlock(S.tfblock_fonts);
-    var blockForm = makeAccordionBlock(S.tfblock_form);
+    var blockForm = makeAccordionBlock(state.wordArtMode ? S.tfblock_form : S.tfblock_formulas);
     blocksWrap.appendChild(blockTemplates);
     blocksWrap.appendChild(blockFonts);
     blocksWrap.appendChild(blockForm);
     layout.appendChild(blocksWrap);
 
     // Block 1: Vorlagen für den Zettel selbst (als Beispiel direkt sichtbar).
+    // Im Zettel-Modus zuerst "Zettel" (Papier) und "Text ohne Hintergrund" -
+    // das sind die für den wissenschaftlichen Editor zentralen globalen
+    // Darstellungsarten. Im WordArt-Modus bleibt die ursprüngliche
+    // Reihenfolge (dort sind alle vier gleichrangig).
+    var presetOrder = state.wordArtMode
+      ? TEXTFRAME_PRESETS
+      : TEXTFRAME_PRESETS.slice().sort(function (a, b) {
+        var order = { paper: 0, none: 1, dark: 2, light: 3 };
+        return order[a.id] - order[b.id];
+      });
     var presetRow = el('div', { class: 'ic-textframe-presets' });
-    TEXTFRAME_PRESETS.forEach(function (p) {
+    presetOrder.forEach(function (p) {
       var label = p.id === 'none' ? S.preset_none : p.id === 'paper' ? S.preset_paper : p.id === 'dark' ? S.preset_dark : S.preset_light;
       var b = el('button', { class: 'ic-btn ic-btn-ghost' + (tf.preset === p.id ? ' ic-btn-primary' : '') }, [label]);
       b.addEventListener('click', function () { tf.preset = p.id; render(); });
@@ -1860,7 +1870,7 @@
           fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
           formatRow.appendChild(fb);
         });
-        formBox.appendChild(formatRow);
+        fontsBox.appendChild(formatRow);
 
         // Formeleditor: Hoch-/Tiefstellen, Bruch, Symbol-Palette - bewusst
         // als reines HTML (sup/sub, verschachtelte Spans) und Unicode-
@@ -1943,7 +1953,7 @@
       var customColor = el('input', { type: 'color', value: active.color || preset.text, class: 'ic-textframe-custom-color' });
       customColor.addEventListener('change', function () { applyColor(customColor.value); });
       paletteRow.appendChild(customColor);
-      formBox.appendChild(paletteRow);
+      (state.wordArtMode ? formBox : fontsBox).appendChild(paletteRow);
 
       if (tf.texts.length > 1) {
         var rmBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.removetextobject]);

@@ -103,6 +103,7 @@ $string['fontweight'] = 'Font weight';
 $string['tfblock_templates'] = 'Templates';
 $string['tfblock_fonts'] = 'Fonts';
 $string['tfblock_form'] = 'Shape / Border / Shadow / Outline';
+$string['tfblock_formulas'] = 'Formulas';
 $string['textcolor'] = 'Colour';
 $string['textframe_placeholder'] = 'Enter text…';
 $string['backside'] = 'Back side';

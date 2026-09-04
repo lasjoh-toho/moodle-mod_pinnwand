@@ -1976,3 +1976,25 @@ Vorschläge zur stärkeren inhaltlichen Differenzierung zwischen Zettel-
 und WordArt-Editor siehe Antworttext - noch nicht umgesetzt, wartet auf
 Rückmeldung, welche Richtung gewünscht ist. LaTeX-Formeldarstellung
 bewusst zurückgestellt (nächster großer Schritt).
+
+---
+
+## Phase 64 — Block-Inhalte neu geplant und geordnet (Zettel: eigener Formel-Block) ✅
+
+Siebenundfünfzigster Feedback-Durchgang. Betrifft: `js/app.js`, neue
+Strings.
+
+Vollständige Planung, was in welchem der drei Werkzeug-Blöcke Platz
+findet (siehe Antworttext für die ausführliche Begründung) - umgesetzt:
+
+- **Zettel**: Block 1 "Vorlagen" zeigt jetzt zuerst "Zettel" (Papier) und
+  "Text ohne Hintergrund" (die zentralen globalen Darstellungsarten für
+  den wissenschaftlichen Editor). Block 2 "Schriften" bekommt zusätzlich
+  die Formatierungs-Buttons (Fett/Kursiv/etc.) und die Farbpalette -
+  passt inhaltlich zur Typografie. Block 3 heißt jetzt "Formeln" und
+  enthält ausschließlich die Formel-Werkzeuge (Hoch-/Tiefstellen, Bruch,
+  Symbol-Palette).
+- **WordArt**: Block 1 "Vorlagen" unverändert (alle vier gleichrangig).
+  Block 2 "Schriften" unverändert (Fonts-Katalog, Gewicht, Laufweite).
+  Block 3 "Form" unverändert (WordArt-Stile + Farbpalette, eng
+  gekoppelt).

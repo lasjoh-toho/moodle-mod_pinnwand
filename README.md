@@ -955,6 +955,13 @@ Details und Scoping-Entscheidungen. In Kurzform:
   rechts, der Zettel bekommt dadurch die volle Höhe von oben bis unten.
 - Vorschläge zur Differenzierung Zettel-/WordArt-Editor siehe Antwort.
 
+### Achtundsechzigste Überarbeitung — Block-Inhalte neu geordnet
+
+- Zettel: Block 1 zeigt zuerst "Zettel"/"Text ohne Hintergrund", Block 2
+  bekommt Formatierung+Farbpalette, Block 3 heißt jetzt "Formeln" und
+  enthält nur noch die Formel-Werkzeuge.
+- WordArt: Blöcke unverändert.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
