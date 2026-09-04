@@ -1998,3 +1998,35 @@ findet (siehe Antworttext für die ausführliche Begründung) - umgesetzt:
   Block 2 "Schriften" unverändert (Fonts-Katalog, Gewicht, Laufweite).
   Block 3 "Form" unverändert (WordArt-Stile + Farbpalette, eng
   gekoppelt).
+
+---
+
+## Phase 65 — Block 1 "Farben und Formen" (identisch in beiden Editoren), WYSIWYG-Textobjekte ✅
+
+Achtundfünfzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`, neue Strings.
+
+- [x] **Kein separater "Text hinzufügen"-Button mehr** - ein Doppelklick
+  auf eine leere Stelle im Editorfeld legt WYSIWYG ein neues Textobjekt
+  genau dort an.
+- [x] **Block 1 "Farben und Formen" komplett neu, identisch in beiden
+  Editoren**:
+  - Form der Kartenfläche (Hintergrund): Eckig/Abgerundet/Kreis/Oval.
+  - Dekorative Form im Vordergrund (Sticker/Badge hinter dem Text):
+    Keine/Stern/Banner/Abzeichen - einfache, exportfähige SVG-Formen.
+  - Fill/Kontur/Effekte als Pop-up-Buttons, wirken auf das gerade
+    gewählte Textobjekt: Fläche (Vollfarbe oder 2-Farben-Verlauf),
+    Kontur (Farbe + Dicke), Effekte (Schatten/Glow, je mit eigener
+    Farbe + Dicke/Unschärfe, unabhängig zuschaltbar).
+- [x] Neue Funktion `computeStyle1Css()` für Fill/Kontur/Effekte -
+  identisch für Live-Vorschau UND SVG-Export verwendet. Export
+  berücksichtigt jetzt auch die Formauswahl (Kreis/Oval als `<ellipse>`)
+  und die Vordergrund-Form.
+- [x] Ein neuer Zettel startet jetzt standardmäßig im Hochformat (WordArt
+  bleibt Querformat) - macht die Seitenleisten-Anordnung aus dem letzten
+  Durchgang sofort sichtbar, ohne erst manuell die Maße ändern zu
+  müssen.
+
+**Noch offen** (folgt in einem späteren Durchgang, wie angekündigt): die
+übrigen, sich zwischen den Editoren unterscheidenden Blöcke (Text/
+Schrift-Tab, Formeln, ggf. weitere Tabs).

@@ -563,6 +563,16 @@
 .ic-textframe-obj:hover .ic-textframe-size-handle, .ic-textframe-obj.active .ic-textframe-size-handle { opacity: 1; }
 .ic-textframe-controls:empty { display: none; }
 .ic-textframe-presets { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
+.ic-textframe-shape-row { margin: 8px 0; }
+.ic-textframe-shape-btn { flex: 1 1 0; }
+.ic-textframe-fgshape {
+  position: absolute; inset: 0; background-repeat: no-repeat; background-position: center;
+  background-size: 70% 70%; pointer-events: none; z-index: 0;
+}
+.ic-textframe-popup {
+  position: fixed; z-index: 500; background: var(--ic-panel); border-radius: 10px; padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5); display: flex; flex-direction: column; gap: 8px; min-width: 200px;
+}
 
 /* Drei Werkzeug-Blöcke: hochkant (Zettel schmaler als hoch) untereinander,
    quer (Zettel breiter als hoch) nebeneinander unter dem Beitrag. */

@@ -962,6 +962,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
   enthält nur noch die Formel-Werkzeuge.
 - WordArt: Blöcke unverändert.
 
+### Neunundsechzigste Überarbeitung — Block 1 "Farben und Formen", WYSIWYG-Textobjekte
+
+- Kein separater "Text hinzufügen"-Button mehr - Doppelklick auf eine
+  leere Stelle im Editorfeld legt WYSIWYG ein neues Textobjekt an.
+- Block 1 "Farben und Formen" komplett neu, identisch in beiden
+  Editoren: Form für Hintergrund/Vordergrund (Sticker), Fill/Kontur/
+  Effekte als Pop-ups mit Verlauf-, Dicke- und Unschärfe-Optionen.
+- Ein neuer Zettel startet jetzt standardmäßig hochkant.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -1365,9 +1365,9 @@
     root.appendChild(overlay);
   }
 
-  function newTextFrame() {
+  function newTextFrame(wordArtMode) {
     return {
-      w: 320, h: 220, preset: 'paper',
+      w: wordArtMode ? 320 : 220, h: wordArtMode ? 220 : 320, preset: 'paper',
       texts: [{ id: 1, text: '', font: 'sans', size: 32, x: 0.5, y: 0.5 }]
     };
   }
@@ -1452,6 +1452,28 @@
     return style ? style.css(t.color || fallbackColor) : '';
   }
 
+  // Block "Farben und Formen": Fill (Vollfarbe oder Verlauf), Kontur
+  // (Umriss mit eigener Dicke) und Effekte (Schatten/Glow, jeweils mit
+  // eigener Dicke/Unschärfe) - eine gemeinsame Funktion für Live-Vorschau
+  // UND SVG-Export, damit beide garantiert übereinstimmen.
+  function computeStyle1Css(t, fallbackColor) {
+    var css = '';
+    if (t.fillGradient && t.fillGradient.length === 2) {
+      css += 'background-image:linear-gradient(135deg,' + t.fillGradient[0] + ',' + t.fillGradient[1] + ');' +
+        '-webkit-background-clip:text;background-clip:text;color:transparent;';
+    } else {
+      css += 'color:' + (t.fillColor || fallbackColor) + ';';
+    }
+    if (t.outlineWidth > 0) {
+      css += '-webkit-text-stroke:' + t.outlineWidth + 'px ' + (t.outlineColor || '#000') + ';paint-order:stroke fill;';
+    }
+    var shadows = [];
+    if (t.shadowOn) { shadows.push('0 2px ' + (t.shadowBlur || 4) + 'px ' + (t.shadowColor || '#000')); }
+    if (t.glowOn) { shadows.push('0 0 ' + (t.glowWidth || 8) + 'px ' + (t.glowColor || '#fff')); }
+    if (shadows.length) { css += 'text-shadow:' + shadows.join(',') + ';'; }
+    return css;
+  }
+
   function buildTextFrameSVG(tf) {
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
     var defs = '';
@@ -1461,8 +1483,36 @@
         defs = '<defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">' +
           '<feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.35"/></filter></defs>';
       }
-      bgRect = '<rect x="0" y="0" width="' + tf.w + '" height="' + tf.h + '" rx="6" fill="' + preset.bg + '"' +
-        (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
+      // Form der Kartenfläche selbst (Block "Farben und Formen") - Kreis/
+      // Oval als <ellipse>, alle anderen als <rect> mit passender Rundung.
+      var shape = tf.shape || 'rounded';
+      if (shape === 'circle' || shape === 'ellipse') {
+        bgRect = '<ellipse cx="' + (tf.w / 2) + '" cy="' + (tf.h / 2) + '" rx="' + (tf.w / 2) + '" ry="' + (tf.h / 2) +
+          '" fill="' + preset.bg + '"' + (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
+      } else {
+        var rx = shape === 'rect' ? 0 : 16;
+        bgRect = '<rect x="0" y="0" width="' + tf.w + '" height="' + tf.h + '" rx="' + rx + '" fill="' + preset.bg + '"' +
+          (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
+      }
+    }
+    // Dekorative Vordergrund-Form (Sticker/Badge) - liegt hinter dem Text,
+    // aber vor dem Kartenhintergrund.
+    var fgShapeEl = '';
+    if (tf.fgShape && tf.fgShape !== 'none') {
+      var fgColor = escapeXml(tf.fgShapeColor || '#e0503f');
+      var cx = tf.w / 2, cy = tf.h / 2, s = Math.min(tf.w, tf.h) * 0.7;
+      if (tf.fgShape === 'star') {
+        var pts = [[50, 3], [61, 38], [98, 38], [68, 60], [79, 95], [50, 74], [21, 95], [32, 60], [2, 38], [39, 38]]
+          .map(function (p) { return (cx - s / 2 + p[0] / 100 * s) + ',' + (cy - s / 2 + p[1] / 100 * s); }).join(' ');
+        fgShapeEl = '<polygon points="' + pts + '" fill="' + fgColor + '"/>';
+      } else if (tf.fgShape === 'ribbon') {
+        var w2 = s, h2 = s * 0.6, x0 = cx - w2 / 2, y0 = cy - h2 / 2;
+        fgShapeEl = '<polygon points="' + x0 + ',' + (y0 + h2 * 0.17) + ' ' + (x0 + w2) + ',' + (y0 + h2 * 0.17) + ' ' +
+          (x0 + w2) + ',' + (y0 + h2 * 0.83) + ' ' + (x0 + w2 / 2) + ',' + (y0 + h2 * 0.63) + ' ' +
+          x0 + ',' + (y0 + h2 * 0.83) + '" fill="' + fgColor + '"/>';
+      } else {
+        fgShapeEl = '<circle cx="' + cx + '" cy="' + cy + '" r="' + (s / 2) + '" fill="' + fgColor + '"/>';
+      }
     }
     // Alle Textobjekte (nicht nur das primäre) laufen über foreignObject mit
     // echtem HTML-Markup - so bleiben Fett/Kursiv/Unterstrichen/
@@ -1475,7 +1525,7 @@
       var baseStyle = 'box-sizing:border-box;font-family:' + escapeXml(fontCss) + ';font-size:' + t.size +
         'px;font-weight:' + (t.fontWeight || 700) + ';line-height:' + (t.lineHeight || 1.2) +
         ';letter-spacing:' + (t.letterSpacing || 0) + 'px;white-space:pre-wrap;word-wrap:break-word;overflow:hidden;' +
-        (wordartCssFor(t, preset.text) || ('color:' + (t.color || preset.text) + ';'));
+        (wordartCssFor(t, preset.text) || computeStyle1Css(t, preset.text));
       if (idx === 0) {
         // Primäres Textobjekt: füllt den ganzen Rahmen.
         return '<foreignObject x="0" y="0" width="' + tf.w + '" height="' + tf.h + '">' +
@@ -1505,7 +1555,7 @@
       'font-size:.82em;line-height:1.1;margin:0 2px}' +
       '.ic-frac-num{border-bottom:1.5px solid currentColor;padding:0 3px 1px}' +
       '.ic-frac-den{padding:1px 3px 0}' +
-      '</style>' + defs + bgRect + textEls + '</svg>';
+      '</style>' + defs + bgRect + fgShapeEl + textEls + '</svg>';
   }
 
   // Bettet die tatsächlich verwendeten Web-Fonts (aktuell nur "Handschrift")
@@ -1589,7 +1639,7 @@
   }
 
   function renderTextFrame(body) {
-    if (!state.textFrame) { state.textFrame = newTextFrame(); }
+    if (!state.textFrame) { state.textFrame = newTextFrame(state.wordArtMode); }
     var tf = state.textFrame;
     TEXTFRAME_FONTS.forEach(function (f) { if (f.webfont) { ensureWebfont(f.webfont); } });
 
@@ -1664,7 +1714,7 @@
         style: (isPrimary ? '' : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;') +
           'font-family:' + fontCss + ';font-size:' + t.size + 'px;font-weight:' + t.fontWeight +
           ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px;' +
-          (wordartCssFor(t, preset.text) || ('color:' + (t.color || preset.text) + ';'))
+          (wordartCssFor(t, preset.text) || computeStyle1Css(t, preset.text))
       });
       // innerHTML statt textContent: so bleiben Fett/Kursiv/Unterstrichen/
       // Durchgestrichen/Aufzählungen (siehe Formatierungswerkzeuge) beim
@@ -1742,11 +1792,78 @@
     blocksWrap.appendChild(blockForm);
     layout.appendChild(blocksWrap);
 
-    // Block 1: Vorlagen für den Zettel selbst (als Beispiel direkt sichtbar).
-    // Im Zettel-Modus zuerst "Zettel" (Papier) und "Text ohne Hintergrund" -
-    // das sind die für den wissenschaftlichen Editor zentralen globalen
-    // Darstellungsarten. Im WordArt-Modus bleibt die ursprüngliche
-    // Reihenfolge (dort sind alle vier gleichrangig).
+    // Block 1 "Farben und Formen" - identisch in beiden Editoren (Zettel
+    // und WordArt). Enthält: Form der Kartenfläche selbst (Hintergrund),
+    // eine optionale dekorative Form im Vordergrund (Sticker/Badge hinter
+    // dem Text), sowie Fill/Kontur/Effekte als Pop-ups, die auf das
+    // gerade gewählte Textobjekt wirken. Die übrigen, sich zwischen den
+    // Editoren unterscheidenden Blöcke (Text/Schrift, Formeln etc.)
+    // folgen in einem späteren Durchgang unverändert weiter unten.
+    var TF_SHAPES = ['rect', 'rounded', 'circle', 'ellipse'];
+    function shapeCssFor(shapeId) {
+      if (shapeId === 'rect') { return 'border-radius:0;clip-path:none;'; }
+      if (shapeId === 'circle') { return 'border-radius:50%;clip-path:none;'; }
+      if (shapeId === 'ellipse') { return 'border-radius:50%;clip-path:none;'; }
+      return 'border-radius:16px;clip-path:none;'; // 'rounded' (Standard)
+    }
+    tf.shape = tf.shape || 'rounded';
+    tf.fgShape = tf.fgShape || 'none';
+    frame.style.cssText += ';' + shapeCssFor(tf.shape) + 'overflow:hidden;';
+
+    var shapeRow = el('div', { class: 'ic-textframe-shape-row' });
+    shapeRow.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_shape_bg]));
+    var shapeBtns = el('div', { class: 'ic-textframe-formatgrid' });
+    TF_SHAPES.forEach(function (sid) {
+      var label = sid === 'rect' ? S.tf_shape_rect : sid === 'rounded' ? S.tf_shape_rounded
+        : sid === 'circle' ? S.tf_shape_circle : S.tf_shape_ellipse;
+      var sb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-shape-btn' + (tf.shape === sid ? ' ic-btn-primary' : '') }, [label]);
+      sb.addEventListener('click', function () { tf.shape = sid; render(); });
+      shapeBtns.appendChild(sb);
+    });
+    shapeRow.appendChild(shapeBtns);
+    blockTemplates.content.appendChild(shapeRow);
+
+    var fgShapeRow = el('div', { class: 'ic-textframe-shape-row' });
+    fgShapeRow.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_shape_fg]));
+    var fgShapeBtns = el('div', { class: 'ic-textframe-formatgrid' });
+    ['none', 'star', 'ribbon', 'badge'].forEach(function (sid) {
+      var label = sid === 'none' ? S.tf_shape_none : sid === 'star' ? S.tf_shape_star
+        : sid === 'ribbon' ? S.tf_shape_ribbon : S.tf_shape_badge;
+      var sb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-shape-btn' + (tf.fgShape === sid ? ' ic-btn-primary' : '') }, [label]);
+      sb.addEventListener('click', function () { tf.fgShape = sid; render(); });
+      fgShapeBtns.appendChild(sb);
+    });
+    fgShapeRow.appendChild(fgShapeBtns);
+    blockTemplates.content.appendChild(fgShapeRow);
+
+    // Dekorative Vordergrund-Form (Sticker/Badge) hinter dem Text, aber vor
+    // dem Kartenhintergrund - einfache SVG-Formen, exportfähig da reines
+    // Markup ohne externe Ressourcen.
+    if (tf.fgShape !== 'none') {
+      var fgSvg = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+        tf.fgShape === 'star'
+          ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="50,3 61,38 98,38 68,60 79,95 50,74 21,95 32,60 2,38 39,38" fill="' + (tf.fgShapeColor || '#e0503f') + '"/></svg>'
+          : tf.fgShape === 'ribbon'
+          ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60"><polygon points="0,10 100,10 100,50 50,38 0,50" fill="' + (tf.fgShapeColor || '#e0503f') + '"/></svg>'
+          : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="' + (tf.fgShapeColor || '#e0503f') + '"/></svg>'
+      );
+      var fgShapeEl = el('div', {
+        class: 'ic-textframe-fgshape',
+        style: 'background-image:url(' + fgSvg + ')'
+      });
+      frame.insertBefore(fgShapeEl, frame.firstChild);
+    }
+
+    // Fill/Kontur/Effekte als Pop-ups - wirken auf das gerade gewählte
+    // Textobjekt (siehe activeId/refreshControls weiter unten). Werden in
+    // einer eigenen Zeile im selben Block untergebracht.
+    var styleRow = el('div', { class: 'ic-textframe-formatgrid' });
+    var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_fill]);
+    var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_outline]);
+    var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_effects]);
+    styleRow.appendChild(fillBtn); styleRow.appendChild(outlineBtn); styleRow.appendChild(effectsBtn);
+    blockTemplates.content.appendChild(styleRow);
+
     var presetOrder = state.wordArtMode
       ? TEXTFRAME_PRESETS
       : TEXTFRAME_PRESETS.slice().sort(function (a, b) {
@@ -1775,6 +1892,103 @@
       formBox.innerHTML = '';
       var active = tf.texts.filter(function (t) { return t.id === activeId; })[0];
       if (!active) { return; }
+
+      // Fill/Kontur/Effekte (Block 1) wirken auf DIESES aktive Textobjekt -
+      // Handler werden bei jedem refreshControls() neu gesetzt (überschreibt
+      // die vorherige Zuordnung), damit sie immer das gerade gewählte
+      // Textobjekt treffen.
+      function applyStyle1() {
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.cssText += ';' + computeStyle1Css(active, preset.text); }
+      }
+      function openStyle1Popup(anchorBtn, buildRows) {
+        var existing = document.getElementById('ic-style1-popup');
+        if (existing) { existing.remove(); if (existing.dataset.anchor === anchorBtn.dataset.popupId) { return; } }
+        var popup = el('div', { class: 'ic-textframe-popup', id: 'ic-style1-popup' });
+        popup.dataset.anchor = anchorBtn.dataset.popupId;
+        buildRows(popup);
+        var rect = anchorBtn.getBoundingClientRect();
+        popup.style.top = (rect.bottom + 4) + 'px';
+        popup.style.left = rect.left + 'px';
+        root.appendChild(popup);
+        setTimeout(function () {
+          document.addEventListener('click', function closeOnce(ev) {
+            if (!popup.contains(ev.target) && ev.target !== anchorBtn) { popup.remove(); }
+            document.removeEventListener('click', closeOnce);
+          });
+        }, 0);
+      }
+      fillBtn.dataset.popupId = 'fill';
+      fillBtn.onclick = function (ev) {
+        ev.stopPropagation();
+        openStyle1Popup(fillBtn, function (popup) {
+          var gradToggle = el('label', { class: 'ic-me-check' });
+          var gradCheck = el('input', { type: 'checkbox' });
+          gradCheck.checked = !!active.fillGradient;
+          gradToggle.appendChild(gradCheck);
+          gradToggle.appendChild(document.createTextNode(S.tf_use_gradient));
+          popup.appendChild(gradToggle);
+          var soloRow = el('div', { class: 'ic-textframe-palette' });
+          TEXTFRAME_PALETTE.forEach(function (color) {
+            var sw = el('button', { class: 'ic-color-swatch' + ((active.fillColor || preset.text) === color ? ' active' : ''), style: 'background:' + color });
+            sw.addEventListener('click', function () { active.fillColor = color; applyStyle1(); popup.remove(); });
+            soloRow.appendChild(sw);
+          });
+          var customColor = el('input', { type: 'color', value: active.fillColor || preset.text, class: 'ic-textframe-custom-color' });
+          customColor.addEventListener('change', function () { active.fillColor = customColor.value; applyStyle1(); });
+          soloRow.appendChild(customColor);
+          var gradRow = el('div', { class: 'ic-textframe-edit' });
+          var g1 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[0]) || '#e0503f' });
+          var g2 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[1]) || '#4f8cff' });
+          function updateGrad() { active.fillGradient = [g1.value, g2.value]; applyStyle1(); }
+          g1.addEventListener('input', updateGrad); g2.addEventListener('input', updateGrad);
+          gradRow.appendChild(g1); gradRow.appendChild(g2);
+          gradCheck.addEventListener('change', function () {
+            active.fillGradient = gradCheck.checked ? [g1.value, g2.value] : null;
+            applyStyle1(); refreshControls();
+          });
+          popup.appendChild(active.fillGradient ? gradRow : soloRow);
+        });
+      };
+      outlineBtn.dataset.popupId = 'outline';
+      outlineBtn.onclick = function (ev) {
+        ev.stopPropagation();
+        openStyle1Popup(outlineBtn, function (popup) {
+          var row = el('div', { class: 'ic-textframe-edit' });
+          var colorInput = el('input', { type: 'color', value: active.outlineColor || '#000000' });
+          var widthInput = el('input', { type: 'range', min: '0', max: '6', step: '0.5', value: String(active.outlineWidth || 0) });
+          colorInput.addEventListener('input', function () { active.outlineColor = colorInput.value; applyStyle1(); });
+          widthInput.addEventListener('input', function () { active.outlineWidth = parseFloat(widthInput.value); applyStyle1(); });
+          row.appendChild(colorInput);
+          row.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
+          row.appendChild(widthInput);
+          popup.appendChild(row);
+        });
+      };
+      effectsBtn.dataset.popupId = 'effects';
+      effectsBtn.onclick = function (ev) {
+        ev.stopPropagation();
+        openStyle1Popup(effectsBtn, function (popup) {
+          [
+            ['shadowOn', 'shadowColor', 'shadowBlur', S.tf_shadow, '#000000', 4],
+            ['glowOn', 'glowColor', 'glowWidth', S.tf_glow, '#ffffff', 8]
+          ].forEach(function (cfg) {
+            var onKey = cfg[0], colorKey = cfg[1], widthKey = cfg[2], label = cfg[3], defColor = cfg[4], defWidth = cfg[5];
+            var row = el('div', { class: 'ic-textframe-edit' });
+            var toggle = el('label', { class: 'ic-me-check' });
+            var check = el('input', { type: 'checkbox' });
+            check.checked = !!active[onKey];
+            toggle.appendChild(check); toggle.appendChild(document.createTextNode(label));
+            var colorInput = el('input', { type: 'color', value: active[colorKey] || defColor });
+            var widthInput = el('input', { type: 'range', min: '0', max: '20', step: '1', value: String(active[widthKey] || defWidth) });
+            check.addEventListener('change', function () { active[onKey] = check.checked; applyStyle1(); });
+            colorInput.addEventListener('input', function () { active[colorKey] = colorInput.value; applyStyle1(); });
+            widthInput.addEventListener('input', function () { active[widthKey] = parseFloat(widthInput.value); applyStyle1(); });
+            row.appendChild(toggle); row.appendChild(colorInput); row.appendChild(widthInput);
+            popup.appendChild(row);
+          });
+        });
+      };
 
       var editRow = el('div', { class: 'ic-textframe-edit' });
       var fontSel = el('select', { class: 'ic-textframe-select' });
@@ -1966,13 +2180,19 @@
     }
     refreshControls();
 
-    var addTextBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.addtextobject]);
-    addTextBtn.addEventListener('click', function () {
+    // Kein separater "Text hinzufügen"-Button mehr - ein Doppelklick auf
+    // eine LEERE Stelle im Editorfeld (nicht auf ein bestehendes
+    // Textobjekt) legt WYSIWYG ein neues Textobjekt genau dort an.
+    frame.addEventListener('dblclick', function (ev) {
+      if (ev.target !== frame) { return; }
+      var rect = frame.getBoundingClientRect();
       var nextId = Math.max.apply(null, tf.texts.map(function (t) { return t.id; })) + 1;
-      tf.texts.push({ id: nextId, text: '', font: 'sans', size: 32, x: 0.5, y: 0.5 });
+      tf.texts.push({
+        id: nextId, text: '', font: 'sans', size: 32,
+        x: (ev.clientX - rect.left) / rect.width, y: (ev.clientY - rect.top) / rect.height
+      });
       render();
     });
-    body.appendChild(addTextBtn);
 
     var bar = el('div', { class: 'ic-actionbar' });
     bar.appendChild(cancelWizardBtn());
