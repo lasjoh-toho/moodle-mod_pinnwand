@@ -566,7 +566,18 @@
 
 /* Drei Werkzeug-Blöcke: hochkant (Zettel schmaler als hoch) untereinander,
    quer (Zettel breiter als hoch) nebeneinander unter dem Beitrag. */
-.ic-textframe-blocks { display: flex; gap: 12px; margin-top: 14px; }
+.ic-textframe-layout { display: flex; flex: 1 1 auto; min-height: 0; gap: 12px; }
+.ic-textframe-layout.ic-tf-portrait { flex-direction: row; }
+.ic-textframe-layout.ic-tf-landscape { flex-direction: column; }
+@media (max-width: 640px) {
+  /* Auf dem Handy immer untereinander, unabhängig von der Zettel-
+     Ausrichtung - eine seitliche Werkzeugleiste wäre dort zu schmal. */
+  .ic-textframe-layout.ic-tf-portrait { flex-direction: column; }
+}
+.ic-textframe-layout.ic-tf-portrait .ic-textframe-blocks {
+  flex: 0 0 280px; overflow-y: auto; max-height: 100%;
+}
+.ic-textframe-blocks { display: flex; gap: 12px; }
 .ic-textframe-blocks.ic-tf-portrait { flex-direction: column; }
 .ic-textframe-blocks.ic-tf-landscape { flex-direction: row; }
 .ic-textframe-blocks.ic-tf-landscape .ic-textframe-block { flex: 1 1 0; min-width: 0; }

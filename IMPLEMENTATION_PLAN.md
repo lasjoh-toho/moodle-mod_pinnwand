@@ -1956,3 +1956,23 @@ Fünfundfünfzigster Feedback-Durchgang. Betrifft: `js/app.js`,
   (fixiertes Panel, slide-in per CSS-Transition).
 - [x] Alle bisherigen `.ic-gallery`-Selektoren zu `.ic-home-row`
   umbenannt (Grid-Definition entfernt, durch Flex-Zeile ersetzt).
+
+---
+
+## Phase 63 — Block-Layout: Seitenleiste rechts bei Hochkant-Zetteln ✅
+
+Sechsundfünfzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] Neuer äußerer Layout-Container (`.ic-textframe-layout`) um Zettel
+  und Werkzeug-Blöcke gemeinsam - bei Hochkant-Zetteln jetzt eine Reihe
+  (Zettel links mit voller Höhe von oben bis unten, Werkzeug-Blöcke als
+  280px breite Seitenleiste rechts mit eigenem Scrollbereich statt
+  darunter). Bei Querformat weiterhin wie bisher (Zettel oben, Blöcke
+  darunter). Auf dem Handy immer untereinander, unabhängig von der
+  Zettel-Ausrichtung, da eine seitliche Leiste dort zu schmal wäre.
+
+Vorschläge zur stärkeren inhaltlichen Differenzierung zwischen Zettel-
+und WordArt-Editor siehe Antworttext - noch nicht umgesetzt, wartet auf
+Rückmeldung, welche Richtung gewünscht ist. LaTeX-Formeldarstellung
+bewusst zurückgestellt (nächster großer Schritt).

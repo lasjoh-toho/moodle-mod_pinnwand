@@ -949,6 +949,12 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Auf schmalen Bildschirmen sind die Felder standardmäßig ausgeblendet
   und lassen sich per Info-Button von rechts einblenden.
 
+### Siebenundsechzigste Überarbeitung — Block-Layout: Seitenleiste bei Hochkant-Zetteln
+
+- Bei Hochkant-Zetteln stehen die Werkzeug-Blöcke jetzt als Seitenleiste
+  rechts, der Zettel bekommt dadurch die volle Höhe von oben bis unten.
+- Vorschläge zur Differenzierung Zettel-/WordArt-Editor siehe Antwort.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

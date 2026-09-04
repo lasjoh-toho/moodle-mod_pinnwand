@@ -1593,6 +1593,14 @@
     var tf = state.textFrame;
     TEXTFRAME_FONTS.forEach(function (f) { if (f.webfont) { ensureWebfont(f.webfont); } });
 
+    // Äußeres Layout: bei einem Hochkant-Zettel stehen die Werkzeug-Blöcke
+    // als Seitenleiste RECHTS (Reihe), damit der Zettel selbst die volle
+    // Höhe von oben bis unten bekommt, statt durch darunter liegende
+    // Blöcke Höhe zu verlieren. Bei Querformat bleiben sie darunter
+    // (Spalte). Richtet sich nach dem Seitenverhältnis des Zettels selbst,
+    // nicht nach der Bildschirmgröße.
+    var tfOrientation = tf.w >= tf.h ? 'ic-tf-landscape' : 'ic-tf-portrait';
+    var layout = el('div', { class: 'ic-textframe-layout ' + tfOrientation });
     var stage = el('div', { class: 'ic-stage' });
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0];
     var frame = el('div', {
@@ -1601,7 +1609,8 @@
         (preset.bg ? 'background:' + preset.bg + (preset.shadow ? ';box-shadow:0 8px 24px rgba(0,0,0,.4)' : '') : 'background:transparent;border:2px dashed rgba(255,255,255,.3)')
     });
     stage.appendChild(frame);
-    body.appendChild(stage);
+    layout.appendChild(stage);
+    body.appendChild(layout);
 
     // Hauptrahmen selbst skalierbar (Eck-Handle unten rechts) - die
     // Textobjekte sind an ihn gebunden (normalisierte 0..1-Koordinaten),
@@ -1711,7 +1720,7 @@
     // nebeneinander) richtet sich nach dem Seitenverhältnis des Zettels
     // selbst (nicht nach der Bildschirmgröße), siehe CSS .ic-tf-landscape/
     // .ic-tf-portrait.
-    var blocksWrap = el('div', { class: 'ic-textframe-blocks ' + (tf.w >= tf.h ? 'ic-tf-landscape' : 'ic-tf-portrait') });
+    var blocksWrap = el('div', { class: 'ic-textframe-blocks ' + tfOrientation });
     // Akkordeon: Überschrift antippen klappt den jeweiligen Block ein/aus -
     // auf dem Handy starten alle Blöcke eingeklappt (siehe CSS), auf
     // größeren Bildschirmen bleiben sie offen.
@@ -1731,7 +1740,7 @@
     blocksWrap.appendChild(blockTemplates);
     blocksWrap.appendChild(blockFonts);
     blocksWrap.appendChild(blockForm);
-    body.appendChild(blocksWrap);
+    layout.appendChild(blocksWrap);
 
     // Block 1: Vorlagen für den Zettel selbst (als Beispiel direkt sichtbar).
     var presetRow = el('div', { class: 'ic-textframe-presets' });
