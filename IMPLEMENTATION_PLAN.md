@@ -2057,3 +2057,30 @@ Bibliothek als Vorlage). Betrifft: `js/app.js`, `styles.css`.
 - [x] Fill/Kontur/Effekte-Pop-ups auf das neue verschiebbare Modal
   umgestellt (waren zu klein, ragten aus dem Bildschirm) - Fill zeigt
   weiterhin eine Palette (keine Tabelle) plus Verlauf-Konfiguration.
+
+---
+
+## Phase 67 — Senden-Bugfix, Zwei-Spalten Meine Bilder, Zeilen-Einfärbung, größeres Pin-Icon ✅
+
+Sechzigster Feedback-Durchgang. Betrifft: `classes/external.php`,
+`js/app.js`, `styles.css`.
+
+- [x] **Echter Bug gefunden und behoben**: die eigenen, gesendeten
+  Objekte im Post-Stream waren zusätzlich hinter der separaten
+  Instanzeinstellung "studentpoststream" versteckt - ein Lernender mit
+  aktiviertem Senden-Button (studentcansend), aber ohne aktiviertes
+  studentpoststream, konnte seine eigenen gesendeten Objekte nie im
+  Post-Stream sehen, obwohl der Sende-Vorgang serverseitig korrekt
+  lief. Die eigenen Objekte sind jetzt IMMER sichtbar für die eigene
+  Person; "studentpoststream" steuert jetzt (sinnvoller) nur noch, ob
+  Lernende auch FREMDE (Klassenkameraden-)Einreichungen im Post-Stream
+  sehen dürfen.
+- [x] "Meine Bilder" zeigt sich auf großen Monitoren (≥1100px) jetzt in
+  zwei Spalten.
+- [x] **Zeilen-Einfärbung** in Meine Bilder UND Klassenansicht: gesendet
+  (auf der Masterpinnwand sichtbar) = grau mit Hauch Blau, gepinnt (auf
+  einem zusätzlichen Board platziert) = grau mit Hauch Rot, beide etwas
+  heller als der Standard. Neue gemeinsame Hilfsfunktion
+  `rowStateClass()`. `otherboardcount` dafür auch in `get_all_photos`
+  (Klassenansicht) ergänzt (vorher nur in `get_photos`).
+- [x] Pin-Icon in der Kopfzeile nochmal deutlich größer (24px auf 34px).

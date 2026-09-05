@@ -349,7 +349,7 @@
 
     var list = el('div', { class: 'ic-home-list' });
     state.photos.forEach(function (p, idx) {
-      var row = el('div', { class: 'ic-home-row' });
+      var row = el('div', { class: 'ic-home-row' + rowStateClass(p) });
       var thumb = el('div', { class: 'ic-thumb' + (p.otherboardcount > 0 ? ' ic-thumb-pinned' : '') });
       var imgWrap = el('div', { class: 'ic-thumb-img-wrap' });
       var img = el('img', { src: p.url, alt: '' });
@@ -2770,6 +2770,15 @@
     render();
   }
 
+  // Zeilen-Einfärbung nach Zustand (Meine Bilder + Klassenansicht) - gepinnt
+  // (auf einem zusätzlichen Board platziert) hat Vorrang vor gesendet
+  // (auf der Masterpinnwand sichtbar), falls beides zutrifft.
+  function rowStateClass(p) {
+    if (p.otherboardcount > 0) { return ' ic-row-pinned'; }
+    if (!p.hiddenfromboard) { return ' ic-row-sent'; }
+    return '';
+  }
+
   function boardDisplayName(boardId) {
     if (state.boardNames && state.boardNames[boardId]) { return state.boardNames[boardId]; }
     var boards = boardList();
@@ -5181,7 +5190,7 @@
       });
     }
     function renderRow(container, p, canedit, candelete) {
-      var row = el('div', { class: 'ic-moderate-row' });
+      var row = el('div', { class: 'ic-moderate-row' + rowStateClass(p) });
       var thumbCluster = el('div', { class: 'ic-thumb-cluster' });
       var thumbWrap = el('div', { class: 'ic-moderate-thumb' });
       var img = el('img', { src: p.url, alt: '' });

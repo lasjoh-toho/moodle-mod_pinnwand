@@ -985,6 +985,17 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Fill/Kontur/Effekte ebenfalls auf verschiebbare Modals umgestellt,
   Fill bleibt eine Palette (keine Tabelle) mit Verlauf-Option.
 
+### Einundsiebzigste Überarbeitung — Senden-Bugfix, Zwei-Spalten, Zeilen-Einfärbung
+
+- **Bugfix**: eigene gesendete Objekte waren zusätzlich hinter der
+  Einstellung "studentpoststream" versteckt - jetzt immer sichtbar für
+  die eigene Person; die Einstellung steuert nur noch fremde
+  Einreichungen.
+- "Meine Bilder" auf großen Monitoren jetzt zweispaltig.
+- Zeilen-Einfärbung in beiden Ansichten: gesendet = Hauch Blau, gepinnt
+  = Hauch Rot, beide etwas heller.
+- Pin-Icon in der Kopfzeile nochmal deutlich größer.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

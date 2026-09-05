@@ -1444,6 +1444,18 @@ class mod_pinnwand_external extends external_api {
               ORDER BY u.lastname, u.firstname, p.sortorder";
         $records = $DB->get_records_sql($sql, ['icid' => $instance->id]);
 
+        $placementcounts = [];
+        if ($records) {
+            list($insql, $inparams) = $DB->get_in_or_equal(array_keys($records));
+            $counts = $DB->get_records_sql(
+                "SELECT photoid, COUNT(*) AS cnt FROM {pinnwand_object_placements}
+                  WHERE status = 'active' AND photoid $insql GROUP BY photoid", $inparams
+            );
+            foreach ($counts as $c) {
+                $placementcounts[$c->photoid] = (int) $c->cnt;
+            }
+        }
+
         $fs = get_file_storage();
         $out = [];
         foreach ($records as $r) {
@@ -1467,6 +1479,7 @@ class mod_pinnwand_external extends external_api {
                 'sourceorigauthor' => (string) $r->sourceorigauthor,
                 'consent' => (bool) $r->consent,
                 'hiddenfromboard' => (bool) $r->hiddenfromboard,
+                'otherboardcount' => $placementcounts[$r->id] ?? 0,
                 'timecreated' => (int) $r->timecreated,
             ];
         }
@@ -1494,6 +1507,7 @@ class mod_pinnwand_external extends external_api {
                 'sourceorigauthor' => new external_value(PARAM_TEXT, 'Autor*in der Vorlage'),
                 'consent' => new external_value(PARAM_BOOL, 'Einwilligung'),
                 'hiddenfromboard' => new external_value(PARAM_BOOL, 'Von der Pinnwand ausgeblendet'),
+                'otherboardcount' => new external_value(PARAM_INT, 'Anzahl zusätzlicher aktiver Platzierungen auf anderen Boards'),
                 'timecreated' => new external_value(PARAM_INT, 'Hochgeladen am'),
             ])),
         ]);
@@ -2110,21 +2124,24 @@ class mod_pinnwand_external extends external_api {
         };
 
         // Eigene, gepinnte aber noch nicht auf dem Board platzierte Fotos -
-        // der "Warteraum" vor der eigentlichen Leinwand. Lehrkraft immer,
-        // Lernende nur mit der Instanzeinstellung "studentpoststream".
-        $canusepoststream = has_capability('mod/pinnwand:viewall', $context) || !empty($instance->studentpoststream);
-        $own = $canusepoststream ? $DB->get_records_select(
+        // der "Warteraum" vor der eigentlichen Leinwand. IMMER sichtbar für
+        // die eigene Person (unabhängig von "studentpoststream" - das
+        // steuert nur, ob auch FREMDE Einreichungen sichtbar sind, siehe
+        // unten). Sonst hätte ein Lernender mit aktiviertem Senden-Button
+        // seine eigenen gesendeten Objekte nie im Post-Stream gesehen.
+        $own = $DB->get_records_select(
             'pinnwand_photos', 'pinnwandid = ? AND userid = ? AND hiddenfromboard = 0 AND boardplaced = 0 AND status = ?',
             [$instance->id, $USER->id, 'active'], 'timecreated DESC', '*', 0, 100
-        ) : [];
+        );
         foreach ($own as $r) {
             $r->firstname = $USER->firstname; $r->lastname = $USER->lastname;
             $export($r, true);
         }
 
-        // Fremde, ebenfalls noch nicht platzierte Einreichungen - nur für
-        // die Lehrkraft (Post-Stream zur Klassen-Durchsicht).
-        if (has_capability('mod/pinnwand:viewall', $context)) {
+        // Fremde, ebenfalls noch nicht platzierte Einreichungen - für die
+        // Lehrkraft immer, für Lernende nur mit der Instanzeinstellung
+        // "studentpoststream" (Post-Stream zur Klassen-Durchsicht).
+        if (has_capability('mod/pinnwand:viewall', $context) || !empty($instance->studentpoststream)) {
             $sql = "SELECT p.*, u.firstname, u.lastname
                       FROM {pinnwand_photos} p
                       JOIN {user} u ON u.id = p.userid
