@@ -2125,30 +2125,23 @@
 
     // Linke Spalte: Formen, inline in einem scrollbaren Feld (kein Modal
     // mehr) - Grundformen oben, dann die Kategorien, dann das
-    // Polygon-Werkzeug. Ist eine Form ausgewählt, überträgt sich der
-    // gewählte Typ auf SIE, sonst entsteht eine neue.
+    // Polygon-Werkzeug. Jede Wahl erzeugt eine NEUE Form (keine
+    // Übertragung auf eine bereits ausgewählte mehr) - die neue Form
+    // lässt sich danach frei über die anderen ziehen und skalieren.
     var shapesCol = el('div', { class: 'ic-cf-shapes-col' });
     columnsWrap.appendChild(shapesCol);
     function pickShapeType(id) {
-      var activeShape = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
-      if (id === '__custom__') { startCustomShapeDraw(activeShape); return; }
-      if (activeShape) {
-        activeShape.type = id;
-      } else {
-        var nextId = (Math.max.apply(null, tf.shapes.map(function (s) { return s.id; }).concat([0])) || 0) + 1;
-        tf.shapes.push({ id: nextId, type: id, x: 0.5, y: 0.5, size: 0.4, color: '#e0503f' });
-        state.activeShapeId = nextId;
-      }
+      if (id === '__custom__') { startCustomShapeDraw(null); return; }
+      var nextId = (Math.max.apply(null, tf.shapes.map(function (s) { return s.id; }).concat([0])) || 0) + 1;
+      tf.shapes.push({ id: nextId, type: id, x: 0.5, y: 0.5, size: 0.4, color: '#e0503f' });
+      state.activeShapeId = nextId;
       render();
     }
-    (function () {
-      var activeShape = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
-      buildShapeGrid(shapesCol, activeShape ? activeShape.type : null, pickShapeType, false);
-    })();
+    buildShapeGrid(shapesCol, null, pickShapeType, false);
 
-    // Formen als echte Objekte auf dem Zettel - anklickbar zum Auswählen
-    // (dann überträgt der Formen-Button oben den nächsten gewählten Typ
-    // auf SIE), verschiebbar wie Textobjekte.
+    // Formen als echte Objekte auf dem Zettel - anklickbar zum Auswählen,
+    // frei verschiebbar und über den Eck-Griff skalierbar (auch über
+    // andere Formen hinweg).
     tf.shapes.forEach(function (s) {
       var shapeDef = s.type === 'custom' && s.customPoints
         ? { d: s.customPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
@@ -2160,10 +2153,13 @@
       var pxSize = Math.min(tf.w, tf.h) * s.size;
       var shapeEl = el('div', {
         class: 'ic-textframe-shapeobj' + (state.activeShapeId === s.id ? ' active' : ''),
-        style: 'left:' + (s.x * tf.w) + 'px;top:' + (s.y * tf.h) + 'px;width:' + pxSize + 'px;height:' + pxSize + 'px;' +
+        style: 'left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + pxSize + 'px;height:' + pxSize + 'px;' +
           (shapeDef ? 'background-image:url(' + fgShapeSvgDataUri(shapeDef, s.color || '#e0503f') + ')' : '')
       });
       shapeEl.addEventListener('click', function (ev) { ev.stopPropagation(); state.activeShapeId = s.id; render(); });
+      var shapeSizeHandle = el('div', { class: 'ic-resize ic-textframe-shape-resize' });
+      shapeEl.appendChild(shapeSizeHandle);
+      makeShapeMovable(shapeEl, frame, s, shapeSizeHandle);
       frameInner.insertBefore(shapeEl, frameInner.firstChild);
     });
 
@@ -2172,9 +2168,9 @@
     var colorsCol = el('div', { class: 'ic-cf-colors-col' });
     columnsWrap.appendChild(colorsCol);
     var styleRow = el('div', { class: 'ic-textframe-formatgrid' });
-    var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_fill }, [icon('fillicon')]);
-    var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_outline }, [icon('outlineicon')]);
-    var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_effects }, [icon('effecticon')]);
+    var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.tf_fill }, [icon('fillicon')]);
+    var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.tf_outline }, [icon('outlineicon')]);
+    var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.tf_effects }, [icon('effecticon')]);
     styleRow.appendChild(fillBtn); styleRow.appendChild(outlineBtn); styleRow.appendChild(effectsBtn);
     colorsCol.appendChild(styleRow);
     var opacitySliderRow = el('div', { class: 'ic-textframe-edit' });
@@ -2198,7 +2194,13 @@
     var presetRow = el('div', { class: 'ic-textframe-presets' });
     presetOrder.forEach(function (p) {
       var label = p.id === 'none' ? S.preset_none : p.id === 'paper' ? S.preset_paper : p.id === 'dark' ? S.preset_dark : S.preset_light;
-      var b = el('button', { class: 'ic-btn ic-btn-ghost' + (tf.preset === p.id ? ' ic-btn-primary' : '') }, [label]);
+      var swatchStyle = p.bg
+        ? 'background:' + p.bg + ';box-shadow:inset 0 0 0 2px rgba(255,255,255,.15);'
+        : 'background:repeating-linear-gradient(45deg,rgba(255,255,255,.08),rgba(255,255,255,.08) 4px,transparent 4px,transparent 8px);';
+      var b = el('button', {
+        class: 'ic-preset-swatch' + (tf.preset === p.id ? ' active' : ''), title: label
+      }, [el('span', { style: 'color:' + p.text }, ['A'])]);
+      b.style.cssText += swatchStyle;
       b.addEventListener('click', function () { tf.preset = p.id; render(); });
       presetRow.appendChild(b);
     });
@@ -2378,6 +2380,8 @@
       }
       var sizeDown = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['A\u2212']);
       var sizeUp = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['A+']);
+      sizeDown.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      sizeUp.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
       sizeDown.addEventListener('click', function () { setSize(-2); });
       sizeUp.addEventListener('click', function () { setSize(2); });
       sizeRow.appendChild(sizeDown); sizeRow.appendChild(sizeDisplay); sizeRow.appendChild(sizeUp);
@@ -2568,6 +2572,58 @@
   // Textobjekte automatisch proportional mitverschiebt. Erst ab einer
   // Mindestbewegung wird tatsächlich verschoben, damit ein normaler Klick
   // weiterhin den Textcursor im contenteditable setzt.
+  // Formen frei verschiebbar und über den Eck-Griff skalierbar (auch über
+  // andere Formen hinweg) - analog zu Textobjekten, aber mit normalisierter
+  // Größe (Anteil an min(Breite,Höhe) des Zettels) statt Schriftgröße.
+  function makeShapeMovable(el2, frame, s, sizeHandle) {
+    var dragging = false, startX = 0, startY = 0, totalDelta = 0;
+    function point(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
+    function down(ev) {
+      if (ev.target === sizeHandle) { return; }
+      dragging = true; totalDelta = 0;
+      var p = point(ev); startX = p.x; startY = p.y;
+    }
+    function move(ev) {
+      if (!dragging) { return; }
+      var p = point(ev);
+      totalDelta += Math.abs(p.x - startX) + Math.abs(p.y - startY);
+      if (totalDelta < 6) { return; }
+      var rect = frame.getBoundingClientRect();
+      s.x = Math.max(0.02, Math.min(0.98, (p.x - rect.left) / rect.width));
+      s.y = Math.max(0.02, Math.min(0.98, (p.y - rect.top) / rect.height));
+      el2.style.left = (s.x * 100) + '%'; el2.style.top = (s.y * 100) + '%';
+      ev.preventDefault();
+    }
+    function up() { dragging = false; }
+    el2.addEventListener('mousedown', down);
+    el2.addEventListener('touchstart', down, { passive: true });
+    window.addEventListener('mousemove', move);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('mouseup', up);
+    window.addEventListener('touchend', up);
+
+    var sDragging = false, sStartX = 0, sStartSize = s.size;
+    function sDown(ev) {
+      sDragging = true; sStartX = point(ev).x; sStartSize = s.size;
+      ev.stopPropagation(); ev.preventDefault();
+    }
+    function sMove(ev) {
+      if (!sDragging) { return; }
+      var dx = point(ev).x - sStartX;
+      s.size = Math.max(0.05, Math.min(2, sStartSize + dx / Math.min(el2.parentNode.offsetWidth || 300, 300)));
+      var pxSize = Math.min(frame.offsetWidth, frame.offsetHeight) * s.size;
+      el2.style.width = pxSize + 'px'; el2.style.height = pxSize + 'px';
+      ev.preventDefault();
+    }
+    function sUp() { sDragging = false; }
+    sizeHandle.addEventListener('mousedown', sDown);
+    sizeHandle.addEventListener('touchstart', sDown, { passive: false });
+    window.addEventListener('mousemove', sMove);
+    window.addEventListener('touchmove', sMove, { passive: false });
+    window.addEventListener('mouseup', sUp);
+    window.addEventListener('touchend', sUp);
+  }
+
   function makeTextObjectMovable(el2, frame, t, sizeHandle) {
     var dragging = false, startX = 0, startY = 0, totalDelta = 0;
     function point(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
@@ -2789,6 +2845,8 @@
     }
     var upBtn = el('button', { class: 'ic-stepper-btn', type: 'button' }, ['\u25B2']);
     var downBtn = el('button', { class: 'ic-stepper-btn', type: 'button' }, ['\u25BC']);
+    upBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+    downBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
     upBtn.addEventListener('click', function () { update(value + step); });
     downBtn.addEventListener('click', function () { update(value - step); });
     wrap.appendChild(display);

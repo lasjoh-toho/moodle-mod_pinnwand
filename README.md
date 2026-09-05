@@ -1057,6 +1057,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
   formatiert wurde. Jetzt werden verschachtelte, widersprüchliche
   Formatierungen vor dem Überschreiben entfernt.
 
+### Achtundsiebzigste Überarbeitung — Fokus-Bugfix, Formen ziehen/skalieren
+
+- Schriftgröße/-gewicht/Laufweite konnten nie auf eine Textauswahl
+  wirken (Fokus-Verlust beim Klick) - jetzt behoben.
+- Fläche/Kontur/Effekte-Buttons passen jetzt in eine Zeile.
+- Vorlagen zeigen eine visuelle Vorschau statt Text.
+- Formen: jede Wahl erzeugt jetzt eine neue Form, frei verschiebbar und
+  über Eck-Griff skalierbar.
+- Noch offen: Textumfluss um Formen konfigurierbar machen.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -567,6 +567,11 @@
 .ic-textframe-obj:hover .ic-textframe-size-handle, .ic-textframe-obj.active .ic-textframe-size-handle { opacity: 1; }
 .ic-textframe-controls:empty { display: none; }
 .ic-textframe-presets { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
+.ic-preset-swatch {
+  width: 34px; height: 34px; border-radius: 6px; border: 2px solid transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .9rem;
+}
+.ic-preset-swatch.active { border-color: var(--ic-accent); }
 .ic-textframe-shape-row { margin: 8px 0; }
 .ic-textframe-shape-btn { flex: 1 1 0; }
 .ic-textframe-shapeobj {
@@ -574,6 +579,12 @@
   background-size: contain; cursor: pointer; z-index: 0; border-radius: 4px;
 }
 .ic-textframe-shapeobj.active { outline: 2px dashed #4f8cff; outline-offset: 4px; }
+.ic-textframe-shape-resize {
+  position: absolute; right: -8px; bottom: -8px; width: 18px; height: 18px;
+  background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: nwse-resize;
+  opacity: 0; transition: opacity .15s;
+}
+.ic-textframe-shapeobj:hover .ic-textframe-shape-resize, .ic-textframe-shapeobj.active .ic-textframe-shape-resize { opacity: 1; }
 .ic-draggable-modal {
   position: fixed; z-index: 500; background: var(--ic-panel); border-radius: 10px;
   box-shadow: 0 8px 28px rgba(0,0,0,.55); width: min(320px, 90vw); max-height: 70vh;

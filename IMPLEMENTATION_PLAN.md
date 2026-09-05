@@ -2241,3 +2241,29 @@ wurde.
   markierten Bereichs, BEVOR die neue Formatierung außen darüber gelegt
   wird - betrifft Schriftart/-größe/-gewicht/Laufweite/Farbe gleichermaßen,
   da alle über dieselbe Funktion laufen.
+
+---
+
+## Phase 74 — Fokus-Bugfix, schmalere Buttons, visuelle Vorlagen, Formen ziehen/skalieren ✅
+
+Siebenundsechzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] **Echter Bugfix gefunden**: Schriftgröße/-gewicht/Laufweite
+  konnten nie auf eine Textauswahl wirken, weil die Buttons/Stepper-
+  Pfeile beim Klick den Fokus (und damit die Selection) übernahmen,
+  BEVOR der Klick-Handler die Auswahl lesen konnte. Fix: `mousedown`
+  mit `preventDefault()` auf allen betroffenen Buttons (wie bereits bei
+  Fett/Kursiv/Ausrichtung).
+- [x] Fläche/Kontur/Effekte-Buttons nutzen jetzt dieselbe schmale
+  Rasterklasse wie die Formatierungs-Icons - passen jetzt in eine
+  Zeile statt zu umbrechen.
+- [x] Vorlagen (Zettel/Text ohne Hintergrund/dunkel/hell) zeigen jetzt
+  eine visuelle Vorschau statt Text-Label.
+- [x] **Formen-Logik geändert**: jede Formwahl erzeugt jetzt immer eine
+  NEUE Form (keine Übertragung auf eine bereits ausgewählte mehr) -
+  die neue Form lässt sich danach frei über die anderen Formen ziehen
+  (Klick+Ziehen) und über einen neuen Eck-Griff skalieren.
+
+**Noch offen:** Textumfluss um darunterliegende Formen konfigurierbar
+machen - eigenständiges, größeres Feature, noch nicht begonnen.
