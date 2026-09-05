@@ -1382,6 +1382,32 @@
     { id: 'light', bg: '#000000', text: '#ffffff', shadow: false }
   ];
   var textframeFontsLoaded = {};
+  // Pretext.js (Textumbruch-Berechnung für den Umfluss-Modus) wird lokal
+  // mitgeliefert (kein CDN, siehe js/vendor/pretext/) und nur bei
+  // tatsächlichem Bedarf nachgeladen, nicht bei jedem Editor-Start.
+  var pretextPromise = null;
+  function loadPretext() {
+    if (pretextPromise) { return pretextPromise; }
+    var base = cfg.wwwroot + '/mod/pinnwand/js/vendor/';
+    var modulePromise = import(base + 'pretext/layout.js');
+    var geometryPromise = window.PretextWrapGeometry ? Promise.resolve() : new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = base + 'pretext-wrap-geometry.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    pretextPromise = Promise.all([modulePromise, geometryPromise]).then(function (results) {
+      var mod = results[0];
+      return {
+        prepare: mod.prepare, layout: mod.layout, prepareWithSegments: mod.prepareWithSegments,
+        layoutWithLines: mod.layoutWithLines, walkLineRanges: mod.walkLineRanges,
+        measureLineStats: mod.measureLineStats, layoutNextLineRange: mod.layoutNextLineRange,
+        materializeLineRange: mod.materializeLineRange, geometry: window.PretextWrapGeometry
+      };
+    });
+    return pretextPromise;
+  }
+
   function ensureWebfont(spec) {
     if (!spec || textframeFontsLoaded[spec]) { return; }
     textframeFontsLoaded[spec] = true;
@@ -1699,6 +1725,56 @@
     if (shadows.length) { css += 'text-shadow:' + shadows.join(',') + ';'; }
     if (t.opacity != null && t.opacity < 1) { css += 'opacity:' + t.opacity + ';'; }
     return css;
+  }
+
+  // Baut die LIVE-Darstellung eines Text-Rahmens (Hintergrund, Formen,
+  // Textobjekte als echtes DOM statt Bild) - rein visuell, nicht
+  // editierbar. Wird sowohl im Editor als Basis verwendet als auch auf der
+  // Pinnwand selbst, damit Text dort lebendig bleibt (Grundlage für
+  // dynamischen Umfluss um Formen/Fotos, statt zu einem Bild eingefroren
+  // zu werden).
+  function buildTextFrameLiveDom(tf) {
+    var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
+    var outer = el('div', {
+      class: 'ic-tf-live', style: 'position:relative;width:100%;aspect-ratio:' + tf.w + '/' + tf.h + ';' +
+        (preset.shadow ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') + (preset.bg ? '' : 'border:2px dashed rgba(255,255,255,.3);')
+    });
+    var inner = el('div', {
+      class: 'ic-tf-live-inner', style: 'position:relative;width:100%;height:100%;overflow:hidden;border-radius:16px;' +
+        (preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;')
+    });
+    outer.appendChild(inner);
+    (tf.shapes || []).forEach(function (s) {
+      var shapeDef = s.type === 'custom' && s.customPoints
+        ? { d: s.customPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
+        : (s.type && s.type !== 'none'
+          ? [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; })).concat(BASIC_SHAPES)
+            .filter(function (d) { return d.id === s.type; })[0]
+          : null);
+      if (!shapeDef) { return; }
+      var shapeEl = el('div', {
+        class: 'ic-tf-live-shape',
+        style: 'position:absolute;left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + (s.size * 100) + '%;' +
+          'padding-bottom:' + (s.size * 100) + '%;height:0;transform:translate(-50%,-50%);' +
+          'background-image:url(' + fgShapeSvgDataUri(shapeDef, s.color || '#e0503f') + ');background-repeat:no-repeat;' +
+          'background-position:center;background-size:contain;' + (s.wrapMode === 'front' ? 'z-index:2;' : 'z-index:0;')
+      });
+      inner.appendChild(shapeEl);
+    });
+    tf.texts.forEach(function (t) {
+      var fontCss = resolveFontCss(t.font);
+      var html = t.html || (t.text ? escapeXml(t.text) : '');
+      var textEl2 = el('div', {
+        class: 'ic-tf-live-text', html: html,
+        style: 'position:absolute;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
+          'padding:4px 8px;white-space:pre-wrap;text-align:center;max-width:94%;z-index:1;' +
+          'font-family:' + fontCss + ';font-size:' + t.size + 'px;font-weight:' + (t.fontWeight || 700) +
+          ';line-height:' + (t.lineHeight || 1.2) + ';letter-spacing:' + (t.letterSpacing || 0) + 'px;' +
+          (wordartCssFor(t, preset.text) || computeStyle1Css(t, preset.text))
+      });
+      inner.appendChild(textEl2);
+    });
+    return outer;
   }
 
   function buildTextFrameSVG(tf) {
@@ -3401,8 +3477,22 @@
       });
       item.style.zIndex = p.canvasz || 0;
       var backPhoto = p.backphotoid ? state.photos.filter(function (o) { return o.id === p.backphotoid; })[0] : null;
-      var img = el('img', { src: (p.showingback && backPhoto) ? backPhoto.url : p.url, alt: '' });
-      item.appendChild(img);
+      if (p.wordfielddata && !p.showingback) {
+        // Textobjekt: live rendern (echtes DOM statt eingefrorenes Bild) -
+        // Grundlage für dynamischen Umfluss um Formen/Fotos in der Nähe.
+        // Bei einem Rückseiten-Foto (backPhoto) oder falls die
+        // gespeicherten Daten unlesbar sind, auf das eingefrorene Bild
+        // zurückfallen.
+        try {
+          var liveTf = JSON.parse(p.wordfielddata);
+          item.appendChild(buildTextFrameLiveDom(liveTf));
+        } catch (e) {
+          item.appendChild(el('img', { src: p.url, alt: '' }));
+        }
+      } else {
+        var img = el('img', { src: (p.showingback && backPhoto) ? backPhoto.url : p.url, alt: '' });
+        item.appendChild(img);
+      }
       if (backPhoto) {
         item.addEventListener('dblclick', function (ev) {
           ev.stopPropagation();

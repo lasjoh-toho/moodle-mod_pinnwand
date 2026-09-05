@@ -1074,6 +1074,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Textfluss unserer frei positionierten Textobjekte noch nicht
   vollständig - größerer Ausbauschritt).
 
+### Achtzigste Überarbeitung — Pretext.js eingebunden, Text auf der Pinnwand live
+
+- Pretext.js lokal eingebunden (kein CDN), inkl. Geometrie-Hilfsfunktionen
+  für Umfluss (auch um freigestellte Fotos per Alphakanal-Silhouette).
+- Textobjekte auf der Pinnwand werden jetzt live gerendert statt als
+  eingefrorenes Bild - Grundlage für dynamischen Umfluss.
+- Noch offen: die eigentliche Umfluss-Berechnung.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

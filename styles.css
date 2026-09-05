@@ -778,7 +778,7 @@
   cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.4); opacity: 0; transition: opacity .15s;
 }
 .ic-extra-placement:hover .ic-extra-placement-unpin { opacity: 1; }
-.ic-arrange-item.selected img { outline: 3px solid var(--ic-accent); outline-offset: 3px; box-shadow: 0 0 0 6px rgba(224,80,63,.25); }
+.ic-arrange-item.selected img, .ic-arrange-item.selected .ic-tf-live { outline: 3px solid var(--ic-accent); outline-offset: 3px; box-shadow: 0 0 0 6px rgba(224,80,63,.25); }
 .ic-arrange-item.multi-selected img { outline: 3px dashed var(--ic-thread-color, #4f8cff); outline-offset: 3px; }
 .ic-thread-frame-onboard {
   position: absolute; border-style: dashed; border-radius: 6px; pointer-events: none;

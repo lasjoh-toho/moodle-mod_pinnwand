@@ -2293,3 +2293,46 @@ CSS `shape-outside` wirkt nur auf normal fließende Geschwister-Elemente.
   normalem Textfluss noch nicht vollständig als sichtbares Ausweichen
   des Textes - eine echte Umsetzung bräuchte eine grundlegend andere
   Positionierung der Textobjekte (nächster, größerer Ausbauschritt).
+
+---
+
+## Phase 76 — Pretext.js lokal eingebunden, Textobjekte auf der Pinnwand live statt eingefroren (Grundlage für Umfluss) 🔄
+
+Neunundsechzigster Feedback-Durchgang (Diskussion zu Pretext.js,
+https://pretextjs.dev). Betrifft: `js/app.js`, `styles.css`, neue
+Datei `js/vendor/pretext/*`, `js/vendor/pretext-wrap-geometry.js`.
+
+**Wichtige Design-Entscheidung nach Rückfrage des Nutzers**: Text muss
+NICHT wie WordArt zu SVG "eingepackt" werden. Innerhalb eines
+Textobjekts fließt Text bereits normal (contenteditable) - für
+statischen Umfluss würde ein unsichtbarer `float`+`shape-outside`-
+Platzhalter reichen. ABER: der Nutzer wollte die dynamische,
+performante Umfluss-Berechnung dort, wo Objekte sich bewegen (auf der
+Pinnwand) - dafür lohnt sich Pretext wirklich (arithmetische Berechnung
+ohne Reflow, wichtig bei vielen gleichzeitig betroffenen Textobjekten).
+
+- [x] Pretext.js (kompilierte, browserfähige ES-Module) lokal
+  eingebunden (`js/vendor/pretext/`) - kein CDN, kein Build-Schritt
+  (Bibliothek liefert bereits fertige `.js`-Dateien mit vollständigen
+  Importpfaden).
+- [x] Geometrie-Hilfsfunktionen aus dem offiziellen Pretext-Demo-Code
+  nach reinem JS portiert (`js/vendor/pretext-wrap-geometry.js`) -
+  inklusive Silhouetten-Erkennung aus Bildern per Alphakanal (Umfluss
+  auch um die tatsächliche Form eines freigestellten Fotos, nicht nur
+  dessen Bounding-Box).
+- [x] Nachlade-Funktion `loadPretext()` - lädt erst bei tatsächlichem
+  Bedarf, nicht bei jedem Editor-Start.
+- [x] **Neue geteilte Funktion `buildTextFrameLiveDom()`**: rendert
+  einen Text-Rahmen (Hintergrund, Formen, Textobjekte) als echtes,
+  lebendiges DOM statt als Bild - Grundlage für BEIDE Kontexte (Editor
+  und Pinnwand).
+- [x] **Auf der Pinnwand eingebunden**: Textobjekte werden jetzt live
+  gerendert statt als eingefrorenes Bild (mit Fallback aufs Bild bei
+  Rückseiten-Fotos oder falls die Daten mal unlesbar sind). Auswahl-
+  Rahmen funktioniert für beide Darstellungsarten.
+
+**Noch offen (nächster Schritt):** die eigentliche Umfluss-Berechnung -
+erkennen, welche Formen/Fotos in der Nähe eines Textobjekts liegen,
+daraus je Zeile die blockierten Bereiche berechnen (Geometrie-Funktionen
+sind vorbereitet), und den Text entsprechend zeilenweise positioniert
+darstellen statt als einfachen Fließtext.
