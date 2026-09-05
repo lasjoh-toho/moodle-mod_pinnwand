@@ -77,6 +77,7 @@
   // ------------------------------------------------------------------
   var state = {
     step: 'home',
+    activeShapeId: null,  // gerade ausgewählte Form im Zettel-/WordArt-Editor (tf.shapes)
     sourceCanvas: null,   // rohes Foto nach Aufnahme
     corners: null,        // 4 Ecken für Entzerrung (in Bildschirm-Koordinaten der Vorschau)
     workCanvas: null,     // Zwischenergebnis nach Entzerrung
@@ -1248,7 +1249,57 @@
   var TEXTFRAME_PALETTE = ['#e0503f', '#4f8cff', '#3fcf8e', '#e0b23f', '#b06fe0', '#ffffff', '#111111'];
   var textframeRecentColors = [];
   function noteRecentColor(color) {
-    textframeRecentColors = [color].concat(textframeRecentColors.filter(function (c) { return c !== color; })).slice(0, 8);
+    textframeRecentColors = [color].concat(textframeRecentColors.filter(function (c) { return c !== color; })).slice(0, 20);
+  }
+  function hslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    var c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+    var r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
+    else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+    function hx(v) { return Math.round((v + m) * 255).toString(16).padStart(2, '0'); }
+    return '#' + hx(r) + hx(g) + hx(b);
+  }
+  // Große 10x10-Palette: oberste 2 Zeilen = zuletzt verwendete Farben,
+  // linker Rand (Spalte 0, ab Zeile 2) = Grauverlauf weiß bis schwarz,
+  // restliche Felder = Farbraster nach Farbton (Spalte) und Helligkeit
+  // (Zeile). Darunter ein Transparenz-Stepper. Wirkt über den
+  // übergebenen onPick-Callback auf die aktuelle Auswahl oder das ganze
+  // Textobjekt (siehe applyStyleToSelectionOrWhole beim Aufrufer).
+  function buildBigColorPalette(container, currentColor, currentOpacity, onPick, onOpacity) {
+    container.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_recent_colors]));
+    var grid = el('div', { class: 'ic-bigpalette-grid' });
+    for (var row = 0; row < 10; row++) {
+      for (var col = 0; col < 10; col++) {
+        var color;
+        if (row < 2) {
+          var recentIdx = row * 10 + col;
+          color = textframeRecentColors[recentIdx] || null;
+        } else if (col === 0) {
+          var t = (row - 2) / 7;
+          var v = Math.round(255 * (1 - t));
+          color = '#' + [v, v, v].map(function (x) { return x.toString(16).padStart(2, '0'); }).join('');
+        } else {
+          color = hslToHex((col - 1) * 40, 65, 85 - (row - 2) * 8);
+        }
+        var cell = el('button', {
+          class: 'ic-bigpalette-cell' + (color === currentColor ? ' active' : '') + (color ? '' : ' empty'),
+          style: color ? 'background:' + color : '', title: color || ''
+        });
+        if (color) { cell.addEventListener('click', function (c) { return function () { onPick(c); }; }(color)); }
+        grid.appendChild(cell);
+      }
+    }
+    container.appendChild(grid);
+    var customColor = el('input', { type: 'color', value: currentColor || '#e0503f', class: 'ic-textframe-custom-color' });
+    customColor.addEventListener('change', function () { onPick(customColor.value); });
+    container.appendChild(customColor);
+    if (onOpacity) {
+      var opRow = el('div', { class: 'ic-textframe-edit' });
+      opRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_opacity]));
+      opRow.appendChild(numberStepper(Math.round((currentOpacity != null ? currentOpacity : 1) * 100), 0, 100, 5, 0, function (v) { onOpacity(v / 100); }));
+      container.appendChild(opRow);
+    }
   }
   var TEXTFRAME_PRESETS = [
     { id: 'none', bg: null, text: '#f2f3f5', shadow: false },
@@ -1585,38 +1636,26 @@
         defs = '<defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">' +
           '<feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.35"/></filter></defs>';
       }
-      // Form der Kartenfläche selbst (Block "Farben und Formen") - Kreis/
-      // Oval als <ellipse>, alle anderen als <rect> mit passender Rundung.
-      var shape = tf.shape || 'rounded';
-      if (shape === 'custom' && tf.customPoints && tf.customPoints.length >= 3) {
-        var polyPts = tf.customPoints.map(function (p) { return (p[0] * tf.w) + ',' + (p[1] * tf.h); }).join(' ');
-        bgRect = '<polygon points="' + polyPts + '" fill="' + preset.bg + '"' + (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
-      } else if (shape === 'circle' || shape === 'ellipse') {
-        bgRect = '<ellipse cx="' + (tf.w / 2) + '" cy="' + (tf.h / 2) + '" rx="' + (tf.w / 2) + '" ry="' + (tf.h / 2) +
-          '" fill="' + preset.bg + '"' + (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
-      } else {
-        var rx = shape === 'rect' ? 0 : 16;
-        bgRect = '<rect x="0" y="0" width="' + tf.w + '" height="' + tf.h + '" rx="' + rx + '" fill="' + preset.bg + '"' +
-          (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
-      }
+      bgRect = '<rect x="0" y="0" width="' + tf.w + '" height="' + tf.h + '" rx="16" fill="' + preset.bg + '"' +
+        (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
     }
-    // Dekorative Vordergrund-Form (Sticker/Badge) - liegt hinter dem Text,
-    // aber vor dem Kartenhintergrund.
-    var fgShapeEl = '';
-    if (tf.fgShape && tf.fgShape !== 'none') {
-      var fgShapeDef = tf.fgShape === 'custom' && tf.fgCustomPoints
-        ? { d: tf.fgCustomPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
-        : [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; }))
-          .filter(function (s) { return s.id === tf.fgShape; })[0];
-      if (fgShapeDef) {
-        var fgColor = escapeXml(tf.fgShapeColor || '#e0503f');
-        var s = Math.min(tf.w, tf.h) * 0.7;
-        var tx = tf.w / 2 - s / 2, ty = tf.h / 2 - s / 2, scale = s / 100;
-        fgShapeEl = '<g transform="translate(' + tx + ',' + ty + ') scale(' + scale + ')">' +
-          '<path d="' + fgShapeDef.d + '" fill="' + fgColor + '"' +
-          (fgShapeDef.fillRule ? ' fill-rule="' + fgShapeDef.fillRule + '"' : '') + '/></g>';
-      }
-    }
+    // Formen (Block "Farben und Formen") - jetzt echte, mehrfache Objekte
+    // (tf.shapes), liegen hinter dem Text, aber vor dem Kartenhintergrund.
+    var fgShapeEl = (tf.shapes || []).map(function (s) {
+      var shapeDef = s.type === 'custom' && s.customPoints
+        ? { d: s.customPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
+        : (s.type && s.type !== 'none'
+          ? [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; })).concat(BASIC_SHAPES)
+            .filter(function (d) { return d.id === s.type; })[0]
+          : null);
+      if (!shapeDef) { return ''; }
+      var fgColor = escapeXml(s.color || '#e0503f');
+      var size = Math.min(tf.w, tf.h) * (s.size || 0.4);
+      var tx = s.x * tf.w - size / 2, ty = s.y * tf.h - size / 2, scale = size / 100;
+      return '<g transform="translate(' + tx + ',' + ty + ') scale(' + scale + ')">' +
+        '<path d="' + shapeDef.d + '" fill="' + fgColor + '"' +
+        (shapeDef.fillRule ? ' fill-rule="' + shapeDef.fillRule + '"' : '') + '/></g>';
+    }).join('');
     // Alle Textobjekte (nicht nur das primäre) laufen über foreignObject mit
     // echtem HTML-Markup - so bleiben Fett/Kursiv/Unterstrichen/
     // Durchgestrichen/Aufzählung sowie Zeilenabstand/Laufweite erhalten
@@ -1920,23 +1959,11 @@
     // Editoren unterscheidenden Blöcke (Text/Schrift, Formeln etc.)
     // folgen in einem späteren Durchgang unverändert weiter unten.
     var TF_SHAPES = ['rect', 'rounded', 'circle', 'ellipse'];
-    function shapeCssFor(shapeId) {
-      if (shapeId === 'custom' && tf.customPoints && tf.customPoints.length >= 3) {
-        var pts = tf.customPoints.map(function (p) { return (p[0] * 100) + '% ' + (p[1] * 100) + '%'; }).join(',');
-        return 'border-radius:0;clip-path:polygon(' + pts + ');';
-      }
-      if (shapeId === 'rect') { return 'border-radius:0;clip-path:none;'; }
-      if (shapeId === 'circle') { return 'border-radius:50%;clip-path:none;'; }
-      if (shapeId === 'ellipse') { return 'border-radius:50%;clip-path:none;'; }
-      return 'border-radius:16px;clip-path:none;'; // 'rounded' (Standard)
-    }
-    tf.shape = tf.shape || 'rounded';
-    tf.fgShape = tf.fgShape || 'none';
-    frameInner.style.cssText += ';' + shapeCssFor(tf.shape) + 'overflow:hidden;';
-
     // Polygon-Werkzeug: eigene Form durch Klicken von Eckpunkten definieren
-    // (mindestens 3 nötig), Doppelklick/Enter schließt den Pfad ab.
-    function startCustomShapeDraw(target) {
+    // (mindestens 3 nötig), Doppelklick/Enter schließt den Pfad ab. Ist
+    // bereits eine Form ausgewählt, wird SIE zur Polygon-Form, sonst
+    // entsteht eine neue.
+    function startCustomShapeDraw(activeShape) {
       var points = [];
       var overlay = el('div', { class: 'ic-custom-shape-draw-hint' }, [S.tf_shape_custom_hint]);
       body.appendChild(overlay);
@@ -1968,8 +1995,13 @@
         document.removeEventListener('keydown', onKey);
         dotsLayer.remove(); overlay.remove();
         if (points.length >= 3) {
-          tf.customPoints = points;
-          if (target === 'bg') { tf.shape = 'custom'; } else { tf.fgShape = 'custom'; tf.fgCustomPoints = points; }
+          if (activeShape) {
+            activeShape.type = 'custom'; activeShape.customPoints = points;
+          } else {
+            var nextId = (Math.max.apply(null, tf.shapes.map(function (s) { return s.id; }).concat([0])) || 0) + 1;
+            tf.shapes.push({ id: nextId, type: 'custom', customPoints: points, x: 0.5, y: 0.5, size: 0.4, color: '#e0503f' });
+            state.activeShapeId = nextId;
+          }
           render();
         }
       }
@@ -2013,57 +2045,67 @@
       polyBtn.addEventListener('click', function () { onPick('__custom__'); });
       content.appendChild(polyBtn);
     }
+    tf.shapes = tf.shapes || [];
     var shapeRow = el('div', { class: 'ic-textframe-formatgrid' });
-    var bgShapeBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_shape_bg }, [icon('frameicon')]);
-    bgShapeBtn.addEventListener('click', function () {
-      openDraggableModal(S.tf_shape_bg, bgShapeBtn, function (content) {
-        buildShapeGrid(content, tf.shape, function (id) {
-          if (id === '__custom__') { startCustomShapeDraw('bg'); closeDraggableModal(); return; }
-          tf.shape = id; render();
+    var shapeBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_shape_fg }, [icon('starfg')]);
+    shapeBtn.addEventListener('click', function () {
+      var activeShape = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
+      openDraggableModal(S.tf_shape_fg, shapeBtn, function (content) {
+        buildShapeGrid(content, activeShape ? activeShape.type : null, function (id) {
+          if (id === '__custom__') { startCustomShapeDraw(activeShape); closeDraggableModal(); return; }
+          if (activeShape) {
+            // Eine Form ist bereits ausgewählt - der gewählte Typ wird auf
+            // SIE übertragen, statt eine neue anzulegen.
+            activeShape.type = id;
+          } else {
+            // Keine Form ausgewählt: neue Form anlegen und direkt aktiv
+            // setzen, damit man sie gleich weiter anpassen kann.
+            var nextId = (Math.max.apply(null, tf.shapes.map(function (s) { return s.id; }).concat([0])) || 0) + 1;
+            tf.shapes.push({ id: nextId, type: id, x: 0.5, y: 0.5, size: 0.4, color: '#e0503f' });
+            state.activeShapeId = nextId;
+          }
+          render();
         }, false);
       });
     });
-    shapeRow.appendChild(bgShapeBtn);
-
-    var fgShapeBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_shape_fg }, [icon('starfg')]);
-    fgShapeBtn.addEventListener('click', function () {
-      openDraggableModal(S.tf_shape_fg, fgShapeBtn, function (content) {
-        buildShapeGrid(content, tf.fgShape, function (id) {
-          if (id === '__custom__') { startCustomShapeDraw('fg'); closeDraggableModal(); return; }
-          tf.fgShape = id; render();
-        }, true);
-      });
-    });
-    shapeRow.appendChild(fgShapeBtn);
+    shapeRow.appendChild(shapeBtn);
     blockTemplates.content.appendChild(shapeRow);
 
-    // Dekorative Vordergrund-Form (Sticker/Badge) hinter dem Text, aber vor
-    // dem Kartenhintergrund - einfache SVG-Formen, exportfähig da reines
-    // Markup ohne externe Ressourcen.
-    if (tf.fgShape !== 'none') {
-      var fgShapeDef = tf.fgShape === 'custom' && tf.fgCustomPoints
-        ? { d: tf.fgCustomPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
-        : [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; }))
-          .filter(function (s) { return s.id === tf.fgShape; })[0];
-      if (fgShapeDef) {
-        var fgShapeEl = el('div', {
-          class: 'ic-textframe-fgshape',
-          style: 'background-image:url(' + fgShapeSvgDataUri(fgShapeDef, tf.fgShapeColor || '#e0503f') + ')'
-        });
-        frameInner.insertBefore(fgShapeEl, frameInner.firstChild);
-      }
-    }
-
+    // Formen als echte Objekte auf dem Zettel - anklickbar zum Auswählen
+    // (dann überträgt der Formen-Button oben den nächsten gewählten Typ
+    // auf SIE), verschiebbar wie Textobjekte.
+    tf.shapes.forEach(function (s) {
+      var shapeDef = s.type === 'custom' && s.customPoints
+        ? { d: s.customPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
+        : (s.type && s.type !== 'none'
+          ? [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; })).concat(BASIC_SHAPES)
+            .filter(function (d) { return d.id === s.type; })[0]
+          : null);
+      if (!shapeDef) { return; }
+      var pxSize = Math.min(tf.w, tf.h) * s.size;
+      var shapeEl = el('div', {
+        class: 'ic-textframe-shapeobj' + (state.activeShapeId === s.id ? ' active' : ''),
+        style: 'left:' + (s.x * tf.w) + 'px;top:' + (s.y * tf.h) + 'px;width:' + pxSize + 'px;height:' + pxSize + 'px;' +
+          (shapeDef ? 'background-image:url(' + fgShapeSvgDataUri(shapeDef, s.color || '#e0503f') + ')' : '')
+      });
+      shapeEl.addEventListener('click', function (ev) { ev.stopPropagation(); state.activeShapeId = s.id; render(); });
+      frameInner.insertBefore(shapeEl, frameInner.firstChild);
+    });
 
     // Fill/Kontur/Effekte als Pop-ups - wirken auf das gerade gewählte
     // Textobjekt (siehe activeId/refreshControls weiter unten). Werden in
     // einer eigenen Zeile im selben Block untergebracht.
+    // Fill: durchgehend sichtbare große Palette (kein Pop-up mehr) - siehe
+    // bigPaletteContainer, wird in refreshControls() befüllt. Kontur/
+    // Effekte bleiben Pop-ups (brauchen zusätzlich Dicke/Unschärfe-Regler).
     var styleRow = el('div', { class: 'ic-textframe-formatgrid' });
     var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_fill }, [icon('fillicon')]);
     var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_outline }, [icon('outlineicon')]);
     var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_effects }, [icon('effecticon')]);
     styleRow.appendChild(fillBtn); styleRow.appendChild(outlineBtn); styleRow.appendChild(effectsBtn);
     blockTemplates.content.appendChild(styleRow);
+    var bigPaletteContainer = el('div', { class: 'ic-bigpalette-container' });
+    blockTemplates.content.appendChild(bigPaletteContainer);
 
     var presetOrder = state.wordArtMode
       ? TEXTFRAME_PRESETS
@@ -2108,66 +2150,37 @@
       function applyFillColor(color) {
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (!objEl) { return; }
+        noteRecentColor(color);
         applyStyleToSelectionOrWhole(objEl, 'color:' + color + ';', function () {
           active.fillColor = active.color = color;
           active.fillGradient = null;
           applyStyle1();
         });
+        refreshControls();
       }
-      fillBtn.dataset.popupId = 'fill';
-      fillBtn.onclick = function (ev) {
-        ev.stopPropagation();
-        openStyle1Popup(fillBtn, S.tf_fill, function (popup) {
-          popup.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_fill]));
-          if (textframeRecentColors.length) {
-            var recentRow = el('div', { class: 'ic-textframe-palette' });
-            textframeRecentColors.forEach(function (color) {
-              var sw = el('button', { class: 'ic-color-swatch' + (!active.fillGradient && active.fillColor === color ? ' active' : ''), style: 'background:' + color });
-              sw.addEventListener('click', function () { applyFillColor(color); });
-              recentRow.appendChild(sw);
-            });
-            popup.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_recent_colors]));
-            popup.appendChild(recentRow);
-          }
-          var soloRow = el('div', { class: 'ic-textframe-palette' });
-          TEXTFRAME_PALETTE.forEach(function (color) {
-            var sw = el('button', { class: 'ic-color-swatch' + (!active.fillGradient && (active.fillColor || preset.text) === color ? ' active' : ''), style: 'background:' + color });
-            sw.addEventListener('click', function () { noteRecentColor(color); applyFillColor(color); });
-            soloRow.appendChild(sw);
-          });
-          var customColor = el('input', { type: 'color', value: active.fillColor || preset.text, class: 'ic-textframe-custom-color' });
-          customColor.addEventListener('change', function () { noteRecentColor(customColor.value); applyFillColor(customColor.value); });
-          soloRow.appendChild(customColor);
-          popup.appendChild(soloRow);
-
-          var opacityRow = el('div', { class: 'ic-textframe-edit' });
-          opacityRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_opacity]));
-          opacityRow.appendChild(numberStepper(Math.round((active.opacity != null ? active.opacity : 1) * 100), 0, 100, 5, 0, function (v) {
-            active.opacity = v / 100;
-            var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-            if (objEl) { objEl.style.opacity = active.opacity; }
-          }));
-          popup.appendChild(opacityRow);
-
-          var gradToggle = el('label', { class: 'ic-me-check' });
-          var gradCheck = el('input', { type: 'checkbox' });
-          gradCheck.checked = !!active.fillGradient;
-          gradToggle.appendChild(gradCheck);
-          gradToggle.appendChild(document.createTextNode(S.tf_use_gradient));
-          popup.appendChild(gradToggle);
-          var gradRow = el('div', { class: 'ic-textframe-edit' });
-          var g1 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[0]) || '#e0503f' });
-          var g2 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[1]) || '#4f8cff' });
-          function updateGrad() { active.fillGradient = [g1.value, g2.value]; applyStyle1(); }
-          g1.addEventListener('input', updateGrad); g2.addEventListener('input', updateGrad);
-          gradRow.appendChild(g1); gradRow.appendChild(g2);
-          gradCheck.addEventListener('change', function () {
-            active.fillGradient = gradCheck.checked ? [g1.value, g2.value] : null;
-            applyStyle1();
-          });
-          popup.appendChild(gradRow);
-        });
-      };
+      bigPaletteContainer.innerHTML = '';
+      buildBigColorPalette(bigPaletteContainer, active.fillGradient ? null : (active.fillColor || preset.text), active.opacity, applyFillColor, function (v) {
+        active.opacity = v;
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.opacity = v; }
+      });
+      var gradToggle = el('label', { class: 'ic-me-check' });
+      var gradCheck = el('input', { type: 'checkbox' });
+      gradCheck.checked = !!active.fillGradient;
+      gradToggle.appendChild(gradCheck);
+      gradToggle.appendChild(document.createTextNode(S.tf_use_gradient));
+      bigPaletteContainer.appendChild(gradToggle);
+      var gradRow = el('div', { class: 'ic-textframe-edit' });
+      var g1 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[0]) || '#e0503f' });
+      var g2 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[1]) || '#4f8cff' });
+      function updateGrad() { active.fillGradient = [g1.value, g2.value]; applyStyle1(); }
+      g1.addEventListener('input', updateGrad); g2.addEventListener('input', updateGrad);
+      gradRow.appendChild(g1); gradRow.appendChild(g2);
+      gradCheck.addEventListener('change', function () {
+        active.fillGradient = gradCheck.checked ? [g1.value, g2.value] : null;
+        applyStyle1(); refreshControls();
+      });
+      bigPaletteContainer.appendChild(gradRow);
       outlineBtn.dataset.popupId = 'outline';
       outlineBtn.onclick = function (ev) {
         ev.stopPropagation();

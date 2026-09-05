@@ -569,10 +569,11 @@
 .ic-textframe-presets { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
 .ic-textframe-shape-row { margin: 8px 0; }
 .ic-textframe-shape-btn { flex: 1 1 0; }
-.ic-textframe-fgshape {
-  position: absolute; inset: 0; background-repeat: no-repeat; background-position: center;
-  background-size: 70% 70%; pointer-events: none; z-index: 0;
+.ic-textframe-shapeobj {
+  position: absolute; transform: translate(-50%, -50%); background-repeat: no-repeat; background-position: center;
+  background-size: contain; cursor: pointer; z-index: 0; border-radius: 4px;
 }
+.ic-textframe-shapeobj.active { outline: 2px dashed #4f8cff; outline-offset: 4px; }
 .ic-draggable-modal {
   position: fixed; z-index: 500; background: var(--ic-panel); border-radius: 10px;
   box-shadow: 0 8px 28px rgba(0,0,0,.55); width: min(320px, 90vw); max-height: 70vh;
@@ -678,6 +679,13 @@
   background: rgba(255,255,255,.08); color: var(--ic-text); cursor: pointer;
 }
 .ic-stepper-btn:hover { background: rgba(255,255,255,.18); }
+.ic-bigpalette-container { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 12px; }
+.ic-bigpalette-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; }
+.ic-bigpalette-cell {
+  aspect-ratio: 1; border-radius: 3px; border: 1px solid rgba(255,255,255,.15); padding: 0; cursor: pointer; min-width: 0;
+}
+.ic-bigpalette-cell.empty { background: transparent; border-style: dashed; cursor: default; }
+.ic-bigpalette-cell.active { outline: 2px solid #fff; outline-offset: 1px; }
 .ic-textframe-fmt-btn[title="Kursiv"], .ic-textframe-fmt-btn[title="Italic"] { font-style: italic; }
 .ic-textframe-fmt-btn[title="Unterstrichen"], .ic-textframe-fmt-btn[title="Underline"] { text-decoration: underline; }
 .ic-textframe-fmt-btn[title="Durchgestrichen"], .ic-textframe-fmt-btn[title="Strikethrough"] { text-decoration: line-through; }

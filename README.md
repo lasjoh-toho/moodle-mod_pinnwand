@@ -1031,6 +1031,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Absatz-Zeile.
 - Fill/Kontur/Effekte-Icons farbcodiert (rotes Rechteck/Rand/Schatten).
 
+### Fünfundsiebzigste Überarbeitung — Große Palette dauerhaft sichtbar, Formen vereinheitlicht
+
+- Neue 10x10-Farbpalette dauerhaft sichtbar (kein Pop-up mehr): zuletzt
+  verwendet oben, Grauverlauf links, Farbraster im Rest, Transparenz
+  darunter.
+- Formen vereinheitlicht: ein Button statt Vordergrund/Hintergrund,
+  Formen sind jetzt echte, wählbare Objekte auf dem Zettel.
+- Noch offen: Formen ziehen/skalieren, Textumfluss-Buttons.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

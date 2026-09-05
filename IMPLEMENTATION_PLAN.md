@@ -2173,3 +2173,31 @@ durchgehend sichtbarer vertikaler Block, Formen als echte, wählbare/
 neu anlegbare Objekte (keine Unterscheidung Vordergrund/Hintergrund
 mehr), Textumfluss-Buttons, "Farbe über Farbe löscht die darunter
 liegende".
+
+---
+
+## Phase 71 — Große 10x10-Palette dauerhaft sichtbar, Formen vereinheitlicht als echte Objekte ✅
+
+Vierundsechzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] **Neue 10x10-Farbpalette**, dauerhaft sichtbar (kein Pop-up mehr)
+  als vertikaler Block in "Farben und Formen": oberste 2 Zeilen
+  zuletzt verwendete Farben, linker Rand Grauverlauf weiß bis schwarz,
+  Rest ein Farbraster nach Farbton (Spalte) und Helligkeit (Zeile).
+  Transparenz-Regler und Verlauf-Umschaltung direkt darunter. Wirkt wie
+  bisher auf die Zeichen-Auswahl oder das ganze Textobjekt.
+- [x] **Formen vereinheitlicht**: keine Unterscheidung mehr zwischen
+  Vordergrund-/Hintergrund-Form - ein einziger "Formen"-Button. Formen
+  sind jetzt echte Objekte (`tf.shapes`-Array, wie `tf.texts`),
+  anklickbar zum Auswählen. Ist eine Form ausgewählt, überträgt der
+  nächste gewählte Typ sich auf SIE; ist keine ausgewählt, entsteht
+  eine neue. Das bisherige Konzept einer eigenen "Kartengrenzen-Form"
+  (tf.shape, Kreis/Oval/Eckig für die Kartenfläche selbst) wurde dabei
+  entfernt - passte nicht zur Vereinheitlichung.
+
+**Noch offen/vereinfacht:** Formen lassen sich noch nicht per Ziehen
+verschieben oder in der Größe ändern (liegen erstmal mittig, feste
+Startgröße) - das wäre der nächste Ausbauschritt. "Farbe über Farbe
+löscht die darunterliegende" sowie die Textumfluss-Buttons sind noch
+nicht umgesetzt.
