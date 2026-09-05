@@ -1714,8 +1714,9 @@
         (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
     }
     // Formen (Block "Farben und Formen") - jetzt echte, mehrfache Objekte
-    // (tf.shapes), liegen hinter dem Text, aber vor dem Kartenhintergrund.
-    var fgShapeEl = (tf.shapes || []).map(function (s) {
+    // (tf.shapes), Reihenfolge richtet sich nach dem Umfluss-Modus:
+    // "vor dem Text" liegt sichtbar über dem Text, sonst darunter.
+    function renderShapeSvg(s) {
       var shapeDef = s.type === 'custom' && s.customPoints
         ? { d: s.customPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
         : (s.type && s.type !== 'none'
@@ -1729,7 +1730,9 @@
       return '<g transform="translate(' + tx + ',' + ty + ') scale(' + scale + ')">' +
         '<path d="' + shapeDef.d + '" fill="' + fgColor + '"' +
         (shapeDef.fillRule ? ' fill-rule="' + shapeDef.fillRule + '"' : '') + '/></g>';
-    }).join('');
+    }
+    var behindShapesEl = (tf.shapes || []).filter(function (s) { return s.wrapMode !== 'front'; }).map(renderShapeSvg).join('');
+    var frontShapesEl = (tf.shapes || []).filter(function (s) { return s.wrapMode === 'front'; }).map(renderShapeSvg).join('');
     // Alle Textobjekte (nicht nur das primäre) laufen über foreignObject mit
     // echtem HTML-Markup - so bleiben Fett/Kursiv/Unterstrichen/
     // Durchgestrichen/Aufzählung sowie Zeilenabstand/Laufweite erhalten
@@ -1771,7 +1774,7 @@
       'font-size:.82em;line-height:1.1;margin:0 2px}' +
       '.ic-frac-num{border-bottom:1.5px solid currentColor;padding:0 3px 1px}' +
       '.ic-frac-den{padding:1px 3px 0}' +
-      '</style>' + defs + bgRect + fgShapeEl + textEls + '</svg>';
+      '</style>' + defs + bgRect + behindShapesEl + textEls + frontShapesEl + '</svg>';
   }
 
   // Bettet die tatsächlich verwendeten Web-Fonts (aktuell nur "Handschrift")
@@ -2160,7 +2163,20 @@
       var shapeSizeHandle = el('div', { class: 'ic-resize ic-textframe-shape-resize' });
       shapeEl.appendChild(shapeSizeHandle);
       makeShapeMovable(shapeEl, frame, s, shapeSizeHandle);
-      frameInner.insertBefore(shapeEl, frameInner.firstChild);
+      if (s.wrapMode === 'wrap') {
+        // Textumfluss: Form "schwimmt" zur nächstgelegenen Seite, Text
+        // soll ihr per shape-outside ausweichen. Wirkt nur bei Text im
+        // normalen Fluss - unsere Textobjekte sind frei positioniert
+        // (siehe Kommentar bei ic-textframe-obj), daher bislang nur eine
+        // Grundlage für spätere Ausbaustufen, kein vollständiger Umfluss.
+        shapeEl.style.float = s.x < 0.5 ? 'left' : 'right';
+        shapeEl.style.shapeOutside = 'circle(50%)';
+      }
+      if (s.wrapMode === 'front') {
+        frameInner.appendChild(shapeEl);
+      } else {
+        frameInner.insertBefore(shapeEl, frameInner.firstChild);
+      }
     });
 
     // Rechte Spalte: Fläche/Kontur/Effekte, Transparenz-Slider, Tabs
@@ -2444,6 +2460,27 @@
         });
       }
       fontsBox.appendChild(alignRow);
+
+      // Textumfluss der gerade ausgewählten Form: vor dem Text (liegt
+      // sichtbar über dem Text), hinter dem Text (Standard), Umfluss
+      // (Text fließt um die Form herum, siehe applyShapeWrapMode).
+      var activeShapeForWrap = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
+      if (activeShapeForWrap) {
+        var wrapRow = el('div', { class: 'ic-textframe-formatgrid' });
+        [
+          ['front', 'wrapfront', S.tf_wrap_front], ['behind', 'wrapbehind', S.tf_wrap_behind],
+          ['wrap', 'wraparound', S.tf_wrap_around]
+        ].forEach(function (w) {
+          var wb = el('button', {
+            class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + ((activeShapeForWrap.wrapMode || 'behind') === w[0] ? ' ic-btn-primary' : ''),
+            title: w[2]
+          }, [icon(w[1])]);
+          wb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+          wb.addEventListener('click', function () { activeShapeForWrap.wrapMode = w[0]; render(); });
+          wrapRow.appendChild(wb);
+        });
+        fontsBox.appendChild(wrapRow);
+      }
 
       var lineRow = el('div', { class: 'ic-textframe-edit' });
       lineRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.lineheight]));
@@ -2765,6 +2802,9 @@
     alignjustify: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
     fillicon: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="4" y="4" width="16" height="16" rx="2" fill="#e0503f"/></svg>',
     outlineicon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none"><rect x="5" y="5" width="14" height="14" rx="2" stroke="#e0503f" stroke-width="2.5"/></svg>',
+    wrapfront: '<svg viewBox="0 0 24 24" width="16" height="16"><line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="6" fill="#e0503f"/><line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 3"/></svg>',
+    wrapbehind: '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="6" fill="#e0503f" opacity=".5"/><line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    wraparound: '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="6" fill="#e0503f"/><line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="9" x2="7" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="17" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="15" x2="7" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="17" y1="15" x2="21" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
     effecticon: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="7" y="7" width="14" height="14" rx="2" fill="#e0503f" opacity=".55"/><rect x="4" y="4" width="14" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
     pin: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-3 0-5.5 2.4-5.5 5.5 0 4 5.5 10.5 5.5 10.5s5.5-6.5 5.5-10.5C17.5 4.4 15 2 12 2z"/><circle cx="12" cy="7.5" r="2"/></svg>',
     group: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3-6 7-6s7 2.7 7 6"/><circle cx="18" cy="8.5" r="2.3"/><path d="M15.5 14.2c2.7.4 4.5 2.6 4.5 5.3"/></svg>',

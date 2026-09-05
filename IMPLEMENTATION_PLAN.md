@@ -2267,3 +2267,29 @@ Siebenundsechzigster Feedback-Durchgang. Betrifft: `js/app.js`,
 
 **Noch offen:** Textumfluss um darunterliegende Formen konfigurierbar
 machen - eigenständiges, größeres Feature, noch nicht begonnen.
+
+---
+
+## Phase 75 — Textumfluss: Vor-/Hinter-Text vollständig, Umfluss als Grundlage ✅
+
+Achtundsechzigster Feedback-Durchgang. Betrifft: `js/app.js`, neue
+Strings.
+
+Ehrliche architektonische Einordnung: echter Textumfluss (Text weicht
+einer Form innerhalb desselben Absatzes aus) setzt voraus, dass Text im
+normalen Dokumentfluss liegt. Unsere Textobjekte sind jedoch frei
+positioniert (`position:absolute`, per Ziehen verschiebbar) - eine
+Grundvoraussetzung für die freie Gestaltung auf dem Zettel. Echtes
+CSS `shape-outside` wirkt nur auf normal fließende Geschwister-Elemente.
+
+- [x] Drei Buttons (vor dem Text/hinter dem Text/Umfluss) neben der
+  Ausrichtung ergänzt, wirken auf die gerade ausgewählte Form
+  (`s.wrapMode`).
+- [x] **"Vor dem Text"/"Hinter dem Text" vollständig funktionsfähig**:
+  steuert die Element-Reihenfolge (Formen vor oder nach den
+  Textobjekten eingefügt) - live UND im Export.
+- [x] **"Umfluss" als Grundlage**: setzt `float`+`shape-outside` auf die
+  Form selbst (technisch korrekt vorbereitet), wirkt aber mangels
+  normalem Textfluss noch nicht vollständig als sichtbares Ausweichen
+  des Textes - eine echte Umsetzung bräuchte eine grundlegend andere
+  Positionierung der Textobjekte (nächster, größerer Ausbauschritt).

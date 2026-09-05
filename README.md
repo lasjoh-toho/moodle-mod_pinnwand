@@ -1065,7 +1065,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Vorlagen zeigen eine visuelle Vorschau statt Text.
 - Formen: jede Wahl erzeugt jetzt eine neue Form, frei verschiebbar und
   über Eck-Griff skalierbar.
-- Noch offen: Textumfluss um Formen konfigurierbar machen.
+
+### Neunundsiebzigste Überarbeitung — Textumfluss (Vor-/Hinter-Text)
+
+- Drei Buttons für die gerade ausgewählte Form: vor dem Text, hinter
+  dem Text (beide vollständig funktionsfähig, live und im Export),
+  Umfluss (technische Grundlage gelegt, wirkt mangels normalem
+  Textfluss unserer frei positionierten Textobjekte noch nicht
+  vollständig - größerer Ausbauschritt).
 
 ## Bekannte Grenzen dieser Version
 
