@@ -1337,7 +1337,7 @@
         ctx.beginPath();
         ctx.strokeStyle = 'hsl(' + deg + ',100%,50%)';
         ctx.lineWidth = outerR - innerR + 1;
-        ctx.arc(cx, cy, (outerR + innerR) / 2, (deg - 1.2) * Math.PI / 180, (deg + 1.2) * Math.PI / 180);
+        ctx.arc(cx, cy, (outerR + innerR) / 2, (deg - 90 - 1.2) * Math.PI / 180, (deg - 90 + 1.2) * Math.PI / 180);
         ctx.stroke();
       }
       var verts = triangleVertices(hue);
@@ -1565,6 +1565,15 @@
   };
   var FG_SHAPE_CATEGORY_LABELS = { grundformen: 'Grundformen', symbolformen: 'Symbolformen', blockpfeile: 'Blockpfeile' };
   var fgShapeGradientCounter = 0;
+  // Rechnet einen Verlauf-Winkel (gleiche Konvention wie der drehbare
+  // Pfeil/die Live-Textdarstellung) in x1/y1/x2/y2 für ein SVG
+  // <linearGradient> um (objectBoundingBox, 0..1), statt einer festen
+  // Diagonale.
+  function gradientSvgVector(angle) {
+    var rad = ((angle != null ? angle : 135) + 90) * Math.PI / 180;
+    var dx = Math.cos(rad) * 0.5, dy = Math.sin(rad) * 0.5;
+    return { x1: 0.5 - dx, y1: 0.5 - dy, x2: 0.5 + dx, y2: 0.5 + dy };
+  }
   function fgShapeSvgDataUri(shape, style) {
     // Rückwärtskompatibel: reiner Farb-String (z.B. für Rastervorschauen)
     // wird als einfache Fläche ohne Kontur/Effekte behandelt.
@@ -1572,7 +1581,8 @@
     var defs = '', fillAttr = 'fill="' + (style.fillColor || '#e0503f') + '"';
     if (style.fillGradient && style.fillGradient.length === 2) {
       var gid = 'fgshapegrad' + (fgShapeGradientCounter++);
-      defs += '<linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1">' +
+      var gv = gradientSvgVector(style.fillGradientAngle);
+      defs += '<linearGradient id="' + gid + '" x1="' + gv.x1 + '" y1="' + gv.y1 + '" x2="' + gv.x2 + '" y2="' + gv.y2 + '">' +
         '<stop offset="0" stop-color="' + style.fillGradient[0] + '"/>' +
         '<stop offset="1" stop-color="' + style.fillGradient[1] + '"/></linearGradient>';
       fillAttr = 'fill="url(#' + gid + ')"';
@@ -1580,8 +1590,11 @@
     var filterAttr = '';
     if (style.shadowOn) {
       var fid = 'fgshapeshadow' + (fgShapeGradientCounter++);
+      var shAngle2 = (style.shadowAngle != null ? style.shadowAngle : 45) * Math.PI / 180;
+      var shDist2 = style.shadowDistance != null ? style.shadowDistance : 3;
       defs += '<filter id="' + fid + '" x="-50%" y="-50%" width="200%" height="200%">' +
-        '<feDropShadow dx="2" dy="3" stdDeviation="' + ((style.shadowBlur || 4) / 4) +
+        '<feDropShadow dx="' + (Math.cos(shAngle2) * shDist2).toFixed(1) + '" dy="' + (Math.sin(shAngle2) * shDist2).toFixed(1) +
+        '" stdDeviation="' + ((style.shadowBlur || 4) / 4) +
         '" flood-color="' + (style.shadowColor || '#000') + '"/></filter>';
       filterAttr = ' filter="url(#' + fid + ')"';
     }
@@ -1733,7 +1746,7 @@
   function computeStyle1Css(t, fallbackColor) {
     var css = '';
     if (t.fillGradient && t.fillGradient.length === 2) {
-      css += 'background-image:linear-gradient(135deg,' + t.fillGradient[0] + ',' + t.fillGradient[1] + ');' +
+      css += 'background-image:linear-gradient(' + ((t.fillGradientAngle != null ? t.fillGradientAngle : 135) + 90) + 'deg,' + t.fillGradient[0] + ',' + t.fillGradient[1] + ');' +
         '-webkit-background-clip:text;background-clip:text;color:transparent;';
     } else {
       css += 'color:' + (t.fillColor || fallbackColor) + ';';
@@ -1742,7 +1755,12 @@
       css += '-webkit-text-stroke:' + t.outlineWidth + 'px ' + (t.outlineColor || '#000') + ';paint-order:stroke fill;';
     }
     var shadows = [];
-    if (t.shadowOn) { shadows.push('0 2px ' + (t.shadowBlur || 4) + 'px ' + (t.shadowColor || '#000')); }
+    if (t.shadowOn) {
+      var shAngle = (t.shadowAngle != null ? t.shadowAngle : 45) * Math.PI / 180;
+      var shDist = t.shadowDistance != null ? t.shadowDistance : 3;
+      var shDx = (Math.cos(shAngle) * shDist).toFixed(1), shDy = (Math.sin(shAngle) * shDist).toFixed(1);
+      shadows.push(shDx + 'px ' + shDy + 'px ' + (t.shadowBlur || 4) + 'px ' + (t.shadowColor || '#000'));
+    }
     if (t.glowOn) { shadows.push('0 0 ' + (t.glowWidth || 8) + 'px ' + (t.glowColor || '#fff')); }
     if (shadows.length) { css += 'text-shadow:' + shadows.join(',') + ';'; }
     if (t.opacity != null && t.opacity < 1) { css += 'opacity:' + t.opacity + ';'; }
@@ -1900,7 +1918,8 @@
       var shapeDefs = '', fillAttr = 'fill="' + escapeXml(s.fillColor || '#e0503f') + '"';
       if (s.fillGradient && s.fillGradient.length === 2) {
         var gid = 'shapegrad' + s.id;
-        shapeDefs += '<linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1">' +
+        var gv2 = gradientSvgVector(s.fillGradientAngle);
+        shapeDefs += '<linearGradient id="' + gid + '" x1="' + gv2.x1 + '" y1="' + gv2.y1 + '" x2="' + gv2.x2 + '" y2="' + gv2.y2 + '">' +
           '<stop offset="0" stop-color="' + escapeXml(s.fillGradient[0]) + '"/>' +
           '<stop offset="1" stop-color="' + escapeXml(s.fillGradient[1]) + '"/></linearGradient>';
         fillAttr = 'fill="url(#' + gid + ')"';
@@ -1908,8 +1927,11 @@
       var filterAttr = '';
       if (s.shadowOn) {
         var fid = 'shapeshadow' + s.id;
+        var shAngle3 = (s.shadowAngle != null ? s.shadowAngle : 45) * Math.PI / 180;
+        var shDist3 = s.shadowDistance != null ? s.shadowDistance : 3;
         shapeDefs += '<filter id="' + fid + '" x="-50%" y="-50%" width="200%" height="200%">' +
-          '<feDropShadow dx="2" dy="3" stdDeviation="' + ((s.shadowBlur || 4) / 4) +
+          '<feDropShadow dx="' + (Math.cos(shAngle3) * shDist3).toFixed(1) + '" dy="' + (Math.sin(shAngle3) * shDist3).toFixed(1) +
+          '" stdDeviation="' + ((s.shadowBlur || 4) / 4) +
           '" flood-color="' + escapeXml(s.shadowColor || '#000') + '"/></filter>';
         filterAttr = ' filter="url(#' + fid + ')"';
       }
@@ -2403,6 +2425,14 @@
     // (Raster/Rad).
     var colorsCol = el('div', { class: 'ic-cf-colors-col' });
     columnsWrap.appendChild(colorsCol);
+    var targetModeRow = el('div', { class: 'ic-textframe-formatgrid' });
+    state.styleTargetMode = state.styleTargetMode || 'text';
+    var textTargetBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + (state.styleTargetMode === 'text' ? ' active' : ''), title: S.tf_target_text }, [icon('texttargeticon')]);
+    var shapeTargetBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + (state.styleTargetMode === 'shape' ? ' active' : ''), title: S.tf_target_shape }, [icon('frameicon')]);
+    textTargetBtn.addEventListener('click', function () { state.styleTargetMode = 'text'; render(); });
+    shapeTargetBtn.addEventListener('click', function () { state.styleTargetMode = 'shape'; render(); });
+    targetModeRow.appendChild(textTargetBtn); targetModeRow.appendChild(shapeTargetBtn);
+    colorsCol.appendChild(targetModeRow);
     var styleRow = el('div', { class: 'ic-textframe-formatgrid' });
     state.styleTab = state.styleTab || 'fill';
     var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + (state.styleTab === 'fill' ? ' active' : ''), title: S.tf_fill }, [icon('fillicon')]);
@@ -2468,12 +2498,13 @@
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (objEl) { objEl.style.cssText += ';' + computeStyle1Css(active, preset.text); }
       }
-      // Fläche/Kontur/Effekte wirken auf die gerade ausgewählte FORM, falls
-      // eine gewählt ist (dieselbe Palette/Tabs wie bei Text) - sonst auf
-      // den aktiven Text.
+      // Fläche/Kontur/Effekte wirken auf Text ODER die gerade ausgewählte
+      // Form - je nachdem, was im T/Rechteck-Umschalter oben gewählt ist
+      // (state.styleTargetMode), nicht mehr implizit erraten.
       var styleActiveShape = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
-      var styleTarget = styleActiveShape || active;
-      var isShapeTarget = !!styleActiveShape;
+      var isShapeTarget = state.styleTargetMode === 'shape';
+      var styleTarget = isShapeTarget ? styleActiveShape : active;
+      var styleTargetMissing = isShapeTarget && !styleTarget;
       function applyShapeOrTextChange() {
         if (isShapeTarget) { render(); } else { applyStyle1(); }
       }
@@ -2497,6 +2528,10 @@
         refreshControls();
       }
       opacitySliderRow.innerHTML = '';
+      bigPaletteContainer.innerHTML = '';
+      if (styleTargetMissing) {
+        bigPaletteContainer.appendChild(el('p', { class: 'ic-hint' }, [S.tf_no_shape_selected]));
+      } else {
       opacitySliderRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_opacity]));
       var opacitySlider = el('input', {
         type: 'range', min: '0', max: '100', step: '5', value: String(Math.round((styleTarget.opacity != null ? styleTarget.opacity : 1) * 100)),
@@ -2510,7 +2545,6 @@
       });
       opacitySliderRow.appendChild(opacitySlider);
 
-      bigPaletteContainer.innerHTML = '';
       if (state.styleTab === 'outline') {
         var outlineRow = el('div', { class: 'ic-textframe-edit' });
         var outlineColorInput = el('input', { type: 'color', value: styleTarget.outlineColor || '#000000' });
@@ -2522,48 +2556,156 @@
         outlineRow.appendChild(outlineWidthInput);
         bigPaletteContainer.appendChild(outlineRow);
       } else if (state.styleTab === 'effects') {
-        [
-          ['shadowOn', 'shadowColor', 'shadowBlur', S.tf_shadow, '#000000', 4],
-          ['glowOn', 'glowColor', 'glowWidth', S.tf_glow, '#ffffff', 8]
-        ].forEach(function (cfg) {
-          var onKey = cfg[0], colorKey = cfg[1], widthKey = cfg[2], label = cfg[3], defColor = cfg[4], defWidth = cfg[5];
-          if (isShapeTarget && onKey === 'glowOn') { return; } // Glow ergibt bei Formen (SVG) aktuell nur Schatten Sinn
-          var effRow = el('div', { class: 'ic-textframe-edit' });
-          var effToggle = el('label', { class: 'ic-me-check' });
-          var effCheck = el('input', { type: 'checkbox' });
-          effCheck.checked = !!styleTarget[onKey];
-          effToggle.appendChild(effCheck); effToggle.appendChild(document.createTextNode(label));
-          var effColorInput = el('input', { type: 'color', value: styleTarget[colorKey] || defColor });
-          var effWidthInput = el('input', { type: 'range', min: '0', max: '20', step: '1', value: String(styleTarget[widthKey] || defWidth) });
-          effCheck.addEventListener('change', function () { styleTarget[onKey] = effCheck.checked; applyShapeOrTextChange(); });
-          effColorInput.addEventListener('input', function () { styleTarget[colorKey] = effColorInput.value; applyShapeOrTextChange(); });
-          effWidthInput.addEventListener('input', function () { styleTarget[widthKey] = parseFloat(effWidthInput.value); applyShapeOrTextChange(); });
-          effRow.appendChild(effToggle); effRow.appendChild(effColorInput); effRow.appendChild(effWidthInput);
-          bigPaletteContainer.appendChild(effRow);
-        });
-      } else {
-        if (state.colorTab === 'wheel') {
-          buildColorWheel(bigPaletteContainer, styleTarget.fillGradient ? null : (styleTarget.fillColor || preset.text), applyFillColor);
-        } else {
-          buildBigColorPalette(bigPaletteContainer, styleTarget.fillGradient ? null : (styleTarget.fillColor || preset.text), null, applyFillColor, null);
+        function buildEffectColorSwatch(colorKey, defColor) {
+          var swatch = el('button', {
+            class: 'ic-effect-swatch', style: 'background:' + (styleTarget[colorKey] || defColor),
+            title: S.tf_fill
+          });
+          swatch.addEventListener('click', function () {
+            state.effectsPickerKey = state.effectsPickerKey === colorKey ? null : colorKey;
+            refreshControls();
+          });
+          return swatch;
         }
+        var shadowToggleRow = el('div', { class: 'ic-textframe-edit' });
+        var shadowToggle = el('label', { class: 'ic-me-check' });
+        var shadowCheck = el('input', { type: 'checkbox' });
+        shadowCheck.checked = !!styleTarget.shadowOn;
+        shadowCheck.addEventListener('change', function () { styleTarget.shadowOn = shadowCheck.checked; applyShapeOrTextChange(); });
+        shadowToggle.appendChild(shadowCheck); shadowToggle.appendChild(document.createTextNode(S.tf_shadow));
+        shadowToggleRow.appendChild(shadowToggle);
+        shadowToggleRow.appendChild(buildEffectColorSwatch('shadowColor', '#000000'));
+        bigPaletteContainer.appendChild(shadowToggleRow);
+        if (styleTarget.shadowOn) {
+          var angleRow = el('div', { class: 'ic-textframe-edit' });
+          angleRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_shadow_angle]));
+          angleRow.appendChild(numberStepper(styleTarget.shadowAngle != null ? styleTarget.shadowAngle : 45, 0, 360, 15, 0, function (v) { styleTarget.shadowAngle = v; applyShapeOrTextChange(); }));
+          bigPaletteContainer.appendChild(angleRow);
+          var distRow = el('div', { class: 'ic-textframe-edit' });
+          distRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_shadow_distance]));
+          distRow.appendChild(numberStepper(styleTarget.shadowDistance != null ? styleTarget.shadowDistance : 3, 0, 20, 1, 0, function (v) { styleTarget.shadowDistance = v; applyShapeOrTextChange(); }));
+          bigPaletteContainer.appendChild(distRow);
+          var blurRow = el('div', { class: 'ic-textframe-edit' });
+          blurRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
+          blurRow.appendChild(numberStepper(styleTarget.shadowBlur || 4, 0, 20, 1, 0, function (v) { styleTarget.shadowBlur = v; applyShapeOrTextChange(); }));
+          bigPaletteContainer.appendChild(blurRow);
+        }
+        if (!isShapeTarget) {
+          // Glow ergibt bei Formen (SVG) aktuell nur als Schatten Sinn.
+          var glowToggleRow = el('div', { class: 'ic-textframe-edit' });
+          var glowToggle = el('label', { class: 'ic-me-check' });
+          var glowCheck = el('input', { type: 'checkbox' });
+          glowCheck.checked = !!styleTarget.glowOn;
+          glowCheck.addEventListener('change', function () { styleTarget.glowOn = glowCheck.checked; applyShapeOrTextChange(); });
+          glowToggle.appendChild(glowCheck); glowToggle.appendChild(document.createTextNode(S.tf_glow));
+          glowToggleRow.appendChild(glowToggle);
+          glowToggleRow.appendChild(buildEffectColorSwatch('glowColor', '#ffffff'));
+          bigPaletteContainer.appendChild(glowToggleRow);
+          if (styleTarget.glowOn) {
+            var glowWidthRow = el('div', { class: 'ic-textframe-edit' });
+            glowWidthRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
+            glowWidthRow.appendChild(numberStepper(styleTarget.glowWidth || 8, 0, 20, 1, 0, function (v) { styleTarget.glowWidth = v; applyShapeOrTextChange(); }));
+            bigPaletteContainer.appendChild(glowWidthRow);
+          }
+        }
+        // Wird eine Farbe gerade gewählt (Schatten/Glow), erscheint dieselbe
+        // große Palette wie bei Fläche darunter.
+        if (state.effectsPickerKey) {
+          var pickerKey = state.effectsPickerKey;
+          function applyEffectColor(color) {
+            styleTarget[pickerKey] = color;
+            noteRecentColor(color);
+            applyShapeOrTextChange();
+          }
+          if (state.colorTab === 'wheel') {
+            buildColorWheel(bigPaletteContainer, styleTarget[pickerKey], applyEffectColor);
+          } else {
+            buildBigColorPalette(bigPaletteContainer, styleTarget[pickerKey], null, applyEffectColor, null);
+          }
+        }
+      } else {
+        var gradToggleRow2 = el('div', { class: 'ic-me-check-row' });
         var gradToggle = el('label', { class: 'ic-me-check' });
         var gradCheck = el('input', { type: 'checkbox' });
         gradCheck.checked = !!styleTarget.fillGradient;
         gradToggle.appendChild(gradCheck);
-        gradToggle.appendChild(document.createTextNode(S.tf_use_gradient));
-        bigPaletteContainer.appendChild(gradToggle);
-        var gradRow = el('div', { class: 'ic-textframe-edit' });
-        var g1 = el('input', { type: 'color', value: (styleTarget.fillGradient && styleTarget.fillGradient[0]) || '#e0503f' });
-        var g2 = el('input', { type: 'color', value: (styleTarget.fillGradient && styleTarget.fillGradient[1]) || '#4f8cff' });
-        function updateGrad() { styleTarget.fillGradient = [g1.value, g2.value]; applyShapeOrTextChange(); }
-        g1.addEventListener('input', updateGrad); g2.addEventListener('input', updateGrad);
-        gradRow.appendChild(g1); gradRow.appendChild(g2);
+        if (!gradCheck.checked) { gradToggle.appendChild(document.createTextNode(S.tf_use_gradient)); }
+        gradToggleRow2.appendChild(gradToggle);
         gradCheck.addEventListener('change', function () {
-          styleTarget.fillGradient = gradCheck.checked ? [g1.value, g2.value] : null;
+          styleTarget.fillGradient = gradCheck.checked ? [styleTarget.fillColor || '#e0503f', '#4f8cff'] : null;
+          styleTarget.fillGradientAngle = styleTarget.fillGradientAngle || 135;
           if (isShapeTarget) { render(); } else { applyStyle1(); refreshControls(); }
         });
-        bigPaletteContainer.appendChild(gradRow);
+        opacitySliderRow.appendChild(gradToggleRow2);
+
+        if (styleTarget.fillGradient) {
+          // Verlauf-Band mit ziehbaren Markern + drehbarem Richtungspfeil
+          // statt Wort/einfacher Farbfelder.
+          var gradRow2 = el('div', { class: 'ic-gradient-row' });
+          var angle = styleTarget.fillGradientAngle != null ? styleTarget.fillGradientAngle : 135;
+          var band = el('div', {
+            class: 'ic-gradient-band',
+            style: 'background:linear-gradient(90deg,' + styleTarget.fillGradient[0] + ',' + styleTarget.fillGradient[1] + ')'
+          });
+          [0, 1].forEach(function (stopIdx) {
+            var stop = el('div', {
+              class: 'ic-gradient-stop' + (state.gradientStopIndex === stopIdx ? ' active' : ''),
+              style: 'left:' + (stopIdx === 0 ? '0%' : '100%') + ';background:' + styleTarget.fillGradient[stopIdx]
+            });
+            stop.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              state.gradientStopIndex = state.gradientStopIndex === stopIdx ? null : stopIdx;
+              refreshControls();
+            });
+            band.appendChild(stop);
+          });
+          gradRow2.appendChild(band);
+          var angleKnob = el('div', { class: 'ic-gradient-angle', style: '--angle:' + angle + 'deg', title: S.tf_gradient_angle });
+          var angleDragging = false;
+          function angleFromEvent(ev) {
+            var rect = angleKnob.getBoundingClientRect();
+            var cx2 = rect.left + rect.width / 2, cy2 = rect.top + rect.height / 2;
+            var p = ev.touches ? ev.touches[0] : ev;
+            var deg = Math.atan2(p.clientY - cy2, p.clientX - cx2) * 180 / Math.PI;
+            return (deg + 360) % 360;
+          }
+          function onAngleMove(ev) {
+            if (!angleDragging) { return; }
+            styleTarget.fillGradientAngle = Math.round(angleFromEvent(ev));
+            angleKnob.style.setProperty('--angle', styleTarget.fillGradientAngle + 'deg');
+            band.style.background = 'linear-gradient(' + (styleTarget.fillGradientAngle + 90) + 'deg,' + styleTarget.fillGradient[0] + ',' + styleTarget.fillGradient[1] + ')';
+          }
+          angleKnob.addEventListener('mousedown', function () { angleDragging = true; });
+          angleKnob.addEventListener('touchstart', function () { angleDragging = true; }, { passive: true });
+          window.addEventListener('mousemove', onAngleMove);
+          window.addEventListener('touchmove', onAngleMove, { passive: true });
+          window.addEventListener('mouseup', function () { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } });
+          window.addEventListener('touchend', function () { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } });
+          gradRow2.appendChild(angleKnob);
+          bigPaletteContainer.appendChild(gradRow2);
+
+          if (state.gradientStopIndex != null) {
+            var stopIdxSel = state.gradientStopIndex;
+            function applyGradStopColor(color) {
+              styleTarget.fillGradient = styleTarget.fillGradient.slice();
+              styleTarget.fillGradient[stopIdxSel] = color;
+              noteRecentColor(color);
+              applyShapeOrTextChange();
+            }
+            if (state.colorTab === 'wheel') {
+              buildColorWheel(bigPaletteContainer, styleTarget.fillGradient[stopIdxSel], applyGradStopColor);
+            } else {
+              buildBigColorPalette(bigPaletteContainer, styleTarget.fillGradient[stopIdxSel], null, applyGradStopColor, null);
+            }
+          }
+        } else {
+          if (state.colorTab === 'wheel') {
+            buildColorWheel(bigPaletteContainer, styleTarget.fillColor || preset.text, applyFillColor);
+          } else {
+            buildBigColorPalette(bigPaletteContainer, styleTarget.fillColor || preset.text, null, applyFillColor, null);
+          }
+        }
+      }
       }
 
       // Zeichen-Werkzeuge (wirken auf die aktuelle Zeichen-Auswahl, siehe
@@ -3033,12 +3175,13 @@
     aligncenter: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>',
     alignright: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg>',
     alignjustify: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
-    fillicon: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="4" y="4" width="16" height="16" rx="2" fill="#e0503f"/></svg>',
-    outlineicon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none"><rect x="5" y="5" width="14" height="14" rx="2" stroke="#e0503f" stroke-width="2.5"/></svg>',
-    wrapfront: '<svg viewBox="0 0 24 24" width="20" height="20"><line x1="2" y1="6" x2="22" y2="6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="12" x2="8" y2="12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="16" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="12" r="7" fill="#e0503f" stroke="#fff" stroke-width="1.2"/></svg>',
-    wrapbehind: '<svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="7" fill="#e0503f" opacity=".4"/><line x1="2" y1="6" x2="22" y2="6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
-    wraparound: '<svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="7" fill="#e0503f" stroke="#fff" stroke-width="1.2"/><line x1="2" y1="6" x2="22" y2="6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="9.5" x2="6.5" y2="9.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="17.5" y1="9.5" x2="22" y2="9.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="14.5" x2="6.5" y2="14.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="17.5" y1="14.5" x2="22" y2="14.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
-    effecticon: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="8" y="8" width="13" height="13" rx="2" fill="#000" opacity=".65"/><rect x="3" y="3" width="13" height="13" rx="2" fill="#e0503f"/></svg>',
+    fillicon: '<svg viewBox="0 0 24 24" width="24" height="24"><rect x="4" y="4" width="16" height="16" rx="2" fill="#e0503f"/></svg>',
+    outlineicon: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none"><rect x="5" y="5" width="14" height="14" rx="2" stroke="#e0503f" stroke-width="3"/></svg>',
+    texttargeticon: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="4" y1="5" x2="20" y2="5"/><line x1="12" y1="5" x2="12" y2="20"/></svg>',
+    wrapfront: '<svg viewBox="0 0 24 24" width="26" height="26"><line x1="2" y1="6" x2="22" y2="6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="12" x2="8" y2="12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="16" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="12" r="7" fill="#e0503f" stroke="#fff" stroke-width="1.2"/></svg>',
+    wrapbehind: '<svg viewBox="0 0 24 24" width="26" height="26"><circle cx="12" cy="12" r="7" fill="#e0503f" opacity=".4"/><line x1="2" y1="6" x2="22" y2="6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    wraparound: '<svg viewBox="0 0 24 24" width="26" height="26"><circle cx="12" cy="12" r="7" fill="#e0503f" stroke="#fff" stroke-width="1.2"/><line x1="2" y1="6" x2="22" y2="6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="9.5" x2="6.5" y2="9.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="17.5" y1="9.5" x2="22" y2="9.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="14.5" x2="6.5" y2="14.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="17.5" y1="14.5" x2="22" y2="14.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    effecticon: '<svg viewBox="0 0 24 24" width="24" height="24"><rect x="8" y="8" width="13" height="13" rx="2" fill="#e0503f"/><rect x="3" y="3" width="13" height="13" rx="2" fill="#fff"/></svg>',
     pin: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-3 0-5.5 2.4-5.5 5.5 0 4 5.5 10.5 5.5 10.5s5.5-6.5 5.5-10.5C17.5 4.4 15 2 12 2z"/><circle cx="12" cy="7.5" r="2"/></svg>',
     group: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3-6 7-6s7 2.7 7 6"/><circle cx="18" cy="8.5" r="2.3"/><path d="M15.5 14.2c2.7.4 4.5 2.6 4.5 5.3"/></svg>',
     rotate: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"/><polyline points="3 21 3 15 9 15"/></svg>',

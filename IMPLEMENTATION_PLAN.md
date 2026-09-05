@@ -2418,3 +2418,31 @@ Zweiundsiebzigster Feedback-Durchgang. Betrifft: `js/app.js`.
   Editor selbst (dort bleibt Text beim Bearbeiten normal editierbar)
   und noch nicht im SVG-Export (gespeichertes Bild zeigt noch normalen
   Fließtext).
+
+---
+
+## Phase 80 — Farb-Bereich-Feinschliff: explizite Text/Form-Auswahl, Farbrad-Bugfix, Schatten-Richtung, Verlauf-Band mit drehbarem Pfeil ✅
+
+Dreiundsiebzigster/vierundsiebzigster/fünfundsiebzigster Feedback-
+Durchgang (mehrere kleine Runden zusammengefasst). Betrifft: `js/app.js`,
+`styles.css`, neue Strings.
+
+- [x] **Explizite Text/Form-Auswahl**: neue Buttongruppe (T / Rechteck)
+  vor Fläche/Kontur/Effekte legt sichtbar fest, worauf sich Änderungen
+  beziehen - mit Hinweis, falls "Form" gewählt, aber keine ausgewählt.
+- [x] Icons vergrößert, Effekte-Icon korrigiert (roter Schatten hinter
+  weißer Fläche), neues T-Icon.
+- [x] **Farbrad-Bugfix**: Ring zeichnete Farben ohne denselben
+  Winkel-Versatz wie Marker/Dreieck - das war die gemeldete
+  90°-Verschiebung.
+- [x] Schatten mit Richtung/Entfernung (statt fester Werte) - wirkt auf
+  Text UND Formen, live und im Export.
+- [x] Schatten/Glow-Farbwahl nutzt jetzt dieselbe große Palette statt
+  einfacher Farbfelder.
+- [x] **Verlauf komplett neu**: Checkbox jetzt unter Transparenz statt
+  im Wort-Label. Bei Aktivierung erscheint ein Verlaufs-Band mit zwei
+  ziehbaren Farb-Markern (Klick öffnet dieselbe Palette) und einem
+  drehbaren Richtungspfeil (wird bei Hover größer).
+- [x] **Verlauf-Winkel jetzt auch bei Formen** (vorher nur Text) - neue
+  gemeinsame Funktion `gradientSvgVector()` rechnet den Winkel in
+  SVG-Koordinaten um, live und im Export.

@@ -1106,6 +1106,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Spalte je Zeile, wirkt bisher nur auf der Pinnwand (nicht im Editor
   selbst, nicht im gespeicherten Bild).
 
+### Vierundachtzigste Überarbeitung — Farb-Bereich-Feinschliff
+
+- Explizite Text/Form-Auswahl (T/Rechteck-Buttons) statt impliziter
+  Erkennung.
+- Farbrad-Bugfix (90°-Verschiebung behoben).
+- Schatten mit Richtung/Entfernung, Schatten/Glow nutzen jetzt die
+  große Palette.
+- Verlauf komplett neu: Checkbox unter Transparenz, Band mit ziehbaren
+  Markern und drehbarem Richtungspfeil - wirkt jetzt auch bei Formen.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
