@@ -2059,9 +2059,9 @@
     // Textobjekt (siehe activeId/refreshControls weiter unten). Werden in
     // einer eigenen Zeile im selben Block untergebracht.
     var styleRow = el('div', { class: 'ic-textframe-formatgrid' });
-    var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_fill]);
-    var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_outline]);
-    var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_effects]);
+    var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_fill }, [icon('fillicon')]);
+    var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_outline }, [icon('outlineicon')]);
+    var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_effects }, [icon('effecticon')]);
     styleRow.appendChild(fillBtn); styleRow.appendChild(outlineBtn); styleRow.appendChild(effectsBtn);
     blockTemplates.content.appendChild(styleRow);
 
@@ -2105,6 +2105,15 @@
       function openStyle1Popup(anchorBtn, title, buildRows) {
         openDraggableModal(title, anchorBtn, function (content) { buildRows(content); });
       }
+      function applyFillColor(color) {
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (!objEl) { return; }
+        applyStyleToSelectionOrWhole(objEl, 'color:' + color + ';', function () {
+          active.fillColor = active.color = color;
+          active.fillGradient = null;
+          applyStyle1();
+        });
+      }
       fillBtn.dataset.popupId = 'fill';
       fillBtn.onclick = function (ev) {
         ev.stopPropagation();
@@ -2114,7 +2123,7 @@
             var recentRow = el('div', { class: 'ic-textframe-palette' });
             textframeRecentColors.forEach(function (color) {
               var sw = el('button', { class: 'ic-color-swatch' + (!active.fillGradient && active.fillColor === color ? ' active' : ''), style: 'background:' + color });
-              sw.addEventListener('click', function () { active.fillColor = color; active.fillGradient = null; applyStyle1(); });
+              sw.addEventListener('click', function () { applyFillColor(color); });
               recentRow.appendChild(sw);
             });
             popup.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_recent_colors]));
@@ -2123,12 +2132,11 @@
           var soloRow = el('div', { class: 'ic-textframe-palette' });
           TEXTFRAME_PALETTE.forEach(function (color) {
             var sw = el('button', { class: 'ic-color-swatch' + (!active.fillGradient && (active.fillColor || preset.text) === color ? ' active' : ''), style: 'background:' + color });
-            sw.addEventListener('click', function () { active.fillColor = color; active.fillGradient = null; noteRecentColor(color); applyStyle1(); });
+            sw.addEventListener('click', function () { noteRecentColor(color); applyFillColor(color); });
             soloRow.appendChild(sw);
           });
           var customColor = el('input', { type: 'color', value: active.fillColor || preset.text, class: 'ic-textframe-custom-color' });
-          customColor.addEventListener('input', function () { active.fillColor = customColor.value; active.fillGradient = null; });
-          customColor.addEventListener('change', function () { noteRecentColor(customColor.value); applyStyle1(); });
+          customColor.addEventListener('change', function () { noteRecentColor(customColor.value); applyFillColor(customColor.value); });
           soloRow.appendChild(customColor);
           popup.appendChild(soloRow);
 
@@ -2200,11 +2208,11 @@
         });
       };
 
-      // Oberste Zeile: Fett/Kursiv/Unterstrichen (nur Zettel - WordArt nutzt
-      // die WordArt-Stile weiter unten für "wilde" Formatierung) sowie
-      // Ausrichtung, die sich auf die markierten Zeilen bezieht.
-      var topRow = el('div', { class: 'ic-textframe-formatgrid' });
+      // Zeichen-Werkzeuge (wirken auf die aktuelle Zeichen-Auswahl, siehe
+      // applyStyleToSelectionOrWhole): Fett/Kursiv/Unterstrichen zuerst.
       if (!state.wordArtMode) {
+        fontsBox.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_group_char]));
+        var charRow = el('div', { class: 'ic-textframe-formatgrid' });
         [
           ['bold', 'boldicon', S.format_bold], ['italic', 'italicicon', S.format_italic],
           ['underline', 'underlineicon', S.format_underline]
@@ -2212,29 +2220,23 @@
           var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
           fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
           fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
-          topRow.appendChild(fb);
+          charRow.appendChild(fb);
         });
+        fontsBox.appendChild(charRow);
       }
-      [
-        ['justifyLeft', 'alignleft', S.align_left], ['justifyCenter', 'aligncenter', S.align_center],
-        ['justifyRight', 'alignright', S.align_right], ['justifyFull', 'alignjustify', S.align_justify]
-      ].forEach(function (cmd) {
-        var ab = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
-        ab.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-        ab.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
-        topRow.appendChild(ab);
-      });
-      fontsBox.appendChild(topRow);
-
       var editRow = el('div', { class: 'ic-textframe-edit' });
       var fontSel = el('select', { class: 'ic-textframe-select' });
       TEXTFRAME_FONTS.forEach(function (f) {
         fontSel.appendChild(el('option', { value: f.id, selected: f.id === active.font ? 'selected' : null }, [f.label]));
       });
       fontSel.addEventListener('change', function () {
-        active.font = fontSel.value;
+        var css = (TEXTFRAME_FONTS.filter(function (f) { return f.id === fontSel.value; })[0] || TEXTFRAME_FONTS[0]).css;
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.fontFamily = (TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]).css; }
+        if (!objEl) { return; }
+        applyStyleToSelectionOrWhole(objEl, 'font-family:' + css + ';', function () {
+          active.font = fontSel.value;
+          objEl.style.fontFamily = css;
+        });
       });
       editRow.appendChild(fontSel);
 
@@ -2249,35 +2251,74 @@
       }
 
       // Schriftgröße: Größer/Kleiner-Buttons statt Slider (auf Wunsch).
+      // Wirkt auf die aktuelle Zeichen-Auswahl, falls vorhanden, sonst auf
+      // das ganze Textobjekt.
       var sizeRow = el('div', { class: 'ic-textframe-edit' });
       var sizeDisplay = el('span', { class: 'ic-stepper-value' }, [String(active.size)]);
-      function setSize(v) {
-        active.size = Math.max(10, Math.min(200, v));
-        sizeDisplay.textContent = String(active.size);
+      var lastSizeDelta = 0;
+      function setSize(delta) {
+        lastSizeDelta += delta;
+        var newSize = Math.max(10, Math.min(200, active.size + lastSizeDelta));
+        sizeDisplay.textContent = String(newSize);
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.fontSize = active.size + 'px'; }
+        if (!objEl) { return; }
+        applyStyleToSelectionOrWhole(objEl, 'font-size:' + newSize + 'px;', function () {
+          active.size = newSize;
+          objEl.style.fontSize = newSize + 'px';
+          lastSizeDelta = 0;
+        });
       }
       var sizeDown = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['A\u2212']);
       var sizeUp = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['A+']);
-      sizeDown.addEventListener('click', function () { setSize(active.size - 2); });
-      sizeUp.addEventListener('click', function () { setSize(active.size + 2); });
+      sizeDown.addEventListener('click', function () { setSize(-2); });
+      sizeUp.addEventListener('click', function () { setSize(2); });
       sizeRow.appendChild(sizeDown); sizeRow.appendChild(sizeDisplay); sizeRow.appendChild(sizeUp);
       editRow.appendChild(sizeRow);
       fontsBox.appendChild(editRow);
 
-      // Schriftschnitt-Gewicht: Zahlen-Stepper statt Slider. Bezieht sich
-      // aktuell auf das ganze Textobjekt (Auswahl auf Wort-/Zeichenebene
-      // ist als nächster Ausbauschritt vorgesehen).
+      // Schriftschnitt-Gewicht: Zahlen-Stepper statt Slider. Wirkt auf die
+      // aktuelle Zeichen-Auswahl, falls vorhanden, sonst auf das ganze
+      // Textobjekt.
       var weightRow = el('div', { class: 'ic-textframe-edit' });
       weightRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontweight]));
       weightRow.appendChild(numberStepper(active.fontWeight || 700, 300, 900, 100, 0, function (v) {
-        active.fontWeight = v;
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.fontWeight = v; }
+        if (!objEl) { return; }
+        applyStyleToSelectionOrWhole(objEl, 'font-weight:' + v + ';', function () {
+          active.fontWeight = v;
+          objEl.style.fontWeight = v;
+        });
       }));
       fontsBox.appendChild(weightRow);
 
-      var spacingGrid = el('div', { class: 'ic-textframe-formatgrid' });
+      var spaceRow = el('div', { class: 'ic-textframe-edit' });
+      spaceRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.letterspacing]));
+      spaceRow.appendChild(numberStepper(active.letterSpacing || 0, -2, 20, 0.5, 1, function (v) {
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (!objEl) { return; }
+        applyStyleToSelectionOrWhole(objEl, 'letter-spacing:' + v + 'px;', function () {
+          active.letterSpacing = v;
+          objEl.style.letterSpacing = v + 'px';
+        });
+      }));
+      fontsBox.appendChild(spaceRow);
+
+      // Absatz-Werkzeuge (wirken auf die markierten Zeilen bzw. das ganze
+      // Textobjekt, nicht auf einzelne Zeichen): Ausrichtung, Zeilenabstand,
+      // Durchgestrichen/Aufzählung.
+      fontsBox.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_group_para]));
+      var alignRow = el('div', { class: 'ic-textframe-formatgrid' });
+      [
+        ['justifyLeft', 'alignleft', S.align_left], ['justifyCenter', 'aligncenter', S.align_center],
+        ['justifyRight', 'alignright', S.align_right], ['justifyFull', 'alignjustify', S.align_justify]
+      ].forEach(function (cmd) {
+        var ab = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
+        ab.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        ab.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
+        alignRow.appendChild(ab);
+      });
+      fontsBox.appendChild(alignRow);
+
       var lineRow = el('div', { class: 'ic-textframe-edit' });
       lineRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.lineheight]));
       lineRow.appendChild(numberStepper(active.lineHeight || 1.2, 0.9, 2.2, 0.1, 1, function (v) {
@@ -2285,17 +2326,7 @@
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (objEl) { objEl.style.lineHeight = v; }
       }));
-      spacingGrid.appendChild(lineRow);
-
-      var spaceRow = el('div', { class: 'ic-textframe-edit' });
-      spaceRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.letterspacing]));
-      spaceRow.appendChild(numberStepper(active.letterSpacing || 0, -2, 20, 0.5, 1, function (v) {
-        active.letterSpacing = v;
-        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.letterSpacing = v + 'px'; }
-      }));
-      spacingGrid.appendChild(spaceRow);
-      fontsBox.appendChild(spacingGrid);
+      fontsBox.appendChild(lineRow);
 
       // Wendet Farbe UND (falls gesetzt) den WordArt-Stil gemeinsam neu auf
       // das Live-Element an - ein WordArt-Stil kann "color" durch eine
@@ -2389,24 +2420,9 @@
         formBox.appendChild(wordartRow);
       }
 
-      var paletteRow = el('div', { class: 'ic-textframe-palette' });
-      function applyColor(color) {
-        active.color = color;
-        reapplyTextStyle();
-        refreshControls();
-      }
-      TEXTFRAME_PALETTE.forEach(function (color) {
-        var sw = el('button', {
-          class: 'ic-color-swatch' + ((active.color || preset.text) === color ? ' active' : ''),
-          style: 'background:' + color
-        });
-        sw.addEventListener('click', function () { applyColor(color); });
-        paletteRow.appendChild(sw);
-      });
-      var customColor = el('input', { type: 'color', value: active.color || preset.text, class: 'ic-textframe-custom-color' });
-      customColor.addEventListener('change', function () { applyColor(customColor.value); });
-      paletteRow.appendChild(customColor);
-      (state.wordArtMode ? formBox : fontsBox).appendChild(paletteRow);
+      // Die frühere separate Minipalette hier wurde entfernt - die Palette
+      // im Block "Farben und Formen" (Fill-Pop-up) übernimmt diese Aufgabe
+      // jetzt vollständig und wirkt zusätzlich auf die Zeichen-Auswahl.
 
       if (tf.texts.length > 1) {
         var rmBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.removetextobject]);
@@ -2586,6 +2602,9 @@
     aligncenter: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>',
     alignright: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg>',
     alignjustify: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
+    fillicon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2 3 10l8 8 9-9-9-7z"/><path d="M3 10h16"/><circle cx="18" cy="18" r="3"/></svg>',
+    outlineicon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3" stroke-dasharray="3 2.5"/></svg>',
+    effecticon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg>',
     pin: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-3 0-5.5 2.4-5.5 5.5 0 4 5.5 10.5 5.5 10.5s5.5-6.5 5.5-10.5C17.5 4.4 15 2 12 2z"/><circle cx="12" cy="7.5" r="2"/></svg>',
     group: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3-6 7-6s7 2.7 7 6"/><circle cx="18" cy="8.5" r="2.3"/><path d="M15.5 14.2c2.7.4 4.5 2.6 4.5 5.3"/></svg>',
     rotate: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"/><polyline points="3 21 3 15 9 15"/></svg>',
@@ -2609,6 +2628,34 @@
   };
   // Zahlen-Stepper statt Schieberegler - Zahl mit kleinen Hoch-/Runter-
   // Pfeilen, spart deutlich Platz gegenüber einem Slider.
+  // Wendet Inline-CSS auf die aktuelle ZEICHEN-Auswahl an (falls eine
+  // Textmarkierung innerhalb des aktiven Textobjekts vorliegt), sonst
+  // auf das gesamte Textobjekt als Fallback. Grundlage dafür, dass
+  // Schriftart/-größe/-gewicht/Laufweite/Farbe auf einzelne Zeichen
+  // wirken können statt nur auf den gesamten Text.
+  function applyStyleToSelectionOrWhole(objEl, cssText, wholeObjectFallback) {
+    var sel = window.getSelection();
+    if (sel && sel.rangeCount && !sel.isCollapsed) {
+      var range = sel.getRangeAt(0);
+      if (objEl.contains(range.commonAncestorContainer)) {
+        try {
+          var span = document.createElement('span');
+          span.style.cssText = cssText;
+          var content = range.extractContents();
+          span.appendChild(content);
+          range.insertNode(span);
+          sel.removeAllRanges();
+          var newRange = document.createRange();
+          newRange.selectNodeContents(span);
+          sel.addRange(newRange);
+          return true;
+        } catch (e) { /* Auswahl reicht über Element-Grenzen - Fallback */ }
+      }
+    }
+    wholeObjectFallback();
+    return false;
+  }
+
   function numberStepper(value, min, max, step, decimals, onChange) {
     var wrap = el('div', { class: 'ic-stepper' });
     var display = el('span', { class: 'ic-stepper-value' }, [decimals ? value.toFixed(decimals) : String(value)]);

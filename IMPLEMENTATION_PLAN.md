@@ -2115,3 +2115,30 @@ Einundsechzigster Feedback-Durchgang. Betrifft: `js/app.js`,
 Antworttext): voller Kreis-Farbwähler mit Auswahldreieck (HSV-Rad),
 Umfluss-Modus (Text um eine Form), Fontweight/Laufweite auf Wort-/
 Zeichenebene, KaTeX-Integration mit Nachladen und Templates.
+
+---
+
+## Phase 69 — Zeichen-Ebene für Schrift/Größe/Gewicht/Laufweite/Farbe, Schriften-Block gegliedert, Minipalette entfernt ✅
+
+Zweiundsechzigster Feedback-Durchgang. Betrifft: `js/app.js`, neue
+Strings.
+
+- [x] Neue Grundlage `applyStyleToSelectionOrWhole()`: wendet Inline-CSS
+  auf die aktuelle Zeichen-Auswahl an (Span-Wrapping via Range), sonst
+  auf das ganze Textobjekt als Fallback.
+- [x] Schriftart, Schriftgröße, Schriftgewicht, Laufweite und Farbe
+  wirken jetzt auf einzelne Zeichen, wenn eine Textmarkierung vorliegt.
+- [x] Schriften-Block gegliedert in "Zeichen" (Schriftart/-größe/
+  -gewicht/Laufweite/Fett/Kursiv/Unterstrichen) und "Absatz"
+  (Ausrichtung/Zeilenabstand/Durchgestrichen/Aufzählung).
+- [x] Fill/Kontur/Effekte-Buttons zeigen jetzt Icons statt Text.
+- [x] **Alte, redundante Minipalette in Schriften entfernt** - die
+  Fill-Palette in "Farben und Formen" übernimmt diese Aufgabe jetzt
+  vollständig UND wirkt zusätzlich auf die Zeichen-Auswahl.
+  `active.color` bleibt als Alias mitgesetzt, damit WordArt-Stil-
+  Tönungen weiterhin funktionieren.
+
+**Bewusst noch nicht umgesetzt:** Verlauf-Fill und Kontur/Effekte-
+Pop-ups wirken weiterhin nur auf das ganze Textobjekt (nicht auf
+Zeichen-Ebene) - technisch aufwändiger, da mehrere CSS-Eigenschaften
+gleichzeitig betroffen sind.

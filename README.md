@@ -1010,6 +1010,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Zurückgestellt: HSV-Farbrad, Umfluss-Modus, Wort-/Zeichen-Ebene für
   Gewicht/Laufweite, KaTeX-Formeleditor.
 
+### Dreiundsiebzigste Überarbeitung — Zeichen-Ebene, Schriften-Block gegliedert
+
+- Schriftart, -größe, -gewicht, Laufweite und Farbe wirken jetzt auf
+  einzelne markierte Zeichen statt nur auf den gesamten Text.
+- Schriften-Block in "Zeichen" und "Absatz" gegliedert.
+- Fill/Kontur/Effekte-Buttons zeigen jetzt Icons statt Text.
+- Alte, redundante Minipalette in Schriften entfernt - die Fill-Palette
+  in "Farben und Formen" übernimmt das jetzt vollständig.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
