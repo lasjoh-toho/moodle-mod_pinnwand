@@ -1097,6 +1097,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
   wie Text - über dieselben Palette-Tabs, die sich automatisch auf die
   gerade ausgewählte Form beziehen, falls eine gewählt ist.
 
+### Dreiundachtzigste Überarbeitung — Erste funktionierende Textumfluss-Berechnung
+
+- Text weicht jetzt tatsächlich Formen mit Umfluss-Modus auf der
+  Pinnwand aus (per Pretext berechnet, zeilenweise).
+- Bewusste Einschränkungen: nur einfacher Text (keine Fett/Kursiv-
+  Formatierung innerhalb umflossener Zeilen), nur die erste freie
+  Spalte je Zeile, wirkt bisher nur auf der Pinnwand (nicht im Editor
+  selbst, nicht im gespeicherten Bild).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

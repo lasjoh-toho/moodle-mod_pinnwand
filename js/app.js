@@ -1755,6 +1755,76 @@
   // Pinnwand selbst, damit Text dort lebendig bleibt (Grundlage für
   // dynamischen Umfluss um Formen/Fotos, statt zu einem Bild eingefroren
   // zu werden).
+  // Berechnet die Umfluss-Zeilen für EIN Textobjekt anhand der
+  // blockierenden Formen in der Nähe - eine Zeile je Durchlauf, Breite je
+  // Zeile abhängig davon, was in diesem Zeilen-Band blockiert ist. Läuft
+  // komplett in der virtuellen tf.w x tf.h-Koordinatenfläche (dieselbe
+  // Fläche, die auch der SVG-Export nutzt), keine echten Pixel-Messungen
+  // am DOM nötig.
+  function computeWrapLines(pretext, text, fontCss, fontSizePx, letterSpacing, boxLeft, boxTop, boxWidth, lineHeightPx, obstacles) {
+    var prepared = pretext.prepareWithSegments(text, Math.round(fontSizePx) + 'px ' + fontCss, { letterSpacing: letterSpacing || 0 });
+    var lines = [];
+    var cursor = { segmentIndex: 0, graphemeIndex: 0 };
+    var y = boxTop;
+    var guard = 0;
+    while (guard++ < 300) {
+      var blocked = pretext.geometry.getRectIntervalsForBand(obstacles, y, y + lineHeightPx, 6, 2);
+      var slots = pretext.geometry.carveTextLineSlots({ left: boxLeft, right: boxLeft + boxWidth }, blocked);
+      var slot = slots[0] || { left: boxLeft, right: boxLeft + boxWidth };
+      var width = Math.max(24, slot.right - slot.left);
+      var range = pretext.layoutNextLineRange(prepared, cursor, width);
+      if (range === null) { break; }
+      var line = pretext.materializeLineRange(prepared, range);
+      lines.push({ text: line.text, x: slot.left, y: y, width: width });
+      cursor = range.end;
+      y += lineHeightPx;
+    }
+    return lines;
+  }
+
+  // Prüft für ein Textobjekt, ob Formen mit Umfluss-Modus in der Nähe
+  // liegen, und ersetzt bei Bedarf dessen Live-Darstellung durch
+  // zeilenweise, per Pretext berechnete Zeilen statt einfachem Fließtext.
+  // Läuft asynchron (Pretext wird erst bei tatsächlichem Bedarf
+  // nachgeladen), ersetzt den Inhalt nachträglich, sobald berechnet.
+  function applyTextWrapLive(tf, textElByIdx, inner) {
+    var wrapShapes = (tf.shapes || []).filter(function (s) { return s.wrapMode === 'wrap'; });
+    if (!wrapShapes.length) { return; }
+    loadPretext().then(function (pretext) {
+      var obstaclesAll = wrapShapes.map(function (s) {
+        var size = Math.min(tf.w, tf.h) * (s.size || 0.4);
+        return { x: s.x * tf.w - size / 2, y: s.y * tf.h - size / 2, width: size, height: size };
+      });
+      tf.texts.forEach(function (t, idx) {
+        var plainText = (t.text || '').replace(/<[^>]+>/g, '');
+        if (!plainText) { return; }
+        var fontCss = resolveFontCss(t.font);
+        var boxLeft = t.x * tf.w, boxWidth = Math.max(60, tf.w * 0.94 - boxLeft);
+        var lineHeightPx = t.size * (t.lineHeight || 1.2);
+        // Nur relevant, wenn sich Textbereich und mindestens eine
+        // Umfluss-Form überhaupt überschneiden könnten (grobe Prüfung
+        // über den vertikalen Bereich, spart unnötige Berechnung).
+        var relevant = obstaclesAll.filter(function (o) {
+          return o.x < boxLeft + boxWidth && o.x + o.width > boxLeft;
+        });
+        if (!relevant.length) { return; }
+        var lines = computeWrapLines(pretext, plainText, fontCss, t.size, t.letterSpacing || 0, boxLeft, t.y * tf.h, boxWidth, lineHeightPx, relevant);
+        if (!lines.length) { return; }
+        var wrapWrap = el('div', { class: 'ic-tf-live-text-wrap', style: 'position:absolute;left:0;top:0;width:100%;height:100%;z-index:1;' });
+        lines.forEach(function (line) {
+          wrapWrap.appendChild(el('div', {
+            style: 'position:absolute;left:' + (line.x / tf.w * 100) + '%;top:' + (line.y / tf.h * 100) + '%;' +
+              'width:' + (line.width / tf.w * 100) + '%;font-family:' + fontCss + ';font-size:' + t.size + 'px;' +
+              'font-weight:' + (t.fontWeight || 700) + ';letter-spacing:' + (t.letterSpacing || 0) + 'px;' +
+              'color:' + (t.fillColor || t.color || '#f2f3f5') + ';white-space:nowrap;'
+          }, [line.text]));
+        });
+        var oldEl = textElByIdx[idx];
+        if (oldEl && oldEl.parentNode) { oldEl.parentNode.replaceChild(wrapWrap, oldEl); textElByIdx[idx] = wrapWrap; }
+      });
+    }).catch(function () { /* Umfluss bleibt aus, normale Darstellung bleibt bestehen */ });
+  }
+
   function buildTextFrameLiveDom(tf) {
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
     var outer = el('div', {
@@ -1783,7 +1853,8 @@
       });
       inner.appendChild(shapeEl);
     });
-    tf.texts.forEach(function (t) {
+    var textElByIdx = [];
+    tf.texts.forEach(function (t, idx) {
       var fontCss = resolveFontCss(t.font);
       var html = t.html || (t.text ? escapeXml(t.text) : '');
       var textEl2 = el('div', {
@@ -1795,7 +1866,9 @@
           (wordartCssFor(t, preset.text) || computeStyle1Css(t, preset.text))
       });
       inner.appendChild(textEl2);
+      textElByIdx[idx] = textEl2;
     });
+    applyTextWrapLive(tf, textElByIdx, inner);
     return outer;
   }
 

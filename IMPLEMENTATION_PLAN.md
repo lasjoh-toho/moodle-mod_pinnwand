@@ -2389,3 +2389,32 @@ Palette-Tabs (nicht doppelt aufgebaut).
   ausgewählte FORM, falls eine gewählt ist, sonst auf den aktiven
   Text** - dieselbe Palette/Tabs für beide, wie gewünscht (kein
   doppelter Aufbau).
+
+---
+
+## Phase 79 — Erste funktionierende Textumfluss-Berechnung mit Pretext 🔄
+
+Zweiundsiebzigster Feedback-Durchgang. Betrifft: `js/app.js`.
+
+- [x] `computeWrapLines()`: berechnet die Umfluss-Zeilen für ein
+  Textobjekt - eine Zeile je Durchlauf, Breite je Zeile abhängig davon,
+  was im jeweiligen Zeilen-Band blockiert ist (Pretext `layoutNextLineRange`
+  + die portierten Geometrie-Funktionen). Läuft komplett in der
+  virtuellen tf.w x tf.h-Koordinatenfläche, keine echten Pixel-Messungen
+  am DOM nötig.
+- [x] `applyTextWrapLive()`: prüft für jedes Textobjekt, ob Formen mit
+  Umfluss-Modus in der Nähe liegen, lädt Pretext bei Bedarf nach und
+  ersetzt betroffene Textobjekte durch zeilenweise berechnete,
+  positionierte Zeilen statt einfachem Fließtext.
+- [x] In `buildTextFrameLiveDom()` eingebunden - wirkt damit auf der
+  Pinnwand.
+
+**Bewusste Einschränkungen dieser ersten Version** (ehrlich benannt):
+- Nur einfacher Text (kein `t.html` mit Fett/Kursiv innerhalb
+  umflossener Zeilen - das würde Pretexts Rich-Inline-API erfordern).
+- Je Zeile wird nur die ERSTE/linke freie Spalte genutzt (kein
+  gleichzeitiges Umfließen auf beiden Seiten einer Form).
+- Wirkt bisher nur auf der Pinnwand (Live-Darstellung), noch nicht im
+  Editor selbst (dort bleibt Text beim Bearbeiten normal editierbar)
+  und noch nicht im SVG-Export (gespeichertes Bild zeigt noch normalen
+  Fließtext).
