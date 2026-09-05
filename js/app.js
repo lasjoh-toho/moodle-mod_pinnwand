@@ -558,11 +558,11 @@
     var gridText = el('div', { class: 'ic-add-modal-grid' });
     var textFrameBtn = el('button', { class: 'ic-choice-btn' }, [icon('text'), el('span', {}, [S.addtextframe])]);
     textFrameBtn.addEventListener('click', function () {
-      closeAndGo('textframe', function () { state.textFrame = null; state.wordArtMode = false; });
+      closeAndGo('textframe', function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = false; });
     });
     var wordArtBtn = el('button', { class: 'ic-choice-btn' }, [icon('text'), el('span', {}, [S.addwordart])]);
     wordArtBtn.addEventListener('click', function () {
-      closeAndGo('textframe', function () { state.textFrame = null; state.wordArtMode = true; });
+      closeAndGo('textframe', function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = true; });
     });
     gridText.appendChild(textFrameBtn);
     gridText.appendChild(wordArtBtn);
@@ -1306,7 +1306,7 @@
   // die tatsächlich gezeichnete Pixelfarbe aus dem Canvas aus (robuster als
   // eigene Dreiecks-Mathematik nachzubauen).
   function buildColorWheel(container, currentColor, onPick) {
-    var size = 150, cx = size / 2, cy = size / 2, outerR = size / 2 - 3, innerR = outerR - 16;
+    var size = 260, cx = size / 2, cy = size / 2, outerR = size / 2 - 5, innerR = outerR - 26;
     var hue = 0;
     if (currentColor) {
       var m = /^#([0-9a-f]{6})$/i.exec(currentColor);
@@ -1933,10 +1933,42 @@
     });
   }
 
+  function resetTfHistory() {
+    state.tfUndoStack = []; state.tfRedoStack = []; state.tfLastSnapshot = null; state.tfSuppressSnapshot = false;
+  }
+
   function renderTextFrame(body) {
     if (!state.textFrame) { state.textFrame = newTextFrame(state.wordArtMode); }
     var tf = state.textFrame;
     TEXTFRAME_FONTS.forEach(function (f) { if (f.webfont) { ensureWebfont(f.webfont); } });
+
+    // Undo/Redo: erkennt Zustandsänderungen zentral bei jedem Rendern
+    // (statt jeden der vielen Änderungs-Punkte im Editor einzeln
+    // verdrahten zu müssen) - jede tatsächliche Änderung an tf wird
+    // automatisch zu einem Undo-Punkt.
+    var tfJson = JSON.stringify(tf);
+    if (state.tfLastSnapshot && state.tfLastSnapshot !== tfJson && !state.tfSuppressSnapshot) {
+      state.tfUndoStack = (state.tfUndoStack || []).concat([state.tfLastSnapshot]).slice(-50);
+      state.tfRedoStack = [];
+    }
+    state.tfLastSnapshot = tfJson;
+    state.tfSuppressSnapshot = false;
+    function tfUndo() {
+      if (!state.tfUndoStack || !state.tfUndoStack.length) { return; }
+      var prev = state.tfUndoStack.pop();
+      state.tfRedoStack = (state.tfRedoStack || []).concat([state.tfLastSnapshot]);
+      state.tfSuppressSnapshot = true;
+      state.textFrame = JSON.parse(prev);
+      render();
+    }
+    function tfRedo() {
+      if (!state.tfRedoStack || !state.tfRedoStack.length) { return; }
+      var next = state.tfRedoStack.pop();
+      state.tfUndoStack = (state.tfUndoStack || []).concat([state.tfLastSnapshot]);
+      state.tfSuppressSnapshot = true;
+      state.textFrame = JSON.parse(next);
+      render();
+    }
 
     // Äußeres Layout: bei einem Hochkant-Zettel stehen die Werkzeug-Blöcke
     // als Seitenleiste RECHTS (Reihe), damit der Zettel selbst die volle
@@ -2260,14 +2292,18 @@
     var colorsCol = el('div', { class: 'ic-cf-colors-col' });
     columnsWrap.appendChild(colorsCol);
     var styleRow = el('div', { class: 'ic-textframe-formatgrid' });
-    var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.tf_fill }, [icon('fillicon')]);
-    var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.tf_outline }, [icon('outlineicon')]);
-    var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.tf_effects }, [icon('effecticon')]);
+    state.styleTab = state.styleTab || 'fill';
+    var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + (state.styleTab === 'fill' ? ' active' : ''), title: S.tf_fill }, [icon('fillicon')]);
+    var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + (state.styleTab === 'outline' ? ' active' : ''), title: S.tf_outline }, [icon('outlineicon')]);
+    var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + (state.styleTab === 'effects' ? ' active' : ''), title: S.tf_effects }, [icon('effecticon')]);
+    fillBtn.addEventListener('click', function () { state.styleTab = 'fill'; render(); });
+    outlineBtn.addEventListener('click', function () { state.styleTab = 'outline'; render(); });
+    effectsBtn.addEventListener('click', function () { state.styleTab = 'effects'; render(); });
     styleRow.appendChild(fillBtn); styleRow.appendChild(outlineBtn); styleRow.appendChild(effectsBtn);
     colorsCol.appendChild(styleRow);
     var opacitySliderRow = el('div', { class: 'ic-textframe-edit' });
     colorsCol.appendChild(opacitySliderRow);
-    var colorTabsRow = el('div', { class: 'ic-cf-tabs' });
+    var colorTabsRow = el('div', { class: 'ic-cf-tabs' + (state.styleTab !== 'fill' ? ' ic-hidden' : '') });
     var tabRaster = el('button', { class: 'ic-cf-tab' + (state.colorTab !== 'wheel' ? ' active' : '') }, [S.tf_tab_grid]);
     var tabWheel = el('button', { class: 'ic-cf-tab' + (state.colorTab === 'wheel' ? ' active' : '') }, [S.tf_tab_wheel]);
     tabRaster.addEventListener('click', function () { state.colorTab = 'grid'; render(); });
@@ -2348,67 +2384,59 @@
       opacitySliderRow.appendChild(opacitySlider);
 
       bigPaletteContainer.innerHTML = '';
-      if (state.colorTab === 'wheel') {
-        buildColorWheel(bigPaletteContainer, active.fillGradient ? null : (active.fillColor || preset.text), applyFillColor);
+      if (state.styleTab === 'outline') {
+        var outlineRow = el('div', { class: 'ic-textframe-edit' });
+        var outlineColorInput = el('input', { type: 'color', value: active.outlineColor || '#000000' });
+        var outlineWidthInput = el('input', { type: 'range', min: '0', max: '6', step: '0.5', value: String(active.outlineWidth || 0) });
+        outlineColorInput.addEventListener('input', function () { active.outlineColor = outlineColorInput.value; applyStyle1(); });
+        outlineWidthInput.addEventListener('input', function () { active.outlineWidth = parseFloat(outlineWidthInput.value); applyStyle1(); });
+        outlineRow.appendChild(outlineColorInput);
+        outlineRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
+        outlineRow.appendChild(outlineWidthInput);
+        bigPaletteContainer.appendChild(outlineRow);
+      } else if (state.styleTab === 'effects') {
+        [
+          ['shadowOn', 'shadowColor', 'shadowBlur', S.tf_shadow, '#000000', 4],
+          ['glowOn', 'glowColor', 'glowWidth', S.tf_glow, '#ffffff', 8]
+        ].forEach(function (cfg) {
+          var onKey = cfg[0], colorKey = cfg[1], widthKey = cfg[2], label = cfg[3], defColor = cfg[4], defWidth = cfg[5];
+          var effRow = el('div', { class: 'ic-textframe-edit' });
+          var effToggle = el('label', { class: 'ic-me-check' });
+          var effCheck = el('input', { type: 'checkbox' });
+          effCheck.checked = !!active[onKey];
+          effToggle.appendChild(effCheck); effToggle.appendChild(document.createTextNode(label));
+          var effColorInput = el('input', { type: 'color', value: active[colorKey] || defColor });
+          var effWidthInput = el('input', { type: 'range', min: '0', max: '20', step: '1', value: String(active[widthKey] || defWidth) });
+          effCheck.addEventListener('change', function () { active[onKey] = effCheck.checked; applyStyle1(); });
+          effColorInput.addEventListener('input', function () { active[colorKey] = effColorInput.value; applyStyle1(); });
+          effWidthInput.addEventListener('input', function () { active[widthKey] = parseFloat(effWidthInput.value); applyStyle1(); });
+          effRow.appendChild(effToggle); effRow.appendChild(effColorInput); effRow.appendChild(effWidthInput);
+          bigPaletteContainer.appendChild(effRow);
+        });
       } else {
-        buildBigColorPalette(bigPaletteContainer, active.fillGradient ? null : (active.fillColor || preset.text), null, applyFillColor, null);
+        if (state.colorTab === 'wheel') {
+          buildColorWheel(bigPaletteContainer, active.fillGradient ? null : (active.fillColor || preset.text), applyFillColor);
+        } else {
+          buildBigColorPalette(bigPaletteContainer, active.fillGradient ? null : (active.fillColor || preset.text), null, applyFillColor, null);
+        }
+        var gradToggle = el('label', { class: 'ic-me-check' });
+        var gradCheck = el('input', { type: 'checkbox' });
+        gradCheck.checked = !!active.fillGradient;
+        gradToggle.appendChild(gradCheck);
+        gradToggle.appendChild(document.createTextNode(S.tf_use_gradient));
+        bigPaletteContainer.appendChild(gradToggle);
+        var gradRow = el('div', { class: 'ic-textframe-edit' });
+        var g1 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[0]) || '#e0503f' });
+        var g2 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[1]) || '#4f8cff' });
+        function updateGrad() { active.fillGradient = [g1.value, g2.value]; applyStyle1(); }
+        g1.addEventListener('input', updateGrad); g2.addEventListener('input', updateGrad);
+        gradRow.appendChild(g1); gradRow.appendChild(g2);
+        gradCheck.addEventListener('change', function () {
+          active.fillGradient = gradCheck.checked ? [g1.value, g2.value] : null;
+          applyStyle1(); refreshControls();
+        });
+        bigPaletteContainer.appendChild(gradRow);
       }
-      var gradToggle = el('label', { class: 'ic-me-check' });
-      var gradCheck = el('input', { type: 'checkbox' });
-      gradCheck.checked = !!active.fillGradient;
-      gradToggle.appendChild(gradCheck);
-      gradToggle.appendChild(document.createTextNode(S.tf_use_gradient));
-      bigPaletteContainer.appendChild(gradToggle);
-      var gradRow = el('div', { class: 'ic-textframe-edit' });
-      var g1 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[0]) || '#e0503f' });
-      var g2 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[1]) || '#4f8cff' });
-      function updateGrad() { active.fillGradient = [g1.value, g2.value]; applyStyle1(); }
-      g1.addEventListener('input', updateGrad); g2.addEventListener('input', updateGrad);
-      gradRow.appendChild(g1); gradRow.appendChild(g2);
-      gradCheck.addEventListener('change', function () {
-        active.fillGradient = gradCheck.checked ? [g1.value, g2.value] : null;
-        applyStyle1(); refreshControls();
-      });
-      bigPaletteContainer.appendChild(gradRow);
-      outlineBtn.dataset.popupId = 'outline';
-      outlineBtn.onclick = function (ev) {
-        ev.stopPropagation();
-        openStyle1Popup(outlineBtn, S.tf_outline, function (popup) {
-          var row = el('div', { class: 'ic-textframe-edit' });
-          var colorInput = el('input', { type: 'color', value: active.outlineColor || '#000000' });
-          var widthInput = el('input', { type: 'range', min: '0', max: '6', step: '0.5', value: String(active.outlineWidth || 0) });
-          colorInput.addEventListener('input', function () { active.outlineColor = colorInput.value; applyStyle1(); });
-          widthInput.addEventListener('input', function () { active.outlineWidth = parseFloat(widthInput.value); applyStyle1(); });
-          row.appendChild(colorInput);
-          row.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
-          row.appendChild(widthInput);
-          popup.appendChild(row);
-        });
-      };
-      effectsBtn.dataset.popupId = 'effects';
-      effectsBtn.onclick = function (ev) {
-        ev.stopPropagation();
-        openStyle1Popup(effectsBtn, S.tf_effects, function (popup) {
-          [
-            ['shadowOn', 'shadowColor', 'shadowBlur', S.tf_shadow, '#000000', 4],
-            ['glowOn', 'glowColor', 'glowWidth', S.tf_glow, '#ffffff', 8]
-          ].forEach(function (cfg) {
-            var onKey = cfg[0], colorKey = cfg[1], widthKey = cfg[2], label = cfg[3], defColor = cfg[4], defWidth = cfg[5];
-            var row = el('div', { class: 'ic-textframe-edit' });
-            var toggle = el('label', { class: 'ic-me-check' });
-            var check = el('input', { type: 'checkbox' });
-            check.checked = !!active[onKey];
-            toggle.appendChild(check); toggle.appendChild(document.createTextNode(label));
-            var colorInput = el('input', { type: 'color', value: active[colorKey] || defColor });
-            var widthInput = el('input', { type: 'range', min: '0', max: '20', step: '1', value: String(active[widthKey] || defWidth) });
-            check.addEventListener('change', function () { active[onKey] = check.checked; applyStyle1(); });
-            colorInput.addEventListener('input', function () { active[colorKey] = colorInput.value; applyStyle1(); });
-            widthInput.addEventListener('input', function () { active[widthKey] = parseFloat(widthInput.value); applyStyle1(); });
-            row.appendChild(toggle); row.appendChild(colorInput); row.appendChild(widthInput);
-            popup.appendChild(row);
-          });
-        });
-      };
 
       // Zeichen-Werkzeuge (wirken auf die aktuelle Zeichen-Auswahl, siehe
       // applyStyleToSelectionOrWhole): Fett/Kursiv/Unterstrichen zuerst.
@@ -2417,7 +2445,7 @@
         var charRow = el('div', { class: 'ic-textframe-formatgrid' });
         [
           ['bold', 'boldicon', S.format_bold], ['italic', 'italicicon', S.format_italic],
-          ['underline', 'underlineicon', S.format_underline]
+          ['underline', 'underlineicon', S.format_underline], ['strikeThrough', 'strikeicon', S.format_strike]
         ].forEach(function (cmd) {
           var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
           fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
@@ -2441,6 +2469,7 @@
         });
       });
       editRow.appendChild(fontSel);
+      fontsBox.appendChild(editRow);
 
       // WordArt: eigener "Fonts"-Button öffnet die kuratierte, nach
       // Kategorien geordnete Schriftbibliothek (siehe WORDART_FONT_CATEGORIES) -
@@ -2452,10 +2481,11 @@
         fontsBox.appendChild(fontsBtn);
       }
 
-      // Schriftgröße: Größer/Kleiner-Buttons statt Slider (auf Wunsch).
-      // Wirkt auf die aktuelle Zeichen-Auswahl, falls vorhanden, sonst auf
-      // das ganze Textobjekt.
-      var sizeRow = el('div', { class: 'ic-textframe-edit' });
+      // Größe, Gewicht und Laufweite jetzt gemeinsam in einer Zeile (auf
+      // Wunsch) statt drei separaten Zeilen. Wirken auf die aktuelle
+      // Zeichen-Auswahl, falls vorhanden, sonst auf das ganze Textobjekt.
+      var sizeWeightSpaceRow = el('div', { class: 'ic-textframe-formatgrid' });
+      var sizeGroup = el('div', { class: 'ic-textframe-edit' });
       var sizeDisplay = el('span', { class: 'ic-stepper-value' }, [String(active.size)]);
       var lastSizeDelta = 0;
       function setSize(delta) {
@@ -2476,16 +2506,11 @@
       sizeUp.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
       sizeDown.addEventListener('click', function () { setSize(-2); });
       sizeUp.addEventListener('click', function () { setSize(2); });
-      sizeRow.appendChild(sizeDown); sizeRow.appendChild(sizeDisplay); sizeRow.appendChild(sizeUp);
-      editRow.appendChild(sizeRow);
-      fontsBox.appendChild(editRow);
+      sizeGroup.appendChild(sizeDown); sizeGroup.appendChild(sizeDisplay); sizeGroup.appendChild(sizeUp);
+      sizeWeightSpaceRow.appendChild(sizeGroup);
 
-      // Schriftschnitt-Gewicht: Zahlen-Stepper statt Slider. Wirkt auf die
-      // aktuelle Zeichen-Auswahl, falls vorhanden, sonst auf das ganze
-      // Textobjekt.
-      var weightRow = el('div', { class: 'ic-textframe-edit' });
-      weightRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontweight]));
-      weightRow.appendChild(numberStepper(active.fontWeight || 700, 300, 900, 100, 0, function (v) {
+      var weightGroup = el('div', { class: 'ic-textframe-edit' });
+      weightGroup.appendChild(numberStepper(active.fontWeight || 700, 300, 900, 100, 0, function (v) {
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (!objEl) { return; }
         applyStyleToSelectionOrWhole(objEl, 'font-weight:' + v + ';', function () {
@@ -2493,11 +2518,10 @@
           objEl.style.fontWeight = v;
         });
       }));
-      fontsBox.appendChild(weightRow);
+      sizeWeightSpaceRow.appendChild(weightGroup);
 
-      var spaceRow = el('div', { class: 'ic-textframe-edit' });
-      spaceRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.letterspacing]));
-      spaceRow.appendChild(numberStepper(active.letterSpacing || 0, -2, 20, 0.5, 1, function (v) {
+      var spaceGroup = el('div', { class: 'ic-textframe-edit' });
+      spaceGroup.appendChild(numberStepper(active.letterSpacing || 0, -2, 20, 0.5, 1, function (v) {
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (!objEl) { return; }
         applyStyleToSelectionOrWhole(objEl, 'letter-spacing:' + v + 'px;', function () {
@@ -2505,7 +2529,8 @@
           objEl.style.letterSpacing = v + 'px';
         });
       }));
-      fontsBox.appendChild(spaceRow);
+      sizeWeightSpaceRow.appendChild(spaceGroup);
+      fontsBox.appendChild(sizeWeightSpaceRow);
 
       // Absatz-Werkzeuge (wirken auf die markierten Zeilen bzw. das ganze
       // Textobjekt, nicht auf einzelne Zeichen): Ausrichtung, Zeilenabstand,
@@ -2521,19 +2546,14 @@
         ab.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
         alignRow.appendChild(ab);
       });
-      // Durchgestrichen/Aufzählung gehören inhaltlich ebenfalls zum Absatz
-      // und stehen in derselben Zeile statt isoliert für sich - nur im
-      // Zettel-Modus (WordArt nutzt die WordArt-Stile weiter unten).
+      // Aufzählung gehört inhaltlich ebenfalls zum Absatz und steht in
+      // derselben Zeile wie die Ausrichtung, statt isoliert für sich - nur
+      // im Zettel-Modus (WordArt nutzt die WordArt-Stile weiter unten).
       if (!state.wordArtMode) {
-        [
-          ['strikeThrough', 'strikeicon', S.format_strike],
-          ['insertUnorderedList', 'bulleticon', S.format_bullets]
-        ].forEach(function (cmd) {
-          var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
-          fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-          fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
-          alignRow.appendChild(fb);
-        });
+        var bulletBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_bullets }, [icon('bulleticon')]);
+        bulletBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        bulletBtn.addEventListener('click', function () { document.execCommand('insertUnorderedList', false, null); });
+        alignRow.appendChild(bulletBtn);
       }
       fontsBox.appendChild(alignRow);
 
@@ -2671,12 +2691,21 @@
       render();
     });
 
-    var bar = el('div', { class: 'ic-actionbar' });
-    bar.appendChild(cancelWizardBtn());
+    var tfHeader = el('div', { class: 'ic-tf-header' });
+    var tfHeaderLeft = el('div', { class: 'ic-tf-header-group' });
+    var undoBtn2 = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' + ((state.tfUndoStack || []).length ? '' : ' disabled'), title: S.undo }, [icon('undo')]);
+    var redoBtn2 = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' + ((state.tfRedoStack || []).length ? '' : ' disabled'), title: S.redo }, [icon('redo')]);
+    undoBtn2.addEventListener('click', tfUndo);
+    redoBtn2.addEventListener('click', tfRedo);
+    tfHeaderLeft.appendChild(undoBtn2); tfHeaderLeft.appendChild(redoBtn2);
+    tfHeader.appendChild(tfHeaderLeft);
+    var tfHeaderRight = el('div', { class: 'ic-tf-header-group' });
+    tfHeaderRight.appendChild(cancelWizardBtn());
     var saveBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.savephoto, 'aria-label': S.savephoto }, [icon('check')]);
     saveBtn.addEventListener('click', function () { saveTextFrame(tf, saveBtn); });
-    bar.appendChild(saveBtn);
-    body.appendChild(bar);
+    tfHeaderRight.appendChild(saveBtn);
+    tfHeader.appendChild(tfHeaderRight);
+    body.appendChild(tfHeader);
   }
 
   // Leichtgewichtiges Verschieben (+ per Eck-Handle skalieren der
@@ -2878,10 +2907,10 @@
     alignjustify: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
     fillicon: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="4" y="4" width="16" height="16" rx="2" fill="#e0503f"/></svg>',
     outlineicon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none"><rect x="5" y="5" width="14" height="14" rx="2" stroke="#e0503f" stroke-width="2.5"/></svg>',
-    wrapfront: '<svg viewBox="0 0 24 24" width="16" height="16"><line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="6" fill="#e0503f"/><line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 3"/></svg>',
-    wrapbehind: '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="6" fill="#e0503f" opacity=".5"/><line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-    wraparound: '<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="6" fill="#e0503f"/><line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="9" x2="7" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="17" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="15" x2="7" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="17" y1="15" x2="21" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-    effecticon: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="7" y="7" width="14" height="14" rx="2" fill="#e0503f" opacity=".55"/><rect x="4" y="4" width="14" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+    wrapfront: '<svg viewBox="0 0 24 24" width="20" height="20"><line x1="2" y1="6" x2="22" y2="6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="12" x2="8" y2="12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="16" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="12" r="7" fill="#e0503f" stroke="#fff" stroke-width="1.2"/></svg>',
+    wrapbehind: '<svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="7" fill="#e0503f" opacity=".4"/><line x1="2" y1="6" x2="22" y2="6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    wraparound: '<svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="7" fill="#e0503f" stroke="#fff" stroke-width="1.2"/><line x1="2" y1="6" x2="22" y2="6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="9.5" x2="6.5" y2="9.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="17.5" y1="9.5" x2="22" y2="9.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="14.5" x2="6.5" y2="14.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="17.5" y1="14.5" x2="22" y2="14.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="2" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    effecticon: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="8" y="8" width="13" height="13" rx="2" fill="#000" opacity=".65"/><rect x="3" y="3" width="13" height="13" rx="2" fill="#e0503f"/></svg>',
     pin: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-3 0-5.5 2.4-5.5 5.5 0 4 5.5 10.5 5.5 10.5s5.5-6.5 5.5-10.5C17.5 4.4 15 2 12 2z"/><circle cx="12" cy="7.5" r="2"/></svg>',
     group: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3-6 7-6s7 2.7 7 6"/><circle cx="18" cy="8.5" r="2.3"/><path d="M15.5 14.2c2.7.4 4.5 2.6 4.5 5.3"/></svg>',
     rotate: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"/><polyline points="3 21 3 15 9 15"/></svg>',
@@ -6282,6 +6311,7 @@
         } catch (e) {
           state.textFrame = null;
         }
+        resetTfHistory();
         state.editingPhotoId = p.id;
         state.step = 'textframe';
         render();

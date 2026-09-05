@@ -1082,6 +1082,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
   eingefrorenes Bild - Grundlage für dynamischen Umfluss.
 - Noch offen: die eigentliche Umfluss-Berechnung.
 
+### Einundachtzigste Überarbeitung — Interface-Feinschliff im Zettel-/WordArt-Editor
+
+- Formen-/Farben-Spalte gleich breit, Raster/Rad füllen den ganzen Tab.
+- Neues, zentrales Undo/Redo-System; neue Kopfzeile (Rückgängig/
+  Wiederherstellen oben links, Abbrechen/Speichern oben rechts).
+- Schrift-Formatierung neu geordnet, Fläche/Kontur/Effekte jetzt echte
+  Tabs mit farblicher Hervorhebung.
+- Icons deutlicher (Schatten, Textumfluss).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -2336,3 +2336,33 @@ erkennen, welche Formen/Fotos in der Nähe eines Textobjekts liegen,
 daraus je Zeile die blockierten Bereiche berechnen (Geometrie-Funktionen
 sind vorbereitet), und den Text entsprechend zeilenweise positioniert
 darstellen statt als einfachen Fließtext.
+
+---
+
+## Phase 77 — Interface-Feinschliff: gleiche Spaltenbreiten, volle Tab-Füllung, Undo/Redo, neue Kopfzeile, Fläche/Kontur/Effekte als Tabs ✅
+
+Siebzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
+
+- [x] Formen- und Farben-Spalte jetzt gleich breit (50/50).
+- [x] Raster und Farbrad füllen jetzt den gesamten Tab-Bereich aus
+  (Canvas-Auflösung erhöht, damit es dabei nicht verpixelt wirkt).
+- [x] **Neues, zentrales Undo/Redo-System** für den Zettel-/WordArt-
+  Editor - erkennt Änderungen automatisch bei jedem Rendern (Vergleich
+  serialisierter Zustände) statt jeden einzelnen Änderungspunkt manuell
+  verdrahten zu müssen. Historie wird beim Start einer neuen
+  Bearbeitungssitzung geleert.
+- [x] Neue Kopfzeile: Rückgängig/Wiederherstellen oben links, Abbrechen/
+  Speichern oben rechts (statt einer Leiste unten).
+- [x] Bestätigt: neu eingesetzte Formen sind sofort verschiebbar/
+  skalierbar (liefen bereits durch dieselbe Logik wie bestehende).
+- [x] Schrift-Formatierung neu geordnet: Fett/Kursiv/Unterstrichen/
+  Durchgestrichen in einer Zeile, Größe/Gewicht/Laufweite in der
+  nächsten.
+- [x] **Fläche/Kontur/Effekte jetzt echte Tabs** (kein Pop-up mehr) mit
+  farblicher Hervorhebung, welcher gerade aktiv ist.
+- [x] Icons deutlicher: Schatten-Icon mit klarerem, kontrastreicherem
+  Schlagschatten; Textumfluss-Icons größer mit dickeren Linien.
+
+**Offene Rückfrage** (Nutzer hat noch nicht geantwortet): "In eine
+zweite Reihe darunter sollte das Gleiche mit Buchstaben" - unklar, was
+genau gemeint ist, noch nicht umgesetzt.

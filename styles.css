@@ -390,6 +390,7 @@
   position: absolute; left: 0; top: 0; width: 1400px; height: 1000px; z-index: 500; pointer-events: none;
 }
 .ic-board-ink-layer.active { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.ic-hidden { display: none !important; }
 .ic-board-ink-layer.ic-hidden { display: none; }
 .ic-board-full-hint {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 15;
@@ -700,7 +701,7 @@
 
 .ic-cf-columns { display: flex; gap: 10px; align-items: flex-start; }
 .ic-cf-shapes-col {
-  flex: 0 0 33%; max-height: 180px; overflow-y: auto; border-right: 1px solid rgba(255,255,255,.1); padding-right: 8px;
+  flex: 1 1 0; min-width: 0; max-height: 260px; overflow-y: auto; border-right: 1px solid rgba(255,255,255,.1); padding-right: 8px;
 }
 .ic-cf-colors-col { flex: 1 1 0; min-width: 0; }
 .ic-cf-tabs { display: flex; gap: 4px; margin: 6px 0; }
@@ -709,12 +710,16 @@
   color: var(--ic-muted); cursor: pointer;
 }
 .ic-cf-tab.active { background: var(--ic-accent); color: #fff; }
-/* Palette auf ca. ein Drittel der ursprünglichen Größe verkleinert, dazu
-   scrollbar begrenzt, falls sie trotzdem noch zu hoch würde. */
-.ic-bigpalette-container { max-height: 130px; overflow-y: auto; }
-.ic-bigpalette-grid { max-width: 130px; }
-.ic-colorwheel-canvas { display: block; margin: 4px auto; cursor: pointer; }
+/* Raster und Rad füllen jetzt den gesamten Tab-Bereich aus. */
+.ic-bigpalette-container { max-height: 260px; overflow-y: auto; }
+.ic-bigpalette-grid { width: 100%; max-width: none; }
+.ic-colorwheel-canvas { display: block; margin: 4px auto; cursor: pointer; width: 100%; max-width: 260px; height: auto; }
 .ic-textframe-range { flex: 1 1 auto; }
+.ic-tf-header {
+  position: absolute; top: 8px; left: 8px; right: 8px; z-index: 50;
+  display: flex; justify-content: space-between; pointer-events: none;
+}
+.ic-tf-header-group { display: flex; gap: 6px; pointer-events: auto; }
 .ic-textframe-fmt-btn[title="Kursiv"], .ic-textframe-fmt-btn[title="Italic"] { font-style: italic; }
 .ic-textframe-fmt-btn[title="Unterstrichen"], .ic-textframe-fmt-btn[title="Underline"] { text-decoration: underline; }
 .ic-textframe-fmt-btn[title="Durchgestrichen"], .ic-textframe-fmt-btn[title="Strikethrough"] { text-decoration: line-through; }
