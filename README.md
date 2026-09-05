@@ -971,6 +971,20 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Effekte als Pop-ups mit Verlauf-, Dicke- und Unschärfe-Optionen.
 - Ein neuer Zettel startet jetzt standardmäßig hochkant.
 
+### Siebzigste Überarbeitung — Größenänderungs-Bugfix, verschiebbare Modals, Formen-Bibliothek
+
+- **Kern-Bugfix**: der Größenänderungs-Griff des Zettels war durch das
+  neue `overflow:hidden` (Formbeschneidung) unsichtbar/unklickbar
+  geworden - jetzt über einen inneren Container behoben, Griff bleibt
+  sichtbar. Layout passt sich nach dem Loslassen jetzt korrekt an.
+- Neue verschiebbare Modal-Komponente statt kleiner, teils abgeschnittener
+  Pop-ups.
+- Formen-Bibliothek (Grundformen/Symbolformen/Blockpfeile) über ein
+  Raster im Modal wählbar statt einzelner Buttons - sowohl für die
+  Hintergrund- als auch die Vordergrund-Form.
+- Fill/Kontur/Effekte ebenfalls auf verschiebbare Modals umgestellt,
+  Fill bleibt eine Palette (keine Tabelle) mit Verlauf-Option.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

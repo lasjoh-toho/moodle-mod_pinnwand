@@ -2030,3 +2030,30 @@ Achtundfünfzigster Feedback-Durchgang. Betrifft: `js/app.js`,
 **Noch offen** (folgt in einem späteren Durchgang, wie angekündigt): die
 übrigen, sich zwischen den Editoren unterscheidenden Blöcke (Text/
 Schrift-Tab, Formeln, ggf. weitere Tabs).
+
+---
+
+## Phase 66 — Größenänderungs-Bugfix, verschiebbare Modals, Formen-Bibliothek ✅
+
+Neunundfünfzigster Feedback-Durchgang (mit Screenshot einer Formen-
+Bibliothek als Vorlage). Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Kern-Bugfix gefunden**: der Größenänderungs-Griff des Zettels
+  liegt bewusst leicht außerhalb der eigenen Box (-10px) - mein
+  `overflow:hidden` aus dem letzten Durchgang (für die Formbeschneidung)
+  hat ihn dadurch unsichtbar/unklickbar gemacht. Behoben durch einen
+  neuen inneren Container (`frameInner`), der die Formbeschneidung trägt,
+  während der äußere `frame` (mit dem Griff) unbeschnitten bleibt.
+- [x] Nach dem Loslassen des Größenänderungs-Griffs wird jetzt neu
+  gerendert, damit sich das Block-Layout (Seitenleiste/gestapelt)
+  korrekt an die neue Ausrichtung anpasst - vorher nie geprüft.
+- [x] **Verschiebbare Modal-Komponente** ergänzt (`openDraggableModal`) -
+  kein blockierendes Overlay, per Titelleiste frei positionierbar.
+- [x] **Formen-Bibliothek** ergänzt (Grundformen/Symbolformen/Blockpfeile,
+  als SVG-Pfade auf 0..100-Koordinatensystem) für die dekorative
+  Vordergrund-Form - jetzt über ein Raster im verschiebbaren Modal
+  wählbar statt einzelner Buttons. Hintergrund-Form (einfache
+  geometrische Formen) ebenfalls als Modal mit Raster statt Buttons.
+- [x] Fill/Kontur/Effekte-Pop-ups auf das neue verschiebbare Modal
+  umgestellt (waren zu klein, ragten aus dem Bildschirm) - Fill zeigt
+  weiterhin eine Palette (keine Tabelle) plus Verlauf-Konfiguration.

@@ -1319,6 +1319,103 @@
     party: 'Party', readable: 'Gut lesbar', schlagzeile: 'Schlagzeile', scifi: 'Sci-Fi',
     sortfield: 'Sortenfeld', stencil: 'Schablone', websafe: 'Websicher'
   };
+  // Verschiebbares Modal (keine blockierende Vollbild-Ebene dahinter, damit
+  // die Live-Vorschau währenddessen sichtbar/aktualisierbar bleibt) - wird
+  // per Titelleiste frei auf dem Bildschirm positioniert. Nur eines
+  // gleichzeitig offen (ein neu geöffnetes schließt ein vorheriges).
+  function closeDraggableModal() {
+    var existing = document.getElementById('ic-draggable-modal');
+    if (existing) { existing.remove(); }
+  }
+  function openDraggableModal(title, anchorEl, buildContent) {
+    closeDraggableModal();
+    var modal = el('div', { class: 'ic-draggable-modal', id: 'ic-draggable-modal' });
+    var titleBar = el('div', { class: 'ic-draggable-modal-titlebar' });
+    titleBar.appendChild(el('span', {}, [title]));
+    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon', title: S.cancel }, ['\u2715']);
+    closeBtn.addEventListener('click', function () { modal.remove(); });
+    titleBar.appendChild(closeBtn);
+    modal.appendChild(titleBar);
+    var content = el('div', { class: 'ic-draggable-modal-content' });
+    buildContent(content, modal);
+    modal.appendChild(content);
+
+    var anchorRect = anchorEl.getBoundingClientRect();
+    modal.style.left = Math.min(anchorRect.left, window.innerWidth - 340) + 'px';
+    modal.style.top = Math.min(anchorRect.bottom + 6, window.innerHeight - 200) + 'px';
+    root.appendChild(modal);
+
+    var dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+    function ptOf(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
+    titleBar.addEventListener('mousedown', function (ev) {
+      dragging = true; var p = ptOf(ev);
+      startX = p.x; startY = p.y; startLeft = modal.offsetLeft; startTop = modal.offsetTop;
+      ev.preventDefault();
+    });
+    titleBar.addEventListener('touchstart', function (ev) {
+      dragging = true; var p = ptOf(ev);
+      startX = p.x; startY = p.y; startLeft = modal.offsetLeft; startTop = modal.offsetTop;
+    }, { passive: true });
+    function onMove(ev) {
+      if (!dragging) { return; }
+      var p = ptOf(ev);
+      modal.style.left = Math.max(0, Math.min(window.innerWidth - 60, startLeft + (p.x - startX))) + 'px';
+      modal.style.top = Math.max(0, Math.min(window.innerHeight - 40, startTop + (p.y - startY))) + 'px';
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('mouseup', function () { dragging = false; });
+    window.addEventListener('touchend', function () { dragging = false; });
+    return modal;
+  }
+
+  // Formen-Bibliothek für die Vordergrund-Form (Sticker/Badge hinter dem
+  // Text) - jede Form ein eigenständiger SVG-Pfad auf einem 0..100-
+  // Koordinatensystem, damit dieselbe Definition sowohl für die Live-
+  // Vorschau (als Daten-URI) als auch für den SVG-Export verwendet werden
+  // kann. Bewusst nur die geometrisch einfachen Formen (Rechteck/Kreis/
+  // Oval/Sechseck/Achteck) für die HINTERGRUND-Form der Karte selbst -
+  // die reichhaltigere Sammlung hier eignet sich als Container-Fläche
+  // für Text kaum und ist daher der dekorativen Vordergrund-Form
+  // vorbehalten.
+  var FG_SHAPE_CATEGORIES = {
+    grundformen: [
+      { id: 'triangle', label: 'Dreieck', d: 'M50 5 L95 90 L5 90 Z' },
+      { id: 'righttriangle', label: 'Rechtwinklig', d: 'M5 5 L5 90 L95 90 Z' },
+      { id: 'trapezoid', label: 'Trapez', d: 'M25 15 L75 15 L95 85 L5 85 Z' },
+      { id: 'diamond', label: 'Raute', d: 'M50 5 L95 50 L50 95 L5 50 Z' },
+      { id: 'parallelogram', label: 'Parallelogramm', d: 'M25 15 L95 15 L75 85 L5 85 Z' },
+      { id: 'pentagon', label: 'Fünfeck', d: 'M50 5 L95 38 L78 92 L22 92 L5 38 Z' },
+      { id: 'hexagon', label: 'Sechseck', d: 'M25 5 L75 5 L95 50 L75 95 L25 95 L5 50 Z' },
+      { id: 'octagon', label: 'Achteck', d: 'M32 5 L68 5 L95 32 L95 68 L68 95 L32 95 L5 68 L5 32 Z' },
+      { id: 'cross', label: 'Kreuz', d: 'M35 5 L65 5 L65 35 L95 35 L95 65 L65 65 L65 95 L35 95 L35 65 L5 65 L5 35 L35 35 Z' },
+      { id: 'ring', label: 'Ring', d: 'M50 5 A45 45 0 1 1 49.9 5 Z M50 30 A20 20 0 1 0 50.1 30 Z', fillRule: 'evenodd' },
+      { id: 'arch', label: 'Bogen', d: 'M5 95 L5 45 A45 45 0 0 1 95 45 L95 95 Z' },
+      { id: 'crescent', label: 'Halbmond', d: 'M65 5 A45 45 0 1 0 65 95 A35 35 0 1 1 65 5 Z', fillRule: 'evenodd' }
+    ],
+    symbolformen: [
+      { id: 'heart', label: 'Herz', d: 'M50 90 C10 60 5 35 25 20 C38 10 50 20 50 32 C50 20 62 10 75 20 C95 35 90 60 50 90 Z' },
+      { id: 'cloud', label: 'Wolke', d: 'M25 70 A18 18 0 0 1 28 35 A22 22 0 0 1 70 28 A18 18 0 0 1 80 70 Z' },
+      { id: 'nostop', label: 'Verbotsschild', d: 'M50 5 A45 45 0 1 1 49.9 5 Z M18 30 L82 70', fillRule: 'evenodd' },
+      { id: 'moon', label: 'Mond', d: 'M65 5 A45 45 0 1 0 65 95 A35 35 0 1 1 65 5 Z', fillRule: 'evenodd' },
+      { id: 'lightning', label: 'Blitz', d: 'M55 5 L20 55 L45 55 L35 95 L82 40 L55 40 Z' },
+      { id: 'gem', label: 'Diamant', d: 'M20 35 L50 5 L80 35 L50 95 Z' }
+    ],
+    blockpfeile: [
+      { id: 'arrowright', label: 'Pfeil rechts', d: 'M5 35 L60 35 L60 15 L95 50 L60 85 L60 65 L5 65 Z' },
+      { id: 'arrowleft', label: 'Pfeil links', d: 'M95 35 L40 35 L40 15 L5 50 L40 85 L40 65 L95 65 Z' },
+      { id: 'arrowup', label: 'Pfeil oben', d: 'M35 95 L35 40 L15 40 L50 5 L85 40 L65 40 L65 95 Z' },
+      { id: 'arrowdown', label: 'Pfeil unten', d: 'M35 5 L35 60 L15 60 L50 95 L85 60 L65 60 L65 5 Z' }
+    ]
+  };
+  var FG_SHAPE_CATEGORY_LABELS = { grundformen: 'Grundformen', symbolformen: 'Symbolformen', blockpfeile: 'Blockpfeile' };
+  function fgShapeSvgDataUri(shape, color) {
+    var attrs = 'fill="' + color + '"' + (shape.fillRule ? ' fill-rule="' + shape.fillRule + '"' : '');
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="' + shape.d + '" ' + attrs + '/></svg>'
+    );
+  }
+
   function openWordartFontBrowser(active, frame) {
     var overlay = el('div', { class: 'ic-modal-overlay' });
     overlay.addEventListener('click', function (ev) { if (ev.target === overlay) { overlay.remove(); } });
@@ -1499,19 +1596,15 @@
     // aber vor dem Kartenhintergrund.
     var fgShapeEl = '';
     if (tf.fgShape && tf.fgShape !== 'none') {
-      var fgColor = escapeXml(tf.fgShapeColor || '#e0503f');
-      var cx = tf.w / 2, cy = tf.h / 2, s = Math.min(tf.w, tf.h) * 0.7;
-      if (tf.fgShape === 'star') {
-        var pts = [[50, 3], [61, 38], [98, 38], [68, 60], [79, 95], [50, 74], [21, 95], [32, 60], [2, 38], [39, 38]]
-          .map(function (p) { return (cx - s / 2 + p[0] / 100 * s) + ',' + (cy - s / 2 + p[1] / 100 * s); }).join(' ');
-        fgShapeEl = '<polygon points="' + pts + '" fill="' + fgColor + '"/>';
-      } else if (tf.fgShape === 'ribbon') {
-        var w2 = s, h2 = s * 0.6, x0 = cx - w2 / 2, y0 = cy - h2 / 2;
-        fgShapeEl = '<polygon points="' + x0 + ',' + (y0 + h2 * 0.17) + ' ' + (x0 + w2) + ',' + (y0 + h2 * 0.17) + ' ' +
-          (x0 + w2) + ',' + (y0 + h2 * 0.83) + ' ' + (x0 + w2 / 2) + ',' + (y0 + h2 * 0.63) + ' ' +
-          x0 + ',' + (y0 + h2 * 0.83) + '" fill="' + fgColor + '"/>';
-      } else {
-        fgShapeEl = '<circle cx="' + cx + '" cy="' + cy + '" r="' + (s / 2) + '" fill="' + fgColor + '"/>';
+      var fgShapeDef = [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; }))
+        .filter(function (s) { return s.id === tf.fgShape; })[0];
+      if (fgShapeDef) {
+        var fgColor = escapeXml(tf.fgShapeColor || '#e0503f');
+        var s = Math.min(tf.w, tf.h) * 0.7;
+        var tx = tf.w / 2 - s / 2, ty = tf.h / 2 - s / 2, scale = s / 100;
+        fgShapeEl = '<g transform="translate(' + tx + ',' + ty + ') scale(' + scale + ')">' +
+          '<path d="' + fgShapeDef.d + '" fill="' + fgColor + '"' +
+          (fgShapeDef.fillRule ? ' fill-rule="' + fgShapeDef.fillRule + '"' : '') + '/></g>';
       }
     }
     // Alle Textobjekte (nicht nur das primäre) laufen über foreignObject mit
@@ -1656,8 +1749,18 @@
     var frame = el('div', {
       class: 'ic-textframe-preview',
       style: 'width:' + tf.w + 'px;height:' + tf.h + 'px;' +
-        (preset.bg ? 'background:' + preset.bg + (preset.shadow ? ';box-shadow:0 8px 24px rgba(0,0,0,.4)' : '') : 'background:transparent;border:2px dashed rgba(255,255,255,.3)')
+        (preset.shadow ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') +
+        (preset.bg ? '' : 'border:2px dashed rgba(255,255,255,.3);')
     });
+    // Innerer Container trägt Hintergrundfarbe UND die Formbeschneidung
+    // (Kreis/Oval/Rundung) - overflow:hidden bleibt bewusst HIER und nicht
+    // auf frame selbst, sonst würde der leicht außerhalb liegende
+    // Größenänderungs-Griff (siehe unten) unsichtbar/unklickbar.
+    var frameInner = el('div', {
+      class: 'ic-textframe-inner',
+      style: preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;'
+    });
+    frame.appendChild(frameInner);
     stage.appendChild(frame);
     layout.appendChild(stage);
     body.appendChild(layout);
@@ -1683,7 +1786,9 @@
         frame.style.width = tf.w + 'px'; frame.style.height = tf.h + 'px';
         ev.preventDefault();
       }
-      function up() { dragging = false; }
+      function up() {
+        if (dragging) { dragging = false; render(); }
+      }
       frameResizeHandle.addEventListener('mousedown', down);
       frameResizeHandle.addEventListener('touchstart', down, { passive: false });
       window.addEventListener('mousemove', move);
@@ -1746,7 +1851,7 @@
       }
       return el2;
     }
-    tf.texts.forEach(function (t, idx) { frame.appendChild(textEl(t, idx)); });
+    tf.texts.forEach(function (t, idx) { frameInner.appendChild(textEl(t, idx)); });
 
     // Die erste Karte ist beim Öffnen des Editors sofort beschreibbar -
     // Cursor direkt gesetzt, kein zusätzlicher Klick nötig.
@@ -1808,51 +1913,68 @@
     }
     tf.shape = tf.shape || 'rounded';
     tf.fgShape = tf.fgShape || 'none';
-    frame.style.cssText += ';' + shapeCssFor(tf.shape) + 'overflow:hidden;';
+    frameInner.style.cssText += ';' + shapeCssFor(tf.shape) + 'overflow:hidden;';
 
-    var shapeRow = el('div', { class: 'ic-textframe-shape-row' });
-    shapeRow.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_shape_bg]));
-    var shapeBtns = el('div', { class: 'ic-textframe-formatgrid' });
-    TF_SHAPES.forEach(function (sid) {
-      var label = sid === 'rect' ? S.tf_shape_rect : sid === 'rounded' ? S.tf_shape_rounded
-        : sid === 'circle' ? S.tf_shape_circle : S.tf_shape_ellipse;
-      var sb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-shape-btn' + (tf.shape === sid ? ' ic-btn-primary' : '') }, [label]);
-      sb.addEventListener('click', function () { tf.shape = sid; render(); });
-      shapeBtns.appendChild(sb);
+    var BG_SHAPES = [
+      { id: 'rect', label: S.tf_shape_rect }, { id: 'rounded', label: S.tf_shape_rounded },
+      { id: 'circle', label: S.tf_shape_circle }, { id: 'ellipse', label: S.tf_shape_ellipse }
+    ];
+    var shapeRow = el('div', { class: 'ic-textframe-formatgrid' });
+    var bgShapeBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_shape_bg]);
+    bgShapeBtn.addEventListener('click', function () {
+      openDraggableModal(S.tf_shape_bg, bgShapeBtn, function (content) {
+        var grid = el('div', { class: 'ic-shape-grid' });
+        BG_SHAPES.forEach(function (s) {
+          var cell = el('button', {
+            class: 'ic-shape-cell' + (tf.shape === s.id ? ' active' : ''), title: s.label
+          }, [el('div', { class: 'ic-shape-cell-preview ic-shape-bg-' + s.id })]);
+          cell.addEventListener('click', function () { tf.shape = s.id; render(); });
+          grid.appendChild(cell);
+        });
+        content.appendChild(grid);
+      });
     });
-    shapeRow.appendChild(shapeBtns);
+    shapeRow.appendChild(bgShapeBtn);
+
+    var fgShapeBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_shape_fg]);
+    fgShapeBtn.addEventListener('click', function () {
+      openDraggableModal(S.tf_shape_fg, fgShapeBtn, function (content) {
+        var noneBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (tf.fgShape === 'none' ? ' ic-btn-primary' : '') }, [S.tf_shape_none]);
+        noneBtn.addEventListener('click', function () { tf.fgShape = 'none'; render(); });
+        content.appendChild(noneBtn);
+        Object.keys(FG_SHAPE_CATEGORIES).forEach(function (cat) {
+          content.appendChild(el('div', { class: 'ic-textframe-label', style: 'margin-top:8px' }, [FG_SHAPE_CATEGORY_LABELS[cat]]));
+          var grid = el('div', { class: 'ic-shape-grid' });
+          FG_SHAPE_CATEGORIES[cat].forEach(function (s) {
+            var cell = el('button', {
+              class: 'ic-shape-cell' + (tf.fgShape === s.id ? ' active' : ''), title: s.label,
+              style: 'background-image:url(' + fgShapeSvgDataUri(s, '#cfd2d8') + ')'
+            });
+            cell.addEventListener('click', function () { tf.fgShape = s.id; render(); });
+            grid.appendChild(cell);
+          });
+          content.appendChild(grid);
+        });
+      });
+    });
+    shapeRow.appendChild(fgShapeBtn);
     blockTemplates.content.appendChild(shapeRow);
-
-    var fgShapeRow = el('div', { class: 'ic-textframe-shape-row' });
-    fgShapeRow.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_shape_fg]));
-    var fgShapeBtns = el('div', { class: 'ic-textframe-formatgrid' });
-    ['none', 'star', 'ribbon', 'badge'].forEach(function (sid) {
-      var label = sid === 'none' ? S.tf_shape_none : sid === 'star' ? S.tf_shape_star
-        : sid === 'ribbon' ? S.tf_shape_ribbon : S.tf_shape_badge;
-      var sb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-shape-btn' + (tf.fgShape === sid ? ' ic-btn-primary' : '') }, [label]);
-      sb.addEventListener('click', function () { tf.fgShape = sid; render(); });
-      fgShapeBtns.appendChild(sb);
-    });
-    fgShapeRow.appendChild(fgShapeBtns);
-    blockTemplates.content.appendChild(fgShapeRow);
 
     // Dekorative Vordergrund-Form (Sticker/Badge) hinter dem Text, aber vor
     // dem Kartenhintergrund - einfache SVG-Formen, exportfähig da reines
     // Markup ohne externe Ressourcen.
     if (tf.fgShape !== 'none') {
-      var fgSvg = 'data:image/svg+xml;utf8,' + encodeURIComponent(
-        tf.fgShape === 'star'
-          ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="50,3 61,38 98,38 68,60 79,95 50,74 21,95 32,60 2,38 39,38" fill="' + (tf.fgShapeColor || '#e0503f') + '"/></svg>'
-          : tf.fgShape === 'ribbon'
-          ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60"><polygon points="0,10 100,10 100,50 50,38 0,50" fill="' + (tf.fgShapeColor || '#e0503f') + '"/></svg>'
-          : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="' + (tf.fgShapeColor || '#e0503f') + '"/></svg>'
-      );
-      var fgShapeEl = el('div', {
-        class: 'ic-textframe-fgshape',
-        style: 'background-image:url(' + fgSvg + ')'
-      });
-      frame.insertBefore(fgShapeEl, frame.firstChild);
+      var fgShapeDef = [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; }))
+        .filter(function (s) { return s.id === tf.fgShape; })[0];
+      if (fgShapeDef) {
+        var fgShapeEl = el('div', {
+          class: 'ic-textframe-fgshape',
+          style: 'background-image:url(' + fgShapeSvgDataUri(fgShapeDef, tf.fgShapeColor || '#e0503f') + ')'
+        });
+        frameInner.insertBefore(fgShapeEl, frameInner.firstChild);
+      }
     }
+
 
     // Fill/Kontur/Effekte als Pop-ups - wirken auf das gerade gewählte
     // Textobjekt (siehe activeId/refreshControls weiter unten). Werden in
@@ -1901,42 +2023,31 @@
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (objEl) { objEl.style.cssText += ';' + computeStyle1Css(active, preset.text); }
       }
-      function openStyle1Popup(anchorBtn, buildRows) {
-        var existing = document.getElementById('ic-style1-popup');
-        if (existing) { existing.remove(); if (existing.dataset.anchor === anchorBtn.dataset.popupId) { return; } }
-        var popup = el('div', { class: 'ic-textframe-popup', id: 'ic-style1-popup' });
-        popup.dataset.anchor = anchorBtn.dataset.popupId;
-        buildRows(popup);
-        var rect = anchorBtn.getBoundingClientRect();
-        popup.style.top = (rect.bottom + 4) + 'px';
-        popup.style.left = rect.left + 'px';
-        root.appendChild(popup);
-        setTimeout(function () {
-          document.addEventListener('click', function closeOnce(ev) {
-            if (!popup.contains(ev.target) && ev.target !== anchorBtn) { popup.remove(); }
-            document.removeEventListener('click', closeOnce);
-          });
-        }, 0);
+      function openStyle1Popup(anchorBtn, title, buildRows) {
+        openDraggableModal(title, anchorBtn, function (content) { buildRows(content); });
       }
       fillBtn.dataset.popupId = 'fill';
       fillBtn.onclick = function (ev) {
         ev.stopPropagation();
-        openStyle1Popup(fillBtn, function (popup) {
+        openStyle1Popup(fillBtn, S.tf_fill, function (popup) {
+          popup.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_fill]));
+          var soloRow = el('div', { class: 'ic-textframe-palette' });
+          TEXTFRAME_PALETTE.forEach(function (color) {
+            var sw = el('button', { class: 'ic-color-swatch' + (!active.fillGradient && (active.fillColor || preset.text) === color ? ' active' : ''), style: 'background:' + color });
+            sw.addEventListener('click', function () { active.fillColor = color; active.fillGradient = null; applyStyle1(); });
+            soloRow.appendChild(sw);
+          });
+          var customColor = el('input', { type: 'color', value: active.fillColor || preset.text, class: 'ic-textframe-custom-color' });
+          customColor.addEventListener('input', function () { active.fillColor = customColor.value; active.fillGradient = null; applyStyle1(); });
+          soloRow.appendChild(customColor);
+          popup.appendChild(soloRow);
+
           var gradToggle = el('label', { class: 'ic-me-check' });
           var gradCheck = el('input', { type: 'checkbox' });
           gradCheck.checked = !!active.fillGradient;
           gradToggle.appendChild(gradCheck);
           gradToggle.appendChild(document.createTextNode(S.tf_use_gradient));
           popup.appendChild(gradToggle);
-          var soloRow = el('div', { class: 'ic-textframe-palette' });
-          TEXTFRAME_PALETTE.forEach(function (color) {
-            var sw = el('button', { class: 'ic-color-swatch' + ((active.fillColor || preset.text) === color ? ' active' : ''), style: 'background:' + color });
-            sw.addEventListener('click', function () { active.fillColor = color; applyStyle1(); popup.remove(); });
-            soloRow.appendChild(sw);
-          });
-          var customColor = el('input', { type: 'color', value: active.fillColor || preset.text, class: 'ic-textframe-custom-color' });
-          customColor.addEventListener('change', function () { active.fillColor = customColor.value; applyStyle1(); });
-          soloRow.appendChild(customColor);
           var gradRow = el('div', { class: 'ic-textframe-edit' });
           var g1 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[0]) || '#e0503f' });
           var g2 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[1]) || '#4f8cff' });
@@ -1945,15 +2056,15 @@
           gradRow.appendChild(g1); gradRow.appendChild(g2);
           gradCheck.addEventListener('change', function () {
             active.fillGradient = gradCheck.checked ? [g1.value, g2.value] : null;
-            applyStyle1(); refreshControls();
+            applyStyle1();
           });
-          popup.appendChild(active.fillGradient ? gradRow : soloRow);
+          popup.appendChild(gradRow);
         });
       };
       outlineBtn.dataset.popupId = 'outline';
       outlineBtn.onclick = function (ev) {
         ev.stopPropagation();
-        openStyle1Popup(outlineBtn, function (popup) {
+        openStyle1Popup(outlineBtn, S.tf_outline, function (popup) {
           var row = el('div', { class: 'ic-textframe-edit' });
           var colorInput = el('input', { type: 'color', value: active.outlineColor || '#000000' });
           var widthInput = el('input', { type: 'range', min: '0', max: '6', step: '0.5', value: String(active.outlineWidth || 0) });
@@ -1968,7 +2079,7 @@
       effectsBtn.dataset.popupId = 'effects';
       effectsBtn.onclick = function (ev) {
         ev.stopPropagation();
-        openStyle1Popup(effectsBtn, function (popup) {
+        openStyle1Popup(effectsBtn, S.tf_effects, function (popup) {
           [
             ['shadowOn', 'shadowColor', 'shadowBlur', S.tf_shadow, '#000000', 4],
             ['glowOn', 'glowColor', 'glowWidth', S.tf_glow, '#ffffff', 8]
