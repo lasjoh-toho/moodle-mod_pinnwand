@@ -2084,3 +2084,34 @@ Sechzigster Feedback-Durchgang. Betrifft: `classes/external.php`,
   `rowStateClass()`. `otherboardcount` dafür auch in `get_all_photos`
   (Klassenansicht) ergänzt (vorher nur in `get_photos`).
 - [x] Pin-Icon in der Kopfzeile nochmal deutlich größer (24px auf 34px).
+
+---
+
+## Phase 68 — Layout-Bugfix, vereinheitlichte Formen-Auswahl + Polygon-Werkzeug, Schriften-Block umgebaut ✅
+
+Einundsechzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`, neue Strings.
+
+- [x] **Layout-Bugfix**: Seitenleisten-Umschaltung richtet sich jetzt
+  danach, ob der Zettel praktisch zu hoch fürs aktuelle Fenster wird
+  (`tf.h > window.innerHeight * 0.5`), nicht mehr nach dem reinen
+  Seitenverhältnis.
+- [x] **Formen-Auswahl vereinheitlicht**: ein gemeinsames, scrollbares
+  Raster für Hintergrund- und Vordergrund-Form (`buildShapeGrid()`),
+  Grundformen zuerst, nur noch Icons statt Text.
+- [x] **Polygon-Werkzeug** ergänzt: Eckpunkte auf den Zettel klicken,
+  Doppelklick/Enter schließt ab (mind. 3 Punkte), Escape bricht ab -
+  funktioniert für Hintergrund- (clip-path) und Vordergrund-Form (SVG-
+  Pfad), live und im Export.
+- [x] **Schriften-Block umgebaut**: Fett/Kursiv/Unterstrichen jetzt in
+  der obersten Zeile, dazu neue Ausrichtungs-Icons (links/zentriert/
+  rechts/Block, wirken auf die Auswahl via execCommand). Schriftgröße
+  über A−/A+-Buttons statt Slider. Gewicht/Zeilenabstand/Laufweite über
+  neuen Zahlen-Stepper (Zahl + kleine Hoch-/Runter-Pfeile) statt Slider.
+- [x] Fill-Popup erweitert: zuletzt verwendete Farben (Sitzung, max. 8),
+  Transparenz-Stepper (wirkt via computeStyle1Css auch im Export).
+
+**Bewusst zurückgestellt** (zu groß für diesen Durchgang, siehe
+Antworttext): voller Kreis-Farbwähler mit Auswahldreieck (HSV-Rad),
+Umfluss-Modus (Text um eine Form), Fontweight/Laufweite auf Wort-/
+Zeichenebene, KaTeX-Integration mit Nachladen und Templates.

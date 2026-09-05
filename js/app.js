@@ -1246,6 +1246,10 @@
     { id: 'hand', label: 'Handschrift', css: '"Caveat", cursive', webfont: 'Caveat:wght@600' }
   ];
   var TEXTFRAME_PALETTE = ['#e0503f', '#4f8cff', '#3fcf8e', '#e0b23f', '#b06fe0', '#ffffff', '#111111'];
+  var textframeRecentColors = [];
+  function noteRecentColor(color) {
+    textframeRecentColors = [color].concat(textframeRecentColors.filter(function (c) { return c !== color; })).slice(0, 8);
+  }
   var TEXTFRAME_PRESETS = [
     { id: 'none', bg: null, text: '#f2f3f5', shadow: false },
     { id: 'paper', bg: '#ffffff', text: '#111111', shadow: true },
@@ -1568,6 +1572,7 @@
     if (t.shadowOn) { shadows.push('0 2px ' + (t.shadowBlur || 4) + 'px ' + (t.shadowColor || '#000')); }
     if (t.glowOn) { shadows.push('0 0 ' + (t.glowWidth || 8) + 'px ' + (t.glowColor || '#fff')); }
     if (shadows.length) { css += 'text-shadow:' + shadows.join(',') + ';'; }
+    if (t.opacity != null && t.opacity < 1) { css += 'opacity:' + t.opacity + ';'; }
     return css;
   }
 
@@ -1583,7 +1588,10 @@
       // Form der Kartenfläche selbst (Block "Farben und Formen") - Kreis/
       // Oval als <ellipse>, alle anderen als <rect> mit passender Rundung.
       var shape = tf.shape || 'rounded';
-      if (shape === 'circle' || shape === 'ellipse') {
+      if (shape === 'custom' && tf.customPoints && tf.customPoints.length >= 3) {
+        var polyPts = tf.customPoints.map(function (p) { return (p[0] * tf.w) + ',' + (p[1] * tf.h); }).join(' ');
+        bgRect = '<polygon points="' + polyPts + '" fill="' + preset.bg + '"' + (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
+      } else if (shape === 'circle' || shape === 'ellipse') {
         bgRect = '<ellipse cx="' + (tf.w / 2) + '" cy="' + (tf.h / 2) + '" rx="' + (tf.w / 2) + '" ry="' + (tf.h / 2) +
           '" fill="' + preset.bg + '"' + (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
       } else {
@@ -1596,8 +1604,10 @@
     // aber vor dem Kartenhintergrund.
     var fgShapeEl = '';
     if (tf.fgShape && tf.fgShape !== 'none') {
-      var fgShapeDef = [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; }))
-        .filter(function (s) { return s.id === tf.fgShape; })[0];
+      var fgShapeDef = tf.fgShape === 'custom' && tf.fgCustomPoints
+        ? { d: tf.fgCustomPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
+        : [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; }))
+          .filter(function (s) { return s.id === tf.fgShape; })[0];
       if (fgShapeDef) {
         var fgColor = escapeXml(tf.fgShapeColor || '#e0503f');
         var s = Math.min(tf.w, tf.h) * 0.7;
@@ -1742,7 +1752,12 @@
     // Blöcke Höhe zu verlieren. Bei Querformat bleiben sie darunter
     // (Spalte). Richtet sich nach dem Seitenverhältnis des Zettels selbst,
     // nicht nach der Bildschirmgröße.
-    var tfOrientation = tf.w >= tf.h ? 'ic-tf-landscape' : 'ic-tf-portrait';
+    // Entscheidend ist NICHT das reine Seitenverhältnis, sondern ob der
+    // Zettel praktisch zu hoch für das aktuelle Fenster wird - dann lohnt
+    // sich die Seitenleiste, weil der Zettel sonst nicht mehr komplett
+    // sichtbar wäre. Ein leicht hochkantiger, aber insgesamt kleiner
+    // Zettel bleibt dagegen bei der gestapelten Anordnung.
+    var tfOrientation = (tf.h > tf.w && tf.h > window.innerHeight * 0.5) ? 'ic-tf-portrait' : 'ic-tf-landscape';
     var layout = el('div', { class: 'ic-textframe-layout ' + tfOrientation });
     var stage = el('div', { class: 'ic-stage' });
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0];
@@ -1906,6 +1921,10 @@
     // folgen in einem späteren Durchgang unverändert weiter unten.
     var TF_SHAPES = ['rect', 'rounded', 'circle', 'ellipse'];
     function shapeCssFor(shapeId) {
+      if (shapeId === 'custom' && tf.customPoints && tf.customPoints.length >= 3) {
+        var pts = tf.customPoints.map(function (p) { return (p[0] * 100) + '% ' + (p[1] * 100) + '%'; }).join(',');
+        return 'border-radius:0;clip-path:polygon(' + pts + ');';
+      }
       if (shapeId === 'rect') { return 'border-radius:0;clip-path:none;'; }
       if (shapeId === 'circle') { return 'border-radius:50%;clip-path:none;'; }
       if (shapeId === 'ellipse') { return 'border-radius:50%;clip-path:none;'; }
@@ -1915,46 +1934,104 @@
     tf.fgShape = tf.fgShape || 'none';
     frameInner.style.cssText += ';' + shapeCssFor(tf.shape) + 'overflow:hidden;';
 
-    var BG_SHAPES = [
-      { id: 'rect', label: S.tf_shape_rect }, { id: 'rounded', label: S.tf_shape_rounded },
-      { id: 'circle', label: S.tf_shape_circle }, { id: 'ellipse', label: S.tf_shape_ellipse }
+    // Polygon-Werkzeug: eigene Form durch Klicken von Eckpunkten definieren
+    // (mindestens 3 nötig), Doppelklick/Enter schließt den Pfad ab.
+    function startCustomShapeDraw(target) {
+      var points = [];
+      var overlay = el('div', { class: 'ic-custom-shape-draw-hint' }, [S.tf_shape_custom_hint]);
+      body.appendChild(overlay);
+      var dotsLayer = el('svg', { class: 'ic-custom-shape-dots' });
+      frame.appendChild(dotsLayer);
+      function redraw() {
+        dotsLayer.innerHTML = '';
+        if (points.length > 1) {
+          var poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          poly.setAttribute('points', points.map(function (p) { return (p[0] * tf.w) + ',' + (p[1] * tf.h); }).join(' '));
+          poly.setAttribute('fill', 'none'); poly.setAttribute('stroke', '#4f8cff'); poly.setAttribute('stroke-width', '2');
+          dotsLayer.appendChild(poly);
+        }
+        points.forEach(function (p) {
+          var dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          dot.setAttribute('cx', p[0] * tf.w); dot.setAttribute('cy', p[1] * tf.h); dot.setAttribute('r', 5);
+          dot.setAttribute('fill', '#4f8cff');
+          dotsLayer.appendChild(dot);
+        });
+      }
+      function onClick(ev) {
+        var rect = frame.getBoundingClientRect();
+        points.push([(ev.clientX - rect.left) / rect.width, (ev.clientY - rect.top) / rect.height]);
+        redraw();
+      }
+      function finish() {
+        frame.removeEventListener('click', onClick);
+        frame.removeEventListener('dblclick', finish);
+        document.removeEventListener('keydown', onKey);
+        dotsLayer.remove(); overlay.remove();
+        if (points.length >= 3) {
+          tf.customPoints = points;
+          if (target === 'bg') { tf.shape = 'custom'; } else { tf.fgShape = 'custom'; tf.fgCustomPoints = points; }
+          render();
+        }
+      }
+      function onKey(ev) { if (ev.key === 'Enter') { finish(); } if (ev.key === 'Escape') { points = []; finish(); } }
+      frame.addEventListener('click', onClick);
+      frame.addEventListener('dblclick', finish);
+      document.addEventListener('keydown', onKey);
+    }
+    var BASIC_SHAPES = [
+      { id: 'rect', label: S.tf_shape_rect, d: 'M5 5 L95 5 L95 95 L5 95 Z' },
+      { id: 'rounded', label: S.tf_shape_rounded, d: 'M25 5 L75 5 A20 20 0 0 1 95 25 L95 75 A20 20 0 0 1 75 95 L25 95 A20 20 0 0 1 5 75 L5 25 A20 20 0 0 1 25 5 Z' },
+      { id: 'circle', label: S.tf_shape_circle, d: 'M50 5 A45 45 0 1 1 49.9 5 Z' },
+      { id: 'ellipse', label: S.tf_shape_ellipse, d: 'M50 20 A45 30 0 1 1 49.9 20 Z' }
     ];
-    var shapeRow = el('div', { class: 'ic-textframe-formatgrid' });
-    var bgShapeBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_shape_bg]);
-    bgShapeBtn.addEventListener('click', function () {
-      openDraggableModal(S.tf_shape_bg, bgShapeBtn, function (content) {
+    // Eine gemeinsame Funktion für BEIDE Formen-Buttons (Hintergrund und
+    // Vordergrund) - ein einziges, scrollbares Raster mit Icons statt
+    // Text, Grundformen zuerst, keine unterschiedliche Gestaltung
+    // zwischen beiden Auswahlen mehr.
+    function buildShapeGrid(content, currentId, onPick, includeNone) {
+      if (includeNone) {
+        var noneBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (currentId === 'none' ? ' ic-btn-primary' : ''), title: S.tf_shape_none }, ['\u2715']);
+        noneBtn.addEventListener('click', function () { onPick('none'); });
+        content.appendChild(noneBtn);
+      }
+      var allCats = Object.assign({ grundformen_basic: BASIC_SHAPES }, FG_SHAPE_CATEGORIES);
+      Object.keys(allCats).forEach(function (cat) {
         var grid = el('div', { class: 'ic-shape-grid' });
-        BG_SHAPES.forEach(function (s) {
+        allCats[cat].forEach(function (s) {
           var cell = el('button', {
-            class: 'ic-shape-cell' + (tf.shape === s.id ? ' active' : ''), title: s.label
-          }, [el('div', { class: 'ic-shape-cell-preview ic-shape-bg-' + s.id })]);
-          cell.addEventListener('click', function () { tf.shape = s.id; render(); });
+            class: 'ic-shape-cell' + (currentId === s.id ? ' active' : ''), title: s.label,
+            style: 'background-image:url(' + fgShapeSvgDataUri(s, '#cfd2d8') + ')'
+          });
+          cell.addEventListener('click', function () { onPick(s.id); });
           grid.appendChild(cell);
         });
         content.appendChild(grid);
       });
+      // Polygon/Punkte-Pfad: eigene Form durch Klicken von Eckpunkten auf
+      // der Karte definieren - Doppelklick oder Enter schließt den Pfad.
+      var polyBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_shape_custom }, [icon('pen')]);
+      polyBtn.addEventListener('click', function () { onPick('__custom__'); });
+      content.appendChild(polyBtn);
+    }
+    var shapeRow = el('div', { class: 'ic-textframe-formatgrid' });
+    var bgShapeBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_shape_bg }, [icon('frameicon')]);
+    bgShapeBtn.addEventListener('click', function () {
+      openDraggableModal(S.tf_shape_bg, bgShapeBtn, function (content) {
+        buildShapeGrid(content, tf.shape, function (id) {
+          if (id === '__custom__') { startCustomShapeDraw('bg'); closeDraggableModal(); return; }
+          tf.shape = id; render();
+        }, false);
+      });
     });
     shapeRow.appendChild(bgShapeBtn);
 
-    var fgShapeBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_shape_fg]);
+    var fgShapeBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_shape_fg }, [icon('starfg')]);
     fgShapeBtn.addEventListener('click', function () {
       openDraggableModal(S.tf_shape_fg, fgShapeBtn, function (content) {
-        var noneBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (tf.fgShape === 'none' ? ' ic-btn-primary' : '') }, [S.tf_shape_none]);
-        noneBtn.addEventListener('click', function () { tf.fgShape = 'none'; render(); });
-        content.appendChild(noneBtn);
-        Object.keys(FG_SHAPE_CATEGORIES).forEach(function (cat) {
-          content.appendChild(el('div', { class: 'ic-textframe-label', style: 'margin-top:8px' }, [FG_SHAPE_CATEGORY_LABELS[cat]]));
-          var grid = el('div', { class: 'ic-shape-grid' });
-          FG_SHAPE_CATEGORIES[cat].forEach(function (s) {
-            var cell = el('button', {
-              class: 'ic-shape-cell' + (tf.fgShape === s.id ? ' active' : ''), title: s.label,
-              style: 'background-image:url(' + fgShapeSvgDataUri(s, '#cfd2d8') + ')'
-            });
-            cell.addEventListener('click', function () { tf.fgShape = s.id; render(); });
-            grid.appendChild(cell);
-          });
-          content.appendChild(grid);
-        });
+        buildShapeGrid(content, tf.fgShape, function (id) {
+          if (id === '__custom__') { startCustomShapeDraw('fg'); closeDraggableModal(); return; }
+          tf.fgShape = id; render();
+        }, true);
       });
     });
     shapeRow.appendChild(fgShapeBtn);
@@ -1964,8 +2041,10 @@
     // dem Kartenhintergrund - einfache SVG-Formen, exportfähig da reines
     // Markup ohne externe Ressourcen.
     if (tf.fgShape !== 'none') {
-      var fgShapeDef = [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; }))
-        .filter(function (s) { return s.id === tf.fgShape; })[0];
+      var fgShapeDef = tf.fgShape === 'custom' && tf.fgCustomPoints
+        ? { d: tf.fgCustomPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
+        : [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; }))
+          .filter(function (s) { return s.id === tf.fgShape; })[0];
       if (fgShapeDef) {
         var fgShapeEl = el('div', {
           class: 'ic-textframe-fgshape',
@@ -2031,16 +2110,36 @@
         ev.stopPropagation();
         openStyle1Popup(fillBtn, S.tf_fill, function (popup) {
           popup.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_fill]));
+          if (textframeRecentColors.length) {
+            var recentRow = el('div', { class: 'ic-textframe-palette' });
+            textframeRecentColors.forEach(function (color) {
+              var sw = el('button', { class: 'ic-color-swatch' + (!active.fillGradient && active.fillColor === color ? ' active' : ''), style: 'background:' + color });
+              sw.addEventListener('click', function () { active.fillColor = color; active.fillGradient = null; applyStyle1(); });
+              recentRow.appendChild(sw);
+            });
+            popup.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_recent_colors]));
+            popup.appendChild(recentRow);
+          }
           var soloRow = el('div', { class: 'ic-textframe-palette' });
           TEXTFRAME_PALETTE.forEach(function (color) {
             var sw = el('button', { class: 'ic-color-swatch' + (!active.fillGradient && (active.fillColor || preset.text) === color ? ' active' : ''), style: 'background:' + color });
-            sw.addEventListener('click', function () { active.fillColor = color; active.fillGradient = null; applyStyle1(); });
+            sw.addEventListener('click', function () { active.fillColor = color; active.fillGradient = null; noteRecentColor(color); applyStyle1(); });
             soloRow.appendChild(sw);
           });
           var customColor = el('input', { type: 'color', value: active.fillColor || preset.text, class: 'ic-textframe-custom-color' });
-          customColor.addEventListener('input', function () { active.fillColor = customColor.value; active.fillGradient = null; applyStyle1(); });
+          customColor.addEventListener('input', function () { active.fillColor = customColor.value; active.fillGradient = null; });
+          customColor.addEventListener('change', function () { noteRecentColor(customColor.value); applyStyle1(); });
           soloRow.appendChild(customColor);
           popup.appendChild(soloRow);
+
+          var opacityRow = el('div', { class: 'ic-textframe-edit' });
+          opacityRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_opacity]));
+          opacityRow.appendChild(numberStepper(Math.round((active.opacity != null ? active.opacity : 1) * 100), 0, 100, 5, 0, function (v) {
+            active.opacity = v / 100;
+            var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+            if (objEl) { objEl.style.opacity = active.opacity; }
+          }));
+          popup.appendChild(opacityRow);
 
           var gradToggle = el('label', { class: 'ic-me-check' });
           var gradCheck = el('input', { type: 'checkbox' });
@@ -2101,6 +2200,32 @@
         });
       };
 
+      // Oberste Zeile: Fett/Kursiv/Unterstrichen (nur Zettel - WordArt nutzt
+      // die WordArt-Stile weiter unten für "wilde" Formatierung) sowie
+      // Ausrichtung, die sich auf die markierten Zeilen bezieht.
+      var topRow = el('div', { class: 'ic-textframe-formatgrid' });
+      if (!state.wordArtMode) {
+        [
+          ['bold', 'boldicon', S.format_bold], ['italic', 'italicicon', S.format_italic],
+          ['underline', 'underlineicon', S.format_underline]
+        ].forEach(function (cmd) {
+          var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
+          fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+          fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
+          topRow.appendChild(fb);
+        });
+      }
+      [
+        ['justifyLeft', 'alignleft', S.align_left], ['justifyCenter', 'aligncenter', S.align_center],
+        ['justifyRight', 'alignright', S.align_right], ['justifyFull', 'alignjustify', S.align_justify]
+      ].forEach(function (cmd) {
+        var ab = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
+        ab.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        ab.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
+        topRow.appendChild(ab);
+      });
+      fontsBox.appendChild(topRow);
+
       var editRow = el('div', { class: 'ic-textframe-edit' });
       var fontSel = el('select', { class: 'ic-textframe-select' });
       TEXTFRAME_FONTS.forEach(function (f) {
@@ -2123,48 +2248,52 @@
         fontsBox.appendChild(fontsBtn);
       }
 
-      var sizeInput = el('input', { type: 'range', min: '14', max: '160', value: String(active.size) });
-      sizeInput.addEventListener('input', function () {
-        active.size = parseInt(sizeInput.value, 10);
+      // Schriftgröße: Größer/Kleiner-Buttons statt Slider (auf Wunsch).
+      var sizeRow = el('div', { class: 'ic-textframe-edit' });
+      var sizeDisplay = el('span', { class: 'ic-stepper-value' }, [String(active.size)]);
+      function setSize(v) {
+        active.size = Math.max(10, Math.min(200, v));
+        sizeDisplay.textContent = String(active.size);
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (objEl) { objEl.style.fontSize = active.size + 'px'; }
-      });
-      editRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontsize]));
-      editRow.appendChild(sizeInput);
+      }
+      var sizeDown = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['A\u2212']);
+      var sizeUp = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['A+']);
+      sizeDown.addEventListener('click', function () { setSize(active.size - 2); });
+      sizeUp.addEventListener('click', function () { setSize(active.size + 2); });
+      sizeRow.appendChild(sizeDown); sizeRow.appendChild(sizeDisplay); sizeRow.appendChild(sizeUp);
+      editRow.appendChild(sizeRow);
       fontsBox.appendChild(editRow);
 
+      // Schriftschnitt-Gewicht: Zahlen-Stepper statt Slider. Bezieht sich
+      // aktuell auf das ganze Textobjekt (Auswahl auf Wort-/Zeichenebene
+      // ist als nächster Ausbauschritt vorgesehen).
       var weightRow = el('div', { class: 'ic-textframe-edit' });
-      var weightInput = el('input', { type: 'range', min: '300', max: '900', step: '100', value: String(active.fontWeight || 700) });
-      weightInput.addEventListener('input', function () {
-        active.fontWeight = parseInt(weightInput.value, 10);
-        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.fontWeight = active.fontWeight; }
-      });
       weightRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontweight]));
-      weightRow.appendChild(weightInput);
+      weightRow.appendChild(numberStepper(active.fontWeight || 700, 300, 900, 100, 0, function (v) {
+        active.fontWeight = v;
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.fontWeight = v; }
+      }));
       fontsBox.appendChild(weightRow);
 
       var spacingGrid = el('div', { class: 'ic-textframe-formatgrid' });
       var lineRow = el('div', { class: 'ic-textframe-edit' });
-      var lineInput = el('input', { type: 'range', min: '0.9', max: '2.2', step: '0.05', value: String(active.lineHeight || 1.2) });
-      lineInput.addEventListener('input', function () {
-        active.lineHeight = parseFloat(lineInput.value);
-        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.lineHeight = active.lineHeight; }
-      });
       lineRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.lineheight]));
-      lineRow.appendChild(lineInput);
+      lineRow.appendChild(numberStepper(active.lineHeight || 1.2, 0.9, 2.2, 0.1, 1, function (v) {
+        active.lineHeight = v;
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.lineHeight = v; }
+      }));
       spacingGrid.appendChild(lineRow);
 
       var spaceRow = el('div', { class: 'ic-textframe-edit' });
-      var spaceInput = el('input', { type: 'range', min: '-2', max: '20', step: '0.5', value: String(active.letterSpacing || 0) });
-      spaceInput.addEventListener('input', function () {
-        active.letterSpacing = parseFloat(spaceInput.value);
-        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.letterSpacing = active.letterSpacing + 'px'; }
-      });
       spaceRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.letterspacing]));
-      spaceRow.appendChild(spaceInput);
+      spaceRow.appendChild(numberStepper(active.letterSpacing || 0, -2, 20, 0.5, 1, function (v) {
+        active.letterSpacing = v;
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.letterSpacing = v + 'px'; }
+      }));
       spacingGrid.appendChild(spaceRow);
       fontsBox.appendChild(spacingGrid);
 
@@ -2186,11 +2315,10 @@
       if (!state.wordArtMode) {
         var formatRow = el('div', { class: 'ic-textframe-formatgrid' });
         [
-          ['bold', 'B', S.format_bold], ['italic', 'I', S.format_italic],
-          ['underline', 'U', S.format_underline], ['strikeThrough', 'S', S.format_strike],
-          ['insertUnorderedList', '\u2022', S.format_bullets]
+          ['strikeThrough', 'strikeicon', S.format_strike],
+          ['insertUnorderedList', 'bulleticon', S.format_bullets]
         ].forEach(function (cmd) {
-          var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [cmd[1]]);
+          var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
           fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
           fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
           formatRow.appendChild(fb);
@@ -2447,6 +2575,17 @@
     grid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg>',
     camera: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg>',
+    frameicon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>',
+    starfg: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
+    boldicon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 4h7a4 4 0 0 1 3 6.7A4.5 4.5 0 0 1 14 19H6z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg>',
+    italicicon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="14" y1="4" x2="9" y2="20"/><line x1="17" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="7" y2="20"/></svg>',
+    underlineicon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 3v8a6 6 0 0 0 12 0V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>',
+    strikeicon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 8c0-2.5 2.5-4 6-4s5 1.2 5 3"/><path d="M7 16c0 2.2 2.3 4 5 4s6-1.2 6-3.5"/><line x1="3" y1="12" x2="21" y2="12"/></svg>',
+    bulleticon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="4" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.4" fill="currentColor" stroke="none"/><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/></svg>',
+    alignleft: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>',
+    aligncenter: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>',
+    alignright: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg>',
+    alignjustify: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
     pin: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-3 0-5.5 2.4-5.5 5.5 0 4 5.5 10.5 5.5 10.5s5.5-6.5 5.5-10.5C17.5 4.4 15 2 12 2z"/><circle cx="12" cy="7.5" r="2"/></svg>',
     group: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3-6 7-6s7 2.7 7 6"/><circle cx="18" cy="8.5" r="2.3"/><path d="M15.5 14.2c2.7.4 4.5 2.6 4.5 5.3"/></svg>',
     rotate: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"/><polyline points="3 21 3 15 9 15"/></svg>',
@@ -2468,6 +2607,26 @@
     check: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
     stream: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>'
   };
+  // Zahlen-Stepper statt Schieberegler - Zahl mit kleinen Hoch-/Runter-
+  // Pfeilen, spart deutlich Platz gegenüber einem Slider.
+  function numberStepper(value, min, max, step, decimals, onChange) {
+    var wrap = el('div', { class: 'ic-stepper' });
+    var display = el('span', { class: 'ic-stepper-value' }, [decimals ? value.toFixed(decimals) : String(value)]);
+    function update(v) {
+      v = Math.max(min, Math.min(max, v));
+      value = v;
+      display.textContent = decimals ? v.toFixed(decimals) : String(v);
+      onChange(v);
+    }
+    var upBtn = el('button', { class: 'ic-stepper-btn', type: 'button' }, ['\u25B2']);
+    var downBtn = el('button', { class: 'ic-stepper-btn', type: 'button' }, ['\u25BC']);
+    upBtn.addEventListener('click', function () { update(value + step); });
+    downBtn.addEventListener('click', function () { update(value - step); });
+    wrap.appendChild(display);
+    wrap.appendChild(el('div', { class: 'ic-stepper-arrows' }, [upBtn, downBtn]));
+    return wrap;
+  }
+
   function icon(name) {
     if (name === 'text') {
       var t = document.createElement('span');

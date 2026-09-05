@@ -996,6 +996,20 @@ Details und Scoping-Entscheidungen. In Kurzform:
   = Hauch Rot, beide etwas heller.
 - Pin-Icon in der Kopfzeile nochmal deutlich größer.
 
+### Zweiundsiebzigste Überarbeitung — Layout-Bugfix, vereinheitlichte Formen-Auswahl, Schriften-Block umgebaut
+
+- Seitenleisten-Umschaltung richtet sich jetzt danach, ob der Zettel
+  praktisch zu hoch fürs Fenster wird, nicht mehr nach dem reinen
+  Seitenverhältnis.
+- Formen-Auswahl vereinheitlicht (ein Raster für Hintergrund/Vordergrund,
+  nur noch Icons), neues Polygon-Werkzeug für eigene Formen.
+- Schriften-Block umgebaut: Fett/Kursiv/Unterstrichen oben, neue
+  Ausrichtungs-Icons, Schriftgröße über A−/A+-Buttons, restliche Regler
+  über Zahlen-Stepper statt Slider.
+- Fill-Popup: zuletzt verwendete Farben, Transparenz-Regler.
+- Zurückgestellt: HSV-Farbrad, Umfluss-Modus, Wort-/Zeichen-Ebene für
+  Gewicht/Laufweite, KaTeX-Formeleditor.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -596,6 +596,12 @@
 .ic-shape-bg-rounded { border-radius: 22%; }
 .ic-shape-bg-circle { border-radius: 50%; }
 .ic-shape-bg-ellipse { border-radius: 50%/35%; }
+.ic-custom-shape-draw-hint {
+  position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 400;
+  background: rgba(20,21,24,.92); color: #fff; padding: 8px 16px; border-radius: 8px; font-size: .85rem;
+  max-width: 90vw; text-align: center;
+}
+.ic-custom-shape-dots { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
 
 /* Drei Werkzeug-Blöcke: hochkant (Zettel schmaler als hoch) untereinander,
    quer (Zettel breiter als hoch) nebeneinander unter dem Beitrag. */
@@ -661,9 +667,17 @@
 }
 @media (min-width: 480px) {
   .ic-textframe-formatgrid { grid-template-columns: 1fr 1fr; }
-  .ic-textframe-formatgrid:has(.ic-textframe-fmt-btn) { grid-template-columns: repeat(5, 1fr); }
+  .ic-textframe-formatgrid:has(.ic-textframe-fmt-btn) { grid-template-columns: repeat(auto-fit, minmax(34px, 1fr)); }
 }
-.ic-textframe-fmt-btn { font-weight: 700; padding: 8px 0; }
+.ic-textframe-fmt-btn { font-weight: 700; padding: 8px 0; display: flex; align-items: center; justify-content: center; }
+.ic-stepper { display: flex; align-items: center; gap: 6px; }
+.ic-stepper-value { min-width: 2.4em; text-align: center; font-variant-numeric: tabular-nums; }
+.ic-stepper-arrows { display: flex; flex-direction: column; gap: 1px; }
+.ic-stepper-btn {
+  width: 20px; height: 14px; line-height: 1; font-size: .6rem; padding: 0; border: none; border-radius: 3px;
+  background: rgba(255,255,255,.08); color: var(--ic-text); cursor: pointer;
+}
+.ic-stepper-btn:hover { background: rgba(255,255,255,.18); }
 .ic-textframe-fmt-btn[title="Kursiv"], .ic-textframe-fmt-btn[title="Italic"] { font-style: italic; }
 .ic-textframe-fmt-btn[title="Unterstrichen"], .ic-textframe-fmt-btn[title="Underline"] { text-decoration: underline; }
 .ic-textframe-fmt-btn[title="Durchgestrichen"], .ic-textframe-fmt-btn[title="Strikethrough"] { text-decoration: line-through; }
