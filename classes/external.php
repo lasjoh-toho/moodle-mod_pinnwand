@@ -1550,12 +1550,13 @@ class mod_pinnwand_external extends external_api {
         }
 
         $photo->hiddenfromboard = !empty($params['hidden']) ? 1 : 0;
-        if ($photo->hiddenfromboard) {
-            // Ein erneutes Anpinnen soll wieder über den Post-Stream laufen
-            // (dorthin gezogen/getippt werden), nicht sofort an der alten
-            // Position auf dem Board wieder auftauchen.
-            $photo->boardplaced = 0;
-        }
+        // boardplaced IMMER zurücksetzen (nicht nur beim Ausblenden) - sonst
+        // bleibt ein bereits einmal auf dem Board platziertes Objekt für
+        // immer unsichtbar im Post-Stream, selbst nach erneutem Senden, weil
+        // boardplaced=1 stehen bliebe und die Post-Stream-Abfrage zwingend
+        // boardplaced=0 voraussetzt. Sowohl Senden als auch Ausblenden sollen
+        // das Objekt wieder in den "Warteraum"-Zustand versetzen.
+        $photo->boardplaced = 0;
         $DB->update_record('pinnwand_photos', $photo);
 
         return ['success' => true, 'hiddenfromboard' => (bool) $photo->hiddenfromboard];

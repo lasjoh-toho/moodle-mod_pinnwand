@@ -2317,6 +2317,20 @@
         ab.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
         alignRow.appendChild(ab);
       });
+      // Durchgestrichen/Aufzählung gehören inhaltlich ebenfalls zum Absatz
+      // und stehen in derselben Zeile statt isoliert für sich - nur im
+      // Zettel-Modus (WordArt nutzt die WordArt-Stile weiter unten).
+      if (!state.wordArtMode) {
+        [
+          ['strikeThrough', 'strikeicon', S.format_strike],
+          ['insertUnorderedList', 'bulleticon', S.format_bullets]
+        ].forEach(function (cmd) {
+          var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
+          fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+          fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
+          alignRow.appendChild(fb);
+        });
+      }
       fontsBox.appendChild(alignRow);
 
       var lineRow = el('div', { class: 'ic-textframe-edit' });
@@ -2338,33 +2352,16 @@
         objEl.style.cssText += ';' + (wordartCssFor(active, preset.text) || ('color:' + (active.color || preset.text) + ';'));
       }
 
-      // Fett/Kursiv/Unterstrichen/Durchgestrichen/Aufzählung: nur im
-      // Zettel-Modus - dient der übersichtlichen Textstruktur. WordArt
-      // ("wilde" Formatierung) nutzt stattdessen die WordArt-Stile weiter
-      // unten (3D/Rand/Glow/Schatten) statt dieser feingliedrigen
-      // Text-Werkzeuge.
+      // Formeleditor: Hoch-/Tiefstellen, Bruch, Symbol-Palette - nur im
+      // Zettel-Modus. Bewusst als reines HTML (sup/sub, verschachtelte
+      // Zeichen umgesetzt statt mit einer externen Formel-Bibliothek wie
+      // KaTeX. Grund: der Zettel wird am Ende als statisches SVG-Bild
+      // exportiert (siehe buildTextFrameSVG/embedFontsInSVG) - externe
+      // Web-Fonts müssten dafür aufwendig als Base64 eingebettet werden
+      // und liefen Gefahr, im exportierten Bild nicht zu erscheinen.
+      // Hoch-/tiefgestellter Text und Unicode-Symbole nutzen dagegen
+      // einfach die bereits vorhandene Schriftart weiter.
       if (!state.wordArtMode) {
-        var formatRow = el('div', { class: 'ic-textframe-formatgrid' });
-        [
-          ['strikeThrough', 'strikeicon', S.format_strike],
-          ['insertUnorderedList', 'bulleticon', S.format_bullets]
-        ].forEach(function (cmd) {
-          var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
-          fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-          fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
-          formatRow.appendChild(fb);
-        });
-        fontsBox.appendChild(formatRow);
-
-        // Formeleditor: Hoch-/Tiefstellen, Bruch, Symbol-Palette - bewusst
-        // als reines HTML (sup/sub, verschachtelte Spans) und Unicode-
-        // Zeichen umgesetzt statt mit einer externen Formel-Bibliothek wie
-        // KaTeX. Grund: der Zettel wird am Ende als statisches SVG-Bild
-        // exportiert (siehe buildTextFrameSVG/embedFontsInSVG) - externe
-        // Web-Fonts müssten dafür aufwendig als Base64 eingebettet werden
-        // und liefen Gefahr, im exportierten Bild nicht zu erscheinen.
-        // Hoch-/tiefgestellter Text und Unicode-Symbole nutzen dagegen
-        // einfach die bereits vorhandene Schriftart weiter.
         var formulaRow = el('div', { class: 'ic-textframe-formatgrid' });
         var supBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_superscript }, ['x\u00b2']);
         supBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
@@ -2602,9 +2599,9 @@
     aligncenter: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>',
     alignright: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg>',
     alignjustify: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
-    fillicon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2 3 10l8 8 9-9-9-7z"/><path d="M3 10h16"/><circle cx="18" cy="18" r="3"/></svg>',
-    outlineicon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3" stroke-dasharray="3 2.5"/></svg>',
-    effecticon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg>',
+    fillicon: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="4" y="4" width="16" height="16" rx="2" fill="#e0503f"/></svg>',
+    outlineicon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none"><rect x="5" y="5" width="14" height="14" rx="2" stroke="#e0503f" stroke-width="2.5"/></svg>',
+    effecticon: '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="7" y="7" width="14" height="14" rx="2" fill="#e0503f" opacity=".55"/><rect x="4" y="4" width="14" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
     pin: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-3 0-5.5 2.4-5.5 5.5 0 4 5.5 10.5 5.5 10.5s5.5-6.5 5.5-10.5C17.5 4.4 15 2 12 2z"/><circle cx="12" cy="7.5" r="2"/></svg>',
     group: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3-6 7-6s7 2.7 7 6"/><circle cx="18" cy="8.5" r="2.3"/><path d="M15.5 14.2c2.7.4 4.5 2.6 4.5 5.3"/></svg>',
     rotate: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"/><polyline points="3 21 3 15 9 15"/></svg>',
@@ -3172,7 +3169,7 @@
 
     visible.forEach(function (p) {
       var item = el('div', {
-        class: 'ic-arrange-item' + (threadPhotoIds[p.id] ? ' ic-in-thread' : '') +
+        class: 'ic-arrange-item' + (p.wordfielddata ? ' ic-wordfield-item' : '') + (threadPhotoIds[p.id] ? ' ic-in-thread' : '') +
           (state.selectedItemKey === 'photo:' + p.id ? ' selected' : '') +
           (state.multiSelect.indexOf('photo:' + p.id) !== -1 ? ' multi-selected' : ''),
         'data-multikey': 'photo:' + p.id,

@@ -1019,6 +1019,18 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Alte, redundante Minipalette in Schriften entfernt - die Fill-Palette
   in "Farben und Formen" übernimmt das jetzt vollständig.
 
+### Vierundsiebzigste Überarbeitung — Senden-Kern-Bugfix, Wortfeld-Rahmen nur bei Auswahl
+
+- **Endlich der echte Kern-Bugfix fürs Senden**: boardplaced wurde nur
+  beim Ausblenden zurückgesetzt, nicht beim Senden - ein bereits einmal
+  platziertes Objekt blieb dadurch für immer unsichtbar im Post-Stream.
+  Jetzt bei jeder Statusänderung zurückgesetzt.
+- Wortfeld-/Text-Objekte auf der Pinnwand/Präsentation bekommen nur noch
+  bei Auswahl einen Rahmen mit Schatten.
+- Durchgestrichen/Aufzählung nicht mehr isoliert, jetzt in der
+  Absatz-Zeile.
+- Fill/Kontur/Effekte-Icons farbcodiert (rotes Rechteck/Rand/Schatten).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

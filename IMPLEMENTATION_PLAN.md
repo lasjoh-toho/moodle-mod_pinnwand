@@ -2142,3 +2142,34 @@ Strings.
 Pop-ups wirken weiterhin nur auf das ganze Textobjekt (nicht auf
 Zeichen-Ebene) - technisch aufwändiger, da mehrere CSS-Eigenschaften
 gleichzeitig betroffen sind.
+
+---
+
+## Phase 70 — Senden-Kern-Bugfix (boardplaced), Wortfeld-Rahmen nur bei Auswahl, isolierte Buttons zusammengeführt, farbcodierte Icons ✅
+
+Dreiundsechzigster Feedback-Durchgang. Betrifft: `classes/external.php`,
+`js/app.js`, `styles.css`.
+
+- [x] **Echter Kern-Bugfix endlich gefunden**: `set_photo_hidden` setzte
+  `boardplaced` bisher NUR beim Ausblenden zurück, nicht beim Senden -
+  ein bereits einmal auf dem Board platziertes Objekt (boardplaced=1)
+  blieb dadurch für immer unsichtbar im Post-Stream, egal wie oft
+  erneut gesendet wurde (die Post-Stream-Abfrage verlangt zwingend
+  boardplaced=0). Jetzt wird boardplaced bei JEDER Statusänderung
+  zurückgesetzt (Senden UND Ausblenden versetzen das Objekt in den
+  Warteraum-Zustand).
+- [x] Wortfeld-/Text-Objekte auf der Pinnwand (und damit auch in der
+  Präsentation, die dieselben Elemente nutzt) bekommen jetzt nur noch
+  bei Auswahl einen Rahmen mit Schatten, nicht mehr permanent.
+- [x] Durchgestrichen/Aufzählung nicht mehr isoliert in einer eigenen
+  kurzen Zeile - jetzt zusammen mit der Ausrichtung in einer Absatz-
+  Zeile.
+- [x] Fill/Kontur/Effekte-Icons farbcodiert: rotes Rechteck=Fläche,
+  Rechteck mit rotem Rand=Kontur, Rechteck mit rotem Schatten=Effekte.
+
+**Noch offen** (zu groß für diesen Durchgang, siehe Antworttext): die
+10x10-Farbpalette mit Grauverlauf/zuletzt-verwendet/Transparenz als
+durchgehend sichtbarer vertikaler Block, Formen als echte, wählbare/
+neu anlegbare Objekte (keine Unterscheidung Vordergrund/Hintergrund
+mehr), Textumfluss-Buttons, "Farbe über Farbe löscht die darunter
+liegende".

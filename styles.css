@@ -732,6 +732,7 @@
 .ic-arrange-canvas { position: relative; z-index: 1; width: 1400px; height: 1000px; max-width: none; }
 .ic-arrange-item { position: absolute; touch-action: none; }
 .ic-arrange-item img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+.ic-arrange-item.ic-wordfield-item img { border-radius: 0; box-shadow: none; }
 .ic-arrange-item.ic-in-thread img { outline: 3px solid #e0503f; outline-offset: 2px; border-radius: 4px; }
 .ic-extra-placement img { outline: 2px dashed #4f8cff; outline-offset: 2px; }
 .ic-extra-placement-unpin {
