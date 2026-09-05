@@ -2738,6 +2738,22 @@
   // auf das gesamte Textobjekt als Fallback. Grundlage dafür, dass
   // Schriftart/-größe/-gewicht/Laufweite/Farbe auf einzelne Zeichen
   // wirken können statt nur auf den gesamten Text.
+  // Entfernt dieselben CSS-Eigenschaften aus allen verschachtelten
+  // Elementen innerhalb von root, BEVOR eine neue Formatierung außen
+  // darüber gelegt wird - sonst bliebe eine früher gesetzte Farbe/Größe
+  // auf einem inneren Element durch CSS-Vererbung weiterhin sichtbar,
+  // obwohl gerade eine neue Formatierung über den ganzen Bereich gewählt
+  // wurde (die "Farbe über Farbe löscht die darunterliegende nicht"-Lücke).
+  function stripConflictingStyles(root, cssText) {
+    var props = cssText.split(';').map(function (s) { return s.split(':')[0].trim(); }).filter(Boolean);
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    var node;
+    while ((node = walker.nextNode())) {
+      if (!node.style) { continue; }
+      props.forEach(function (p) { node.style.removeProperty(p); });
+      if (!node.getAttribute('style')) { node.removeAttribute('style'); }
+    }
+  }
   function applyStyleToSelectionOrWhole(objEl, cssText, wholeObjectFallback) {
     var sel = window.getSelection();
     if (sel && sel.rangeCount && !sel.isCollapsed) {
@@ -2747,6 +2763,7 @@
           var span = document.createElement('span');
           span.style.cssText = cssText;
           var content = range.extractContents();
+          stripConflictingStyles(content, cssText);
           span.appendChild(content);
           range.insertNode(span);
           sel.removeAllRanges();

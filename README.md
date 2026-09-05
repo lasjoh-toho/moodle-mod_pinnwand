@@ -1050,6 +1050,13 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Formen jetzt links in einem eigenen scrollbaren Feld, zweispaltiges
   Layout im Block.
 
+### Siebenundsiebzigste Überarbeitung — Bugfix: neue Formatierung überschreibt zuverlässig
+
+- Eine bereits gesetzte Zeichen-Formatierung (z.B. Farbe) blieb durch
+  CSS-Vererbung sichtbar, wenn ein größerer Bereich darüber neu
+  formatiert wurde. Jetzt werden verschachtelte, widersprüchliche
+  Formatierungen vor dem Überschreiben entfernt.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

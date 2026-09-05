@@ -2220,3 +2220,24 @@ Fünfundsechzigster Feedback-Durchgang. Betrifft: `js/app.js`,
   Slider dazwischen (vor den Tabs).
 - [x] **Formen jetzt links** in einem eigenen, scrollbaren Feld (inline
   statt Modal) - zweispaltiges Layout im Block.
+
+---
+
+## Phase 73 — Bugfix: neue Formatierung überschreibt jetzt zuverlässig ältere darunterliegende ✅
+
+Sechsundsechzigster Feedback-Durchgang (Klärung eines zuvor unklar
+formulierten Punkts). Betrifft: `js/app.js`.
+
+Beobachtung des Nutzers: ein bereits gesetzter Farbton (oder andere
+Zeichen-Formatierung) wurde nicht überschrieben, wenn ein GRÖSSERER
+Bereich darüber neu eingefärbt wurde - Ursache: `applyStyleToSelectionOrWhole`
+wrappt die Auswahl in einen neuen äußeren Span, aber ein zuvor gesetzter
+innerer Span (z.B. mit eigener Farbe) blieb durch CSS-Vererbung
+weiterhin sichtbar/wirksam, auch wenn außen eine neue Farbe gesetzt
+wurde.
+
+- [x] Neue Funktion `stripConflictingStyles()`: entfernt dieselben
+  CSS-Eigenschaften aus allen verschachtelten Elementen innerhalb des
+  markierten Bereichs, BEVOR die neue Formatierung außen darüber gelegt
+  wird - betrifft Schriftart/-größe/-gewicht/Laufweite/Farbe gleichermaßen,
+  da alle über dieselbe Funktion laufen.
