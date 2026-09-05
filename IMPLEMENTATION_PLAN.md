@@ -2201,3 +2201,22 @@ verschieben oder in der Größe ändern (liegen erstmal mittig, feste
 Startgröße) - das wäre der nächste Ausbauschritt. "Farbe über Farbe
 löscht die darunterliegende" sowie die Textumfluss-Buttons sind noch
 nicht umgesetzt.
+
+---
+
+## Phase 72 — Palette verkleinert+scrollbar, Rad/Dreieck-Farbwähler als Tab, zweispaltiges Layout ✅
+
+Fünfundsechzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`, neue Strings.
+
+- [x] Palette auf ca. ein Drittel der Größe verkleinert, zusätzlich mit
+  Scroll begrenzt (max-height), falls trotzdem zu hoch.
+- [x] **Neuer Kreis-/Dreieck-Farbwähler** (HSV-Rad) als zweiter Tab:
+  äußerer Ring = Farbton, inneres Dreieck = Sättigung/Helligkeit für
+  den gewählten Farbton - per Canvas gezeichnet, Klick liest die
+  tatsächliche Pixelfarbe aus (robuster als eigene Dreiecks-Mathematik).
+- [x] Tabs "Raster"/"Rad" oberhalb der Palette.
+- [x] Fläche/Kontur/Effekte-Buttons jetzt oberhalb, Transparenz als
+  Slider dazwischen (vor den Tabs).
+- [x] **Formen jetzt links** in einem eigenen, scrollbaren Feld (inline
+  statt Modal) - zweispaltiges Layout im Block.

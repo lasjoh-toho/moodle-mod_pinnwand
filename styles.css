@@ -686,6 +686,24 @@
 }
 .ic-bigpalette-cell.empty { background: transparent; border-style: dashed; cursor: default; }
 .ic-bigpalette-cell.active { outline: 2px solid #fff; outline-offset: 1px; }
+
+.ic-cf-columns { display: flex; gap: 10px; align-items: flex-start; }
+.ic-cf-shapes-col {
+  flex: 0 0 33%; max-height: 180px; overflow-y: auto; border-right: 1px solid rgba(255,255,255,.1); padding-right: 8px;
+}
+.ic-cf-colors-col { flex: 1 1 0; min-width: 0; }
+.ic-cf-tabs { display: flex; gap: 4px; margin: 6px 0; }
+.ic-cf-tab {
+  flex: 1 1 0; padding: 5px 0; font-size: .75rem; background: rgba(255,255,255,.06); border: none; border-radius: 6px;
+  color: var(--ic-muted); cursor: pointer;
+}
+.ic-cf-tab.active { background: var(--ic-accent); color: #fff; }
+/* Palette auf ca. ein Drittel der ursprünglichen Größe verkleinert, dazu
+   scrollbar begrenzt, falls sie trotzdem noch zu hoch würde. */
+.ic-bigpalette-container { max-height: 130px; overflow-y: auto; }
+.ic-bigpalette-grid { max-width: 130px; }
+.ic-colorwheel-canvas { display: block; margin: 4px auto; cursor: pointer; }
+.ic-textframe-range { flex: 1 1 auto; }
 .ic-textframe-fmt-btn[title="Kursiv"], .ic-textframe-fmt-btn[title="Italic"] { font-style: italic; }
 .ic-textframe-fmt-btn[title="Unterstrichen"], .ic-textframe-fmt-btn[title="Underline"] { text-decoration: underline; }
 .ic-textframe-fmt-btn[title="Durchgestrichen"], .ic-textframe-fmt-btn[title="Strikethrough"] { text-decoration: line-through; }

@@ -1301,6 +1301,80 @@
       container.appendChild(opRow);
     }
   }
+  // Kreis-/Dreieck-Farbwähler (HSV-Rad): äußerer Ring = Farbton, inneres
+  // Dreieck = Sättigung/Helligkeit für den gewählten Farbton. Klicks lesen
+  // die tatsächlich gezeichnete Pixelfarbe aus dem Canvas aus (robuster als
+  // eigene Dreiecks-Mathematik nachzubauen).
+  function buildColorWheel(container, currentColor, onPick) {
+    var size = 150, cx = size / 2, cy = size / 2, outerR = size / 2 - 3, innerR = outerR - 16;
+    var hue = 0;
+    if (currentColor) {
+      var m = /^#([0-9a-f]{6})$/i.exec(currentColor);
+      if (m) {
+        var r = parseInt(m[1].substr(0, 2), 16) / 255, g = parseInt(m[1].substr(2, 2), 16) / 255, b = parseInt(m[1].substr(4, 2), 16) / 255;
+        var max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+        if (d !== 0) {
+          if (max === r) { hue = 60 * (((g - b) / d) % 6); } else if (max === g) { hue = 60 * ((b - r) / d + 2); } else { hue = 60 * ((r - g) / d + 4); }
+          if (hue < 0) { hue += 360; }
+        }
+      }
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    canvas.className = 'ic-colorwheel-canvas';
+    var ctx = canvas.getContext('2d');
+    function triangleVertices(hueDeg) {
+      var a0 = (hueDeg - 90) * Math.PI / 180, a1 = a0 + 2 * Math.PI / 3, a2 = a0 + 4 * Math.PI / 3;
+      return [
+        { x: cx + innerR * Math.cos(a0), y: cy + innerR * Math.sin(a0) },
+        { x: cx + innerR * Math.cos(a1), y: cy + innerR * Math.sin(a1) },
+        { x: cx + innerR * Math.cos(a2), y: cy + innerR * Math.sin(a2) }
+      ];
+    }
+    function draw() {
+      ctx.clearRect(0, 0, size, size);
+      for (var deg = 0; deg < 360; deg += 2) {
+        ctx.beginPath();
+        ctx.strokeStyle = 'hsl(' + deg + ',100%,50%)';
+        ctx.lineWidth = outerR - innerR + 1;
+        ctx.arc(cx, cy, (outerR + innerR) / 2, (deg - 1.2) * Math.PI / 180, (deg + 1.2) * Math.PI / 180);
+        ctx.stroke();
+      }
+      var verts = triangleVertices(hue);
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(verts[0].x, verts[0].y); ctx.lineTo(verts[1].x, verts[1].y); ctx.lineTo(verts[2].x, verts[2].y);
+      ctx.closePath(); ctx.clip();
+      ctx.fillStyle = 'hsl(' + hue + ',100%,50%)'; ctx.fillRect(0, 0, size, size);
+      var gradW = ctx.createLinearGradient(verts[1].x, verts[1].y, verts[0].x, verts[0].y);
+      gradW.addColorStop(0, 'rgba(255,255,255,1)'); gradW.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gradW; ctx.fillRect(0, 0, size, size);
+      var gradB = ctx.createLinearGradient(verts[2].x, verts[2].y, verts[0].x, verts[0].y);
+      gradB.addColorStop(0, 'rgba(0,0,0,1)'); gradB.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gradB; ctx.fillRect(0, 0, size, size);
+      ctx.restore();
+      var ringAngle = (hue - 90) * Math.PI / 180, mr = (outerR + innerR) / 2;
+      ctx.beginPath(); ctx.arc(cx + mr * Math.cos(ringAngle), cy + mr * Math.sin(ringAngle), 4, 0, Math.PI * 2);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    }
+    draw();
+    container.appendChild(canvas);
+    canvas.addEventListener('click', function (ev) {
+      var rect = canvas.getBoundingClientRect();
+      var x = (ev.clientX - rect.left) * (size / rect.width), y = (ev.clientY - rect.top) * (size / rect.height);
+      var dist = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+      if (dist > innerR) {
+        hue = (((Math.atan2(y - cy, x - cx) * 180 / Math.PI) + 90) + 360) % 360;
+        draw();
+      } else {
+        var px = ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data;
+        if (px[3] === 0) { return; } // außerhalb des Dreiecks
+        var hex = '#' + [px[0], px[1], px[2]].map(function (v) { return v.toString(16).padStart(2, '0'); }).join('');
+        onPick(hex);
+      }
+    });
+  }
+
   var TEXTFRAME_PRESETS = [
     { id: 'none', bg: null, text: '#f2f3f5', shadow: false },
     { id: 'paper', bg: '#ffffff', text: '#111111', shadow: true },
@@ -2046,30 +2120,31 @@
       content.appendChild(polyBtn);
     }
     tf.shapes = tf.shapes || [];
-    var shapeRow = el('div', { class: 'ic-textframe-formatgrid' });
-    var shapeBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_shape_fg }, [icon('starfg')]);
-    shapeBtn.addEventListener('click', function () {
+    var columnsWrap = el('div', { class: 'ic-cf-columns' });
+    blockTemplates.content.appendChild(columnsWrap);
+
+    // Linke Spalte: Formen, inline in einem scrollbaren Feld (kein Modal
+    // mehr) - Grundformen oben, dann die Kategorien, dann das
+    // Polygon-Werkzeug. Ist eine Form ausgewählt, überträgt sich der
+    // gewählte Typ auf SIE, sonst entsteht eine neue.
+    var shapesCol = el('div', { class: 'ic-cf-shapes-col' });
+    columnsWrap.appendChild(shapesCol);
+    function pickShapeType(id) {
       var activeShape = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
-      openDraggableModal(S.tf_shape_fg, shapeBtn, function (content) {
-        buildShapeGrid(content, activeShape ? activeShape.type : null, function (id) {
-          if (id === '__custom__') { startCustomShapeDraw(activeShape); closeDraggableModal(); return; }
-          if (activeShape) {
-            // Eine Form ist bereits ausgewählt - der gewählte Typ wird auf
-            // SIE übertragen, statt eine neue anzulegen.
-            activeShape.type = id;
-          } else {
-            // Keine Form ausgewählt: neue Form anlegen und direkt aktiv
-            // setzen, damit man sie gleich weiter anpassen kann.
-            var nextId = (Math.max.apply(null, tf.shapes.map(function (s) { return s.id; }).concat([0])) || 0) + 1;
-            tf.shapes.push({ id: nextId, type: id, x: 0.5, y: 0.5, size: 0.4, color: '#e0503f' });
-            state.activeShapeId = nextId;
-          }
-          render();
-        }, false);
-      });
-    });
-    shapeRow.appendChild(shapeBtn);
-    blockTemplates.content.appendChild(shapeRow);
+      if (id === '__custom__') { startCustomShapeDraw(activeShape); return; }
+      if (activeShape) {
+        activeShape.type = id;
+      } else {
+        var nextId = (Math.max.apply(null, tf.shapes.map(function (s) { return s.id; }).concat([0])) || 0) + 1;
+        tf.shapes.push({ id: nextId, type: id, x: 0.5, y: 0.5, size: 0.4, color: '#e0503f' });
+        state.activeShapeId = nextId;
+      }
+      render();
+    }
+    (function () {
+      var activeShape = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
+      buildShapeGrid(shapesCol, activeShape ? activeShape.type : null, pickShapeType, false);
+    })();
 
     // Formen als echte Objekte auf dem Zettel - anklickbar zum Auswählen
     // (dann überträgt der Formen-Button oben den nächsten gewählten Typ
@@ -2092,20 +2167,27 @@
       frameInner.insertBefore(shapeEl, frameInner.firstChild);
     });
 
-    // Fill/Kontur/Effekte als Pop-ups - wirken auf das gerade gewählte
-    // Textobjekt (siehe activeId/refreshControls weiter unten). Werden in
-    // einer eigenen Zeile im selben Block untergebracht.
-    // Fill: durchgehend sichtbare große Palette (kein Pop-up mehr) - siehe
-    // bigPaletteContainer, wird in refreshControls() befüllt. Kontur/
-    // Effekte bleiben Pop-ups (brauchen zusätzlich Dicke/Unschärfe-Regler).
+    // Rechte Spalte: Fläche/Kontur/Effekte, Transparenz-Slider, Tabs
+    // (Raster/Rad).
+    var colorsCol = el('div', { class: 'ic-cf-colors-col' });
+    columnsWrap.appendChild(colorsCol);
     var styleRow = el('div', { class: 'ic-textframe-formatgrid' });
     var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_fill }, [icon('fillicon')]);
     var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_outline }, [icon('outlineicon')]);
     var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.tf_effects }, [icon('effecticon')]);
     styleRow.appendChild(fillBtn); styleRow.appendChild(outlineBtn); styleRow.appendChild(effectsBtn);
-    blockTemplates.content.appendChild(styleRow);
+    colorsCol.appendChild(styleRow);
+    var opacitySliderRow = el('div', { class: 'ic-textframe-edit' });
+    colorsCol.appendChild(opacitySliderRow);
+    var colorTabsRow = el('div', { class: 'ic-cf-tabs' });
+    var tabRaster = el('button', { class: 'ic-cf-tab' + (state.colorTab !== 'wheel' ? ' active' : '') }, [S.tf_tab_grid]);
+    var tabWheel = el('button', { class: 'ic-cf-tab' + (state.colorTab === 'wheel' ? ' active' : '') }, [S.tf_tab_wheel]);
+    tabRaster.addEventListener('click', function () { state.colorTab = 'grid'; render(); });
+    tabWheel.addEventListener('click', function () { state.colorTab = 'wheel'; render(); });
+    colorTabsRow.appendChild(tabRaster); colorTabsRow.appendChild(tabWheel);
+    colorsCol.appendChild(colorTabsRow);
     var bigPaletteContainer = el('div', { class: 'ic-bigpalette-container' });
-    blockTemplates.content.appendChild(bigPaletteContainer);
+    colorsCol.appendChild(bigPaletteContainer);
 
     var presetOrder = state.wordArtMode
       ? TEXTFRAME_PRESETS
@@ -2158,12 +2240,25 @@
         });
         refreshControls();
       }
-      bigPaletteContainer.innerHTML = '';
-      buildBigColorPalette(bigPaletteContainer, active.fillGradient ? null : (active.fillColor || preset.text), active.opacity, applyFillColor, function (v) {
-        active.opacity = v;
-        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.opacity = v; }
+      opacitySliderRow.innerHTML = '';
+      opacitySliderRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_opacity]));
+      var opacitySlider = el('input', {
+        type: 'range', min: '0', max: '100', step: '5', value: String(Math.round((active.opacity != null ? active.opacity : 1) * 100)),
+        class: 'ic-textframe-range'
       });
+      opacitySlider.addEventListener('input', function () {
+        active.opacity = parseInt(opacitySlider.value, 10) / 100;
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.opacity = active.opacity; }
+      });
+      opacitySliderRow.appendChild(opacitySlider);
+
+      bigPaletteContainer.innerHTML = '';
+      if (state.colorTab === 'wheel') {
+        buildColorWheel(bigPaletteContainer, active.fillGradient ? null : (active.fillColor || preset.text), applyFillColor);
+      } else {
+        buildBigColorPalette(bigPaletteContainer, active.fillGradient ? null : (active.fillColor || preset.text), null, applyFillColor, null);
+      }
       var gradToggle = el('label', { class: 'ic-me-check' });
       var gradCheck = el('input', { type: 'checkbox' });
       gradCheck.checked = !!active.fillGradient;

@@ -1040,6 +1040,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Formen sind jetzt echte, wählbare Objekte auf dem Zettel.
 - Noch offen: Formen ziehen/skalieren, Textumfluss-Buttons.
 
+### Sechsundsiebzigste Überarbeitung — Palette verkleinert, Rad-Farbwähler, zweispaltiges Layout
+
+- Palette auf ca. ein Drittel der Größe verkleinert, zusätzlich
+  scrollbar begrenzt.
+- Neuer Kreis-/Dreieck-Farbwähler (HSV-Rad) als zweiter Tab neben dem
+  Raster.
+- Fläche/Kontur/Effekte-Buttons oben, Transparenz als Slider dazwischen.
+- Formen jetzt links in einem eigenen scrollbaren Feld, zweispaltiges
+  Layout im Block.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
