@@ -2366,3 +2366,26 @@ Siebzigster Feedback-Durchgang. Betrifft: `js/app.js`, `styles.css`.
 **Offene Rückfrage** (Nutzer hat noch nicht geantwortet): "In eine
 zweite Reihe darunter sollte das Gleiche mit Buchstaben" - unklar, was
 genau gemeint ist, noch nicht umgesetzt.
+
+---
+
+## Phase 78 — Formen bekommen Fläche/Kontur/Effekte (dieselben Tabs wie Text) ✅
+
+Einundsiebzigster Feedback-Durchgang (Klärung der offenen Rückfrage).
+Betrifft: `js/app.js`.
+
+Klärung: "zweite Reihe mit Buchstaben" meinte, dass Formen dieselbe
+Fläche/Kontur/Effekte-Struktur wie Text bekommen sollen, über dieselben
+Palette-Tabs (nicht doppelt aufgebaut).
+
+- [x] `fgShapeSvgDataUri()` erweitert: akzeptiert jetzt ein Style-Objekt
+  (Fläche/Verlauf/Kontur mit Dicke/Schatten) statt nur einer Farbe -
+  rückwärtskompatibel (reiner Farb-String funktioniert weiterhin).
+- [x] Formen speichern jetzt `fillColor`/`fillGradient`/`outlineColor`/
+  `outlineWidth`/`shadowOn` etc. - dieselben Feldnamen wie Text.
+- [x] Export (`buildTextFrameSVG`) unterstützt Formen mit Verlauf/Kontur/
+  Schatten (eigener `<defs>`-Block je Form).
+- [x] **Fläche/Kontur/Effekte-Tabs wirken jetzt auf die gerade
+  ausgewählte FORM, falls eine gewählt ist, sonst auf den aktiven
+  Text** - dieselbe Palette/Tabs für beide, wie gewünscht (kein
+  doppelter Aufbau).

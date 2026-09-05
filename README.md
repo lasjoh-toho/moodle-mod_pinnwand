@@ -1091,6 +1091,12 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Tabs mit farblicher Hervorhebung.
 - Icons deutlicher (Schatten, Textumfluss).
 
+### Zweiundachtzigste Überarbeitung — Formen bekommen Fläche/Kontur/Effekte
+
+- Formen unterstützen jetzt Verlauf/Kontur mit Dicke/Schatten, genau
+  wie Text - über dieselben Palette-Tabs, die sich automatisch auf die
+  gerade ausgewählte Form beziehen, falls eine gewählt ist.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -1564,10 +1564,32 @@
     ]
   };
   var FG_SHAPE_CATEGORY_LABELS = { grundformen: 'Grundformen', symbolformen: 'Symbolformen', blockpfeile: 'Blockpfeile' };
-  function fgShapeSvgDataUri(shape, color) {
-    var attrs = 'fill="' + color + '"' + (shape.fillRule ? ' fill-rule="' + shape.fillRule + '"' : '');
+  var fgShapeGradientCounter = 0;
+  function fgShapeSvgDataUri(shape, style) {
+    // Rückwärtskompatibel: reiner Farb-String (z.B. für Rastervorschauen)
+    // wird als einfache Fläche ohne Kontur/Effekte behandelt.
+    if (typeof style === 'string') { style = { fillColor: style }; }
+    var defs = '', fillAttr = 'fill="' + (style.fillColor || '#e0503f') + '"';
+    if (style.fillGradient && style.fillGradient.length === 2) {
+      var gid = 'fgshapegrad' + (fgShapeGradientCounter++);
+      defs += '<linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1">' +
+        '<stop offset="0" stop-color="' + style.fillGradient[0] + '"/>' +
+        '<stop offset="1" stop-color="' + style.fillGradient[1] + '"/></linearGradient>';
+      fillAttr = 'fill="url(#' + gid + ')"';
+    }
+    var filterAttr = '';
+    if (style.shadowOn) {
+      var fid = 'fgshapeshadow' + (fgShapeGradientCounter++);
+      defs += '<filter id="' + fid + '" x="-50%" y="-50%" width="200%" height="200%">' +
+        '<feDropShadow dx="2" dy="3" stdDeviation="' + ((style.shadowBlur || 4) / 4) +
+        '" flood-color="' + (style.shadowColor || '#000') + '"/></filter>';
+      filterAttr = ' filter="url(#' + fid + ')"';
+    }
+    var strokeAttr = style.outlineWidth ? ' stroke="' + (style.outlineColor || '#000') + '" stroke-width="' + style.outlineWidth + '"' : '';
+    var attrs = fillAttr + strokeAttr + filterAttr + (shape.fillRule ? ' fill-rule="' + shape.fillRule + '"' : '');
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="' + shape.d + '" ' + attrs + '/></svg>'
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' + (defs ? '<defs>' + defs + '</defs>' : '') +
+      '<path d="' + shape.d + '" ' + attrs + '/></svg>'
     );
   }
 
@@ -1756,7 +1778,7 @@
         class: 'ic-tf-live-shape',
         style: 'position:absolute;left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + (s.size * 100) + '%;' +
           'padding-bottom:' + (s.size * 100) + '%;height:0;transform:translate(-50%,-50%);' +
-          'background-image:url(' + fgShapeSvgDataUri(shapeDef, s.color || '#e0503f') + ');background-repeat:no-repeat;' +
+          'background-image:url(' + fgShapeSvgDataUri(shapeDef, s) + ');background-repeat:no-repeat;' +
           'background-position:center;background-size:contain;' + (s.wrapMode === 'front' ? 'z-index:2;' : 'z-index:0;')
       });
       inner.appendChild(shapeEl);
@@ -1800,11 +1822,28 @@
             .filter(function (d) { return d.id === s.type; })[0]
           : null);
       if (!shapeDef) { return ''; }
-      var fgColor = escapeXml(s.color || '#e0503f');
       var size = Math.min(tf.w, tf.h) * (s.size || 0.4);
       var tx = s.x * tf.w - size / 2, ty = s.y * tf.h - size / 2, scale = size / 100;
-      return '<g transform="translate(' + tx + ',' + ty + ') scale(' + scale + ')">' +
-        '<path d="' + shapeDef.d + '" fill="' + fgColor + '"' +
+      var shapeDefs = '', fillAttr = 'fill="' + escapeXml(s.fillColor || '#e0503f') + '"';
+      if (s.fillGradient && s.fillGradient.length === 2) {
+        var gid = 'shapegrad' + s.id;
+        shapeDefs += '<linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1">' +
+          '<stop offset="0" stop-color="' + escapeXml(s.fillGradient[0]) + '"/>' +
+          '<stop offset="1" stop-color="' + escapeXml(s.fillGradient[1]) + '"/></linearGradient>';
+        fillAttr = 'fill="url(#' + gid + ')"';
+      }
+      var filterAttr = '';
+      if (s.shadowOn) {
+        var fid = 'shapeshadow' + s.id;
+        shapeDefs += '<filter id="' + fid + '" x="-50%" y="-50%" width="200%" height="200%">' +
+          '<feDropShadow dx="2" dy="3" stdDeviation="' + ((s.shadowBlur || 4) / 4) +
+          '" flood-color="' + escapeXml(s.shadowColor || '#000') + '"/></filter>';
+        filterAttr = ' filter="url(#' + fid + ')"';
+      }
+      var strokeAttr = s.outlineWidth ? ' stroke="' + escapeXml(s.outlineColor || '#000') + '" stroke-width="' + s.outlineWidth + '"' : '';
+      return (shapeDefs ? '<defs>' + shapeDefs + '</defs>' : '') +
+        '<g transform="translate(' + tx + ',' + ty + ') scale(' + scale + ')">' +
+        '<path d="' + shapeDef.d + '" ' + fillAttr + strokeAttr + filterAttr +
         (shapeDef.fillRule ? ' fill-rule="' + shapeDef.fillRule + '"' : '') + '/></g>';
     }
     var behindShapesEl = (tf.shapes || []).filter(function (s) { return s.wrapMode !== 'front'; }).map(renderShapeSvg).join('');
@@ -2184,7 +2223,7 @@
             activeShape.type = 'custom'; activeShape.customPoints = points;
           } else {
             var nextId = (Math.max.apply(null, tf.shapes.map(function (s) { return s.id; }).concat([0])) || 0) + 1;
-            tf.shapes.push({ id: nextId, type: 'custom', customPoints: points, x: 0.5, y: 0.5, size: 0.4, color: '#e0503f' });
+            tf.shapes.push({ id: nextId, type: 'custom', customPoints: points, x: 0.5, y: 0.5, size: 0.4, fillColor: '#e0503f' });
             state.activeShapeId = nextId;
           }
           render();
@@ -2244,7 +2283,7 @@
     function pickShapeType(id) {
       if (id === '__custom__') { startCustomShapeDraw(null); return; }
       var nextId = (Math.max.apply(null, tf.shapes.map(function (s) { return s.id; }).concat([0])) || 0) + 1;
-      tf.shapes.push({ id: nextId, type: id, x: 0.5, y: 0.5, size: 0.4, color: '#e0503f' });
+      tf.shapes.push({ id: nextId, type: id, x: 0.5, y: 0.5, size: 0.4, fillColor: '#e0503f' });
       state.activeShapeId = nextId;
       render();
     }
@@ -2265,7 +2304,7 @@
       var shapeEl = el('div', {
         class: 'ic-textframe-shapeobj' + (state.activeShapeId === s.id ? ' active' : ''),
         style: 'left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + pxSize + 'px;height:' + pxSize + 'px;' +
-          (shapeDef ? 'background-image:url(' + fgShapeSvgDataUri(shapeDef, s.color || '#e0503f') + ')' : '')
+          (shapeDef ? 'background-image:url(' + fgShapeSvgDataUri(shapeDef, s) + ')' : '')
       });
       shapeEl.addEventListener('click', function (ev) { ev.stopPropagation(); state.activeShapeId = s.id; render(); });
       var shapeSizeHandle = el('div', { class: 'ic-resize ic-textframe-shape-resize' });
@@ -2356,13 +2395,27 @@
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (objEl) { objEl.style.cssText += ';' + computeStyle1Css(active, preset.text); }
       }
+      // Fläche/Kontur/Effekte wirken auf die gerade ausgewählte FORM, falls
+      // eine gewählt ist (dieselbe Palette/Tabs wie bei Text) - sonst auf
+      // den aktiven Text.
+      var styleActiveShape = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
+      var styleTarget = styleActiveShape || active;
+      var isShapeTarget = !!styleActiveShape;
+      function applyShapeOrTextChange() {
+        if (isShapeTarget) { render(); } else { applyStyle1(); }
+      }
       function openStyle1Popup(anchorBtn, title, buildRows) {
         openDraggableModal(title, anchorBtn, function (content) { buildRows(content); });
       }
       function applyFillColor(color) {
+        noteRecentColor(color);
+        if (isShapeTarget) {
+          styleTarget.fillColor = color; styleTarget.fillGradient = null;
+          render();
+          return;
+        }
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (!objEl) { return; }
-        noteRecentColor(color);
         applyStyleToSelectionOrWhole(objEl, 'color:' + color + ';', function () {
           active.fillColor = active.color = color;
           active.fillGradient = null;
@@ -2373,23 +2426,24 @@
       opacitySliderRow.innerHTML = '';
       opacitySliderRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_opacity]));
       var opacitySlider = el('input', {
-        type: 'range', min: '0', max: '100', step: '5', value: String(Math.round((active.opacity != null ? active.opacity : 1) * 100)),
+        type: 'range', min: '0', max: '100', step: '5', value: String(Math.round((styleTarget.opacity != null ? styleTarget.opacity : 1) * 100)),
         class: 'ic-textframe-range'
       });
       opacitySlider.addEventListener('input', function () {
-        active.opacity = parseInt(opacitySlider.value, 10) / 100;
+        styleTarget.opacity = parseInt(opacitySlider.value, 10) / 100;
+        if (isShapeTarget) { render(); return; }
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.opacity = active.opacity; }
+        if (objEl) { objEl.style.opacity = styleTarget.opacity; }
       });
       opacitySliderRow.appendChild(opacitySlider);
 
       bigPaletteContainer.innerHTML = '';
       if (state.styleTab === 'outline') {
         var outlineRow = el('div', { class: 'ic-textframe-edit' });
-        var outlineColorInput = el('input', { type: 'color', value: active.outlineColor || '#000000' });
-        var outlineWidthInput = el('input', { type: 'range', min: '0', max: '6', step: '0.5', value: String(active.outlineWidth || 0) });
-        outlineColorInput.addEventListener('input', function () { active.outlineColor = outlineColorInput.value; applyStyle1(); });
-        outlineWidthInput.addEventListener('input', function () { active.outlineWidth = parseFloat(outlineWidthInput.value); applyStyle1(); });
+        var outlineColorInput = el('input', { type: 'color', value: styleTarget.outlineColor || '#000000' });
+        var outlineWidthInput = el('input', { type: 'range', min: '0', max: '6', step: '0.5', value: String(styleTarget.outlineWidth || 0) });
+        outlineColorInput.addEventListener('input', function () { styleTarget.outlineColor = outlineColorInput.value; applyShapeOrTextChange(); });
+        outlineWidthInput.addEventListener('input', function () { styleTarget.outlineWidth = parseFloat(outlineWidthInput.value); applyShapeOrTextChange(); });
         outlineRow.appendChild(outlineColorInput);
         outlineRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
         outlineRow.appendChild(outlineWidthInput);
@@ -2400,40 +2454,41 @@
           ['glowOn', 'glowColor', 'glowWidth', S.tf_glow, '#ffffff', 8]
         ].forEach(function (cfg) {
           var onKey = cfg[0], colorKey = cfg[1], widthKey = cfg[2], label = cfg[3], defColor = cfg[4], defWidth = cfg[5];
+          if (isShapeTarget && onKey === 'glowOn') { return; } // Glow ergibt bei Formen (SVG) aktuell nur Schatten Sinn
           var effRow = el('div', { class: 'ic-textframe-edit' });
           var effToggle = el('label', { class: 'ic-me-check' });
           var effCheck = el('input', { type: 'checkbox' });
-          effCheck.checked = !!active[onKey];
+          effCheck.checked = !!styleTarget[onKey];
           effToggle.appendChild(effCheck); effToggle.appendChild(document.createTextNode(label));
-          var effColorInput = el('input', { type: 'color', value: active[colorKey] || defColor });
-          var effWidthInput = el('input', { type: 'range', min: '0', max: '20', step: '1', value: String(active[widthKey] || defWidth) });
-          effCheck.addEventListener('change', function () { active[onKey] = effCheck.checked; applyStyle1(); });
-          effColorInput.addEventListener('input', function () { active[colorKey] = effColorInput.value; applyStyle1(); });
-          effWidthInput.addEventListener('input', function () { active[widthKey] = parseFloat(effWidthInput.value); applyStyle1(); });
+          var effColorInput = el('input', { type: 'color', value: styleTarget[colorKey] || defColor });
+          var effWidthInput = el('input', { type: 'range', min: '0', max: '20', step: '1', value: String(styleTarget[widthKey] || defWidth) });
+          effCheck.addEventListener('change', function () { styleTarget[onKey] = effCheck.checked; applyShapeOrTextChange(); });
+          effColorInput.addEventListener('input', function () { styleTarget[colorKey] = effColorInput.value; applyShapeOrTextChange(); });
+          effWidthInput.addEventListener('input', function () { styleTarget[widthKey] = parseFloat(effWidthInput.value); applyShapeOrTextChange(); });
           effRow.appendChild(effToggle); effRow.appendChild(effColorInput); effRow.appendChild(effWidthInput);
           bigPaletteContainer.appendChild(effRow);
         });
       } else {
         if (state.colorTab === 'wheel') {
-          buildColorWheel(bigPaletteContainer, active.fillGradient ? null : (active.fillColor || preset.text), applyFillColor);
+          buildColorWheel(bigPaletteContainer, styleTarget.fillGradient ? null : (styleTarget.fillColor || preset.text), applyFillColor);
         } else {
-          buildBigColorPalette(bigPaletteContainer, active.fillGradient ? null : (active.fillColor || preset.text), null, applyFillColor, null);
+          buildBigColorPalette(bigPaletteContainer, styleTarget.fillGradient ? null : (styleTarget.fillColor || preset.text), null, applyFillColor, null);
         }
         var gradToggle = el('label', { class: 'ic-me-check' });
         var gradCheck = el('input', { type: 'checkbox' });
-        gradCheck.checked = !!active.fillGradient;
+        gradCheck.checked = !!styleTarget.fillGradient;
         gradToggle.appendChild(gradCheck);
         gradToggle.appendChild(document.createTextNode(S.tf_use_gradient));
         bigPaletteContainer.appendChild(gradToggle);
         var gradRow = el('div', { class: 'ic-textframe-edit' });
-        var g1 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[0]) || '#e0503f' });
-        var g2 = el('input', { type: 'color', value: (active.fillGradient && active.fillGradient[1]) || '#4f8cff' });
-        function updateGrad() { active.fillGradient = [g1.value, g2.value]; applyStyle1(); }
+        var g1 = el('input', { type: 'color', value: (styleTarget.fillGradient && styleTarget.fillGradient[0]) || '#e0503f' });
+        var g2 = el('input', { type: 'color', value: (styleTarget.fillGradient && styleTarget.fillGradient[1]) || '#4f8cff' });
+        function updateGrad() { styleTarget.fillGradient = [g1.value, g2.value]; applyShapeOrTextChange(); }
         g1.addEventListener('input', updateGrad); g2.addEventListener('input', updateGrad);
         gradRow.appendChild(g1); gradRow.appendChild(g2);
         gradCheck.addEventListener('change', function () {
-          active.fillGradient = gradCheck.checked ? [g1.value, g2.value] : null;
-          applyStyle1(); refreshControls();
+          styleTarget.fillGradient = gradCheck.checked ? [g1.value, g2.value] : null;
+          if (isShapeTarget) { render(); } else { applyStyle1(); refreshControls(); }
         });
         bigPaletteContainer.appendChild(gradRow);
       }
