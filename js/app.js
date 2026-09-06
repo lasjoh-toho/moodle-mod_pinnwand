@@ -1726,33 +1726,71 @@
   // Glow, Verlaufsfüllung per background-clip:text für Chrome/Feuer) - läuft
   // dadurch sowohl live im Editor als auch im foreignObject-SVG-Export
   // (echtes CSS, keine SVG-Pfad-Extraktion einer Schriftart nötig).
+  // WordArt-Vorlagen-Bibliothek - übernommen aus dem vom Nutzer
+  // bereitgestellten Prototyp (wordart_editor_final.html). Jede Vorlage
+  // bündelt Fläche (Farbe/Verlauf), Kontur, vertikale Streckung sowie
+  // Extrusions-Farbe/-Tiefe für den 3D-Effekt.
   var WORDART_STYLES = [
-    { id: 'none', label: 'Normal', css: function (color) { return 'color:' + color + ';'; } },
-    { id: 'outline', label: 'Umriss', css: function (color) {
-      return 'color:transparent;-webkit-text-stroke:2px ' + color + ';text-stroke:2px ' + color + ';';
-    } },
-    { id: 'shadow3d', label: '3D', css: function (color) {
-      var layers = [];
-      for (var i = 1; i <= 10; i++) { layers.push(i + 'px ' + i + 'px 0 rgba(0,0,0,' + (0.55 - i * 0.02) + ')'); }
-      return 'color:' + color + ';text-shadow:' + layers.join(',') + ';';
-    } },
-    { id: 'glow', label: 'Glow', css: function (color) {
-      return 'color:' + color + ';filter:drop-shadow(0 0 8px ' + color + ') drop-shadow(0 0 16px ' + color + ');';
-    } },
-    { id: 'chrome', label: 'Chrome', css: function () {
-      return 'background:linear-gradient(180deg,#8baac1 0%,#ffffff 45%,#161d26 50%,#a47c50 78%,#f3e5c8 100%);' +
-        '-webkit-background-clip:text;background-clip:text;color:transparent;';
-    } },
-    { id: 'fire', label: 'Feuer', css: function () {
-      return 'background:linear-gradient(0deg,#ff0000 0%,#ff8a00 40%,#ffd500 100%);' +
-        '-webkit-background-clip:text;background-clip:text;color:transparent;' +
-        'filter:drop-shadow(0 0 6px rgba(255,120,0,.7));';
-    } }
+    { id: 'chrome-ultra', label: 'Chrom High-Gloss', fillGradient: 'linear-gradient(180deg,#2b4756 0%,#8baac1 20%,#ffffff 48%,#161d26 50%,#3d2c1d 53%,#a47c50 78%,#f3e5c8 100%)', stroke: '#1e293b', strokeWidth: 0.5, scaleY: 1.4, extrudeColor: '#0f172a', extrudeSteps: 14 },
+    { id: 'silver-metal', label: 'Silber Metallik', fillGradient: 'linear-gradient(180deg,#9ca3af 0%,#e5e7eb 25%,#ffffff 49%,#4b5563 50%,#d1d5db 75%,#6b7280 100%)', stroke: '#2b2b2b', strokeWidth: 0.6, scaleY: 1.3, extrudeColor: '#475569', extrudeSteps: 10 },
+    { id: 'gold-extrude', label: 'Gold Metallik', fillGradient: 'linear-gradient(180deg,#fef08a 0%,#facc15 30%,#ffffff 49%,#854d0e 50%,#eab308 80%,#713f12 100%)', stroke: '#3a2500', strokeWidth: 0.5, scaleY: 1.3, extrudeColor: '#422006', extrudeSteps: 12 },
+    { id: 'sunset-metal', label: 'Sunset Metallic', fillGradient: 'linear-gradient(180deg,#7dd3fc 0%,#ffffff 48%,#be123c 50%,#fb7185 75%,#fde047 100%)', stroke: '#000', strokeWidth: 0.5, scaleY: 1.5, extrudeColor: '#18181b', extrudeSteps: 14 },
+    { id: 'rainbow', label: 'Regenbogen', fillGradient: 'linear-gradient(90deg,#ff0000,#ff7f00,#ffff00,#00ff00,#0000ff,#8b00ff)', stroke: '#fff', strokeWidth: 0.5, scaleY: 1.5, extrudeColor: '#334155', extrudeSteps: 8 },
+    { id: 'classic-blue', label: 'Klassisch Blau', fillGradient: 'linear-gradient(180deg,#0099ff,#003399)', stroke: '#99ccff', strokeWidth: 0.8, scaleY: 1.3, extrudeColor: '#002245', extrudeSteps: 10 },
+    { id: 'synthwave', label: 'Synthwave', fillGradient: 'linear-gradient(180deg,#ff007f,#7928ca,#00f0ff)', stroke: '#ff007f', strokeWidth: 1.2, scaleY: 1.3, skewY: -5, extrudeColor: '#240046', extrudeSteps: 12 },
+    { id: 'offset90s', label: '90s Offset', fillColor: '#33ccff', stroke: '#000099', strokeWidth: 1.5, scaleY: 1.2, extrudeColor: '#000099', extrudeSteps: 6 },
+    { id: 'outline', label: 'Classic Outline', fillColor: '#fff', stroke: '#000', strokeWidth: 2, scaleY: 1.25, extrudeSteps: 0 },
+    { id: 'black-skew', label: 'Black Skew', fillColor: '#000', scaleY: 1.65, skewY: -10, rotate: -3, extrudeSteps: 0 },
+    { id: 'soft-shadow', label: 'Soft Shadow', fillColor: '#fff', stroke: '#000', strokeWidth: 1, scaleY: 1.65, extrudeColor: '#999', extrudeSteps: 4 },
+    { id: 'times-blue', label: 'Times Blue', fillColor: '#369', extrudeColor: '#c1c1c1', extrudeSteps: 3 },
+    { id: 'offset-blue', label: 'Offset Blue', fillColor: '#d8d8d8', stroke: '#33c', strokeWidth: 1, scaleY: 1.25, extrudeColor: '#99f', extrudeSteps: 6 },
+    { id: 'silver-gradient', label: 'Silver Gradient', fillGradient: 'linear-gradient(180deg,#adadad,#fff)', extrudeColor: '#717171', extrudeSteps: 5 },
+    { id: 'impact-red', label: 'Impact Red', fillColor: '#06c', stroke: '#9cf', strokeWidth: 0.5, scaleY: 1.25, extrudeColor: '#900', extrudeSteps: 6 },
+    { id: 'sunburst-yellow', label: 'Sunburst Yellow', fillGradient: 'radial-gradient(circle,#fff812,#ff9a32)', scaleY: 1.25, extrudeColor: '#cdcdcd', extrudeSteps: 6 },
+    { id: 'purple-skew', label: 'Purple Skew', fillGradient: 'linear-gradient(180deg,#69c,#c0c)', stroke: '#d2a2fe', strokeWidth: 0.5, scaleY: 1.65, rotate: -3, skewY: -3, extrudeColor: '#adadff', extrudeSteps: 6 },
+    { id: 'forest-times', label: 'Forest Times', fillColor: '#1a4b28', stroke: '#080', strokeWidth: 1.5, scaleY: 1.25, extrudeColor: '#d2e5dc', extrudeSteps: 8 },
+    { id: 'rainbow-spectrum', label: 'Rainbow Spectrum', fillGradient: 'linear-gradient(90deg,#a104ad,#0b2be0,#329941,#f7f658,#f16412,#e92153,#aa04a7)', stroke: '#eaeaea', strokeWidth: 0.5, scaleY: 1.65, extrudeColor: '#cdcdcd', extrudeSteps: 8 },
+    { id: 'cyan-gradient', label: 'Cyan Gradient', fillGradient: 'linear-gradient(180deg,#999cfc,#1b999c)', extrudeColor: '#cdcdcd', extrudeSteps: 4 },
+    { id: 'heavy-extrude', label: 'Heavy Extrude', fillColor: '#896640', scaleY: 1.65, extrudeColor: '#1b0d00', extrudeSteps: 12 },
+    { id: 'soft-red-extrude', label: 'Soft Red Extrude', fillGradient: 'linear-gradient(180deg,#fffecb,#ff9999)', scaleY: 1.3, extrudeColor: '#002245', extrudeSteps: 8 },
+    { id: 'flame-gradient', label: 'Flame Gradient', fillGradient: 'linear-gradient(180deg,#551700,#fecb00)', stroke: '#b2b2b2', strokeWidth: 1, scaleY: 1.65, extrudeColor: '#ab8d56', extrudeSteps: 8 },
+    { id: 'blue-shadow', label: 'Blue Shadow', fillColor: '#3cf', stroke: '#009', strokeWidth: 1.25, scaleY: 1.2, extrudeColor: '#009', extrudeSteps: 6 },
+    { id: 'pattern-yellow', label: 'Pattern Yellow', fillColor: '#ff0', stroke: '#000', strokeWidth: 1, scaleY: 1.25, extrudeColor: '#999', extrudeSteps: 4 },
+    { id: 'dark-green-extrude', label: 'Dark Green Extrude', fillColor: '#0f3a1a', scaleY: 1.75, rotate: -7, extrudeColor: '#000800', extrudeSteps: 14 },
+    { id: 'deep-3d-shadow', label: 'Deep 3D Shadow', fillColor: '#fff', scaleY: 1.25, skewY: 15, rotate: -3, extrudeColor: '#2c2d23', extrudeSteps: 18 },
+    { id: 'fire-extrude', label: 'Fire Extrude', fillGradient: 'linear-gradient(225deg,#fee601,#fe4201)', scaleY: 1.5, skewY: -8, rotate: -3, extrudeColor: '#813300', extrudeSteps: 12 }
   ];
+  // Baut CSS für eine WordArt-Vorlage bzw. individuell eingestellte
+  // Werte (t.rotate/skewY/scaleY/extrudeSteps/extrudeColor/wordartGlow*)
+  // - Extrusion (3D-Tiefe) über gestapelte text-shadow-Schichten
+  // (dieselbe Technik wie das Original-Prototyp, nur ohne echte
+  // zusätzliche DOM-Elemente - funktioniert live UND im SVG-Export
+  // identisch, da beide über HTML/CSS via foreignObject laufen).
   function wordartCssFor(t, fallbackColor) {
     if (!t.wordartStyle || t.wordartStyle === 'none') { return ''; }
     var style = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0];
-    return style ? style.css(t.color || fallbackColor) : '';
+    if (!style) { return ''; }
+    var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (style.extrudeSteps || 0);
+    var extrudeColor = t.extrudeColor || style.extrudeColor || '#000';
+    var scaleY = t.scaleY != null ? t.scaleY : (style.scaleY || 1);
+    var skewY = t.skewY != null ? t.skewY : (style.skewY || 0);
+    var rotate = t.rotate != null ? t.rotate : (style.rotate || 0);
+    var rotY = t.rotY || 0;
+    var radY = rotY * Math.PI / 180;
+    var scaleX = Math.cos(radY);
+    var skewFromRotY = Math.sin(radY) * 12; // Grad-Näherung der Y-Rotations-Scherung
+    var css = 'display:inline-block;transform:skewY(' + (skewY + skewFromRotY).toFixed(2) + 'deg) scaleX(' + scaleX.toFixed(3) + ') scaleY(' + scaleY + ') rotate(' + rotate + 'deg);';
+    if (style.fillGradient) {
+      css += 'background-image:' + style.fillGradient + ';-webkit-background-clip:text;background-clip:text;color:transparent;';
+    } else {
+      css += 'color:' + (style.fillColor || fallbackColor) + ';';
+    }
+    if (style.stroke) { css += '-webkit-text-stroke:' + (style.strokeWidth || 1) + 'px ' + style.stroke + ';paint-order:stroke fill;'; }
+    var shadows = [];
+    for (var i = extrudeSteps; i >= 1; i--) { shadows.push((i * 0.8) + 'px ' + (i * 0.8) + 'px 0 ' + extrudeColor); }
+    if (t.wordartGlow) { shadows.push('0 0 ' + t.wordartGlow + 'px ' + (t.wordartGlowColor || '#fff'), '0 0 ' + (t.wordartGlow / 2) + 'px ' + (t.wordartGlowColor || '#fff')); }
+    if (shadows.length) { css += 'text-shadow:' + shadows.join(',') + ';'; }
+    return css;
   }
 
   // Block "Farben und Formen": Fill (Vollfarbe oder Verlauf), Kontur
@@ -3023,7 +3061,7 @@
         formBox.appendChild(symbolRow);
       }
 
-      // WordArt-Stile (Form/Rand/Schatten/Kontur) - nur im WordArt-Modus.
+      // WordArt-Vorlagen (Fläche/Rand/Extrusion) - nur im WordArt-Modus.
       // Jeder Button zeigt seinen eigenen Namen bereits im jeweiligen Stil -
       // dient dadurch gleichzeitig als Live-Vorschau ohne separate Tabs.
       if (state.wordArtMode) {
@@ -3031,16 +3069,54 @@
         WORDART_STYLES.forEach(function (w) {
           var wb = el('button', {
             class: 'ic-wordart-preset-btn' + ((active.wordartStyle || 'none') === w.id ? ' active' : ''),
-            style: w.css(active.color || preset.text)
+            style: wordartCssFor({ wordartStyle: w.id }, preset.text)
           }, [w.label]);
           wb.addEventListener('click', function () {
             active.wordartStyle = w.id;
+            // Individuelle Regler zurücksetzen, damit die Vorlage sauber
+            // greift (Regler unten passen sie danach bei Bedarf an).
+            active.extrudeSteps = active.extrudeColor = active.scaleY = active.skewY = active.rotate = active.rotY = null;
             reapplyTextStyle();
             refreshControls();
           });
           wordartRow.appendChild(wb);
         });
         formBox.appendChild(wordartRow);
+
+        if (active.wordartStyle && active.wordartStyle !== 'none') {
+          var activeWStyle = WORDART_STYLES.filter(function (w) { return w.id === active.wordartStyle; })[0] || {};
+          formBox.appendChild(el('div', { class: 'ic-textframe-label' }, [S.wordart_3d_title]));
+          function wSlider(label, key, min, max, step, def) {
+            var row = el('div', { class: 'ic-textframe-edit' });
+            row.appendChild(el('span', { class: 'ic-textframe-label' }, [label]));
+            row.appendChild(numberStepper(active[key] != null ? active[key] : (activeWStyle[key] != null ? activeWStyle[key] : def), min, max, step, step < 1 ? 2 : 0, function (v) {
+              active[key] = v; reapplyTextStyle();
+            }));
+            formBox.appendChild(row);
+          }
+          wSlider(S.wordart_roty, 'rotY', -90, 90, 5, 0);
+          wSlider(S.wordart_extrude, 'extrudeSteps', 0, 20, 1, 0);
+          wSlider(S.wordart_rotate, 'rotate', -45, 45, 1, 0);
+          wSlider(S.wordart_skew, 'skewY', -30, 30, 1, 0);
+          wSlider(S.wordart_scaley, 'scaleY', 0.5, 2, 0.05, 1);
+          wSlider(S.wordart_glow, 'wordartGlow', 0, 30, 1, 0);
+          var extrudeColorRow = el('div', { class: 'ic-textframe-edit' });
+          var extrudeColorSwatch = el('button', { class: 'ic-effect-swatch', style: 'background:' + (active.extrudeColor || activeWStyle.extrudeColor || '#000') });
+          extrudeColorSwatch.addEventListener('click', function () {
+            state.effectsPickerKey = state.effectsPickerKey === 'extrudeColor' ? null : 'extrudeColor';
+            refreshControls();
+          });
+          extrudeColorRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.wordart_extrude_color]));
+          extrudeColorRow.appendChild(extrudeColorSwatch);
+          formBox.appendChild(extrudeColorRow);
+          if (state.effectsPickerKey === 'extrudeColor') {
+            var extrudeColorContainer = el('div', {});
+            formBox.appendChild(extrudeColorContainer);
+            function applyExtrudeColor(color) { active.extrudeColor = color; noteRecentColor(color); reapplyTextStyle(); }
+            if (state.colorTab === 'wheel') { buildColorWheel(extrudeColorContainer, active.extrudeColor || activeWStyle.extrudeColor, applyExtrudeColor); }
+            else { buildBigColorPalette(extrudeColorContainer, active.extrudeColor || activeWStyle.extrudeColor, null, applyExtrudeColor, null); }
+          }
+        }
       }
 
       // Die frühere separate Minipalette hier wurde entfernt - die Palette

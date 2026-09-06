@@ -2517,3 +2517,32 @@ Strings.
   interpoliert als Startwert).
 - [x] Wirkt konsistent überall: Live-Vorschau (Text/Formen/Kartenfläche),
   SVG-Export (Text/Formen/Kartenfläche).
+
+---
+
+## Phase 84 — WordArt: reichhaltige Vorlagen-Bibliothek + echte 3D/Extrusion-Regler ✅
+
+Achtzigster Feedback-Durchgang (Integration einer vom Nutzer
+bereitgestellten Prototyp-Datei `wordart_editor_final.html`). Betrifft:
+`js/app.js`, neue Strings.
+
+- [x] **WORDART_STYLES komplett ersetzt** durch die über 25 benannten
+  Vorlagen aus dem Prototyp (Chrom, Silber-/Gold-Metallik, Sunset-
+  Metallic, Regenbogen, Synthwave, diverse Extrusions-Stile) - jede
+  bündelt Fläche (Farbe/Verlauf), Kontur, vertikale Streckung sowie
+  Extrusions-Farbe/-Tiefe.
+- [x] **Extrusion (3D-Tiefe) über gestapelte `text-shadow`-Schichten**
+  gelöst statt echter zusätzlicher DOM-Elemente wie im Original -
+  funktioniert dadurch live UND im SVG-Export identisch (beide laufen
+  über HTML/CSS via foreignObject).
+- [x] **Y-Rotation** als Vektor-Matrix-Näherung (`scaleX=cos(rotY)` +
+  zusätzliche Scherung) übernommen - simuliert eine 3D-Drehung ohne
+  CSS-3D-Clipping-Probleme, genau wie im Original.
+- [x] Neue Regler nach Vorlagen-Auswahl: Y-Rotation, Extrusion-Tiefe/
+  -Farbe, Rotation, Schrägstellung, vertikale Streckung, Glow -
+  überschreiben die Vorlagen-Vorgabe individuell.
+
+**Noch offen/Rückfrage**: Bögen/Linien, denen die Schrift folgt, waren
+NICHT Teil der hochgeladenen Datei (meine eigene frühere Ergänzung) -
+noch nicht umgesetzt, wartet auf Rückmeldung ob gewünscht. Block 2
+"Schriften" (visuelle Kachel-Vorschau für Fonts/Kategorien) folgt noch.

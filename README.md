@@ -1139,6 +1139,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
   zwei: Marker ziehen ändert die Position, Doppelklick entfernt/fügt
   hinzu.
 
+### Achtundachtzigste Überarbeitung — WordArt: reichhaltige Vorlagen + echte 3D-Regler
+
+- WordArt-Stile durch über 25 benannte Vorlagen aus einem vom Nutzer
+  bereitgestellten Prototyp ersetzt (Chrom, Metallic, Regenbogen,
+  Synthwave, diverse Extrusions-Stile).
+- Extrusion (3D-Tiefe) über gestapelte text-shadow-Schichten - live und
+  im Export identisch.
+- Neue Regler: Y-Rotation, Extrusion-Tiefe/-Farbe, Rotation,
+  Schrägstellung, vertikale Streckung, Glow.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
