@@ -2652,3 +2652,29 @@ WordArt-Rahmen-Anpassung (zu viel Platz links, maximale Schriftgröße
 berechnen), Verlauf-Interface-Umbau (Balken über Tabs, immer sichtbare
 Checkbox davor, Tooltip statt Text), Schatten/Glow als Radiobuttons,
 Update-Synchronisation zwischen Pinnwand und Dateimanager.
+
+---
+
+## Phase 89 — Kartenfläche auf der Pinnwand sichtbar, Verlauf-Interface komplett neu 🔄
+
+Fünfundachtzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`, neue Strings.
+
+- [x] **Kartenfläche (tf.cardStyle) wird jetzt auch auf der Pinnwand
+  und im gespeicherten Bild dargestellt** - vorher wirkte das nur in
+  der Editor-Vorschau. Betrifft `buildTextFrameLiveDom()` und
+  `buildTextFrameSVG()`.
+- [x] **Verlauf-Interface komplett neu**: neue, immer sichtbare Zeile
+  (`gradientBarRow`) liegt jetzt ÜBER den Palette-Tabs statt bedingt
+  innerhalb der Palette. Checkbox aus der Transparenz-Zeile entfernt,
+  liegt jetzt direkt vor dem Balken. Ungecheckt zeigt der Balken die
+  aktuelle Vollfarbe (Klick öffnet die Palette darunter), gecheckt
+  wird er zum Verlaufsband mit Markern.
+- [x] Hinweistext unter dem Band durch Tooltip (title-Attribut auf dem
+  Band selbst) ersetzt - stört nicht mehr permanent.
+- [x] `user-select:none`/`touch-action:none` gegen hakeliges
+  Marker-Ziehen ergänzt (verhinderte vermutlich versehentliche
+  Textauswahl/Browser-Gesten während des Ziehens).
+
+**Noch offen**: Schatten/Glow als Radiobuttons (nur eins gleichzeitig
+aktiv) - noch nicht umgesetzt.

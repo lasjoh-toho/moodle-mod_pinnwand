@@ -266,6 +266,7 @@ $config = [
         'tf_shadow_distance' => get_string('tf_shadow_distance', 'pinnwand'),
         'tf_gradient_angle' => get_string('tf_gradient_angle', 'pinnwand'),
         'tf_gradient_hint' => get_string('tf_gradient_hint', 'pinnwand'),
+        'tf_gradient_pick_stop_hint' => get_string('tf_gradient_pick_stop_hint', 'pinnwand'),
         'wordart_3d_title' => get_string('wordart_3d_title', 'pinnwand'),
         'wordart_roty' => get_string('wordart_roty', 'pinnwand'),
         'wordart_extrude' => get_string('wordart_extrude', 'pinnwand'),

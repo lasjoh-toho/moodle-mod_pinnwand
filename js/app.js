@@ -1942,9 +1942,13 @@
       class: 'ic-tf-live', style: 'position:relative;width:100%;aspect-ratio:' + tf.w + '/' + tf.h + ';' +
         (preset.shadow ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') + (preset.bg ? '' : 'border:2px dashed rgba(255,255,255,.3);')
     });
+    var cardStyle = tf.cardStyle || {};
+    var cardBg = cardStyle.fillGradient
+      ? 'background-image:linear-gradient(' + ((cardStyle.fillGradientAngle != null ? cardStyle.fillGradientAngle : 135) + 90) + 'deg,' + gradientCssStops(cardStyle.fillGradient) + ');'
+      : (cardStyle.fillColor ? 'background:' + cardStyle.fillColor + ';' : (preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;'));
+    var cardBorder = cardStyle.outlineWidth ? 'box-shadow:inset 0 0 0 ' + cardStyle.outlineWidth + 'px ' + (cardStyle.outlineColor || '#000') + ';' : '';
     var inner = el('div', {
-      class: 'ic-tf-live-inner', style: 'position:relative;width:100%;height:100%;overflow:hidden;border-radius:16px;' +
-        (preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;')
+      class: 'ic-tf-live-inner', style: 'position:relative;width:100%;height:100%;overflow:hidden;border-radius:16px;' + cardBg + cardBorder
     });
     outer.appendChild(inner);
     (tf.shapes || []).forEach(function (s) {
@@ -1995,14 +1999,27 @@
 
   function buildTextFrameSVG(tf) {
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
+    var cardStyle = tf.cardStyle || {};
     var defs = '';
     var bgRect = '';
-    if (preset.bg) {
+    var hasCardBg = cardStyle.fillColor || cardStyle.fillGradient || preset.bg;
+    if (hasCardBg) {
       if (preset.shadow) {
         defs = '<defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">' +
           '<feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.35"/></filter></defs>';
       }
-      bgRect = '<rect x="0" y="0" width="' + tf.w + '" height="' + tf.h + '" rx="16" fill="' + preset.bg + '"' +
+      var cardFillAttr = 'fill="' + escapeXml(cardStyle.fillColor || preset.bg || '#fff') + '"';
+      if (cardStyle.fillGradient && cardStyle.fillGradient.length >= 2) {
+        var cardGid = 'cardgrad';
+        var cardGv = gradientSvgVector(cardStyle.fillGradientAngle);
+        var cardStopsXml = normalizeGradientStops(cardStyle.fillGradient).map(function (st) {
+          return '<stop offset="' + st.pos + '" stop-color="' + escapeXml(st.color) + '"/>';
+        }).join('');
+        defs += '<defs><linearGradient id="' + cardGid + '" x1="' + cardGv.x1 + '" y1="' + cardGv.y1 + '" x2="' + cardGv.x2 + '" y2="' + cardGv.y2 + '">' + cardStopsXml + '</linearGradient></defs>';
+        cardFillAttr = 'fill="url(#' + cardGid + ')"';
+      }
+      var cardStrokeAttr = cardStyle.outlineWidth ? ' stroke="' + escapeXml(cardStyle.outlineColor || '#000') + '" stroke-width="' + cardStyle.outlineWidth + '"' : '';
+      bgRect = '<rect x="0" y="0" width="' + tf.w + '" height="' + tf.h + '" rx="16" ' + cardFillAttr + cardStrokeAttr +
         (preset.shadow ? ' filter="url(#shadow)"' : '') + '/>';
     }
     // Formen (Block "Farben und Formen") - jetzt echte, mehrfache Objekte
@@ -2632,6 +2649,12 @@
     colorsCol.appendChild(combinedRow);
     var opacitySliderRow = el('div', { class: 'ic-textframe-edit' });
     colorsCol.appendChild(opacitySliderRow);
+    // Immer sichtbare Verlauf-Zeile (nur im Fläche-Tab) - liegt bewusst
+    // ÜBER den Palette-Tabs. Ungecheckt: Balken zeigt die aktuelle
+    // Vollfarbe. Gecheckt: derselbe Balken wird zum Verlaufsband mit
+    // Markern.
+    var gradientBarRow = el('div', { class: 'ic-gradient-toggle-row' + (state.styleTab !== 'fill' ? ' ic-hidden' : '') });
+    colorsCol.appendChild(gradientBarRow);
     var colorTabsRow = el('div', { class: 'ic-cf-tabs' + (state.styleTab !== 'fill' ? ' ic-hidden' : '') });
     var tabRaster = el('button', { class: 'ic-cf-tab' + (state.colorTab !== 'wheel' ? ' active' : '') }, [S.tf_tab_grid]);
     var tabWheel = el('button', { class: 'ic-cf-tab' + (state.colorTab === 'wheel' ? ' active' : '') }, [S.tf_tab_wheel]);
@@ -2822,27 +2845,27 @@
           }
         }
       } else {
-        var gradToggleRow2 = el('div', { class: 'ic-me-check-row' });
-        var gradToggle = el('label', { class: 'ic-me-check' });
+        gradientBarRow.innerHTML = '';
         var gradCheck = el('input', { type: 'checkbox' });
         gradCheck.checked = !!styleTarget.fillGradient;
-        gradToggle.appendChild(gradCheck);
-        if (!gradCheck.checked) { gradToggle.appendChild(document.createTextNode(S.tf_use_gradient)); }
-        gradToggleRow2.appendChild(gradToggle);
         gradCheck.addEventListener('change', function () {
           styleTarget.fillGradient = gradCheck.checked ? [styleTarget.fillColor || '#e0503f', '#4f8cff'] : null;
           styleTarget.fillGradientAngle = styleTarget.fillGradientAngle || 135;
           if (isShapeTarget) { render(); } else { applyStyle1(); refreshControls(); }
         });
-        opacitySliderRow.appendChild(gradToggleRow2);
+        gradientBarRow.appendChild(gradCheck);
 
         if (styleTarget.fillGradient) {
           // Verlauf-Band mit beliebig vielen ziehbaren Markern (Position
           // UND Farbe je Stufe einstellbar) + drehbarem Richtungspfeil.
+          // Hinweis zur Bedienung ist ein Tooltip (title), kein
+          // permanenter Text mehr.
           var stops = normalizeGradientStops(styleTarget.fillGradient);
           var angle = styleTarget.fillGradientAngle != null ? styleTarget.fillGradientAngle : 135;
-          var gradRow2 = el('div', { class: 'ic-gradient-row' });
-          var band = el('div', { class: 'ic-gradient-band', style: 'background:linear-gradient(90deg,' + gradientCssStops(stops) + ')' });
+          var band = el('div', {
+            class: 'ic-gradient-band', title: S.tf_gradient_hint,
+            style: 'background:linear-gradient(90deg,' + gradientCssStops(stops) + ')'
+          });
           function commitStops(newStops) {
             newStops.sort(function (a, b) { return a.pos - b.pos; });
             styleTarget.fillGradient = newStops;
@@ -2853,7 +2876,7 @@
               style: 'left:' + (stop.pos * 100) + '%;background:' + stop.color
             });
             var markerDragging = false, markerMoved = false;
-            function markerDown(ev) { markerDragging = true; markerMoved = false; ev.stopPropagation(); }
+            function markerDown(ev) { markerDragging = true; markerMoved = false; ev.stopPropagation(); ev.preventDefault(); }
             function markerMove(ev) {
               if (!markerDragging) { return; }
               markerMoved = true;
@@ -2862,6 +2885,7 @@
               stop.pos = Math.max(0, Math.min(1, (p.clientX - rect.left) / rect.width));
               marker.style.left = (stop.pos * 100) + '%';
               band.style.background = 'linear-gradient(90deg,' + gradientCssStops(stops) + ')';
+              ev.preventDefault();
             }
             function markerUp() {
               if (!markerDragging) { return; }
@@ -2869,9 +2893,9 @@
               if (markerMoved) { commitStops(stops); applyShapeOrTextChange(); }
             }
             marker.addEventListener('mousedown', markerDown);
-            marker.addEventListener('touchstart', markerDown, { passive: true });
+            marker.addEventListener('touchstart', markerDown, { passive: false });
             window.addEventListener('mousemove', markerMove);
-            window.addEventListener('touchmove', markerMove, { passive: true });
+            window.addEventListener('touchmove', markerMove, { passive: false });
             window.addEventListener('mouseup', markerUp);
             window.addEventListener('touchend', markerUp);
             marker.addEventListener('click', function (ev) {
@@ -2900,7 +2924,7 @@
             commitStops(newStops);
             applyShapeOrTextChange();
           });
-          gradRow2.appendChild(band);
+          gradientBarRow.appendChild(band);
           var angleKnob = el('div', { class: 'ic-gradient-angle', style: '--angle:' + angle + 'deg', title: S.tf_gradient_angle });
           var angleDragging = false;
           function angleFromEvent(ev) {
@@ -2915,16 +2939,15 @@
             styleTarget.fillGradientAngle = Math.round(angleFromEvent(ev));
             angleKnob.style.setProperty('--angle', styleTarget.fillGradientAngle + 'deg');
             band.style.background = 'linear-gradient(90deg,' + gradientCssStops(stops) + ')';
+            ev.preventDefault();
           }
-          angleKnob.addEventListener('mousedown', function () { angleDragging = true; });
-          angleKnob.addEventListener('touchstart', function () { angleDragging = true; }, { passive: true });
+          angleKnob.addEventListener('mousedown', function (ev) { angleDragging = true; ev.preventDefault(); });
+          angleKnob.addEventListener('touchstart', function (ev) { angleDragging = true; }, { passive: true });
           window.addEventListener('mousemove', onAngleMove);
-          window.addEventListener('touchmove', onAngleMove, { passive: true });
+          window.addEventListener('touchmove', onAngleMove, { passive: false });
           window.addEventListener('mouseup', function () { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } });
           window.addEventListener('touchend', function () { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } });
-          gradRow2.appendChild(angleKnob);
-          bigPaletteContainer.appendChild(gradRow2);
-          bigPaletteContainer.appendChild(el('p', { class: 'ic-hint' }, [S.tf_gradient_hint]));
+          gradientBarRow.appendChild(angleKnob);
 
           if (state.gradientStopIndex != null && stops[state.gradientStopIndex]) {
             var stopIdxSel = state.gradientStopIndex;
@@ -2940,8 +2963,14 @@
             } else {
               buildBigColorPalette(bigPaletteContainer, stops[stopIdxSel].color, null, applyGradStopColor, null);
             }
+          } else {
+            bigPaletteContainer.appendChild(el('p', { class: 'ic-hint' }, [S.tf_gradient_pick_stop_hint]));
           }
         } else {
+          // Ungecheckt: Balken zeigt die aktuelle Vollfarbe, Klick öffnet
+          // dieselbe Palette darunter wie gewohnt.
+          var soloBar = el('div', { class: 'ic-gradient-band ic-gradient-band-solid', style: 'background:' + (styleTarget.fillColor || preset.text) });
+          gradientBarRow.appendChild(soloBar);
           if (state.colorTab === 'wheel') {
             buildColorWheel(bigPaletteContainer, styleTarget.fillColor || preset.text, applyFillColor);
           } else {

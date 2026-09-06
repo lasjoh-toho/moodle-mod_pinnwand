@@ -128,6 +128,7 @@ $string['tf_shadow_angle'] = 'Richtung';
 $string['tf_shadow_distance'] = 'Entfernung';
 $string['tf_gradient_angle'] = 'Verlauf-Richtung (ziehen)';
 $string['tf_gradient_hint'] = 'Marker ziehen = Position ändern. Doppelklick auf Marker = entfernen. Doppelklick auf leere Stelle = neue Stufe hinzufügen.';
+$string['tf_gradient_pick_stop_hint'] = 'Klicke einen Marker an, um seine Farbe zu ändern.';
 $string['wordart_3d_title'] = '3D & Tiefe';
 $string['wordart_roty'] = 'Y-Rotation';
 $string['wordart_extrude'] = 'Extrusion-Tiefe';

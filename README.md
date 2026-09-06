@@ -1180,6 +1180,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
   eines Buttons.
 - Rahmen um Textobjekte zeigt sich nur noch bei tatsächlichem Fokus.
 
+### Dreiundneunzigste Überarbeitung — Kartenfläche auf der Pinnwand, Verlauf-Interface neu
+
+- Kartenfläche (Farbe/Verlauf) wird jetzt auch auf der Pinnwand und im
+  gespeicherten Bild dargestellt, nicht mehr nur in der Editor-Vorschau.
+- Verlauf-Interface neu: immer sichtbare Zeile über den Palette-Tabs,
+  Balken zeigt Vollfarbe oder Verlauf je nach Checkbox-Status,
+  Hinweistext jetzt als Tooltip.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
