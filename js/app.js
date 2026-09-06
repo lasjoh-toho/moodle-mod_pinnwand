@@ -1865,7 +1865,7 @@
       var shapeEl = el('div', {
         class: 'ic-tf-live-shape',
         style: 'position:absolute;left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + (s.size * 100) + '%;' +
-          'padding-bottom:' + (s.size * 100) + '%;height:0;transform:translate(-50%,-50%);' +
+          'padding-bottom:' + (s.size * 100) + '%;height:0;transform:translate(-50%,-50%) rotate(' + (s.rotation || 0) + 'deg);' +
           'background-image:url(' + fgShapeSvgDataUri(shapeDef, s) + ');background-repeat:no-repeat;' +
           'background-position:center;background-size:contain;' + (s.wrapMode === 'front' ? 'z-index:2;' : 'z-index:0;')
       });
@@ -1937,7 +1937,7 @@
       }
       var strokeAttr = s.outlineWidth ? ' stroke="' + escapeXml(s.outlineColor || '#000') + '" stroke-width="' + s.outlineWidth + '"' : '';
       return (shapeDefs ? '<defs>' + shapeDefs + '</defs>' : '') +
-        '<g transform="translate(' + tx + ',' + ty + ') scale(' + scale + ')">' +
+        '<g transform="translate(' + tx + ',' + ty + ') scale(' + scale + ') rotate(' + (s.rotation || 0) + ',50,50)">' +
         '<path d="' + shapeDef.d + '" ' + fillAttr + strokeAttr + filterAttr +
         (shapeDef.fillRule ? ' fill-rule="' + shapeDef.fillRule + '"' : '') + '/></g>';
     }
@@ -2399,12 +2399,14 @@
       var shapeEl = el('div', {
         class: 'ic-textframe-shapeobj' + (state.activeShapeId === s.id ? ' active' : ''),
         style: 'left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + pxSize + 'px;height:' + pxSize + 'px;' +
+          'transform:translate(-50%,-50%) rotate(' + (s.rotation || 0) + 'deg);' +
           (shapeDef ? 'background-image:url(' + fgShapeSvgDataUri(shapeDef, s) + ')' : '')
       });
-      shapeEl.addEventListener('click', function (ev) { ev.stopPropagation(); state.activeShapeId = s.id; render(); });
       var shapeSizeHandle = el('div', { class: 'ic-resize ic-textframe-shape-resize' });
+      var shapeRotateHandle = el('div', { class: 'ic-textframe-shape-rotate' });
       shapeEl.appendChild(shapeSizeHandle);
-      makeShapeMovable(shapeEl, frame, s, shapeSizeHandle);
+      shapeEl.appendChild(shapeRotateHandle);
+      makeShapeMovable(shapeEl, frame, s, shapeSizeHandle, shapeRotateHandle);
       if (s.wrapMode === 'wrap') {
         // Textumfluss: Form "schwimmt" zur nächstgelegenen Seite, Text
         // soll ihr per shape-outside ausweichen. Wirkt nur bei Text im
@@ -2425,24 +2427,27 @@
     // (Raster/Rad).
     var colorsCol = el('div', { class: 'ic-cf-colors-col' });
     columnsWrap.appendChild(colorsCol);
-    var targetModeRow = el('div', { class: 'ic-textframe-formatgrid' });
+    var combinedRow = el('div', { class: 'ic-cf-combined-row' });
     state.styleTargetMode = state.styleTargetMode || 'text';
-    var textTargetBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + (state.styleTargetMode === 'text' ? ' active' : ''), title: S.tf_target_text }, [icon('texttargeticon')]);
-    var shapeTargetBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + (state.styleTargetMode === 'shape' ? ' active' : ''), title: S.tf_target_shape }, [icon('frameicon')]);
+    var targetGroup = el('div', { class: 'ic-btn-group' });
+    var textTargetBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (state.styleTargetMode === 'text' ? ' active' : ''), title: S.tf_target_text }, [icon('texttargeticon')]);
+    var shapeTargetBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (state.styleTargetMode === 'shape' ? ' active' : ''), title: S.tf_target_shape }, [icon('frameicon')]);
     textTargetBtn.addEventListener('click', function () { state.styleTargetMode = 'text'; render(); });
     shapeTargetBtn.addEventListener('click', function () { state.styleTargetMode = 'shape'; render(); });
-    targetModeRow.appendChild(textTargetBtn); targetModeRow.appendChild(shapeTargetBtn);
-    colorsCol.appendChild(targetModeRow);
-    var styleRow = el('div', { class: 'ic-textframe-formatgrid' });
+    targetGroup.appendChild(textTargetBtn); targetGroup.appendChild(shapeTargetBtn);
+    combinedRow.appendChild(targetGroup);
+
     state.styleTab = state.styleTab || 'fill';
-    var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + (state.styleTab === 'fill' ? ' active' : ''), title: S.tf_fill }, [icon('fillicon')]);
-    var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + (state.styleTab === 'outline' ? ' active' : ''), title: S.tf_outline }, [icon('outlineicon')]);
-    var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + (state.styleTab === 'effects' ? ' active' : ''), title: S.tf_effects }, [icon('effecticon')]);
+    var styleGroup = el('div', { class: 'ic-btn-group' });
+    var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (state.styleTab === 'fill' ? ' active' : ''), title: S.tf_fill }, [icon('fillicon')]);
+    var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (state.styleTab === 'outline' ? ' active' : ''), title: S.tf_outline }, [icon('outlineicon')]);
+    var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (state.styleTab === 'effects' ? ' active' : ''), title: S.tf_effects }, [icon('effecticon')]);
     fillBtn.addEventListener('click', function () { state.styleTab = 'fill'; render(); });
     outlineBtn.addEventListener('click', function () { state.styleTab = 'outline'; render(); });
     effectsBtn.addEventListener('click', function () { state.styleTab = 'effects'; render(); });
-    styleRow.appendChild(fillBtn); styleRow.appendChild(outlineBtn); styleRow.appendChild(effectsBtn);
-    colorsCol.appendChild(styleRow);
+    styleGroup.appendChild(fillBtn); styleGroup.appendChild(outlineBtn); styleGroup.appendChild(effectsBtn);
+    combinedRow.appendChild(styleGroup);
+    colorsCol.appendChild(combinedRow);
     var opacitySliderRow = el('div', { class: 'ic-textframe-edit' });
     colorsCol.appendChild(opacitySliderRow);
     var colorTabsRow = el('div', { class: 'ic-cf-tabs' + (state.styleTab !== 'fill' ? ' ic-hidden' : '') });
@@ -2546,15 +2551,24 @@
       opacitySliderRow.appendChild(opacitySlider);
 
       if (state.styleTab === 'outline') {
+        var outlineSwatch = el('button', { class: 'ic-effect-swatch', style: 'background:' + (styleTarget.outlineColor || '#000000') });
+        outlineSwatch.addEventListener('click', function () {
+          state.effectsPickerKey = state.effectsPickerKey === 'outlineColor' ? null : 'outlineColor';
+          refreshControls();
+        });
         var outlineRow = el('div', { class: 'ic-textframe-edit' });
-        var outlineColorInput = el('input', { type: 'color', value: styleTarget.outlineColor || '#000000' });
-        var outlineWidthInput = el('input', { type: 'range', min: '0', max: '6', step: '0.5', value: String(styleTarget.outlineWidth || 0) });
-        outlineColorInput.addEventListener('input', function () { styleTarget.outlineColor = outlineColorInput.value; applyShapeOrTextChange(); });
-        outlineWidthInput.addEventListener('input', function () { styleTarget.outlineWidth = parseFloat(outlineWidthInput.value); applyShapeOrTextChange(); });
-        outlineRow.appendChild(outlineColorInput);
+        outlineRow.appendChild(outlineSwatch);
         outlineRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
-        outlineRow.appendChild(outlineWidthInput);
+        outlineRow.appendChild(numberStepper(styleTarget.outlineWidth || 0, 0, 6, 0.5, 1, function (v) { styleTarget.outlineWidth = v; applyShapeOrTextChange(); }));
         bigPaletteContainer.appendChild(outlineRow);
+        if (state.effectsPickerKey === 'outlineColor') {
+          function applyOutlineColor(color) { styleTarget.outlineColor = color; noteRecentColor(color); applyShapeOrTextChange(); }
+          if (state.colorTab === 'wheel') {
+            buildColorWheel(bigPaletteContainer, styleTarget.outlineColor || '#000000', applyOutlineColor);
+          } else {
+            buildBigColorPalette(bigPaletteContainer, styleTarget.outlineColor || '#000000', null, applyOutlineColor, null);
+          }
+        }
       } else if (state.styleTab === 'effects') {
         function buildEffectColorSwatch(colorKey, defColor) {
           var swatch = el('button', {
@@ -2984,16 +2998,24 @@
   // Textobjekte automatisch proportional mitverschiebt. Erst ab einer
   // Mindestbewegung wird tatsächlich verschoben, damit ein normaler Klick
   // weiterhin den Textcursor im contenteditable setzt.
-  // Formen frei verschiebbar und über den Eck-Griff skalierbar (auch über
-  // andere Formen hinweg) - analog zu Textobjekten, aber mit normalisierter
-  // Größe (Anteil an min(Breite,Höhe) des Zettels) statt Schriftgröße.
-  function makeShapeMovable(el2, frame, s, sizeHandle) {
+  // Formen frei verschiebbar, über den Eck-Griff skalierbar UND über
+  // einen zweiten Griff oberhalb drehbar (auch über andere Formen
+  // hinweg) - analog zu Textobjekten, aber mit normalisierter Größe
+  // (Anteil an min(Breite,Höhe) des Zettels) statt Schriftgröße.
+  // WICHTIG: kein separater "click"-Handler zum Auswählen mehr (der
+  // kollidierte mit dem Ziehen, da der Browser nach mousedown+mouseup
+  // auf demselben Element zusätzlich ein click-Event feuert und dieses
+  // bei jeder Ziehbewegung ein komplettes Neu-Rendern auslöste) - die
+  // Auswahl entscheidet sich jetzt selbst anhand der Bewegungsdistanz
+  // im selben Handler.
+  function makeShapeMovable(el2, frame, s, sizeHandle, rotateHandle) {
     var dragging = false, startX = 0, startY = 0, totalDelta = 0;
     function point(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
     function down(ev) {
-      if (ev.target === sizeHandle) { return; }
+      if (ev.target === sizeHandle || ev.target === rotateHandle) { return; }
       dragging = true; totalDelta = 0;
       var p = point(ev); startX = p.x; startY = p.y;
+      ev.stopPropagation();
     }
     function move(ev) {
       if (!dragging) { return; }
@@ -3006,7 +3028,15 @@
       el2.style.left = (s.x * 100) + '%'; el2.style.top = (s.y * 100) + '%';
       ev.preventDefault();
     }
-    function up() { dragging = false; }
+    function up(ev) {
+      if (!dragging) { return; }
+      dragging = false;
+      if (totalDelta < 6) {
+        // Kaum/keine Bewegung: als Auswahl-Klick werten statt als Zug.
+        state.activeShapeId = s.id;
+      }
+      render();
+    }
     el2.addEventListener('mousedown', down);
     el2.addEventListener('touchstart', down, { passive: true });
     window.addEventListener('mousemove', move);
@@ -3027,13 +3057,34 @@
       el2.style.width = pxSize + 'px'; el2.style.height = pxSize + 'px';
       ev.preventDefault();
     }
-    function sUp() { sDragging = false; }
+    function sUp() { if (sDragging) { sDragging = false; render(); } }
     sizeHandle.addEventListener('mousedown', sDown);
     sizeHandle.addEventListener('touchstart', sDown, { passive: false });
     window.addEventListener('mousemove', sMove);
     window.addEventListener('touchmove', sMove, { passive: false });
     window.addEventListener('mouseup', sUp);
     window.addEventListener('touchend', sUp);
+
+    // Rotations-Griff: Ziehen dreht die Form um ihren Mittelpunkt.
+    var rDragging = false;
+    function rMove(ev) {
+      if (!rDragging) { return; }
+      var rect = el2.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+      var p = point(ev);
+      var deg = Math.atan2(p.y - cy, p.x - cx) * 180 / Math.PI + 90;
+      s.rotation = Math.round((deg + 360) % 360);
+      el2.style.transform = 'translate(-50%,-50%) rotate(' + s.rotation + 'deg)';
+      ev.preventDefault();
+    }
+    function rDown(ev) { rDragging = true; ev.stopPropagation(); ev.preventDefault(); }
+    function rUp() { if (rDragging) { rDragging = false; render(); } }
+    rotateHandle.addEventListener('mousedown', rDown);
+    rotateHandle.addEventListener('touchstart', rDown, { passive: false });
+    window.addEventListener('mousemove', rMove);
+    window.addEventListener('touchmove', rMove, { passive: false });
+    window.addEventListener('mouseup', rUp);
+    window.addEventListener('touchend', rUp);
   }
 
   function makeTextObjectMovable(el2, frame, t, sizeHandle) {

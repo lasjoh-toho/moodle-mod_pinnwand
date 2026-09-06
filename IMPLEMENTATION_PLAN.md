@@ -2446,3 +2446,32 @@ Durchgang (mehrere kleine Runden zusammengefasst). Betrifft: `js/app.js`,
 - [x] **Verlauf-Winkel jetzt auch bei Formen** (vorher nur Text) - neue
   gemeinsame Funktion `gradientSvgVector()` rechnet den Winkel in
   SVG-Koordinaten um, live und im Export.
+
+---
+
+## Phase 81 — Kern-Bugfix: Formen jetzt wirklich frei beweglich, skalierbar UND rotierbar ✅
+
+Siebenundsiebzigster Feedback-Durchgang (dringender Bugreport +
+weitere Korrekturen). Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Kern-Bugfix gefunden**: ein separater "click"-Handler zum
+  Auswählen kollidierte mit dem Ziehen (der Browser feuert nach
+  mousedown+mouseup auf demselben Element zusätzlich ein click-Event) -
+  das löste bei jeder Ziehbewegung ein komplettes Neu-Rendern aus.
+  `makeShapeMovable()` komplett neu gebaut: kein separater Klick-Handler
+  mehr, die Auswahl entscheidet sich jetzt selbst über die
+  Bewegungsdistanz im selben Handler wie das Ziehen.
+- [x] **Rotation ergänzt** - neuer Rotations-Griff oberhalb der Form,
+  live, im Export und in der Pinnwand-Darstellung.
+- [x] Kopfzeile (Undo/Redo/Speichern/Abbrechen) weiter nach unten
+  verschoben, damit sie die App-eigene Menüleiste nicht überlappt.
+- [x] T/Rechteck und Fläche/Kontur/Effekt jetzt in einer gemeinsamen
+  Zeile als zwei verbundene Buttongruppen (ohne Abstand, nur außen
+  abgerundet).
+- [x] Kontur-Farbe nutzt jetzt ebenfalls die große Palette.
+
+**Noch offen** (zu viel für diesen Durchgang, siehe Antworttext): den
+Zettel/die Kartenfläche selbst als Ziel auswählbar machen, mehrere
+Verlauf-Stufen statt nur zwei, Hoch-/Tiefstellen + Textmarker in der
+Zeichen-Zeile, Schrift/Schriftdicke/Laufweite mit Labels in einer
+gemeinsamen Zeile.

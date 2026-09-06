@@ -586,6 +586,19 @@
   opacity: 0; transition: opacity .15s;
 }
 .ic-textframe-shapeobj:hover .ic-textframe-shape-resize, .ic-textframe-shapeobj.active .ic-textframe-shape-resize { opacity: 1; }
+.ic-textframe-shape-rotate {
+  position: absolute; left: 50%; top: -22px; width: 14px; height: 14px; transform: translateX(-50%);
+  background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: grab;
+  opacity: 0; transition: opacity .15s;
+}
+.ic-textframe-shapeobj:hover .ic-textframe-shape-rotate, .ic-textframe-shapeobj.active .ic-textframe-shape-rotate { opacity: 1; }
+.ic-cf-combined-row { display: flex; gap: 10px; margin: 8px 0; }
+.ic-btn-group { display: flex; flex: 1 1 0; }
+.ic-btn-group .ic-btn {
+  flex: 1 1 0; border-radius: 0; margin: 0; border-right: 1px solid rgba(0,0,0,.25);
+}
+.ic-btn-group .ic-btn:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+.ic-btn-group .ic-btn:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; border-right: none; }
 .ic-draggable-modal {
   position: fixed; z-index: 500; background: var(--ic-panel); border-radius: 10px;
   box-shadow: 0 8px 28px rgba(0,0,0,.55); width: min(320px, 90vw); max-height: 70vh;
@@ -742,7 +755,7 @@
 .ic-colorwheel-canvas { display: block; margin: 4px auto; cursor: pointer; width: 100%; max-width: 260px; height: auto; }
 .ic-textframe-range { flex: 1 1 auto; }
 .ic-tf-header {
-  position: absolute; top: 8px; left: 8px; right: 8px; z-index: 50;
+  position: absolute; top: 60px; left: 8px; right: 8px; z-index: 50;
   display: flex; justify-content: space-between; pointer-events: none;
 }
 .ic-tf-header-group { display: flex; gap: 6px; pointer-events: auto; }

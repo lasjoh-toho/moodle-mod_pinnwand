@@ -1116,6 +1116,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Verlauf komplett neu: Checkbox unter Transparenz, Band mit ziehbaren
   Markern und drehbarem Richtungspfeil - wirkt jetzt auch bei Formen.
 
+### Fünfundachtzigste Überarbeitung — Kern-Bugfix: Formen wirklich beweglich
+
+- Formen ließen sich bisher nicht zuverlässig ziehen (Kollision
+  zwischen Klick- und Zieh-Handler) - jetzt behoben, dazu Rotation neu
+  ergänzt.
+- Kopfzeile unter die Menüleiste verschoben.
+- T/Rechteck und Fläche/Kontur/Effekt als verbundene Buttongruppen in
+  einer Zeile.
+- Kontur-Farbe nutzt jetzt ebenfalls die große Palette.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
