@@ -2570,3 +2570,29 @@ Einundachtzigster Feedback-Durchgang. Betrifft: `js/app.js`,
 **Bewusste Einschränkung**: Bogen-Text unterstützt nur einfachen Text,
 keine Fett/Kursiv-Formatierung innerhalb (bei Text-auf-Pfad auch in
 echten Grafikprogrammen üblich).
+
+---
+
+## Phase 86 — Kartenauswahl-Bugfix, direkter Senden-Button im Editor 🔄
+
+Zweiundachtzigster Feedback-Durchgang (dringende Problemliste).
+Betrifft: `js/app.js`, neue Strings.
+
+- [x] **Kartenauswahl-Bugfix gefunden**: das primäre Textobjekt füllt
+  den ganzen Zettel aus und fing dadurch JEDEN Klick ab, bevor er den
+  Hintergrund erreichen konnte - der Klick-Handler zur Kartenauswahl
+  hat deshalb nie ausgelöst. Fix: fragiler Klick-Handler entfernt,
+  stattdessen ein eigener, immer erreichbarer Button in der Kopfzeile
+  (neben Rückgängig/Wiederherstellen).
+- [x] **Neuer Direkt-Senden-Button** im Editor (nur sichtbar, wenn
+  Senden erlaubt ist): speichert UND schickt das Objekt sofort in den
+  Post-Stream der Masterpinnwand (hiddenfromboard=0) statt erst über
+  "Meine Bilder" gesendet werden zu müssen.
+
+**Noch offen/Rückfrage** (siehe Antworttext): "Neue Formen entstehen
+immer noch als Objekte auf dem Zettel" - unklar was genau gemeint ist,
+da Formen als Objekte ja gerade explizit so gewünscht waren
+(Phase 74). "Sende-Button funktioniert nicht" - konnte im Code keinen
+weiteren Bug finden (Kern-Bugfix aus Phase 70 ist weiterhin intakt),
+der neue Direkt-Senden-Button sollte den beschriebenen Anwendungsfall
+aber ohnehin direkt lösen.

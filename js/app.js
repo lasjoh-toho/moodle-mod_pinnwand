@@ -2145,7 +2145,7 @@
   // Ziehen/Größe/Rotation/Annotieren/Faden ohne Sonderbehandlung
   // funktionieren; `wordfielddata` (JSON) wird zusätzlich mitgespeichert,
   // damit "Bearbeiten" später wieder den Wortfeld-Editor öffnen kann.
-  function saveTextFrame(tf, saveBtn) {
+  function saveTextFrame(tf, saveBtn, sendDirect) {
     saveBtn.disabled = true;
     var svg = buildTextFrameSVG(tf);
     var label = tf.texts.map(function (t) { return t.text; }).filter(Boolean).join(' ');
@@ -2166,11 +2166,20 @@
 
       promise.then(function (res) {
         var maxreached = !!res.maxreached;
-        refreshPhotos().then(function () {
-          resetCaptureState();
-          state.step = isEditingExisting ? 'arrange' : (maxreached ? 'arrange' : 'home');
-          render();
-        });
+        var photoid = isEditingExisting ? state.editingPhotoId : res.photoid;
+        var afterSave = function () {
+          refreshPhotos().then(function () {
+            resetCaptureState();
+            state.step = isEditingExisting ? 'arrange' : (maxreached ? 'arrange' : 'home');
+            render();
+          });
+        };
+        if (sendDirect && photoid) {
+          callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: photoid, hidden: false })
+            .then(afterSave).catch(afterSave);
+        } else {
+          afterSave();
+        }
       }).catch(function (e) {
         alert(S.error_save + ' (' + e.message + ')');
         saveBtn.disabled = false;
@@ -3237,12 +3246,6 @@
     // Kein separater "Text hinzufügen"-Button mehr - ein Doppelklick auf
     // eine LEERE Stelle im Editorfeld (nicht auf ein bestehendes
     // Textobjekt) legt WYSIWYG ein neues Textobjekt genau dort an.
-    frame.addEventListener('click', function (ev) {
-      if (ev.target !== frame && ev.target !== frameInner) { return; }
-      state.activeShapeId = '__card__';
-      state.styleTargetMode = 'shape';
-      render();
-    });
     frame.addEventListener('dblclick', function (ev) {
       if (ev.target !== frame) { return; }
       var rect = frame.getBoundingClientRect();
@@ -3261,11 +3264,33 @@
     undoBtn2.addEventListener('click', tfUndo);
     redoBtn2.addEventListener('click', tfRedo);
     tfHeaderLeft.appendChild(undoBtn2); tfHeaderLeft.appendChild(redoBtn2);
+    // Eigener, immer erreichbarer Button zur Kartenauswahl - ein Klick auf
+    // den Zettel selbst wurde bisher vom (den ganzen Zettel ausfüllenden)
+    // primären Textobjekt abgefangen und kam nie beim Hintergrund an.
+    var cardTargetBtn = el('button', {
+      class: 'ic-btn ic-btn-ghost ic-btn-icon' + (state.activeShapeId === '__card__' ? ' active' : ''),
+      title: S.tf_target_card
+    }, [icon('frameicon')]);
+    cardTargetBtn.addEventListener('click', function () {
+      state.activeShapeId = '__card__';
+      state.styleTargetMode = 'shape';
+      render();
+    });
+    tfHeaderLeft.appendChild(cardTargetBtn);
     tfHeader.appendChild(tfHeaderLeft);
     var tfHeaderRight = el('div', { class: 'ic-tf-header-group' });
     tfHeaderRight.appendChild(cancelWizardBtn());
+    // Direkt senden: speichert UND schickt das Objekt sofort in den
+    // Post-Stream der Masterpinnwand (hiddenfromboard=0), statt erst über
+    // "Meine Bilder" gesendet werden zu müssen. Nur sichtbar, wenn Senden
+    // überhaupt erlaubt ist (konsistent mit dem Senden-Button dort).
+    if (state.studentcansend) {
+      var sendDirectBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon', title: S.tf_send_direct, 'aria-label': S.tf_send_direct }, [icon('send')]);
+      sendDirectBtn.addEventListener('click', function () { saveTextFrame(tf, sendDirectBtn, true); });
+      tfHeaderRight.appendChild(sendDirectBtn);
+    }
     var saveBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.savephoto, 'aria-label': S.savephoto }, [icon('check')]);
-    saveBtn.addEventListener('click', function () { saveTextFrame(tf, saveBtn); });
+    saveBtn.addEventListener('click', function () { saveTextFrame(tf, saveBtn, false); });
     tfHeaderRight.appendChild(saveBtn);
     tfHeader.appendChild(tfHeaderRight);
     body.appendChild(tfHeader);

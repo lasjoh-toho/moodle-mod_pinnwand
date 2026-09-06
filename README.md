@@ -1156,6 +1156,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Bögen (Text folgt einem Pfad) ergänzt: Aufwärts/Abwärts/Welle/Kreis,
   natives SVG - live, auf der Pinnwand und im Export identisch.
 
+### Neunzigste Überarbeitung — Kartenauswahl-Bugfix, direkter Senden-Button
+
+- Kartenauswahl-Bug gefunden und behoben: eigener Button statt
+  fragilem Klick-Ziel (wurde vom primären Textobjekt abgefangen).
+- Neuer Direkt-Senden-Button im Editor: speichert und schickt sofort
+  in den Post-Stream, statt erst über "Meine Bilder" gesendet werden
+  zu müssen.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
