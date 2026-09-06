@@ -734,6 +734,7 @@
 .ic-gradient-toggle-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; user-select: none; }
 .ic-gradient-toggle-row input[type="checkbox"] { flex: 0 0 auto; width: 18px; height: 18px; }
 .ic-gradient-band-solid { flex: 1 1 auto; cursor: default; }
+.ic-effect-sliders-row { flex-wrap: wrap; gap: 8px 12px; }
 .ic-gradient-band {
   position: relative; flex: 1 1 auto; height: 28px; border-radius: 6px; cursor: pointer;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); user-select: none;

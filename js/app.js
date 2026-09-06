@@ -1573,12 +1573,15 @@
   // Format (['#a','#b']) als auch das neue Mehrstufen-Format
   // ([{color,pos}, ...]) werden hier auf Letzteres normalisiert -
   // Rückwärtskompatibilität für bereits gespeicherte Zettel.
+  var gradientStopIdCounter = 1;
   function normalizeGradientStops(g) {
     if (!g || !g.length) { return null; }
     if (typeof g[0] === 'string') {
-      return g.map(function (c, i) { return { color: c, pos: g.length > 1 ? i / (g.length - 1) : 0 }; });
+      return g.map(function (c, i) { return { color: c, pos: g.length > 1 ? i / (g.length - 1) : 0, sid: gradientStopIdCounter++ }; });
     }
-    return g.slice().sort(function (a, b) { return a.pos - b.pos; });
+    var out = g.slice().sort(function (a, b) { return a.pos - b.pos; });
+    out.forEach(function (s) { if (s.sid == null) { s.sid = gradientStopIdCounter++; } });
+    return out;
   }
   function gradientCssStops(g) {
     var stops = normalizeGradientStops(g);
@@ -1613,6 +1616,14 @@
         '" stdDeviation="' + ((style.shadowBlur || 4) / 4) +
         '" flood-color="' + (style.shadowColor || '#000') + '"/></filter>';
       filterAttr = ' filter="url(#' + fid + ')"';
+    } else if (style.glowOn) {
+      var gfid = 'fgshapeglow' + (fgShapeGradientCounter++);
+      defs += '<filter id="' + gfid + '" x="-60%" y="-60%" width="220%" height="220%">' +
+        '<feFlood flood-color="' + (style.glowColor || '#fff') + '" result="gc"/>' +
+        '<feComposite in="gc" in2="SourceAlpha" operator="in" result="go"/>' +
+        '<feGaussianBlur in="go" stdDeviation="' + ((style.glowWidth || 8) / 3) + '" result="gb"/>' +
+        '<feMerge><feMergeNode in="gb"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+      filterAttr = ' filter="url(#' + gfid + ')"';
     }
     var strokeAttr = style.outlineWidth ? ' stroke="' + (style.outlineColor || '#000') + '" stroke-width="' + style.outlineWidth + '"' : '';
     var attrs = fillAttr + strokeAttr + filterAttr + (shape.fillRule ? ' fill-rule="' + shape.fillRule + '"' : '');
@@ -2056,6 +2067,14 @@
           '" stdDeviation="' + ((s.shadowBlur || 4) / 4) +
           '" flood-color="' + escapeXml(s.shadowColor || '#000') + '"/></filter>';
         filterAttr = ' filter="url(#' + fid + ')"';
+      } else if (s.glowOn) {
+        var gfid2 = 'shapeglow' + s.id;
+        shapeDefs += '<filter id="' + gfid2 + '" x="-60%" y="-60%" width="220%" height="220%">' +
+          '<feFlood flood-color="' + escapeXml(s.glowColor || '#fff') + '" result="gc"/>' +
+          '<feComposite in="gc" in2="SourceAlpha" operator="in" result="go"/>' +
+          '<feGaussianBlur in="go" stdDeviation="' + ((s.glowWidth || 8) / 3) + '" result="gb"/>' +
+          '<feMerge><feMergeNode in="gb"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+        filterAttr = ' filter="url(#' + gfid2 + ')"';
       }
       var strokeAttr = s.outlineWidth ? ' stroke="' + escapeXml(s.outlineColor || '#000') + '" stroke-width="' + s.outlineWidth + '"' : '';
       return (shapeDefs ? '<defs>' + shapeDefs + '</defs>' : '') +
@@ -2748,7 +2767,7 @@
           active.fillColor = active.color = color;
           active.fillGradient = null;
           applyStyle1();
-        });
+        }, active);
         refreshControls();
       }
       opacitySliderRow.innerHTML = '';
@@ -2804,13 +2823,16 @@
         // gleichzeitig aktiv sein (statt zwei unabhängiger Checkboxen).
         var effectMode = styleTarget.shadowOn ? 'shadow' : (styleTarget.glowOn ? 'glow' : 'none');
         var effectGroup = el('div', { class: 'ic-btn-group' });
-        var effectModes = [['none', S.tf_effect_none], ['shadow', S.tf_shadow]];
-        if (!isShapeTarget) { effectModes.push(['glow', S.tf_glow]); } // Glow ergibt bei Formen (SVG) aktuell nur als Schatten Sinn
+        var effectModes = [['none', S.tf_effect_none], ['shadow', S.tf_shadow], ['glow', S.tf_glow]];
         effectModes.forEach(function (m) {
           var btn = el('button', { class: 'ic-btn ic-btn-ghost' + (effectMode === m[0] ? ' active' : '') }, [m[1]]);
           btn.addEventListener('click', function () {
-            styleTarget.shadowOn = m[0] === 'shadow';
-            styleTarget.glowOn = m[0] === 'glow';
+            // Klick auf die bereits aktive Option schaltet sie wieder aus
+            // (wie eine Checkbox) - es kann aber weiterhin nur eine
+            // gleichzeitig aktiv sein (wie ein Radiobutton).
+            var newMode = effectMode === m[0] ? 'none' : m[0];
+            styleTarget.shadowOn = newMode === 'shadow';
+            styleTarget.glowOn = newMode === 'glow';
             applyShapeOrTextChange();
           });
           effectGroup.appendChild(btn);
@@ -2822,27 +2844,24 @@
           shadowColorRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_fill]));
           shadowColorRow.appendChild(buildEffectColorSwatch('shadowColor', '#000000'));
           bigPaletteContainer.appendChild(shadowColorRow);
-          var angleRow = el('div', { class: 'ic-textframe-edit' });
-          angleRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_shadow_angle]));
-          angleRow.appendChild(numberStepper(styleTarget.shadowAngle != null ? styleTarget.shadowAngle : 45, 0, 360, 15, 0, function (v) { styleTarget.shadowAngle = v; applyShapeOrTextChange(); }));
-          bigPaletteContainer.appendChild(angleRow);
-          var distRow = el('div', { class: 'ic-textframe-edit' });
-          distRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_shadow_distance]));
-          distRow.appendChild(numberStepper(styleTarget.shadowDistance != null ? styleTarget.shadowDistance : 3, 0, 20, 1, 0, function (v) { styleTarget.shadowDistance = v; applyShapeOrTextChange(); }));
-          bigPaletteContainer.appendChild(distRow);
-          var blurRow = el('div', { class: 'ic-textframe-edit' });
-          blurRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
-          blurRow.appendChild(numberStepper(styleTarget.shadowBlur || 4, 0, 20, 1, 0, function (v) { styleTarget.shadowBlur = v; applyShapeOrTextChange(); }));
-          bigPaletteContainer.appendChild(blurRow);
+          var shadowSlidersRow = el('div', { class: 'ic-textframe-edit ic-effect-sliders-row' });
+          var angleStepper = numberStepper(styleTarget.shadowAngle != null ? styleTarget.shadowAngle : 45, 0, 360, 15, 0, function (v) { styleTarget.shadowAngle = v; applyShapeOrTextChange(); });
+          angleStepper.title = S.tf_shadow_angle;
+          shadowSlidersRow.appendChild(angleStepper);
+          var distStepper = numberStepper(styleTarget.shadowDistance != null ? styleTarget.shadowDistance : 3, 0, 20, 1, 0, function (v) { styleTarget.shadowDistance = v; applyShapeOrTextChange(); });
+          distStepper.title = S.tf_shadow_distance;
+          shadowSlidersRow.appendChild(distStepper);
+          var blurStepper = numberStepper(styleTarget.shadowBlur || 4, 0, 20, 1, 0, function (v) { styleTarget.shadowBlur = v; applyShapeOrTextChange(); });
+          blurStepper.title = S.tf_width;
+          shadowSlidersRow.appendChild(blurStepper);
+          bigPaletteContainer.appendChild(shadowSlidersRow);
         } else if (effectMode === 'glow') {
           var glowColorRow = el('div', { class: 'ic-textframe-edit' });
           glowColorRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_fill]));
           glowColorRow.appendChild(buildEffectColorSwatch('glowColor', '#ffffff'));
+          glowColorRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
+          glowColorRow.appendChild(numberStepper(styleTarget.glowWidth || 8, 0, 20, 1, 0, function (v) { styleTarget.glowWidth = v; applyShapeOrTextChange(); }));
           bigPaletteContainer.appendChild(glowColorRow);
-          var glowWidthRow = el('div', { class: 'ic-textframe-edit' });
-          glowWidthRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
-          glowWidthRow.appendChild(numberStepper(styleTarget.glowWidth || 8, 0, 20, 1, 0, function (v) { styleTarget.glowWidth = v; applyShapeOrTextChange(); }));
-          bigPaletteContainer.appendChild(glowWidthRow);
         }
         // Wird eine Farbe gerade gewählt (Schatten/Glow), erscheint dieselbe
         // große Palette wie bei Fläche darunter.
@@ -2887,7 +2906,7 @@
           }
           stops.forEach(function (stop, stopIdx) {
             var marker = el('div', {
-              class: 'ic-gradient-stop' + (state.gradientStopIndex === stopIdx ? ' active' : ''),
+              class: 'ic-gradient-stop' + (state.gradientStopSid === stop.sid ? ' active' : ''),
               style: 'left:' + (stop.pos * 100) + '%;background:' + stop.color
             });
             var markerDragging = false, markerMoved = false;
@@ -2916,7 +2935,7 @@
             marker.addEventListener('click', function (ev) {
               if (markerMoved) { return; }
               ev.stopPropagation();
-              state.gradientStopIndex = state.gradientStopIndex === stopIdx ? null : stopIdx;
+              state.gradientStopSid = state.gradientStopSid === stop.sid ? null : stop.sid;
               refreshControls();
             });
             marker.addEventListener('dblclick', function (ev) {
@@ -2924,7 +2943,7 @@
               if (stops.length <= 2) { return; } // mindestens 2 Stufen bleiben erhalten
               var without = stops.filter(function (s2) { return s2 !== stop; });
               commitStops(without);
-              state.gradientStopIndex = null;
+              state.gradientStopSid = null;
               applyShapeOrTextChange();
             });
             band.appendChild(marker);
@@ -2964,19 +2983,24 @@
           window.addEventListener('touchend', function () { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } });
           gradientBarRow.appendChild(angleKnob);
 
-          if (state.gradientStopIndex != null && stops[state.gradientStopIndex]) {
-            var stopIdxSel = state.gradientStopIndex;
+          var stopSel = stops.filter(function (s2) { return s2.sid === state.gradientStopSid; })[0];
+          if (stopSel) {
             function applyGradStopColor(color) {
-              var newStops = stops.slice();
-              newStops[stopIdxSel] = { color: color, pos: stops[stopIdxSel].pos };
+              // sid MUSS übernommen werden, sonst bekäme diese Stufe beim
+              // nächsten Rendern eine neue sid und die Auswahl ginge
+              // verloren - genau das war der Grund, warum Farben für
+              // weitere Marker nicht zuverlässig gespeichert wurden.
+              var newStops = stops.map(function (s2) {
+                return s2.sid === stopSel.sid ? { color: color, pos: s2.pos, sid: s2.sid } : s2;
+              });
               commitStops(newStops);
               noteRecentColor(color);
               applyShapeOrTextChange();
             }
             if (state.colorTab === 'wheel') {
-              buildColorWheel(bigPaletteContainer, stops[stopIdxSel].color, applyGradStopColor);
+              buildColorWheel(bigPaletteContainer, stopSel.color, applyGradStopColor);
             } else {
-              buildBigColorPalette(bigPaletteContainer, stops[stopIdxSel].color, null, applyGradStopColor, null);
+              buildBigColorPalette(bigPaletteContainer, stopSel.color, null, applyGradStopColor, null);
             }
           } else {
             bigPaletteContainer.appendChild(el('p', { class: 'ic-hint' }, [S.tf_gradient_pick_stop_hint]));
@@ -3013,7 +3037,7 @@
                 var sel = window.getSelection();
                 sel.removeAllRanges(); sel.addRange(savedRange);
               }
-              applyStyleToSelectionOrWhole(objEl, 'background-color:' + color + ';', function () {});
+              applyStyleToSelectionOrWhole(objEl, 'background-color:' + color + ';', function () {}, active);
               noteRecentColor(color);
             }
             if (state.colorTab === 'wheel') { buildColorWheel(content, null, applyHighlight); }
@@ -3028,7 +3052,16 @@
         ].forEach(function (cmd) {
           var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
           fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-          fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
+          fb.addEventListener('click', function () {
+            document.execCommand(cmd[0], false, null);
+            // t.html/t.text explizit synchronisieren statt sich allein auf
+            // das 'input'-Event zu verlassen (feuert nicht in jedem Fall
+            // zuverlässig nach execCommand) - sonst können veraltete Daten
+            // bei einem späteren Neu-Rendern die gerade vorgenommene
+            // Formatierung wieder rückgängig machen ("Sprung").
+            var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+            if (objEl) { active.html = objEl.innerHTML; active.text = objEl.textContent; }
+          });
           charRow.appendChild(fb);
         });
         fontsBox.appendChild(charRow);
@@ -3050,7 +3083,7 @@
         applyStyleToSelectionOrWhole(objEl, 'font-family:' + css + ';', function () {
           active.font = fontSel.value;
           objEl.style.fontFamily = css;
-        });
+        }, active);
       });
       fontGroup.appendChild(fontSel);
       fontWeightSpaceRow.appendChild(fontGroup);
@@ -3079,7 +3112,7 @@
           active.size = newSize;
           objEl.style.fontSize = newSize + 'px';
           lastSizeDelta = 0;
-        });
+        }, active);
       }
       var sizeDown = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['A\u2212']);
       var sizeUp = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['A+']);
@@ -3100,7 +3133,7 @@
         applyStyleToSelectionOrWhole(objEl, 'font-weight:' + v + ';', function () {
           active.fontWeight = v;
           objEl.style.fontWeight = v;
-        });
+        }, active);
       }));
       fontWeightSpaceRow.appendChild(weightGroup);
 
@@ -3112,7 +3145,7 @@
         applyStyleToSelectionOrWhole(objEl, 'letter-spacing:' + v + 'px;', function () {
           active.letterSpacing = v;
           objEl.style.letterSpacing = v + 'px';
-        });
+        }, active);
       }));
       fontWeightSpaceRow.appendChild(spaceGroup);
       fontsBox.appendChild(fontWeightSpaceRow);
@@ -3661,7 +3694,7 @@
       if (!node.getAttribute('style')) { node.removeAttribute('style'); }
     }
   }
-  function applyStyleToSelectionOrWhole(objEl, cssText, wholeObjectFallback) {
+  function applyStyleToSelectionOrWhole(objEl, cssText, wholeObjectFallback, t) {
     var sel = window.getSelection();
     if (sel && sel.rangeCount && !sel.isCollapsed) {
       var range = sel.getRangeAt(0);
@@ -3677,6 +3710,12 @@
           var newRange = document.createRange();
           newRange.selectNodeContents(span);
           sel.addRange(newRange);
+          // t.html/t.text explizit synchronisieren - range.insertNode() ist
+          // eine programmatische DOM-Änderung und löst KEIN natives
+          // 'input'-Event aus (anders als echte Tastatureingaben), sonst
+          // würden diese Daten veraltet bleiben und die Formatierung bei
+          // einem späteren Neu-Rendern wieder verlorengehen.
+          if (t) { t.html = objEl.innerHTML; t.text = objEl.textContent; }
           return true;
         } catch (e) { /* Auswahl reicht über Element-Grenzen - Fallback */ }
       }

@@ -2731,3 +2731,34 @@ Siebenundachtzigster Feedback-Durchgang. Betrifft: `js/app.js`,
   Schatten-Look wird stattdessen für den Fokus-Zustand von
   Textobjekten im Editor verwendet (statt der bisherigen gestrichelten
   Linie).
+
+---
+
+## Phase 92 — Zwei Kernbugfixes (Text-Sprung, Verlauf-Marker), Glow bei Formen, Effekt-Umschaltverhalten ✅
+
+Achtundachtzigster Feedback-Durchgang (Bugreport mit Screenshot).
+Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Text-Sprung-Kernbugfix**: `applyStyleToSelectionOrWhole()`
+  synchronisierte `t.html`/`t.text` nach dem Einfügen des
+  Formatierungs-Span nicht - programmatische DOM-Änderungen
+  (`range.insertNode()`) lösen kein natives `input`-Event aus. Betraf
+  ALLE darüberlaufenden Formatierungen (Farbe, Schriftart, Größe,
+  Gewicht, Laufweite, Textmarker), nicht nur Kursiv. Neuer vierter
+  Parameter `t` an der Funktion, alle sechs Aufrufstellen aktualisiert.
+  Zusätzlich: die B/I/U/Durchgestrichen/Hoch-/Tiefstellen-Buttons
+  (execCommand-basiert) synchronisieren jetzt ebenfalls explizit statt
+  sich allein auf das input-Event zu verlassen.
+- [x] **Verlauf-Marker-Kernbugfix**: jede Verlauf-Stufe bekommt jetzt
+  eine dauerhafte ID (`sid`) statt sich auf ihre Position im Array zu
+  verlassen - beim Farbwechsel wurde die sid bisher nicht übernommen,
+  wodurch die Stufe beim nächsten Rendern eine NEUE sid bekam und die
+  Auswahl verlorenging.
+- [x] **Glow jetzt auch bei Formen** verfügbar (neuer SVG-Glow-Filter
+  über feFlood+feComposite+feGaussianBlur+feMerge, live und im
+  Export).
+- [x] **Effekt-Umschaltverhalten**: Klick auf die bereits aktive
+  Option schaltet sie aus (wie eine Checkbox), es bleibt aber nur eine
+  gleichzeitig aktiv (wie ein Radiobutton).
+- [x] Effekt-Einstellungen kompakter angeordnet (Regler in einer
+  gemeinsamen Zeile statt je einer eigenen).

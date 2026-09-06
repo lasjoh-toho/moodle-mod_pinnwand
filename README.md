@@ -1208,6 +1208,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Schatten-Look wird jetzt für den Fokus-Zustand von Textobjekten im
   Editor verwendet statt der bisherigen gestrichelten Linie.
 
+### Sechsundneunzigste Überarbeitung — Zwei Kernbugfixes, Glow bei Formen
+
+- Text-Sprung-Bug behoben: Formatierungen (Farbe, Schriftart, Größe,
+  Gewicht, Laufweite, Textmarker) auf markiertem Text konnten bei
+  einem späteren Neu-Rendern verlorengehen.
+- Verlauf-Marker-Bug behoben: Farben für weitere Marker wurden nicht
+  zuverlässig gespeichert.
+- Glow jetzt auch bei Formen verfügbar, Effekt-Buttons schalten sich
+  jetzt auch wieder aus.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
