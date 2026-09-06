@@ -1569,6 +1569,21 @@
   // Pfeil/die Live-Textdarstellung) in x1/y1/x2/y2 für ein SVG
   // <linearGradient> um (objectBoundingBox, 0..1), statt einer festen
   // Diagonale.
+  // Verlauf-Stufen vereinheitlichen: sowohl das alte, einfache 2-Farben-
+  // Format (['#a','#b']) als auch das neue Mehrstufen-Format
+  // ([{color,pos}, ...]) werden hier auf Letzteres normalisiert -
+  // Rückwärtskompatibilität für bereits gespeicherte Zettel.
+  function normalizeGradientStops(g) {
+    if (!g || !g.length) { return null; }
+    if (typeof g[0] === 'string') {
+      return g.map(function (c, i) { return { color: c, pos: g.length > 1 ? i / (g.length - 1) : 0 }; });
+    }
+    return g.slice().sort(function (a, b) { return a.pos - b.pos; });
+  }
+  function gradientCssStops(g) {
+    var stops = normalizeGradientStops(g);
+    return stops.map(function (s) { return s.color + ' ' + Math.round(s.pos * 100) + '%'; }).join(',');
+  }
   function gradientSvgVector(angle) {
     var rad = ((angle != null ? angle : 135) + 90) * Math.PI / 180;
     var dx = Math.cos(rad) * 0.5, dy = Math.sin(rad) * 0.5;
@@ -1579,12 +1594,13 @@
     // wird als einfache Fläche ohne Kontur/Effekte behandelt.
     if (typeof style === 'string') { style = { fillColor: style }; }
     var defs = '', fillAttr = 'fill="' + (style.fillColor || '#e0503f') + '"';
-    if (style.fillGradient && style.fillGradient.length === 2) {
+    if (style.fillGradient && style.fillGradient.length >= 2) {
       var gid = 'fgshapegrad' + (fgShapeGradientCounter++);
       var gv = gradientSvgVector(style.fillGradientAngle);
-      defs += '<linearGradient id="' + gid + '" x1="' + gv.x1 + '" y1="' + gv.y1 + '" x2="' + gv.x2 + '" y2="' + gv.y2 + '">' +
-        '<stop offset="0" stop-color="' + style.fillGradient[0] + '"/>' +
-        '<stop offset="1" stop-color="' + style.fillGradient[1] + '"/></linearGradient>';
+      var stopsXml = normalizeGradientStops(style.fillGradient).map(function (s) {
+        return '<stop offset="' + s.pos + '" stop-color="' + s.color + '"/>';
+      }).join('');
+      defs += '<linearGradient id="' + gid + '" x1="' + gv.x1 + '" y1="' + gv.y1 + '" x2="' + gv.x2 + '" y2="' + gv.y2 + '">' + stopsXml + '</linearGradient>';
       fillAttr = 'fill="url(#' + gid + ')"';
     }
     var filterAttr = '';
@@ -1745,8 +1761,8 @@
   // UND SVG-Export, damit beide garantiert übereinstimmen.
   function computeStyle1Css(t, fallbackColor) {
     var css = '';
-    if (t.fillGradient && t.fillGradient.length === 2) {
-      css += 'background-image:linear-gradient(' + ((t.fillGradientAngle != null ? t.fillGradientAngle : 135) + 90) + 'deg,' + t.fillGradient[0] + ',' + t.fillGradient[1] + ');' +
+    if (t.fillGradient && t.fillGradient.length >= 2) {
+      css += 'background-image:linear-gradient(' + ((t.fillGradientAngle != null ? t.fillGradientAngle : 135) + 90) + 'deg,' + gradientCssStops(t.fillGradient) + ');' +
         '-webkit-background-clip:text;background-clip:text;color:transparent;';
     } else {
       css += 'color:' + (t.fillColor || fallbackColor) + ';';
@@ -1916,12 +1932,13 @@
       var size = Math.min(tf.w, tf.h) * (s.size || 0.4);
       var tx = s.x * tf.w - size / 2, ty = s.y * tf.h - size / 2, scale = size / 100;
       var shapeDefs = '', fillAttr = 'fill="' + escapeXml(s.fillColor || '#e0503f') + '"';
-      if (s.fillGradient && s.fillGradient.length === 2) {
+      if (s.fillGradient && s.fillGradient.length >= 2) {
         var gid = 'shapegrad' + s.id;
         var gv2 = gradientSvgVector(s.fillGradientAngle);
-        shapeDefs += '<linearGradient id="' + gid + '" x1="' + gv2.x1 + '" y1="' + gv2.y1 + '" x2="' + gv2.x2 + '" y2="' + gv2.y2 + '">' +
-          '<stop offset="0" stop-color="' + escapeXml(s.fillGradient[0]) + '"/>' +
-          '<stop offset="1" stop-color="' + escapeXml(s.fillGradient[1]) + '"/></linearGradient>';
+        var stopsXml2 = normalizeGradientStops(s.fillGradient).map(function (st) {
+          return '<stop offset="' + st.pos + '" stop-color="' + escapeXml(st.color) + '"/>';
+        }).join('');
+        shapeDefs += '<linearGradient id="' + gid + '" x1="' + gv2.x1 + '" y1="' + gv2.y1 + '" x2="' + gv2.x2 + '" y2="' + gv2.y2 + '">' + stopsXml2 + '</linearGradient>';
         fillAttr = 'fill="url(#' + gid + ')"';
       }
       var filterAttr = '';
@@ -2131,7 +2148,7 @@
     // Größenänderungs-Griff (siehe unten) unsichtbar/unklickbar.
     var cardStyle = tf.cardStyle || {};
     var cardBg = cardStyle.fillGradient
-      ? 'background-image:linear-gradient(' + ((cardStyle.fillGradientAngle != null ? cardStyle.fillGradientAngle : 135) + 90) + 'deg,' + cardStyle.fillGradient[0] + ',' + cardStyle.fillGradient[1] + ');'
+      ? 'background-image:linear-gradient(' + ((cardStyle.fillGradientAngle != null ? cardStyle.fillGradientAngle : 135) + 90) + 'deg,' + gradientCssStops(cardStyle.fillGradient) + ');'
       : (cardStyle.fillColor ? 'background:' + cardStyle.fillColor + ';' : (preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;'));
     var cardBorder = cardStyle.outlineWidth ? 'box-shadow:inset 0 0 0 ' + cardStyle.outlineWidth + 'px ' + (cardStyle.outlineColor || '#000') + ';' : '';
     var frameInner = el('div', {
@@ -2660,25 +2677,68 @@
         opacitySliderRow.appendChild(gradToggleRow2);
 
         if (styleTarget.fillGradient) {
-          // Verlauf-Band mit ziehbaren Markern + drehbarem Richtungspfeil
-          // statt Wort/einfacher Farbfelder.
-          var gradRow2 = el('div', { class: 'ic-gradient-row' });
+          // Verlauf-Band mit beliebig vielen ziehbaren Markern (Position
+          // UND Farbe je Stufe einstellbar) + drehbarem Richtungspfeil.
+          var stops = normalizeGradientStops(styleTarget.fillGradient);
           var angle = styleTarget.fillGradientAngle != null ? styleTarget.fillGradientAngle : 135;
-          var band = el('div', {
-            class: 'ic-gradient-band',
-            style: 'background:linear-gradient(90deg,' + styleTarget.fillGradient[0] + ',' + styleTarget.fillGradient[1] + ')'
-          });
-          [0, 1].forEach(function (stopIdx) {
-            var stop = el('div', {
+          var gradRow2 = el('div', { class: 'ic-gradient-row' });
+          var band = el('div', { class: 'ic-gradient-band', style: 'background:linear-gradient(90deg,' + gradientCssStops(stops) + ')' });
+          function commitStops(newStops) {
+            newStops.sort(function (a, b) { return a.pos - b.pos; });
+            styleTarget.fillGradient = newStops;
+          }
+          stops.forEach(function (stop, stopIdx) {
+            var marker = el('div', {
               class: 'ic-gradient-stop' + (state.gradientStopIndex === stopIdx ? ' active' : ''),
-              style: 'left:' + (stopIdx === 0 ? '0%' : '100%') + ';background:' + styleTarget.fillGradient[stopIdx]
+              style: 'left:' + (stop.pos * 100) + '%;background:' + stop.color
             });
-            stop.addEventListener('click', function (ev) {
+            var markerDragging = false, markerMoved = false;
+            function markerDown(ev) { markerDragging = true; markerMoved = false; ev.stopPropagation(); }
+            function markerMove(ev) {
+              if (!markerDragging) { return; }
+              markerMoved = true;
+              var rect = band.getBoundingClientRect();
+              var p = ev.touches ? ev.touches[0] : ev;
+              stop.pos = Math.max(0, Math.min(1, (p.clientX - rect.left) / rect.width));
+              marker.style.left = (stop.pos * 100) + '%';
+              band.style.background = 'linear-gradient(90deg,' + gradientCssStops(stops) + ')';
+            }
+            function markerUp() {
+              if (!markerDragging) { return; }
+              markerDragging = false;
+              if (markerMoved) { commitStops(stops); applyShapeOrTextChange(); }
+            }
+            marker.addEventListener('mousedown', markerDown);
+            marker.addEventListener('touchstart', markerDown, { passive: true });
+            window.addEventListener('mousemove', markerMove);
+            window.addEventListener('touchmove', markerMove, { passive: true });
+            window.addEventListener('mouseup', markerUp);
+            window.addEventListener('touchend', markerUp);
+            marker.addEventListener('click', function (ev) {
+              if (markerMoved) { return; }
               ev.stopPropagation();
               state.gradientStopIndex = state.gradientStopIndex === stopIdx ? null : stopIdx;
               refreshControls();
             });
-            band.appendChild(stop);
+            marker.addEventListener('dblclick', function (ev) {
+              ev.stopPropagation();
+              if (stops.length <= 2) { return; } // mindestens 2 Stufen bleiben erhalten
+              var without = stops.filter(function (s2) { return s2 !== stop; });
+              commitStops(without);
+              state.gradientStopIndex = null;
+              applyShapeOrTextChange();
+            });
+            band.appendChild(marker);
+          });
+          band.addEventListener('dblclick', function (ev) {
+            if (ev.target !== band) { return; } // nicht auf einem Marker
+            var rect = band.getBoundingClientRect();
+            var pos = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+            // Farbe an der neuen Stelle interpolieren, als sinnvoller Start.
+            var before = stops.filter(function (s2) { return s2.pos <= pos; }).pop() || stops[0];
+            var newStops = stops.concat([{ color: before.color, pos: pos }]);
+            commitStops(newStops);
+            applyShapeOrTextChange();
           });
           gradRow2.appendChild(band);
           var angleKnob = el('div', { class: 'ic-gradient-angle', style: '--angle:' + angle + 'deg', title: S.tf_gradient_angle });
@@ -2694,7 +2754,7 @@
             if (!angleDragging) { return; }
             styleTarget.fillGradientAngle = Math.round(angleFromEvent(ev));
             angleKnob.style.setProperty('--angle', styleTarget.fillGradientAngle + 'deg');
-            band.style.background = 'linear-gradient(' + (styleTarget.fillGradientAngle + 90) + 'deg,' + styleTarget.fillGradient[0] + ',' + styleTarget.fillGradient[1] + ')';
+            band.style.background = 'linear-gradient(90deg,' + gradientCssStops(stops) + ')';
           }
           angleKnob.addEventListener('mousedown', function () { angleDragging = true; });
           angleKnob.addEventListener('touchstart', function () { angleDragging = true; }, { passive: true });
@@ -2704,19 +2764,21 @@
           window.addEventListener('touchend', function () { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } });
           gradRow2.appendChild(angleKnob);
           bigPaletteContainer.appendChild(gradRow2);
+          bigPaletteContainer.appendChild(el('p', { class: 'ic-hint' }, [S.tf_gradient_hint]));
 
-          if (state.gradientStopIndex != null) {
+          if (state.gradientStopIndex != null && stops[state.gradientStopIndex]) {
             var stopIdxSel = state.gradientStopIndex;
             function applyGradStopColor(color) {
-              styleTarget.fillGradient = styleTarget.fillGradient.slice();
-              styleTarget.fillGradient[stopIdxSel] = color;
+              var newStops = stops.slice();
+              newStops[stopIdxSel] = { color: color, pos: stops[stopIdxSel].pos };
+              commitStops(newStops);
               noteRecentColor(color);
               applyShapeOrTextChange();
             }
             if (state.colorTab === 'wheel') {
-              buildColorWheel(bigPaletteContainer, styleTarget.fillGradient[stopIdxSel], applyGradStopColor);
+              buildColorWheel(bigPaletteContainer, stops[stopIdxSel].color, applyGradStopColor);
             } else {
-              buildBigColorPalette(bigPaletteContainer, styleTarget.fillGradient[stopIdxSel], null, applyGradStopColor, null);
+              buildBigColorPalette(bigPaletteContainer, stops[stopIdxSel].color, null, applyGradStopColor, null);
             }
           }
         } else {

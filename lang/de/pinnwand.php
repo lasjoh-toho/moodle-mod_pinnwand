@@ -125,6 +125,7 @@ $string['tf_no_shape_selected'] = 'Keine Form ausgewählt - klicke zuerst eine F
 $string['tf_shadow_angle'] = 'Richtung';
 $string['tf_shadow_distance'] = 'Entfernung';
 $string['tf_gradient_angle'] = 'Verlauf-Richtung (ziehen)';
+$string['tf_gradient_hint'] = 'Marker ziehen = Position ändern. Doppelklick auf Marker = entfernen. Doppelklick auf leere Stelle = neue Stufe hinzufügen.';
 $string['tf_shape_custom'] = 'Eigene Form (Punkte)';
 $string['tf_shape_custom_hint'] = 'Klicke Eckpunkte auf den Zettel - Doppelklick oder Eingabetaste schließt die Form ab (mind. 3 Punkte), Escape bricht ab.';
 $string['align_left'] = 'Linksbündig';

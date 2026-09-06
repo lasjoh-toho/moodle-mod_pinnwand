@@ -2498,3 +2498,22 @@ Betrifft: `js/app.js`, neue Strings.
 **Noch offen:** mehrere Verlauf-Stufen (aktuell weiterhin fix zwei) -
 zu groß/riskant für diesen Durchgang, Datenmodell-Änderung hätte das
 gerade erst stabilisierte Verlauf-System wieder gefährdet.
+
+---
+
+## Phase 83 — Mehrere Verlaufsstufen ✅
+
+Neunundsiebzigster Feedback-Durchgang. Betrifft: `js/app.js`, neue
+Strings.
+
+- [x] Neue Funktionen `normalizeGradientStops()`/`gradientCssStops()`:
+  vereinheitlichen sowohl das alte 2-Farben-Format als auch das neue
+  Mehrstufen-Format ([{color,pos}]) - Rückwärtskompatibilität für
+  bereits gespeicherte Zettel gewährleistet.
+- [x] Verlauf-Band unterstützt jetzt beliebig viele Stufen: Marker
+  ziehen ändert die Position, Doppelklick auf einen Marker entfernt ihn
+  (mind. 2 bleiben erhalten), Doppelklick auf eine leere Stelle im Band
+  fügt eine neue Stufe hinzu (Farbe von der vorherigen Stufe
+  interpoliert als Startwert).
+- [x] Wirkt konsistent überall: Live-Vorschau (Text/Formen/Kartenfläche),
+  SVG-Export (Text/Formen/Kartenfläche).

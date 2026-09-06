@@ -1132,7 +1132,12 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Textmarker (Highlight) und Hoch-/Tiefstellen ergänzt.
 - Zettel selbst als Ziel für Fläche/Kontur/Effekte auswählbar (bisher
   nur in der Editor-Vorschau, noch nicht im Export/auf der Pinnwand).
-- Noch offen: mehrere Verlauf-Stufen.
+
+### Siebenundachtzigste Überarbeitung — Mehrere Verlaufsstufen
+
+- Verlauf-Band unterstützt jetzt beliebig viele Farbstufen statt nur
+  zwei: Marker ziehen ändert die Position, Doppelklick entfernt/fügt
+  hinzu.
 
 ## Bekannte Grenzen dieser Version
 

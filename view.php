@@ -263,6 +263,7 @@ $config = [
         'tf_shadow_angle' => get_string('tf_shadow_angle', 'pinnwand'),
         'tf_shadow_distance' => get_string('tf_shadow_distance', 'pinnwand'),
         'tf_gradient_angle' => get_string('tf_gradient_angle', 'pinnwand'),
+        'tf_gradient_hint' => get_string('tf_gradient_hint', 'pinnwand'),
         'tf_shape_custom' => get_string('tf_shape_custom', 'pinnwand'),
         'tf_shape_custom_hint' => get_string('tf_shape_custom_hint', 'pinnwand'),
         'align_left' => get_string('align_left', 'pinnwand'),

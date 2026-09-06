@@ -125,6 +125,7 @@ $string['tf_no_shape_selected'] = 'No shape selected - click a shape on the note
 $string['tf_shadow_angle'] = 'Direction';
 $string['tf_shadow_distance'] = 'Distance';
 $string['tf_gradient_angle'] = 'Gradient direction (drag)';
+$string['tf_gradient_hint'] = 'Drag a marker to change its position. Double-click a marker to remove it. Double-click an empty spot to add a new stop.';
 $string['tf_shape_custom'] = 'Custom shape (points)';
 $string['tf_shape_custom_hint'] = 'Click corner points on the note - double-click or Enter finishes the shape (at least 3 points), Escape cancels.';
 $string['align_left'] = 'Align left';
