@@ -2762,3 +2762,30 @@ Betrifft: `js/app.js`, `styles.css`.
   gleichzeitig aktiv (wie ein Radiobutton).
 - [x] Effekt-Einstellungen kompakter angeordnet (Regler in einer
   gemeinsamen Zeile statt je einer eigenen).
+
+---
+
+## Phase 93 — Schatten-Hervorhebung auf der Pinnwand, größerer Export-Rand, Schriftgröße skaliert mit Kartengröße 🔄
+
+Neunundachtzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] **Hervorhebung auf der Pinnwand**: gestrichelte Linien/Outline
+  durch denselben weichen Schatten-Look ersetzt wie im Editor - zeigt
+  sich jetzt bei Hover UND Auswahl, nicht mehr permanent als Outline
+  (die Pinnwand hat schon genug Linien).
+- [x] **Export-Rand verbessert**: berücksichtigt jetzt die tatsächlich
+  verwendeten Schrägstellungs-/Rotations-/Extrusions-Werte statt eines
+  pauschalen Prozentsatzes - bei starker diagonaler Verzerrung reichte
+  der bisherige feste Rand nicht aus (Ursache für Abschneiden in der
+  Präsentation).
+- [x] **Schriftgröße skaliert jetzt mit der Kartengröße auf der
+  Pinnwand**: `container-type:inline-size` + `cqw`-Einheiten statt
+  fester Pixel-Werte für Schriftgröße/Laufweite in
+  `buildTextFrameLiveDom()` - vorher blieb die Schrift bei
+  verkleinerten Karten in fester Pixelgröße stehen, statt
+  mitzuskalieren.
+
+**Noch nicht umgestellt**: Extrusions-Schatten-Offsets und Glow-Breite
+in `wordartCssFor()` bleiben vorerst in festen Pixeln (kleinerer,
+weniger kritischer visueller Nebeneffekt).

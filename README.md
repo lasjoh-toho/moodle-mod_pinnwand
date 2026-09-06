@@ -1218,6 +1218,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Glow jetzt auch bei Formen verfügbar, Effekt-Buttons schalten sich
   jetzt auch wieder aus.
 
+### Siebenundneunzigste Überarbeitung — Hervorhebung, Export-Rand, Schriftgrößen-Skalierung
+
+- Hervorhebung auf der Pinnwand jetzt per Schatten bei Hover/Auswahl
+  statt permanenter gestrichelter Linie.
+- Export-Rand berücksichtigt jetzt starke diagonale Verzerrung
+  (behebt Abschneiden in der Präsentation).
+- Schriftgröße skaliert jetzt mit, wenn die Karte auf der Pinnwand
+  verkleinert wird.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

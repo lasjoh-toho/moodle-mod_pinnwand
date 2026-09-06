@@ -1937,7 +1937,7 @@
         lines.forEach(function (line) {
           wrapWrap.appendChild(el('div', {
             style: 'position:absolute;left:' + (line.x / tf.w * 100) + '%;top:' + (line.y / tf.h * 100) + '%;' +
-              'width:' + (line.width / tf.w * 100) + '%;font-family:' + fontCss + ';font-size:' + t.size + 'px;' +
+              'width:' + (line.width / tf.w * 100) + '%;font-family:' + fontCss + ';font-size:' + (t.size / tf.w * 100) + 'cqw;' +
               'font-weight:' + (t.fontWeight || 700) + ';letter-spacing:' + (t.letterSpacing || 0) + 'px;' +
               'color:' + (t.fillColor || t.color || '#f2f3f5') + ';white-space:nowrap;'
           }, [line.text]));
@@ -1951,7 +1951,7 @@
   function buildTextFrameLiveDom(tf) {
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
     var outer = el('div', {
-      class: 'ic-tf-live', style: 'position:relative;width:100%;aspect-ratio:' + tf.w + '/' + tf.h + ';' +
+      class: 'ic-tf-live', style: 'position:relative;width:100%;aspect-ratio:' + tf.w + '/' + tf.h + ';container-type:inline-size;' +
         (preset.shadow ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') + (preset.bg ? '' : 'border:2px dashed rgba(255,255,255,.3);')
     });
     var cardStyle = tf.cardStyle || {};
@@ -1997,8 +1997,8 @@
           class: 'ic-tf-live-text', html: html,
           style: 'position:absolute;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
             'padding:4px 8px;white-space:pre-wrap;text-align:center;max-width:94%;z-index:1;' +
-            'font-family:' + fontCss + ';font-size:' + t.size + 'px;font-weight:' + (t.fontWeight || 700) +
-            ';line-height:' + (t.lineHeight || 1.2) + ';letter-spacing:' + (t.letterSpacing || 0) + 'px;' +
+            'font-family:' + fontCss + ';font-size:' + (t.size / tf.w * 100) + 'cqw;font-weight:' + (t.fontWeight || 700) +
+            ';line-height:' + (t.lineHeight || 1.2) + ';letter-spacing:' + ((t.letterSpacing || 0) / tf.w * 100) + 'cqw;' +
             (wordartCssFor(t, preset.text) || computeStyle1Css(t, preset.text))
         });
       }
@@ -2131,7 +2131,22 @@
     // Kartenrand hinausragende Effekte (WordArt-Streckung/Schrägstellung/
     // Extrusion) abgeschnitten, sobald das Ergebnis als <img> angezeigt
     // wird (betraf "Meine Dateien" und die Klassenübersicht).
+    // Rand berücksichtigt die tatsächlich verwendeten Schrägstellungs-/
+    // Rotations-/Extrusions-Werte, statt eines pauschalen Prozentsatzes -
+    // bei starker diagonaler Verzerrung reichte ein fester Rand nicht aus
+    // (Ursache für Abschneiden in der Präsentation bei skew-lastigen
+    // WordArt-Stilen).
     var margin = Math.max(30, Math.round(Math.min(tf.w, tf.h) * 0.15));
+    tf.texts.forEach(function (t) {
+      if (!t.wordartStyle || t.wordartStyle === 'none') { return; }
+      var wStyle = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0] || {};
+      var skewY = Math.abs(t.skewY != null ? t.skewY : (wStyle.skewY || 0));
+      var rotate = Math.abs(t.rotate != null ? t.rotate : (wStyle.rotate || 0));
+      var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (wStyle.extrudeSteps || 0);
+      var scaleY = t.scaleY != null ? t.scaleY : (wStyle.scaleY || 1);
+      var estimate = t.size * scaleY * (Math.tan((skewY + rotate) * Math.PI / 180) + 0.3) + extrudeSteps * 0.8 + 20;
+      margin = Math.max(margin, Math.round(Math.abs(estimate)));
+    });
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + (tf.w + margin * 2) + '" height="' + (tf.h + margin * 2) +
       '" viewBox="0 0 ' + (tf.w + margin * 2) + ' ' + (tf.h + margin * 2) + '"><style>' +
       '.ic-frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;' +
