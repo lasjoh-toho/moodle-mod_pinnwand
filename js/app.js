@@ -1949,7 +1949,7 @@
       : (cardStyle.fillColor ? 'background:' + cardStyle.fillColor + ';' : (preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;'));
     var cardBorder = cardStyle.outlineWidth ? 'box-shadow:inset 0 0 0 ' + cardStyle.outlineWidth + 'px ' + (cardStyle.outlineColor || '#000') + ';' : '';
     var inner = el('div', {
-      class: 'ic-tf-live-inner', style: 'position:relative;width:100%;height:100%;overflow:hidden;border-radius:16px;' + cardBg + cardBorder
+      class: 'ic-tf-live-inner', style: 'position:relative;width:100%;height:100%;overflow:hidden;border-radius:16px;z-index:1;' + cardBg + cardBorder
     });
     outer.appendChild(inner);
     (tf.shapes || []).forEach(function (s) {
@@ -1967,7 +1967,7 @@
           'background-image:url(' + fgShapeSvgDataUri(shapeDef, s) + ');background-repeat:no-repeat;' +
           'background-position:center;background-size:contain;' + (s.wrapMode === 'front' ? 'z-index:2;' : 'z-index:0;')
       });
-      inner.appendChild(shapeEl);
+      outer.appendChild(shapeEl);
     });
     var textElByIdx = [];
     tf.texts.forEach(function (t, idx) {
@@ -1991,7 +1991,7 @@
             (wordartCssFor(t, preset.text) || computeStyle1Css(t, preset.text))
         });
       }
-      inner.appendChild(textEl2);
+      outer.appendChild(textEl2);
       textElByIdx[idx] = textEl2;
     });
     applyTextWrapLive(tf, textElByIdx, inner);
@@ -2107,13 +2107,20 @@
         'display:flex;align-items:center;justify-content:center;text-align:center;' + baseStyle + '">' +
         html + '</div></foreignObject>';
     }).join('');
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + tf.w + '" height="' + tf.h +
-      '" viewBox="0 0 ' + tf.w + ' ' + tf.h + '"><style>' +
+    // Zusätzlicher Rand um den eigentlichen Karteninhalt: SVGs beschneiden
+    // standardmäßig am eigenen Viewport - ohne diesen Rand würden über den
+    // Kartenrand hinausragende Effekte (WordArt-Streckung/Schrägstellung/
+    // Extrusion) abgeschnitten, sobald das Ergebnis als <img> angezeigt
+    // wird (betraf "Meine Dateien" und die Klassenübersicht).
+    var margin = Math.max(30, Math.round(Math.min(tf.w, tf.h) * 0.15));
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + (tf.w + margin * 2) + '" height="' + (tf.h + margin * 2) +
+      '" viewBox="0 0 ' + (tf.w + margin * 2) + ' ' + (tf.h + margin * 2) + '"><style>' +
       '.ic-frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;' +
       'font-size:.82em;line-height:1.1;margin:0 2px}' +
       '.ic-frac-num{border-bottom:1.5px solid currentColor;padding:0 3px 1px}' +
       '.ic-frac-den{padding:1px 3px 0}' +
-      '</style>' + defs + bgRect + behindShapesEl + textEls + frontShapesEl + '</svg>';
+      '</style><g transform="translate(' + margin + ',' + margin + ')">' +
+      defs + bgRect + behindShapesEl + textEls + frontShapesEl + '</g></svg>';
   }
 
   // Bettet die tatsächlich verwendeten Web-Fonts (aktuell nur "Handschrift")
@@ -2339,7 +2346,11 @@
         ev.preventDefault();
       }
       function up() {
-        if (dragging) { dragging = false; render(); }
+        if (!dragging) { return; }
+        dragging = false;
+        var primaryEl = tf.texts[0] && frame.querySelector('[data-textid="' + tf.texts[0].id + '"]');
+        if (primaryEl) { autoFitPrimaryText(primaryEl, tf.texts[0], tf.h); }
+        render();
       }
       frameResizeHandle.addEventListener('mousedown', down);
       frameResizeHandle.addEventListener('touchstart', down, { passive: false });

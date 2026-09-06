@@ -525,7 +525,7 @@
 .ic-present-photo {
   position: absolute; padding: 0; transition: opacity .25s ease;
 }
-.ic-present-photo img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 4px 24px rgba(0,0,0,.6); }
+.ic-present-photo img { width: 100%; display: block; border-radius: 4px; }
 .ic-present-photo.ic-present-occluded { opacity: 0; pointer-events: none; }
 .ic-present-photo.ic-present-addable { cursor: pointer; }
 .ic-present-step-frame {
@@ -549,13 +549,12 @@
   position: absolute; transform: translate(-50%, -50%); padding: 4px 8px; white-space: pre-wrap;
   outline: none; cursor: move; min-width: 20px; text-align: center;
 }
-.ic-textframe-obj.active { outline: 1px dashed rgba(255,255,255,.5); }
+.ic-textframe-obj.active { box-shadow: 0 4px 24px rgba(0,0,0,.6); }
 .ic-textframe-obj:empty::before { content: attr(data-placeholder); opacity: .5; }
 .ic-textframe-obj.primary {
   position: absolute; inset: 0; transform: none; box-sizing: border-box; padding: 12px;
   display: table-cell; vertical-align: middle; overflow: hidden; cursor: text;
 }
-.ic-textframe-obj.primary.active { outline-offset: -2px; }
 .ic-textframe-preview > .ic-resize {
   position: absolute; right: -10px; bottom: -10px; width: 26px; height: 26px;
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: nwse-resize;

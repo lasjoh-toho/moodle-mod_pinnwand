@@ -1198,6 +1198,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Bild-URLs bekommen jetzt einen Cache-Busting-Parameter - Änderungen
   sollten dadurch ohne Verzögerung sichtbar werden.
 
+### Fünfundneunzigste Überarbeitung — WordArt-Beschneidung behoben, Auto-Fit, Präsentations-Schatten übertragen
+
+- WordArt wurde auf der Pinnwand und im gespeicherten Bild am
+  Kartenrand abgeschnitten - behoben.
+- Schriftgröße passt sich nach Größenänderung des Rahmens automatisch
+  an.
+- Kein Rahmen/Schatten mehr während der Präsentation - derselbe
+  Schatten-Look wird jetzt für den Fokus-Zustand von Textobjekten im
+  Editor verwendet statt der bisherigen gestrichelten Linie.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

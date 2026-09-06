@@ -2704,3 +2704,30 @@ Betrifft: `js/app.js`, `classes/external.php`.
   einer Bearbeitung oft noch die alte, zwischengespeicherte
   Bildversion (mutmaßliche Ursache für "Update-Synchronisation
   zwischen Pinnwand und Dateimanager").
+
+---
+
+## Phase 91 — WordArt-Beschneidung behoben, Schriftgrößen-Auto-Fit bei Rahmen-Resize, Präsentations-Schatten übertragen ✅
+
+Siebenundachtzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] **WordArt-Beschneidung auf der Pinnwand behoben**: Text- und
+  Formen-Objekte hängen jetzt am unbeschnittenen äußeren Container
+  statt am formbeschnittenen inneren (analog zum früheren
+  Formen-Fix im Editor).
+- [x] **Beschneidung im SVG-Export behoben**: SVGs beschneiden
+  standardmäßig am eigenen Viewport - zusätzlicher Rand um den
+  Karteninhalt ergänzt, damit über den Rand hinausragende Effekte
+  (Streckung/Schrägstellung/Extrusion) nicht mehr abgeschnitten
+  werden. Betrifft damit auch "Meine Dateien" und die
+  Klassenübersicht, die das gespeicherte Bild zeigen.
+- [x] **Schriftgrößen-Auto-Fit bei Rahmen-Resize**: nach dem
+  Verkleinern/Vergrößern des Zettel-Rahmens wird die Schriftgröße des
+  primären Textobjekts jetzt automatisch neu angepasst.
+- [x] **Präsentations-Schatten auf Fokus-Rahmen übertragen**: der
+  Schatten-Rahmen, der Objekte während der Präsentation umgab, ist
+  während der Präsentation jetzt weg (kein Rahmen mehr) - derselbe
+  Schatten-Look wird stattdessen für den Fokus-Zustand von
+  Textobjekten im Editor verwendet (statt der bisherigen gestrichelten
+  Linie).
