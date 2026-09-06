@@ -1164,6 +1164,13 @@ Details und Scoping-Entscheidungen. In Kurzform:
   in den Post-Stream, statt erst über "Meine Bilder" gesendet werden
   zu müssen.
 
+### Einundneunzigste Überarbeitung — Formen-Beschneidungs-Bugfix, robustere Fehlerbehandlung
+
+- Formen wurden am Kartenrand abgeschnitten statt frei über die ganze
+  Editorfläche beweglich zu sein - behoben.
+- Fehlerbehandlung beim Speichern verstärkt: Fehler erscheinen jetzt
+  immer als Meldung statt im schlimmsten Fall unsichtbar zu bleiben.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

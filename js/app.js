@@ -2147,10 +2147,17 @@
   // damit "Bearbeiten" später wieder den Wortfeld-Editor öffnen kann.
   function saveTextFrame(tf, saveBtn, sendDirect) {
     saveBtn.disabled = true;
-    var svg = buildTextFrameSVG(tf);
-    var label = tf.texts.map(function (t) { return t.text; }).filter(Boolean).join(' ');
-    var wordfielddata = JSON.stringify(tf);
-    var isEditingExisting = !!state.editingPhotoId;
+    var svg, label, wordfielddata, isEditingExisting;
+    try {
+      svg = buildTextFrameSVG(tf);
+      label = tf.texts.map(function (t) { return t.text; }).filter(Boolean).join(' ');
+      wordfielddata = JSON.stringify(tf);
+      isEditingExisting = !!state.editingPhotoId;
+    } catch (e) {
+      alert(S.error_save + ' (' + e.message + ')');
+      saveBtn.disabled = false;
+      return;
+    }
 
     embedFontsInSVG(svg, tf).then(function (finalSvg) {
       var dataUrl = 'data:image/svg+xml;base64,' + utf8ToBase64(finalSvg);
@@ -2184,6 +2191,9 @@
         alert(S.error_save + ' (' + e.message + ')');
         saveBtn.disabled = false;
       });
+    }).catch(function (e) {
+      alert(S.error_save + ' (' + e.message + ')');
+      saveBtn.disabled = false;
     });
   }
 
@@ -2555,9 +2565,11 @@
         shapeEl.style.shapeOutside = 'circle(50%)';
       }
       if (s.wrapMode === 'front') {
-        frameInner.appendChild(shapeEl);
+        shapeEl.style.zIndex = '2';
+        frame.appendChild(shapeEl);
       } else {
-        frameInner.insertBefore(shapeEl, frameInner.firstChild);
+        shapeEl.style.zIndex = '0';
+        frame.insertBefore(shapeEl, frame.firstChild);
       }
     });
 

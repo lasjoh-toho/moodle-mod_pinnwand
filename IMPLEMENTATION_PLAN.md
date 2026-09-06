@@ -2596,3 +2596,31 @@ da Formen als Objekte ja gerade explizit so gewünscht waren
 weiteren Bug finden (Kern-Bugfix aus Phase 70 ist weiterhin intakt),
 der neue Direkt-Senden-Button sollte den beschriebenen Anwendungsfall
 aber ohnehin direkt lösen.
+
+---
+
+## Phase 87 — Formen-Beschneidungs-Bugfix, Fehlerbehandlung beim Speichern 🔄
+
+Dreiundachtzigster Feedback-Durchgang (Klärung der zwei offenen
+Rückfragen). Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Formen-Beschneidungs-Bug gefunden**: Formen hingen an
+  `frameInner`, das für die Kartenform (Kreis/Oval/Rundung)
+  `overflow:hidden` trägt - beim Ziehen an den Rand wurden Formen
+  dadurch abgeschnitten statt frei über die ganze Editorfläche
+  beweglich zu sein ("entsteht als Objekt im Zettel" statt frei
+  beweglich). Fix: Formen hängen jetzt am unbeschnittenen `frame`
+  selbst, mit explizitem z-index um weiterhin korrekt vor/hinter Text
+  zu liegen.
+- [x] **Fehlerbehandlung beim Speichern verstärkt**: sowohl der
+  synchrone SVG-Aufbau als auch das äußere Promise (Schriftarten-
+  Einbettung) waren bisher nicht gegen Fehler abgesichert - ein
+  Fehlschlagen dort konnte den Klick auf Speichern wirkungslos
+  erscheinen lassen, ganz ohne Rückmeldung. Jetzt erscheint in jedem
+  Fall eine Fehlermeldung.
+
+**Noch nicht abschließend geklärt**: die genaue Ursache, warum ein
+gespeichertes Objekt nicht in "Meine Bilder" auftauchte, konnte nicht
+per Code-Durchsicht gefunden werden - die neue Fehlerbehandlung sollte
+aber beim nächsten Testen die tatsächliche Fehlermeldung sichtbar
+machen, falls es erneut auftritt.
