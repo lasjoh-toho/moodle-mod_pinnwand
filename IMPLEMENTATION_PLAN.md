@@ -2624,3 +2624,31 @@ gespeichertes Objekt nicht in "Meine Bilder" auftauchte, konnte nicht
 per Code-Durchsicht gefunden werden - die neue Fehlerbehandlung sollte
 aber beim nächsten Testen die tatsächliche Fehlermeldung sichtbar
 machen, falls es erneut auftritt.
+
+---
+
+## Phase 88 — Senden-Workflow-Klärung, Kartenauswahl als klickbarer Rahmen, Textobjekt-Rahmen nur bei Fokus ✅
+
+Vierundachtzigster Feedback-Durchgang (erster Teil einer größeren
+Liste). Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **Direkt-Senden-Workflow korrigiert**: landete bisher bei "Meine
+  Bilder" statt bei der Board-Ansicht mit geöffnetem Post-Stream-Panel
+  - dadurch war für den Nutzer nicht sichtbar, dass das Senden
+  tatsächlich funktioniert hat. Post-Stream ist NICHT an ein
+  bestimmtes Board gebunden, sondern ein gemeinsamer Warteraum auf
+  Aktivitätsebene (im Antworttext erklärt).
+- [x] **Kartenauswahl komplett umgebaut**: statt eines Buttons ein
+  klickbarer Rahmen um den Zettel selbst (`.ic-textframe-card-hit`,
+  clip-path "Rahmen mit Loch" - nur der Rand reagiert auf Klicks, die
+  Mitte bleibt für Text/Formen/Doppelklick frei).
+- [x] **Textobjekt-Rahmen nur bei Fokus**: `activeId` startet jetzt
+  ohne Vorauswahl, blur-Handler entfernt die Markierung wieder -
+  vorher blieb der Rahmen dauerhaft nach dem ersten Fokussieren
+  bestehen.
+
+**Noch offen** (zu viel für diesen Durchgang, siehe Antworttext):
+WordArt-Rahmen-Anpassung (zu viel Platz links, maximale Schriftgröße
+berechnen), Verlauf-Interface-Umbau (Balken über Tabs, immer sichtbare
+Checkbox davor, Tooltip statt Text), Schatten/Glow als Radiobuttons,
+Update-Synchronisation zwischen Pinnwand und Dateimanager.

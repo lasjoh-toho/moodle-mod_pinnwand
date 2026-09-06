@@ -1171,6 +1171,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Fehlerbehandlung beim Speichern verstärkt: Fehler erscheinen jetzt
   immer als Meldung statt im schlimmsten Fall unsichtbar zu bleiben.
 
+### Zweiundneunzigste Überarbeitung — Senden-Workflow, Kartenauswahl als Rahmen, Fokus-Rahmen
+
+- Direkt-Senden führt jetzt zur Board-Ansicht mit geöffnetem Post-
+  Stream-Panel statt zu "Meine Bilder" - Senden ist dadurch sichtbar
+  erfolgreich.
+- Kartenauswahl jetzt über einen klickbaren Rahmen um den Zettel statt
+  eines Buttons.
+- Rahmen um Textobjekte zeigt sich nur noch bei tatsächlichem Fokus.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

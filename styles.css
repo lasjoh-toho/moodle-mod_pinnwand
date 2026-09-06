@@ -689,6 +689,14 @@
   color: var(--ic-text); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 6px;
 }
 .ic-wordart-arc-tile.active { border-color: var(--ic-accent); }
+.ic-textframe-card-hit {
+  position: absolute; inset: 0; z-index: 3; cursor: pointer;
+  clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 10px 10px, 10px calc(100% - 10px), calc(100% - 10px) calc(100% - 10px), calc(100% - 10px) 10px, 10px 10px);
+  background: rgba(255,255,255,.06);
+  transition: background .15s;
+}
+.ic-textframe-card-hit:hover { background: rgba(79,140,255,.25); }
+.ic-textframe-card-hit.active { background: rgba(79,140,255,.35); outline: 2px solid var(--ic-accent); outline-offset: -2px; }
 .ic-textframe-arc-obj { cursor: pointer; }
 
 .ic-textframe-edit { display: flex; align-items: center; gap: 10px; margin: 8px 0; }

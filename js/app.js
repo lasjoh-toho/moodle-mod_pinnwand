@@ -2177,7 +2177,17 @@
         var afterSave = function () {
           refreshPhotos().then(function () {
             resetCaptureState();
-            state.step = isEditingExisting ? 'arrange' : (maxreached ? 'arrange' : 'home');
+            if (sendDirect) {
+              // Direkt zur Board-Ansicht mit geöffnetem Post-Stream-Panel,
+              // damit sofort sichtbar ist, dass das Objekt tatsächlich im
+              // gemeinsamen Warteraum angekommen ist (statt bei "Meine
+              // Bilder" zu landen, wo das nicht zu sehen war).
+              state.step = 'arrange';
+              state.streamPanelOpen = true;
+              loadStreamPhotos();
+            } else {
+              state.step = isEditingExisting ? 'arrange' : (maxreached ? 'arrange' : 'home');
+            }
             render();
           });
         };
@@ -2269,6 +2279,22 @@
       style: cardBg + cardBorder
     });
     frame.appendChild(frameInner);
+
+    // Klickbarer Rahmen um den Zettel zur Auswahl der Kartenfläche selbst
+    // (Kontur/Hintergrund/Effekte werden dann bearbeitbar) - liegt als
+    // "Rahmen mit Loch" (clip-path) über allem, reagiert aber NUR am
+    // Rand selbst auf Klicks, die Mitte bleibt für Text/Formen frei.
+    var cardFrameHit = el('div', {
+      class: 'ic-textframe-card-hit' + (state.activeShapeId === '__card__' ? ' active' : ''),
+      title: S.tf_target_card
+    });
+    cardFrameHit.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      state.activeShapeId = '__card__';
+      state.styleTargetMode = 'shape';
+      render();
+    });
+    frame.appendChild(cardFrameHit);
     stage.appendChild(frame);
     layout.appendChild(stage);
     body.appendChild(layout);
@@ -2305,7 +2331,7 @@
       window.addEventListener('touchend', up);
     })();
 
-    var activeId = tf.texts[0] && tf.texts[0].id;
+    var activeId = null;
     function selectText(id) {
       activeId = id;
       frame.querySelectorAll('.ic-textframe-obj').forEach(function (o) {
@@ -2342,6 +2368,12 @@
       // nur die aktive Markierung + das Steuerelemente-Panel isoliert
       // aktualisiert (siehe selectText/refreshControls).
       el2.addEventListener('focus', function () { selectText(t.id); });
+      el2.addEventListener('blur', function () {
+        if (activeId === t.id) {
+          activeId = null;
+          el2.classList.remove('active');
+        }
+      });
       if (isPrimary) {
         // Primäres Textobjekt: füllt den ganzen Rahmen, bricht automatisch
         // um und passt seine Schriftgröße live an (2D-Fit: Breite + Höhe),
@@ -2642,7 +2674,7 @@
     function refreshControls() {
       fontsBox.innerHTML = '';
       formBox.innerHTML = '';
-      var active = tf.texts.filter(function (t) { return t.id === activeId; })[0];
+      var active = tf.texts.filter(function (t) { return t.id === activeId; })[0] || tf.texts[0];
       if (!active) { return; }
 
       // Fill/Kontur/Effekte (Block 1) wirken auf DIESES aktive Textobjekt -
@@ -3276,19 +3308,6 @@
     undoBtn2.addEventListener('click', tfUndo);
     redoBtn2.addEventListener('click', tfRedo);
     tfHeaderLeft.appendChild(undoBtn2); tfHeaderLeft.appendChild(redoBtn2);
-    // Eigener, immer erreichbarer Button zur Kartenauswahl - ein Klick auf
-    // den Zettel selbst wurde bisher vom (den ganzen Zettel ausfüllenden)
-    // primären Textobjekt abgefangen und kam nie beim Hintergrund an.
-    var cardTargetBtn = el('button', {
-      class: 'ic-btn ic-btn-ghost ic-btn-icon' + (state.activeShapeId === '__card__' ? ' active' : ''),
-      title: S.tf_target_card
-    }, [icon('frameicon')]);
-    cardTargetBtn.addEventListener('click', function () {
-      state.activeShapeId = '__card__';
-      state.styleTargetMode = 'shape';
-      render();
-    });
-    tfHeaderLeft.appendChild(cardTargetBtn);
     tfHeader.appendChild(tfHeaderLeft);
     var tfHeaderRight = el('div', { class: 'ic-tf-header-group' });
     tfHeaderRight.appendChild(cancelWizardBtn());
