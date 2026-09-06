@@ -118,6 +118,7 @@ $string['tf_effects'] = 'Effekte';
 $string['tf_use_gradient'] = 'Verlauf verwenden';
 $string['tf_width'] = 'Dicke';
 $string['tf_shadow'] = 'Schatten';
+$string['tf_effect_none'] = 'Keiner';
 $string['tf_glow'] = 'Glow';
 $string['tf_target_text'] = 'Text';
 $string['tf_target_shape'] = 'Form';

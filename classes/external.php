@@ -18,6 +18,21 @@ class mod_pinnwand_external extends external_api {
         return [$cm, $context, $instance];
     }
 
+    // ---------------------------------------------------------------
+    // Hilfsfunktion: Foto-URL mit Cache-Busting-Parameter (Zeitstempel
+    // der letzten Änderung) - ohne diesen zeigte der Browser nach einer
+    // Bearbeitung oft noch die alte, zwischengespeicherte Bildversion,
+    // weil sich die URL sonst nicht ändert, selbst wenn die Datei auf
+    // dem Server neu geschrieben wurde.
+    // ---------------------------------------------------------------
+    protected static function photo_url($contextid, $photoid, $filename, $timemodified = 0) {
+        $url = moodle_url::make_pluginfile_url($contextid, 'mod_pinnwand', 'photo', $photoid, '/', $filename);
+        if ($timemodified) {
+            $url->param('v', $timemodified);
+        }
+        return (string) $url;
+    }
+
     /**
      * Effektive Höchstzahl an Bildern für die aktuelle Person in dieser
      * Aktivität. Lehrkräfte (erkannt an mod/pinnwand:viewall) haben ein
@@ -121,6 +136,7 @@ class mod_pinnwand_external extends external_api {
         $record->boardid = $params['boardid'];
         $record->wordfielddata = $params['wordfielddata'] !== '' ? $params['wordfielddata'] : null;
         $record->timecreated = time();
+        $record->timemodified = $record->timecreated;
         $record->id = $DB->insert_record('pinnwand_photos', $record);
 
         $fs = get_file_storage();
@@ -141,9 +157,7 @@ class mod_pinnwand_external extends external_api {
             'max' => $effectivemax,
             'maxreached' => ($effectivemax > 0 && $newcount >= $effectivemax),
             'hiddenfromboard' => (bool) $record->hiddenfromboard,
-            'url' => (string) moodle_url::make_pluginfile_url(
-                $context->id, 'mod_pinnwand', 'photo', $record->id, '/', $filerecord['filename']
-            ),
+            'url' => self::photo_url($context->id, $record->id, $filerecord['filename'], $record->timemodified),
         ];
     }
 
@@ -197,9 +211,7 @@ class mod_pinnwand_external extends external_api {
             }
             $out[] = [
                 'id' => (int) $r->id,
-                'url' => (string) moodle_url::make_pluginfile_url(
-                    $context->id, 'mod_pinnwand', 'photo', $r->id, '/', $file->get_filename()
-                ),
+                'url' => self::photo_url($context->id, $r->id, $file->get_filename(), $r->timemodified),
                 'annotationdata' => $r->annotationdata !== null ? (string) $r->annotationdata : '[]',
                 'gridtype' => $r->gridtype,
                 'gridvalue' => (int) $r->gridvalue,
@@ -1468,9 +1480,7 @@ class mod_pinnwand_external extends external_api {
                 'id' => (int) $r->id,
                 'userid' => (int) $r->userid,
                 'userfullname' => fullname($r),
-                'url' => (string) moodle_url::make_pluginfile_url(
-                    $context->id, 'mod_pinnwand', 'photo', $r->id, '/', $file->get_filename()
-                ),
+                'url' => self::photo_url($context->id, $r->id, $file->get_filename(), $r->timemodified),
                 'sourcetitle' => (string) $r->sourcetitle,
                 'sourceauthor' => (string) $r->sourceauthor,
                 'sourceyear' => (string) $r->sourceyear,
@@ -1649,6 +1659,7 @@ class mod_pinnwand_external extends external_api {
         }
 
         $photo->wordfielddata = $params['wordfielddata'] !== '' ? $params['wordfielddata'] : null;
+        $photo->timemodified = time();
         $DB->update_record('pinnwand_photos', $photo);
 
         $fs = get_file_storage();
@@ -1665,9 +1676,7 @@ class mod_pinnwand_external extends external_api {
 
         return [
             'success' => true,
-            'url' => (string) moodle_url::make_pluginfile_url(
-                $context->id, 'mod_pinnwand', 'photo', $photo->id, '/', $filerecord['filename']
-            ),
+            'url' => self::photo_url($context->id, $photo->id, $filerecord['filename'], $photo->timemodified),
         ];
     }
 
@@ -2114,9 +2123,7 @@ class mod_pinnwand_external extends external_api {
                 'userid' => (int) $r->userid,
                 'userfullname' => fullname($r),
                 'mine' => $mine,
-                'url' => (string) moodle_url::make_pluginfile_url(
-                    $context->id, 'mod_pinnwand', 'photo', $r->id, '/', $file->get_filename()
-                ),
+                'url' => self::photo_url($context->id, $r->id, $file->get_filename(), $r->timemodified),
                 'sourcetitle' => (string) $r->sourcetitle,
                 'sourceauthor' => (string) ($r->sourceauthor ?? ''),
                 'sourceyear' => (string) ($r->sourceyear ?? ''),
@@ -2227,9 +2234,7 @@ class mod_pinnwand_external extends external_api {
                 'contextid' => $context->id, 'component' => 'mod_pinnwand', 'filearea' => 'photo',
                 'itemid' => $newid, 'filepath' => '/', 'filename' => $file->get_filename(),
             ], $file);
-            $url = (string) moodle_url::make_pluginfile_url(
-                $context->id, 'mod_pinnwand', 'photo', $newid, '/', $newfile->get_filename()
-            );
+            $url = self::photo_url($context->id, $newid, $newfile->get_filename(), time());
         }
 
         return ['id' => (int) $newid, 'url' => (string) $url];

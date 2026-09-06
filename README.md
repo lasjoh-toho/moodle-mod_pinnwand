@@ -1188,6 +1188,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Balken zeigt Vollfarbe oder Verlauf je nach Checkbox-Status,
   Hinweistext jetzt als Tooltip.
 
+### Vierundneunzigste Überarbeitung — Schatten/Glow-Radiobuttons, WordArt-Rahmen-Bugfix, Cache-Busting
+
+- Schatten/Glow jetzt als Radiobuttons (nur einer aktiv) statt zwei
+  unabhängiger Checkboxen.
+- WordArt-Rahmen-Kernbugfix: Zentrierung wurde durch den Stil-eigenen
+  transform überschrieben ("zu viel Platz links") - behoben an allen
+  drei betroffenen Stellen.
+- Bild-URLs bekommen jetzt einen Cache-Busting-Parameter - Änderungen
+  sollten dadurch ohne Verzögerung sichtbar werden.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

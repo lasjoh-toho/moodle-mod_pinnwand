@@ -256,6 +256,7 @@ $config = [
         'tf_use_gradient' => get_string('tf_use_gradient', 'pinnwand'),
         'tf_width' => get_string('tf_width', 'pinnwand'),
         'tf_shadow' => get_string('tf_shadow', 'pinnwand'),
+        'tf_effect_none' => get_string('tf_effect_none', 'pinnwand'),
         'tf_glow' => get_string('tf_glow', 'pinnwand'),
         'tf_target_text' => get_string('tf_target_text', 'pinnwand'),
         'tf_target_shape' => get_string('tf_target_shape', 'pinnwand'),

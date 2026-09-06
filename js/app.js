@@ -1805,7 +1805,7 @@
       escapeXml(plainText || '') + '</textPath></text></svg>';
   }
 
-  function wordartCssFor(t, fallbackColor) {
+  function wordartCssFor(t, fallbackColor, isPrimary) {
     if (!t.wordartStyle || t.wordartStyle === 'none') { return ''; }
     var style = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0];
     if (!style) { return ''; }
@@ -1818,7 +1818,8 @@
     var radY = rotY * Math.PI / 180;
     var scaleX = Math.cos(radY);
     var skewFromRotY = Math.sin(radY) * 12; // Grad-Näherung der Y-Rotations-Scherung
-    var css = 'display:inline-block;transform:skewY(' + (skewY + skewFromRotY).toFixed(2) + 'deg) scaleX(' + scaleX.toFixed(3) + ') scaleY(' + scaleY + ') rotate(' + rotate + 'deg);';
+    var css = 'display:inline-block;transform:' + (isPrimary ? '' : 'translate(-50%,-50%) ') +
+      'skewY(' + (skewY + skewFromRotY).toFixed(2) + 'deg) scaleX(' + scaleX.toFixed(3) + ') scaleY(' + scaleY + ') rotate(' + rotate + 'deg);';
     if (style.fillGradient) {
       css += 'background-image:' + style.fillGradient + ';-webkit-background-clip:text;background-clip:text;color:transparent;';
     } else {
@@ -2082,7 +2083,7 @@
       var baseStyle = 'box-sizing:border-box;font-family:' + escapeXml(fontCss) + ';font-size:' + t.size +
         'px;font-weight:' + (t.fontWeight || 700) + ';line-height:' + (t.lineHeight || 1.2) +
         ';letter-spacing:' + (t.letterSpacing || 0) + 'px;white-space:pre-wrap;word-wrap:break-word;overflow:hidden;' +
-        (wordartCssFor(t, preset.text) || computeStyle1Css(t, preset.text));
+        (wordartCssFor(t, preset.text, true) || computeStyle1Css(t, preset.text));
       if (idx === 0) {
         // Primäres Textobjekt: füllt den ganzen Rahmen.
         return '<foreignObject x="0" y="0" width="' + tf.w + '" height="' + tf.h + '">' +
@@ -2370,7 +2371,7 @@
         style: (isPrimary ? '' : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;') +
           'font-family:' + fontCss + ';font-size:' + t.size + 'px;font-weight:' + t.fontWeight +
           ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px;' +
-          (wordartCssFor(t, preset.text) || computeStyle1Css(t, preset.text))
+          (wordartCssFor(t, preset.text, isPrimary) || computeStyle1Css(t, preset.text))
       });
       // innerHTML statt textContent: so bleiben Fett/Kursiv/Unterstrichen/
       // Durchgestrichen/Aufzählungen (siehe Formatierungswerkzeuge) beim
@@ -2788,16 +2789,28 @@
           });
           return swatch;
         }
-        var shadowToggleRow = el('div', { class: 'ic-textframe-edit' });
-        var shadowToggle = el('label', { class: 'ic-me-check' });
-        var shadowCheck = el('input', { type: 'checkbox' });
-        shadowCheck.checked = !!styleTarget.shadowOn;
-        shadowCheck.addEventListener('change', function () { styleTarget.shadowOn = shadowCheck.checked; applyShapeOrTextChange(); });
-        shadowToggle.appendChild(shadowCheck); shadowToggle.appendChild(document.createTextNode(S.tf_shadow));
-        shadowToggleRow.appendChild(shadowToggle);
-        shadowToggleRow.appendChild(buildEffectColorSwatch('shadowColor', '#000000'));
-        bigPaletteContainer.appendChild(shadowToggleRow);
-        if (styleTarget.shadowOn) {
+        // Schatten/Glow als Radiobuttons - nur eins von beiden kann
+        // gleichzeitig aktiv sein (statt zwei unabhängiger Checkboxen).
+        var effectMode = styleTarget.shadowOn ? 'shadow' : (styleTarget.glowOn ? 'glow' : 'none');
+        var effectGroup = el('div', { class: 'ic-btn-group' });
+        var effectModes = [['none', S.tf_effect_none], ['shadow', S.tf_shadow]];
+        if (!isShapeTarget) { effectModes.push(['glow', S.tf_glow]); } // Glow ergibt bei Formen (SVG) aktuell nur als Schatten Sinn
+        effectModes.forEach(function (m) {
+          var btn = el('button', { class: 'ic-btn ic-btn-ghost' + (effectMode === m[0] ? ' active' : '') }, [m[1]]);
+          btn.addEventListener('click', function () {
+            styleTarget.shadowOn = m[0] === 'shadow';
+            styleTarget.glowOn = m[0] === 'glow';
+            applyShapeOrTextChange();
+          });
+          effectGroup.appendChild(btn);
+        });
+        bigPaletteContainer.appendChild(effectGroup);
+
+        if (effectMode === 'shadow') {
+          var shadowColorRow = el('div', { class: 'ic-textframe-edit' });
+          shadowColorRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_fill]));
+          shadowColorRow.appendChild(buildEffectColorSwatch('shadowColor', '#000000'));
+          bigPaletteContainer.appendChild(shadowColorRow);
           var angleRow = el('div', { class: 'ic-textframe-edit' });
           angleRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_shadow_angle]));
           angleRow.appendChild(numberStepper(styleTarget.shadowAngle != null ? styleTarget.shadowAngle : 45, 0, 360, 15, 0, function (v) { styleTarget.shadowAngle = v; applyShapeOrTextChange(); }));
@@ -2810,24 +2823,15 @@
           blurRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
           blurRow.appendChild(numberStepper(styleTarget.shadowBlur || 4, 0, 20, 1, 0, function (v) { styleTarget.shadowBlur = v; applyShapeOrTextChange(); }));
           bigPaletteContainer.appendChild(blurRow);
-        }
-        if (!isShapeTarget) {
-          // Glow ergibt bei Formen (SVG) aktuell nur als Schatten Sinn.
-          var glowToggleRow = el('div', { class: 'ic-textframe-edit' });
-          var glowToggle = el('label', { class: 'ic-me-check' });
-          var glowCheck = el('input', { type: 'checkbox' });
-          glowCheck.checked = !!styleTarget.glowOn;
-          glowCheck.addEventListener('change', function () { styleTarget.glowOn = glowCheck.checked; applyShapeOrTextChange(); });
-          glowToggle.appendChild(glowCheck); glowToggle.appendChild(document.createTextNode(S.tf_glow));
-          glowToggleRow.appendChild(glowToggle);
-          glowToggleRow.appendChild(buildEffectColorSwatch('glowColor', '#ffffff'));
-          bigPaletteContainer.appendChild(glowToggleRow);
-          if (styleTarget.glowOn) {
-            var glowWidthRow = el('div', { class: 'ic-textframe-edit' });
-            glowWidthRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
-            glowWidthRow.appendChild(numberStepper(styleTarget.glowWidth || 8, 0, 20, 1, 0, function (v) { styleTarget.glowWidth = v; applyShapeOrTextChange(); }));
-            bigPaletteContainer.appendChild(glowWidthRow);
-          }
+        } else if (effectMode === 'glow') {
+          var glowColorRow = el('div', { class: 'ic-textframe-edit' });
+          glowColorRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_fill]));
+          glowColorRow.appendChild(buildEffectColorSwatch('glowColor', '#ffffff'));
+          bigPaletteContainer.appendChild(glowColorRow);
+          var glowWidthRow = el('div', { class: 'ic-textframe-edit' });
+          glowWidthRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_width]));
+          glowWidthRow.appendChild(numberStepper(styleTarget.glowWidth || 8, 0, 20, 1, 0, function (v) { styleTarget.glowWidth = v; applyShapeOrTextChange(); }));
+          bigPaletteContainer.appendChild(glowWidthRow);
         }
         // Wird eine Farbe gerade gewählt (Schatten/Glow), erscheint dieselbe
         // große Palette wie bei Fläche darunter.
@@ -3164,7 +3168,9 @@
       function reapplyTextStyle() {
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (!objEl) { return; }
-        objEl.style.cssText += ';' + (wordartCssFor(active, preset.text) || ('color:' + (active.color || preset.text) + ';'));
+        var isActivePrimary = tf.texts[0] && tf.texts[0].id === active.id;
+        objEl.style.cssText += ';' + (wordartCssFor(active, preset.text, isActivePrimary) || ('color:' + (active.color || preset.text) + ';'));
+        if (isActivePrimary) { autoFitPrimaryText(objEl, active, tf.h); }
       }
 
       // Formeleditor: Hoch-/Tiefstellen, Bruch, Symbol-Palette - nur im

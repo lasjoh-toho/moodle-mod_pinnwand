@@ -2678,3 +2678,29 @@ Fünfundachtzigster Feedback-Durchgang. Betrifft: `js/app.js`,
 
 **Noch offen**: Schatten/Glow als Radiobuttons (nur eins gleichzeitig
 aktiv) - noch nicht umgesetzt.
+
+---
+
+## Phase 90 — Schatten/Glow als Radiobuttons, WordArt-Rahmen-Kernbugfix, Cache-Busting für Bild-URLs ✅
+
+Sechsundachtzigster Feedback-Durchgang (letzte drei offene Punkte).
+Betrifft: `js/app.js`, `classes/external.php`.
+
+- [x] **Schatten/Glow als Radiobuttons**: drei Optionen (Keiner/
+  Schatten/Glow), nur eine gleichzeitig aktiv, darunter tab-artig die
+  passenden Einstellungen.
+- [x] **WordArt-Rahmen-Kernbugfix gefunden**: der WordArt-Stil setzte
+  sein eigenes `transform` (Schrägstellung/Streckung/Rotation) per
+  Inline-Style, was die Zentrierung (`translate(-50%,-50%)`) aus dem
+  CSS komplett überschrieb statt sich damit zu kombinieren - erklärt
+  "zu viel Platz links". Betraf drei Stellen (Editor-Rendering,
+  `reapplyTextStyle`, Export) - alle korrigiert, mit korrekter
+  Unterscheidung primäres/anderes Textobjekt. Nach Stilwechsel wird
+  jetzt zusätzlich die Schriftgröße neu an den Rahmen angepasst
+  (`autoFitPrimaryText`).
+- [x] **Cache-Busting für Bild-URLs**: `timemodified` wird jetzt beim
+  Aktualisieren korrekt gesetzt, neue Hilfsfunktion `photo_url()`
+  hängt es als `?v=`-Parameter an - ohne das zeigte der Browser nach
+  einer Bearbeitung oft noch die alte, zwischengespeicherte
+  Bildversion (mutmaßliche Ursache für "Update-Synchronisation
+  zwischen Pinnwand und Dateimanager").
