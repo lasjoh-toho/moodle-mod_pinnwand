@@ -1227,6 +1227,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Schriftgröße skaliert jetzt mit, wenn die Karte auf der Pinnwand
   verkleinert wird.
 
+### Achtundneunzigste Überarbeitung — WordArt-Vorlagen originalgetreu, Effekt-Skalierung vervollständigt
+
+- Extrusions-Schatten und Glow-Breite skalieren jetzt ebenfalls mit
+  der Kartengröße auf der Pinnwand.
+- WordArt-Vorlagen originalgetreu neu übernommen (echte mehrstufige
+  Verläufe statt vereinfachter 2-Farben-Näherung, korrekte
+  Schriftarten je Vorlage, ein Farbfehler behoben).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -2789,3 +2789,24 @@ Neunundachtzigster Feedback-Durchgang. Betrifft: `js/app.js`,
 **Noch nicht umgestellt**: Extrusions-Schatten-Offsets und Glow-Breite
 in `wordartCssFor()` bleiben vorerst in festen Pixeln (kleinerer,
 weniger kritischer visueller Nebeneffekt).
+
+---
+
+## Phase 94 — Glow/Schatten-Skalierung behoben, WordArt-Vorlagen originalgetreu neu übernommen ✅
+
+Neunzigster Feedback-Durchgang. Betrifft: `js/app.js`.
+
+- [x] **Glow/Schatten-Skalierung behoben**: `wordartCssFor()` bekam
+  einen optionalen `cqwPerPx`-Parameter - Extrusions-Schatten und
+  Glow-Breite nutzen jetzt ebenfalls cqw-Einheiten auf der Pinnwand
+  (vorher nur die Schriftgröße selbst).
+- [x] **WordArt-Vorlagen komplett originalgetreu neu übernommen**:
+  erneuter Blick in die hochgeladene Datei zeigte, dass mehrere
+  Vorlagen beim ersten Port zu grob vereinfacht wurden (2-Farben-
+  Näherung statt der echten mehrstufigen Verläufe) - jetzt exakt mit
+  den originalen SVG-Farbstopps und -Positionen übernommen. Dabei
+  einen echten Übertragungsfehler gefunden: `#6900cc→#cb00cc` (Purple
+  Skew) war versehentlich zu `#69c→#c0c` verkürzt worden - eine ganz
+  andere Farbe. Schriftart-Vorgabe je Vorlage ergänzt (fehlte bisher
+  komplett - manche Vorlagen wie Chrom nutzen bewusst Times New Roman,
+  andere bewusst Impact).

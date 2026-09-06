@@ -1751,34 +1751,34 @@
   // bündelt Fläche (Farbe/Verlauf), Kontur, vertikale Streckung sowie
   // Extrusions-Farbe/-Tiefe für den 3D-Effekt.
   var WORDART_STYLES = [
-    { id: 'chrome-ultra', label: 'Chrom High-Gloss', fillGradient: 'linear-gradient(180deg,#2b4756 0%,#8baac1 20%,#ffffff 48%,#161d26 50%,#3d2c1d 53%,#a47c50 78%,#f3e5c8 100%)', stroke: '#1e293b', strokeWidth: 0.5, scaleY: 1.4, extrudeColor: '#0f172a', extrudeSteps: 14 },
-    { id: 'silver-metal', label: 'Silber Metallik', fillGradient: 'linear-gradient(180deg,#9ca3af 0%,#e5e7eb 25%,#ffffff 49%,#4b5563 50%,#d1d5db 75%,#6b7280 100%)', stroke: '#2b2b2b', strokeWidth: 0.6, scaleY: 1.3, extrudeColor: '#475569', extrudeSteps: 10 },
-    { id: 'gold-extrude', label: 'Gold Metallik', fillGradient: 'linear-gradient(180deg,#fef08a 0%,#facc15 30%,#ffffff 49%,#854d0e 50%,#eab308 80%,#713f12 100%)', stroke: '#3a2500', strokeWidth: 0.5, scaleY: 1.3, extrudeColor: '#422006', extrudeSteps: 12 },
+    { id: 'chrome-ultra', label: 'Chrom High-Gloss', fillGradient: 'linear-gradient(180deg,#2b4756 0%,#8baac1 20%,#ffffff 48%,#161d26 50%,#3d2c1d 53%,#a47c50 78%,#f3e5c8 100%)', stroke: '#1e293b', strokeWidth: 0.5, font: "'Times New Roman',serif", scaleY: 1.4, extrudeColor: '#0f172a', extrudeSteps: 14 },
+    { id: 'silver-metal', label: 'Silber Metallik', fillGradient: 'linear-gradient(180deg,#9ca3af 0%,#e5e7eb 25%,#ffffff 49%,#4b5563 50%,#d1d5db 75%,#6b7280 100%)', stroke: '#2b2b2b', strokeWidth: 0.6, font: 'Impact,sans-serif', scaleY: 1.3, extrudeColor: '#475569', extrudeSteps: 10 },
+    { id: 'gold-extrude', label: 'Gold Metallik', fillGradient: 'linear-gradient(180deg,#fef08a 0%,#facc15 30%,#ffffff 49%,#854d0e 50%,#eab308 80%,#713f12 100%)', stroke: '#3a2500', strokeWidth: 0.5, font: 'Impact,sans-serif', scaleY: 1.3, extrudeColor: '#422006', extrudeSteps: 12 },
     { id: 'sunset-metal', label: 'Sunset Metallic', fillGradient: 'linear-gradient(180deg,#7dd3fc 0%,#ffffff 48%,#be123c 50%,#fb7185 75%,#fde047 100%)', stroke: '#000', strokeWidth: 0.5, scaleY: 1.5, extrudeColor: '#18181b', extrudeSteps: 14 },
-    { id: 'rainbow', label: 'Regenbogen', fillGradient: 'linear-gradient(90deg,#ff0000,#ff7f00,#ffff00,#00ff00,#0000ff,#8b00ff)', stroke: '#fff', strokeWidth: 0.5, scaleY: 1.5, extrudeColor: '#334155', extrudeSteps: 8 },
-    { id: 'classic-blue', label: 'Klassisch Blau', fillGradient: 'linear-gradient(180deg,#0099ff,#003399)', stroke: '#99ccff', strokeWidth: 0.8, scaleY: 1.3, extrudeColor: '#002245', extrudeSteps: 10 },
-    { id: 'synthwave', label: 'Synthwave', fillGradient: 'linear-gradient(180deg,#ff007f,#7928ca,#00f0ff)', stroke: '#ff007f', strokeWidth: 1.2, scaleY: 1.3, skewY: -5, extrudeColor: '#240046', extrudeSteps: 12 },
-    { id: 'offset90s', label: '90s Offset', fillColor: '#33ccff', stroke: '#000099', strokeWidth: 1.5, scaleY: 1.2, extrudeColor: '#000099', extrudeSteps: 6 },
-    { id: 'outline', label: 'Classic Outline', fillColor: '#fff', stroke: '#000', strokeWidth: 2, scaleY: 1.25, extrudeSteps: 0 },
-    { id: 'black-skew', label: 'Black Skew', fillColor: '#000', scaleY: 1.65, skewY: -10, rotate: -3, extrudeSteps: 0 },
+    { id: 'rainbow', label: 'Regenbogen', fillGradient: 'linear-gradient(90deg,#ff0000 0%,#ff7f00 20%,#ffff00 40%,#00ff00 60%,#0000ff 80%,#8b00ff 100%)', stroke: '#fff', strokeWidth: 0.5, font: 'Impact,sans-serif', scaleY: 1.5, extrudeColor: '#334155', extrudeSteps: 8 },
+    { id: 'classic-blue', label: 'Klassisch Blau', fillGradient: 'linear-gradient(180deg,#0099ff,#003399)', stroke: '#99ccff', strokeWidth: 0.8, font: 'Impact,sans-serif', scaleY: 1.3, extrudeColor: '#002245', extrudeSteps: 10 },
+    { id: 'synthwave', label: 'Synthwave', fillGradient: 'linear-gradient(180deg,#ff007f 0%,#7928ca 50%,#00f0ff 100%)', stroke: '#ff007f', strokeWidth: 1.2, font: 'Impact,sans-serif', scaleY: 1.3, skewY: -5, extrudeColor: '#240046', extrudeSteps: 12 },
+    { id: 'offset90s', label: '90s Offset', fillColor: '#33ccff', stroke: '#000099', strokeWidth: 1.5, font: 'Impact,sans-serif', scaleY: 1.2, extrudeColor: '#000099', extrudeSteps: 6 },
+    { id: 'outline', label: 'Classic Outline', fillColor: '#fff', stroke: '#000', strokeWidth: 2, scaleY: 1.25, extrudeColor: '#000', extrudeSteps: 0 },
+    { id: 'black-skew', label: 'Black Skew', fillColor: '#000', scaleY: 1.65, skewY: -10, rotate: -3, extrudeColor: '#000', extrudeSteps: 0 },
     { id: 'soft-shadow', label: 'Soft Shadow', fillColor: '#fff', stroke: '#000', strokeWidth: 1, scaleY: 1.65, extrudeColor: '#999', extrudeSteps: 4 },
-    { id: 'times-blue', label: 'Times Blue', fillColor: '#369', extrudeColor: '#c1c1c1', extrudeSteps: 3 },
+    { id: 'times-blue', label: 'Times Blue', fillColor: '#369', font: "'Times New Roman',serif", extrudeColor: '#c1c1c1', extrudeSteps: 3 },
     { id: 'offset-blue', label: 'Offset Blue', fillColor: '#d8d8d8', stroke: '#33c', strokeWidth: 1, scaleY: 1.25, extrudeColor: '#99f', extrudeSteps: 6 },
     { id: 'silver-gradient', label: 'Silver Gradient', fillGradient: 'linear-gradient(180deg,#adadad,#fff)', extrudeColor: '#717171', extrudeSteps: 5 },
-    { id: 'impact-red', label: 'Impact Red', fillColor: '#06c', stroke: '#9cf', strokeWidth: 0.5, scaleY: 1.25, extrudeColor: '#900', extrudeSteps: 6 },
-    { id: 'sunburst-yellow', label: 'Sunburst Yellow', fillGradient: 'radial-gradient(circle,#fff812,#ff9a32)', scaleY: 1.25, extrudeColor: '#cdcdcd', extrudeSteps: 6 },
-    { id: 'purple-skew', label: 'Purple Skew', fillGradient: 'linear-gradient(180deg,#69c,#c0c)', stroke: '#d2a2fe', strokeWidth: 0.5, scaleY: 1.65, rotate: -3, skewY: -3, extrudeColor: '#adadff', extrudeSteps: 6 },
-    { id: 'forest-times', label: 'Forest Times', fillColor: '#1a4b28', stroke: '#080', strokeWidth: 1.5, scaleY: 1.25, extrudeColor: '#d2e5dc', extrudeSteps: 8 },
-    { id: 'rainbow-spectrum', label: 'Rainbow Spectrum', fillGradient: 'linear-gradient(90deg,#a104ad,#0b2be0,#329941,#f7f658,#f16412,#e92153,#aa04a7)', stroke: '#eaeaea', strokeWidth: 0.5, scaleY: 1.65, extrudeColor: '#cdcdcd', extrudeSteps: 8 },
-    { id: 'cyan-gradient', label: 'Cyan Gradient', fillGradient: 'linear-gradient(180deg,#999cfc,#1b999c)', extrudeColor: '#cdcdcd', extrudeSteps: 4 },
+    { id: 'impact-red', label: 'Impact Red', fillColor: '#06c', stroke: '#9cf', strokeWidth: 0.5, font: 'Impact,sans-serif', scaleY: 1.25, extrudeColor: '#900', extrudeSteps: 6 },
+    { id: 'sunburst-yellow', label: 'Sunburst Yellow', fillGradient: 'radial-gradient(circle,#fff812 0%,#ff9a32 100%)', font: 'Impact,sans-serif', scaleY: 1.25, extrudeColor: '#cdcdcd', extrudeSteps: 6 },
+    { id: 'purple-skew', label: 'Purple Skew', fillGradient: 'linear-gradient(180deg,#6900cc,#cb00cc)', stroke: '#d2a2fe', strokeWidth: 0.5, font: 'Impact,sans-serif', scaleY: 1.65, rotate: -3, skewY: -3, extrudeColor: '#adadff', extrudeSteps: 6 },
+    { id: 'forest-times', label: 'Forest Times', fillColor: '#1a4b28', stroke: '#080', strokeWidth: 1.5, font: "'Times New Roman',serif", scaleY: 1.25, extrudeColor: '#d2e5dc', extrudeSteps: 8 },
+    { id: 'rainbow-spectrum', label: 'Rainbow Spectrum', fillGradient: 'linear-gradient(270deg,#a104ad 0%,#0b2be0 16%,#329941 33%,#f7f658 50%,#f16412 66%,#e92153 83%,#aa04a7 100%)', stroke: '#eaeaea', strokeWidth: 0.5, scaleY: 1.65, extrudeColor: '#cdcdcd', extrudeSteps: 8 },
+    { id: 'cyan-gradient', label: 'Cyan Gradient', fillGradient: 'linear-gradient(180deg,#999cfc,#1b999c)', font: "'Times New Roman',serif", extrudeColor: '#cdcdcd', extrudeSteps: 4 },
     { id: 'heavy-extrude', label: 'Heavy Extrude', fillColor: '#896640', scaleY: 1.65, extrudeColor: '#1b0d00', extrudeSteps: 12 },
-    { id: 'soft-red-extrude', label: 'Soft Red Extrude', fillGradient: 'linear-gradient(180deg,#fffecb,#ff9999)', scaleY: 1.3, extrudeColor: '#002245', extrudeSteps: 8 },
+    { id: 'soft-red-extrude', label: 'Soft Red Extrude', fillGradient: 'linear-gradient(180deg,#fffecb,#ff9999)', font: "'Times New Roman',serif", scaleY: 1.3, extrudeColor: '#002245', extrudeSteps: 8 },
     { id: 'flame-gradient', label: 'Flame Gradient', fillGradient: 'linear-gradient(180deg,#551700,#fecb00)', stroke: '#b2b2b2', strokeWidth: 1, scaleY: 1.65, extrudeColor: '#ab8d56', extrudeSteps: 8 },
-    { id: 'blue-shadow', label: 'Blue Shadow', fillColor: '#3cf', stroke: '#009', strokeWidth: 1.25, scaleY: 1.2, extrudeColor: '#009', extrudeSteps: 6 },
+    { id: 'blue-shadow', label: 'Blue Shadow', fillColor: '#3cf', stroke: '#009', strokeWidth: 1.25, font: 'Impact,sans-serif', scaleY: 1.2, extrudeColor: '#009', extrudeSteps: 6 },
     { id: 'pattern-yellow', label: 'Pattern Yellow', fillColor: '#ff0', stroke: '#000', strokeWidth: 1, scaleY: 1.25, extrudeColor: '#999', extrudeSteps: 4 },
     { id: 'dark-green-extrude', label: 'Dark Green Extrude', fillColor: '#0f3a1a', scaleY: 1.75, rotate: -7, extrudeColor: '#000800', extrudeSteps: 14 },
-    { id: 'deep-3d-shadow', label: 'Deep 3D Shadow', fillColor: '#fff', scaleY: 1.25, skewY: 15, rotate: -3, extrudeColor: '#2c2d23', extrudeSteps: 18 },
-    { id: 'fire-extrude', label: 'Fire Extrude', fillGradient: 'linear-gradient(225deg,#fee601,#fe4201)', scaleY: 1.5, skewY: -8, rotate: -3, extrudeColor: '#813300', extrudeSteps: 12 }
+    { id: 'deep-3d-shadow', label: 'Deep 3D Shadow', fillColor: '#fff', font: 'Impact,sans-serif', scaleY: 1.25, skewY: 15, rotate: -3, extrudeColor: '#2c2d23', extrudeSteps: 18 },
+    { id: 'fire-extrude', label: 'Fire Extrude', fillGradient: 'linear-gradient(135deg,#fee601 0%,#fe4201 100%)', font: 'Impact,sans-serif', scaleY: 1.5, skewY: -8, rotate: -3, extrudeColor: '#813300', extrudeSteps: 12 }
   ];
   // Baut CSS für eine WordArt-Vorlage bzw. individuell eingestellte
   // Werte (t.rotate/skewY/scaleY/extrudeSteps/extrudeColor/wordartGlow*)
@@ -1816,10 +1816,11 @@
       escapeXml(plainText || '') + '</textPath></text></svg>';
   }
 
-  function wordartCssFor(t, fallbackColor, isPrimary) {
+  function wordartCssFor(t, fallbackColor, isPrimary, cqwPerPx) {
     if (!t.wordartStyle || t.wordartStyle === 'none') { return ''; }
     var style = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0];
     if (!style) { return ''; }
+    var unit = function (px) { return cqwPerPx ? (px * cqwPerPx).toFixed(3) + 'cqw' : px + 'px'; };
     var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (style.extrudeSteps || 0);
     var extrudeColor = t.extrudeColor || style.extrudeColor || '#000';
     var scaleY = t.scaleY != null ? t.scaleY : (style.scaleY || 1);
@@ -1836,10 +1837,11 @@
     } else {
       css += 'color:' + (style.fillColor || fallbackColor) + ';';
     }
-    if (style.stroke) { css += '-webkit-text-stroke:' + (style.strokeWidth || 1) + 'px ' + style.stroke + ';paint-order:stroke fill;'; }
+    if (style.stroke) { css += '-webkit-text-stroke:' + unit(style.strokeWidth || 1) + ' ' + style.stroke + ';paint-order:stroke fill;'; }
+    if (style.font) { css += 'font-family:' + style.font + ';'; }
     var shadows = [];
-    for (var i = extrudeSteps; i >= 1; i--) { shadows.push((i * 0.8) + 'px ' + (i * 0.8) + 'px 0 ' + extrudeColor); }
-    if (t.wordartGlow) { shadows.push('0 0 ' + t.wordartGlow + 'px ' + (t.wordartGlowColor || '#fff'), '0 0 ' + (t.wordartGlow / 2) + 'px ' + (t.wordartGlowColor || '#fff')); }
+    for (var i = extrudeSteps; i >= 1; i--) { shadows.push(unit(i * 0.8) + ' ' + unit(i * 0.8) + ' 0 ' + extrudeColor); }
+    if (t.wordartGlow) { shadows.push('0 0 ' + unit(t.wordartGlow) + ' ' + (t.wordartGlowColor || '#fff'), '0 0 ' + unit(t.wordartGlow / 2) + ' ' + (t.wordartGlowColor || '#fff')); }
     if (shadows.length) { css += 'text-shadow:' + shadows.join(',') + ';'; }
     return css;
   }
@@ -1999,7 +2001,7 @@
             'padding:4px 8px;white-space:pre-wrap;text-align:center;max-width:94%;z-index:1;' +
             'font-family:' + fontCss + ';font-size:' + (t.size / tf.w * 100) + 'cqw;font-weight:' + (t.fontWeight || 700) +
             ';line-height:' + (t.lineHeight || 1.2) + ';letter-spacing:' + ((t.letterSpacing || 0) / tf.w * 100) + 'cqw;' +
-            (wordartCssFor(t, preset.text) || computeStyle1Css(t, preset.text))
+            (wordartCssFor(t, preset.text, false, 100 / tf.w) || computeStyle1Css(t, preset.text))
         });
       }
       outer.appendChild(textEl2);
