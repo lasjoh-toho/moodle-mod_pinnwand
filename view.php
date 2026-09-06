@@ -234,6 +234,7 @@ $config = [
         'format_bullets' => get_string('format_bullets', 'pinnwand'),
         'format_superscript' => get_string('format_superscript', 'pinnwand'),
         'format_subscript' => get_string('format_subscript', 'pinnwand'),
+        'format_highlight' => get_string('format_highlight', 'pinnwand'),
         'format_fraction' => get_string('format_fraction', 'pinnwand'),
         'lineheight' => get_string('lineheight', 'pinnwand'),
         'letterspacing' => get_string('letterspacing', 'pinnwand'),

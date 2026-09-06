@@ -1126,6 +1126,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
   einer Zeile.
 - Kontur-Farbe nutzt jetzt ebenfalls die große Palette.
 
+### Sechsundachtzigste Überarbeitung — Detail-Korrekturen im Textfeld-Editor
+
+- Schriftart/-dicke/Laufweite mit Beschriftung in einer Zeile.
+- Textmarker (Highlight) und Hoch-/Tiefstellen ergänzt.
+- Zettel selbst als Ziel für Fläche/Kontur/Effekte auswählbar (bisher
+  nur in der Editor-Vorschau, noch nicht im Export/auf der Pinnwand).
+- Noch offen: mehrere Verlauf-Stufen.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

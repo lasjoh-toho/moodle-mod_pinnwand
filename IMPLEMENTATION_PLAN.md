@@ -2475,3 +2475,26 @@ Zettel/die Kartenfläche selbst als Ziel auswählbar machen, mehrere
 Verlauf-Stufen statt nur zwei, Hoch-/Tiefstellen + Textmarker in der
 Zeichen-Zeile, Schrift/Schriftdicke/Laufweite mit Labels in einer
 gemeinsamen Zeile.
+
+---
+
+## Phase 82 — Restliche Detail-Korrekturen: Labels, Textmarker, Hoch-/Tiefstellen, Zettel als Ziel wählbar 🔄
+
+Achtundsiebzigster Feedback-Durchgang (Rest der vorherigen Liste).
+Betrifft: `js/app.js`, neue Strings.
+
+- [x] Schriftart/Schriftdicke/Laufweite jetzt in einer gemeinsamen Zeile
+  mit Beschriftung (fehlte bisher) - Schriftgröße bleibt eigene Zeile.
+- [x] Textmarker (Highlight) links in der Zeichen-Zeile ergänzt - öffnet
+  die große Palette in einem verschiebbaren Modal.
+- [x] Hoch-/Tiefstellen in dieselbe Zeile wie Fett/Kursiv/Unterstrichen/
+  Durchgestrichen ergänzt.
+- [x] **Zettel selbst als Ziel auswählbar**: Klick auf eine leere Stelle
+  des Zettels (nicht auf ein Objekt) wählt jetzt den Zettel selbst aus
+  (`__card__`-Sonderfall, `tf.cardStyle`) - Fläche/Kontur/Effekte
+  wirken dann auf die Kartenfläche. Wirkt bisher nur im Editor-Vorschau
+  (frameInner), noch NICHT im SVG-Export oder der Pinnwand-Darstellung.
+
+**Noch offen:** mehrere Verlauf-Stufen (aktuell weiterhin fix zwei) -
+zu groß/riskant für diesen Durchgang, Datenmodell-Änderung hätte das
+gerade erst stabilisierte Verlauf-System wieder gefährdet.

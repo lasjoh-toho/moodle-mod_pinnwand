@@ -2129,9 +2129,14 @@
     // (Kreis/Oval/Rundung) - overflow:hidden bleibt bewusst HIER und nicht
     // auf frame selbst, sonst würde der leicht außerhalb liegende
     // Größenänderungs-Griff (siehe unten) unsichtbar/unklickbar.
+    var cardStyle = tf.cardStyle || {};
+    var cardBg = cardStyle.fillGradient
+      ? 'background-image:linear-gradient(' + ((cardStyle.fillGradientAngle != null ? cardStyle.fillGradientAngle : 135) + 90) + 'deg,' + cardStyle.fillGradient[0] + ',' + cardStyle.fillGradient[1] + ');'
+      : (cardStyle.fillColor ? 'background:' + cardStyle.fillColor + ';' : (preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;'));
+    var cardBorder = cardStyle.outlineWidth ? 'box-shadow:inset 0 0 0 ' + cardStyle.outlineWidth + 'px ' + (cardStyle.outlineColor || '#000') + ';' : '';
     var frameInner = el('div', {
       class: 'ic-textframe-inner',
-      style: preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;'
+      style: cardBg + cardBorder
     });
     frame.appendChild(frameInner);
     stage.appendChild(frame);
@@ -2506,7 +2511,9 @@
       // Fläche/Kontur/Effekte wirken auf Text ODER die gerade ausgewählte
       // Form - je nachdem, was im T/Rechteck-Umschalter oben gewählt ist
       // (state.styleTargetMode), nicht mehr implizit erraten.
-      var styleActiveShape = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
+      tf.cardStyle = tf.cardStyle || {};
+      var styleActiveShape = state.activeShapeId === '__card__' ? tf.cardStyle
+        : tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
       var isShapeTarget = state.styleTargetMode === 'shape';
       var styleTarget = isShapeTarget ? styleActiveShape : active;
       var styleTargetMissing = isShapeTarget && !styleTarget;
@@ -2727,9 +2734,31 @@
       if (!state.wordArtMode) {
         fontsBox.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_group_char]));
         var charRow = el('div', { class: 'ic-textframe-formatgrid' });
+        var highlightBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_highlight }, [icon('highlighticon')]);
+        highlightBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        highlightBtn.addEventListener('click', function () {
+          var savedSel = window.getSelection();
+          var savedRange = savedSel.rangeCount ? savedSel.getRangeAt(0).cloneRange() : null;
+          openDraggableModal(S.format_highlight, highlightBtn, function (content) {
+            function applyHighlight(color) {
+              var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+              if (!objEl) { return; }
+              if (savedRange) {
+                var sel = window.getSelection();
+                sel.removeAllRanges(); sel.addRange(savedRange);
+              }
+              applyStyleToSelectionOrWhole(objEl, 'background-color:' + color + ';', function () {});
+              noteRecentColor(color);
+            }
+            if (state.colorTab === 'wheel') { buildColorWheel(content, null, applyHighlight); }
+            else { buildBigColorPalette(content, null, null, applyHighlight, null); }
+          });
+        });
+        charRow.appendChild(highlightBtn);
         [
           ['bold', 'boldicon', S.format_bold], ['italic', 'italicicon', S.format_italic],
-          ['underline', 'underlineicon', S.format_underline], ['strikeThrough', 'strikeicon', S.format_strike]
+          ['underline', 'underlineicon', S.format_underline], ['strikeThrough', 'strikeicon', S.format_strike],
+          ['superscript', 'supicon', S.format_superscript], ['subscript', 'subicon', S.format_subscript]
         ].forEach(function (cmd) {
           var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
           fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
@@ -2738,7 +2767,12 @@
         });
         fontsBox.appendChild(charRow);
       }
-      var editRow = el('div', { class: 'ic-textframe-edit' });
+      // Schriftart, Schriftdicke und Laufweite gemeinsam in einer Zeile,
+      // jeweils mit Beschriftung. Schriftgröße bleibt als eigene Zeile
+      // (A-/A+ -Buttons brauchen mehr Platz). Wirken auf die aktuelle
+      // Zeichen-Auswahl, falls vorhanden, sonst auf das ganze Textobjekt.
+      var fontWeightSpaceRow = el('div', { class: 'ic-textframe-formatgrid' });
+      var fontGroup = el('div', { class: 'ic-textframe-edit' });
       var fontSel = el('select', { class: 'ic-textframe-select' });
       TEXTFRAME_FONTS.forEach(function (f) {
         fontSel.appendChild(el('option', { value: f.id, selected: f.id === active.font ? 'selected' : null }, [f.label]));
@@ -2752,8 +2786,8 @@
           objEl.style.fontFamily = css;
         });
       });
-      editRow.appendChild(fontSel);
-      fontsBox.appendChild(editRow);
+      fontGroup.appendChild(fontSel);
+      fontWeightSpaceRow.appendChild(fontGroup);
 
       // WordArt: eigener "Fonts"-Button öffnet die kuratierte, nach
       // Kategorien geordnete Schriftbibliothek (siehe WORDART_FONT_CATEGORIES) -
@@ -2765,10 +2799,7 @@
         fontsBox.appendChild(fontsBtn);
       }
 
-      // Größe, Gewicht und Laufweite jetzt gemeinsam in einer Zeile (auf
-      // Wunsch) statt drei separaten Zeilen. Wirken auf die aktuelle
-      // Zeichen-Auswahl, falls vorhanden, sonst auf das ganze Textobjekt.
-      var sizeWeightSpaceRow = el('div', { class: 'ic-textframe-formatgrid' });
+      var sizeRow = el('div', { class: 'ic-textframe-edit' });
       var sizeGroup = el('div', { class: 'ic-textframe-edit' });
       var sizeDisplay = el('span', { class: 'ic-stepper-value' }, [String(active.size)]);
       var lastSizeDelta = 0;
@@ -2791,9 +2822,12 @@
       sizeDown.addEventListener('click', function () { setSize(-2); });
       sizeUp.addEventListener('click', function () { setSize(2); });
       sizeGroup.appendChild(sizeDown); sizeGroup.appendChild(sizeDisplay); sizeGroup.appendChild(sizeUp);
-      sizeWeightSpaceRow.appendChild(sizeGroup);
+      sizeRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontsize]));
+      sizeRow.appendChild(sizeGroup);
+      fontsBox.appendChild(sizeRow);
 
       var weightGroup = el('div', { class: 'ic-textframe-edit' });
+      weightGroup.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontweight]));
       weightGroup.appendChild(numberStepper(active.fontWeight || 700, 300, 900, 100, 0, function (v) {
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (!objEl) { return; }
@@ -2802,9 +2836,10 @@
           objEl.style.fontWeight = v;
         });
       }));
-      sizeWeightSpaceRow.appendChild(weightGroup);
+      fontWeightSpaceRow.appendChild(weightGroup);
 
       var spaceGroup = el('div', { class: 'ic-textframe-edit' });
+      spaceGroup.appendChild(el('span', { class: 'ic-textframe-label' }, [S.letterspacing]));
       spaceGroup.appendChild(numberStepper(active.letterSpacing || 0, -2, 20, 0.5, 1, function (v) {
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (!objEl) { return; }
@@ -2813,8 +2848,8 @@
           objEl.style.letterSpacing = v + 'px';
         });
       }));
-      sizeWeightSpaceRow.appendChild(spaceGroup);
-      fontsBox.appendChild(sizeWeightSpaceRow);
+      fontWeightSpaceRow.appendChild(spaceGroup);
+      fontsBox.appendChild(fontWeightSpaceRow);
 
       // Absatz-Werkzeuge (wirken auf die markierten Zeilen bzw. das ganze
       // Textobjekt, nicht auf einzelne Zeichen): Ausrichtung, Zeilenabstand,
@@ -2964,6 +2999,12 @@
     // Kein separater "Text hinzufügen"-Button mehr - ein Doppelklick auf
     // eine LEERE Stelle im Editorfeld (nicht auf ein bestehendes
     // Textobjekt) legt WYSIWYG ein neues Textobjekt genau dort an.
+    frame.addEventListener('click', function (ev) {
+      if (ev.target !== frame && ev.target !== frameInner) { return; }
+      state.activeShapeId = '__card__';
+      state.styleTargetMode = 'shape';
+      render();
+    });
     frame.addEventListener('dblclick', function (ev) {
       if (ev.target !== frame) { return; }
       var rect = frame.getBoundingClientRect();
@@ -3221,6 +3262,9 @@
     italicicon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="14" y1="4" x2="9" y2="20"/><line x1="17" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="7" y2="20"/></svg>',
     underlineicon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 3v8a6 6 0 0 0 12 0V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>',
     strikeicon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 8c0-2.5 2.5-4 6-4s5 1.2 5 3"/><path d="M7 16c0 2.2 2.3 4 5 4s6-1.2 6-3.5"/><line x1="3" y1="12" x2="21" y2="12"/></svg>',
+    highlighticon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11 3 17l1.5 3L8 19l6-6"/><path d="M12 8l4-4 4 4-4 4z"/><rect x="3" y="18" width="6" height="3" fill="currentColor" stroke="none"/></svg>',
+    supicon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 18 9 8M3 8l6 10"/><path d="M15 8h5M19 8c0-1.2-1-2-2-2s-2 .6-2 1.6"/></svg>',
+    subicon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 8 9 18M3 18l6-10"/><path d="M15 18h5M19 18c0-1.2-1-2-2-2s-2 .6-2 1.6"/></svg>',
     bulleticon: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="4" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.4" fill="currentColor" stroke="none"/><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/></svg>',
     alignleft: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>',
     aligncenter: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>',

@@ -96,6 +96,7 @@ $string['format_strike'] = 'Durchgestrichen';
 $string['format_bullets'] = 'Aufzählung';
 $string['format_superscript'] = 'Hochstellen';
 $string['format_subscript'] = 'Tiefstellen';
+$string['format_highlight'] = 'Textmarker';
 $string['format_fraction'] = 'Bruch einfügen';
 $string['lineheight'] = 'Zeilenabstand';
 $string['letterspacing'] = 'Laufweite';

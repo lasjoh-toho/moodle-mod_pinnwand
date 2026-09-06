@@ -96,6 +96,7 @@ $string['format_strike'] = 'Strikethrough';
 $string['format_bullets'] = 'Bullet list';
 $string['format_superscript'] = 'Superscript';
 $string['format_subscript'] = 'Subscript';
+$string['format_highlight'] = 'Highlight';
 $string['format_fraction'] = 'Insert fraction';
 $string['lineheight'] = 'Line height';
 $string['letterspacing'] = 'Letter spacing';
