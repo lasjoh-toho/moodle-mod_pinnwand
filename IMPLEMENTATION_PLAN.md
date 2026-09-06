@@ -2546,3 +2546,27 @@ bereitgestellten Prototyp-Datei `wordart_editor_final.html`). Betrifft:
 NICHT Teil der hochgeladenen Datei (meine eigene frühere Ergänzung) -
 noch nicht umgesetzt, wartet auf Rückmeldung ob gewünscht. Block 2
 "Schriften" (visuelle Kachel-Vorschau für Fonts/Kategorien) folgt noch.
+
+---
+
+## Phase 85 — Font-Kacheln + Bögen (Text folgt einem Pfad) ✅
+
+Einundachtzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`, neue Strings.
+
+- [x] **Font-Kacheln**: Kategorien und einzelne Schriften im WordArt-
+  Schriftbrowser zeigen jetzt ein gerendertes Beispielwort in der
+  jeweiligen Optik statt reinem Text/Listenzeile - echtes
+  Kachel-Raster statt einspaltiger Liste.
+- [x] **Bögen (Text folgt einem Pfad)**: natives SVG `<textPath>` statt
+  CSS-Trick, da echte Pfad-Geometrie nötig - funktioniert dadurch live
+  im Editor, auf der Pinnwand UND im SVG-Export identisch. Vier
+  Varianten (Aufwärts/Abwärts/Welle/Kreis) mit Krümmungsstärke-Regler,
+  als Vorschau-Kacheln mit echter Pfad-Linie wählbar.
+- [x] Editor-Interaktion: Bogen-Objekt zeigt die SVG-Ansicht, solange es
+  NICHT bearbeitet wird - Klick wechselt zurück zur normalen
+  editierbaren Eingabe, Verlassen wechselt wieder zur Bogen-Ansicht.
+
+**Bewusste Einschränkung**: Bogen-Text unterstützt nur einfachen Text,
+keine Fett/Kursiv-Formatierung innerhalb (bei Text-auf-Pfad auch in
+echten Grafikprogrammen üblich).

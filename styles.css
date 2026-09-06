@@ -674,13 +674,22 @@
 .ic-wordart-preset-btn.active { border-color: var(--ic-accent); }
 
 .ic-wordart-font-modal { max-height: 80vh; }
-.ic-wordart-cat-btn { width: 100%; justify-content: space-between; display: flex; margin-bottom: 6px; }
-.ic-wordart-font-grid { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-height: 55vh; overflow-y: auto; }
-.ic-wordart-font-btn {
-  text-align: left; padding: 10px 12px; border-radius: 8px; border: none; background: #1b1d22;
-  color: var(--ic-text); font-size: 1.15rem; cursor: pointer;
+.ic-wordart-cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 8px; }
+.ic-wordart-cat-tile, .ic-wordart-font-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border-radius: 8px;
+  background: #24262c; border: none; cursor: pointer; color: var(--ic-text); overflow: hidden;
 }
-.ic-wordart-font-btn:hover { background: #24262c; }
+.ic-wordart-cat-tile:hover, .ic-wordart-font-tile:hover { background: #2c2e35; }
+.ic-wordart-cat-tile-sample, .ic-wordart-font-tile-sample { font-size: 1.4rem; line-height: 1.1; }
+.ic-wordart-cat-tile-label, .ic-wordart-font-tile-label { font-size: .68rem; color: var(--ic-muted); text-align: center; }
+.ic-wordart-font-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 8px; max-height: 55vh; overflow-y: auto; }
+.ic-wordart-arc-row { display: flex; gap: 8px; margin: 8px 0; }
+.ic-wordart-arc-tile {
+  flex: 1 1 0; aspect-ratio: 5/3; border-radius: 8px; border: 2px solid transparent; background: #24262c;
+  color: var(--ic-text); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 6px;
+}
+.ic-wordart-arc-tile.active { border-color: var(--ic-accent); }
+.ic-textframe-arc-obj { cursor: pointer; }
 
 .ic-textframe-edit { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
 .ic-textframe-select {

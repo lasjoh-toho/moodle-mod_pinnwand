@@ -1149,6 +1149,13 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Neue Regler: Y-Rotation, Extrusion-Tiefe/-Farbe, Rotation,
   Schrägstellung, vertikale Streckung, Glow.
 
+### Neunundachtzigste Überarbeitung — Font-Kacheln + Bögen
+
+- WordArt-Schriftbrowser zeigt jetzt echte Kacheln mit gerendertem
+  Beispielwort statt Text-Liste.
+- Bögen (Text folgt einem Pfad) ergänzt: Aufwärts/Abwärts/Welle/Kreis,
+  natives SVG - live, auf der Pinnwand und im Export identisch.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

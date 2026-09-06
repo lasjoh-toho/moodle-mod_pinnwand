@@ -1639,12 +1639,18 @@
 
     function showCategories() {
       body2.innerHTML = '';
+      var catGrid = el('div', { class: 'ic-wordart-cat-grid' });
       Object.keys(WORDART_FONT_CATEGORIES).forEach(function (cat) {
-        var catBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-wordart-cat-btn' },
-          [WORDART_CATEGORY_LABELS[cat] || cat, el('span', { class: 'ic-textframe-label' }, [' (' + WORDART_FONT_CATEGORIES[cat].length + ')'])]);
+        var fonts = WORDART_FONT_CATEGORIES[cat];
+        var sampleFont = fonts[Math.floor(fonts.length / 2)] || fonts[0];
+        var catBtn = el('button', { class: 'ic-wordart-cat-tile' }, [
+          el('div', { class: 'ic-wordart-cat-tile-sample', style: 'font-family:' + resolveFontCss(sampleFont) }, [S.wordart_sample_word]),
+          el('div', { class: 'ic-wordart-cat-tile-label' }, [(WORDART_CATEGORY_LABELS[cat] || cat) + ' (' + fonts.length + ')'])
+        ]);
         catBtn.addEventListener('click', function () { showFonts(cat); });
-        body2.appendChild(catBtn);
+        catGrid.appendChild(catBtn);
       });
+      body2.appendChild(catGrid);
     }
     function showFonts(cat) {
       body2.innerHTML = '';
@@ -1653,7 +1659,10 @@
       body2.appendChild(backBtn);
       var grid = el('div', { class: 'ic-wordart-font-grid' });
       WORDART_FONT_CATEGORIES[cat].forEach(function (name) {
-        var fb = el('button', { class: 'ic-wordart-font-btn', style: 'font-family:' + resolveFontCss(name) }, [name]);
+        var fb = el('button', { class: 'ic-wordart-font-tile' }, [
+          el('div', { class: 'ic-wordart-font-tile-sample', style: 'font-family:' + resolveFontCss(name) }, [S.wordart_sample_word]),
+          el('div', { class: 'ic-wordart-font-tile-label' }, [name])
+        ]);
         fb.addEventListener('click', function () { applyFont(name); });
         grid.appendChild(fb);
       });
@@ -1766,6 +1775,36 @@
   // (dieselbe Technik wie das Original-Prototyp, nur ohne echte
   // zusätzliche DOM-Elemente - funktioniert live UND im SVG-Export
   // identisch, da beide über HTML/CSS via foreignObject laufen).
+  // Bögen (Text folgt einem Pfad) - natives SVG <textPath>, funktioniert
+  // dadurch identisch live und im Export (kein CSS-Trick nötig, da echte
+  // Pfad-Geometrie). Vier Varianten, Krümmungsstärke einstellbar.
+  function arcSvgPathD(style, amount, w, h) {
+    var midY = h * 0.55, amt = ((amount != null ? amount : 50) / 100) * h * 0.45;
+    if (style === 'up') { return 'M 5,' + (midY + amt) + ' Q ' + (w / 2) + ',' + (midY - amt) + ' ' + (w - 5) + ',' + (midY + amt); }
+    if (style === 'down') { return 'M 5,' + (midY - amt) + ' Q ' + (w / 2) + ',' + (midY + amt) + ' ' + (w - 5) + ',' + (midY - amt); }
+    if (style === 'wave') {
+      return 'M 5,' + midY + ' Q ' + (w * 0.25) + ',' + (midY - amt) + ' ' + (w / 2) + ',' + midY +
+        ' Q ' + (w * 0.75) + ',' + (midY + amt) + ' ' + (w - 5) + ',' + midY;
+    }
+    if (style === 'circle') {
+      var r = Math.min(w, h) * 0.42;
+      return 'M ' + (w / 2 - r) + ',' + (h / 2) + ' A ' + r + ',' + r + ' 0 1,1 ' + (w / 2 + r) + ',' + (h / 2) +
+        ' A ' + r + ',' + r + ' 0 1,1 ' + (w / 2 - r) + ',' + (h / 2);
+    }
+    return null;
+  }
+  var arcIdCounter = 0;
+  function buildArcTextSvg(t, plainText, fontCss, color) {
+    var d = arcSvgPathD(t.arcStyle, t.arcAmount, 300, 120);
+    if (!d) { return null; }
+    var pid = 'arcpath' + (arcIdCounter++);
+    return '<svg viewBox="0 0 300 120" width="100%" height="100%" style="overflow:visible;display:block">' +
+      '<path id="' + pid + '" d="' + d + '" fill="none" stroke="none"/>' +
+      '<text font-family="' + fontCss + '" font-size="' + Math.round(t.size * 0.55) + '" font-weight="' + (t.fontWeight || 700) +
+      '" fill="' + color + '" text-anchor="middle"><textPath href="#' + pid + '" startOffset="50%">' +
+      escapeXml(plainText || '') + '</textPath></text></svg>';
+  }
+
   function wordartCssFor(t, fallbackColor) {
     if (!t.wordartStyle || t.wordartStyle === 'none') { return ''; }
     var style = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0];
@@ -1928,15 +1967,25 @@
     var textElByIdx = [];
     tf.texts.forEach(function (t, idx) {
       var fontCss = resolveFontCss(t.font);
-      var html = t.html || (t.text ? escapeXml(t.text) : '');
-      var textEl2 = el('div', {
-        class: 'ic-tf-live-text', html: html,
-        style: 'position:absolute;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
-          'padding:4px 8px;white-space:pre-wrap;text-align:center;max-width:94%;z-index:1;' +
-          'font-family:' + fontCss + ';font-size:' + t.size + 'px;font-weight:' + (t.fontWeight || 700) +
-          ';line-height:' + (t.lineHeight || 1.2) + ';letter-spacing:' + (t.letterSpacing || 0) + 'px;' +
-          (wordartCssFor(t, preset.text) || computeStyle1Css(t, preset.text))
-      });
+      var textEl2;
+      if (t.arcStyle && t.arcStyle !== 'none') {
+        textEl2 = el('div', {
+          class: 'ic-tf-live-text',
+          style: 'position:absolute;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
+            'width:' + Math.max(120, t.size * 6) + 'px;z-index:1;'
+        });
+        textEl2.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text)) || '';
+      } else {
+        var html = t.html || (t.text ? escapeXml(t.text) : '');
+        textEl2 = el('div', {
+          class: 'ic-tf-live-text', html: html,
+          style: 'position:absolute;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
+            'padding:4px 8px;white-space:pre-wrap;text-align:center;max-width:94%;z-index:1;' +
+            'font-family:' + fontCss + ';font-size:' + t.size + 'px;font-weight:' + (t.fontWeight || 700) +
+            ';line-height:' + (t.lineHeight || 1.2) + ';letter-spacing:' + (t.letterSpacing || 0) + 'px;' +
+            (wordartCssFor(t, preset.text) || computeStyle1Css(t, preset.text))
+        });
+      }
       inner.appendChild(textEl2);
       textElByIdx[idx] = textEl2;
     });
@@ -2003,9 +2052,16 @@
     // Durchgestrichen/Aufzählung sowie Zeilenabstand/Laufweite erhalten
     // (SVG-<text> unterstützt weder automatischen Umbruch noch Inline-HTML).
     var textEls = tf.texts.map(function (t, idx) {
+      var fontCss = resolveFontCss(t.font);
+      if (idx !== 0 && t.arcStyle && t.arcStyle !== 'none') {
+        var arcSvg = buildArcTextSvg(t, t.text, fontCss, t.fillColor || preset.text);
+        if (!arcSvg) { return ''; }
+        var arcW = Math.max(120, t.size * 6), arcH = arcW * 0.4;
+        return '<foreignObject x="' + (t.x * tf.w - arcW / 2) + '" y="' + (t.y * tf.h - arcH / 2) + '" width="' + arcW + '" height="' + arcH + '">' +
+          '<div xmlns="http://www.w3.org/1999/xhtml">' + arcSvg + '</div></foreignObject>';
+      }
       var html = t.html || (t.text ? escapeXml(t.text) : '');
       if (!html) { return ''; }
-      var fontCss = resolveFontCss(t.font);
       var baseStyle = 'box-sizing:border-box;font-family:' + escapeXml(fontCss) + ';font-size:' + t.size +
         'px;font-weight:' + (t.fontWeight || 700) + ';line-height:' + (t.lineHeight || 1.2) +
         ';letter-spacing:' + (t.letterSpacing || 0) + 'px;white-space:pre-wrap;word-wrap:break-word;overflow:hidden;' +
@@ -2281,6 +2337,19 @@
         el2.appendChild(sizeHandle);
         makeTextObjectMovable(el2, frame, t, sizeHandle);
         sizeHandle.addEventListener('mousedown', function () { selectText(t.id); });
+      }
+      if (!isPrimary && t.arcStyle && t.arcStyle !== 'none' && t.id !== activeId) {
+        // Bogen-Ansicht: SVG mit pfadfolgendem Text statt des editierbaren
+        // Feldes, solange NICHT gerade bearbeitet wird (Bearbeitung selbst
+        // bleibt einfacher Text - siehe Klick unten, der wieder zurück auf
+        // den normalen editierbaren Zustand wechselt).
+        var arcWrap = el('div', {
+          class: 'ic-textframe-obj ic-textframe-arc-obj',
+          style: 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + Math.max(120, t.size * 6) + 'px;'
+        });
+        arcWrap.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text)) || '';
+        arcWrap.addEventListener('click', function (ev) { ev.stopPropagation(); selectText(t.id); render(); });
+        return arcWrap;
       }
       return el2;
     }
@@ -3116,6 +3185,37 @@
             if (state.colorTab === 'wheel') { buildColorWheel(extrudeColorContainer, active.extrudeColor || activeWStyle.extrudeColor, applyExtrudeColor); }
             else { buildBigColorPalette(extrudeColorContainer, active.extrudeColor || activeWStyle.extrudeColor, null, applyExtrudeColor, null); }
           }
+        }
+
+        // Bögen: Text folgt einem Pfad - unabhängig von der Fläche-Vorlage
+        // oben, da ein eigenständiges Konzept.
+        formBox.appendChild(el('div', { class: 'ic-textframe-label' }, [S.wordart_arc_title]));
+        var arcRow = el('div', { class: 'ic-wordart-arc-row' });
+        [
+          ['none', S.wordart_arc_none], ['up', S.wordart_arc_up],
+          ['down', S.wordart_arc_down], ['wave', S.wordart_arc_wave], ['circle', S.wordart_arc_circle]
+        ].forEach(function (arc) {
+          var tile = el('button', {
+            class: 'ic-wordart-arc-tile' + ((active.arcStyle || 'none') === arc[0] ? ' active' : ''), title: arc[1]
+          });
+          if (arc[0] !== 'none') {
+            var previewD = arcSvgPathD(arc[0], 50, 100, 60);
+            tile.innerHTML = '<svg viewBox="0 0 100 60" width="100%" height="100%"><path d="' + previewD +
+              '" fill="none" stroke="currentColor" stroke-width="4"/></svg>';
+          } else {
+            tile.textContent = '\u2014';
+          }
+          tile.addEventListener('click', function () { active.arcStyle = arc[0] === 'none' ? null : arc[0]; render(); });
+          arcRow.appendChild(tile);
+        });
+        formBox.appendChild(arcRow);
+        if (active.arcStyle && active.arcStyle !== 'none') {
+          var arcAmountRow = el('div', { class: 'ic-textframe-edit' });
+          arcAmountRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.wordart_arc_amount]));
+          arcAmountRow.appendChild(numberStepper(active.arcAmount != null ? active.arcAmount : 50, 5, 100, 5, 0, function (v) {
+            active.arcAmount = v; render();
+          }));
+          formBox.appendChild(arcAmountRow);
         }
       }
 
