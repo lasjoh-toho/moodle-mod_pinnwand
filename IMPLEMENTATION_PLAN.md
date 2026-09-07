@@ -2917,3 +2917,23 @@ Strings.
   Hintergrund ist aktuell NICHT pro Board unterschiedlich (ein
   einziger gespeicherter Wert pro Nutzer/Aktivität, `boardid` wird
   beim Speichern gar nicht mitgegeben) - keine Duplizierung nötig.
+
+---
+
+## Phase 99 — Präsentations-Hotfix, echte Nachbarobjekte im Editor ✅
+
+Fünfundneunzigster Feedback-Durchgang (dringender Bugreport +
+Klärung). Betrifft: `js/app.js`, `styles.css`.
+
+- [x] **DRINGENDER HOTFIX**: die Präsentations-Umstellung auf
+  `buildTextFrameLiveDom` aus dem letzten Durchgang hat die
+  Präsentation offenbar zum Absturz gebracht - sofort zurück auf das
+  gespeicherte Bild revertiert, bis die genaue Ursache in Ruhe
+  gefunden werden kann (separates Vorhaben für später).
+- [x] **Echte Nachbarobjekte im Editor**: die Pinnwand-Hintergrund-
+  Vorschau zeigt jetzt nicht nur die Hintergrundfarbe/-bild, sondern
+  auch die tatsächlichen Nachbarobjekte auf der Pinnwand - genau die,
+  die auch bei Fokus in der Präsentation sichtbar bleiben (gleiche
+  oder niedrigere Ebene, gleiche Verdeckungs-Regel wie dort). Nur
+  möglich beim Bearbeiten eines bereits platzierten Objekts (neue,
+  noch nicht platzierte Objekte haben keine Board-Position).

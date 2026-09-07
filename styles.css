@@ -702,6 +702,7 @@
 }
 .ic-textframe-card-hit:hover { background: rgba(79,140,255,.25); }
 .ic-textframe-card-hit.active { background: rgba(79,140,255,.35); outline: 2px solid var(--ic-accent); outline-offset: -2px; }
+.ic-tf-neighbors-layer { position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
 .ic-textframe-arc-obj { cursor: pointer; }
 
 .ic-textframe-edit { display: flex; align-items: center; gap: 10px; margin: 8px 0; }

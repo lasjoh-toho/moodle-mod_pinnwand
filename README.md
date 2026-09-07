@@ -1261,12 +1261,23 @@ Details und Scoping-Entscheidungen. In Kurzform:
   passen sich dem verfügbaren Raum an.
 - WordArt startet standardmäßig ohne Hintergrund.
 
-### Einhundertzweite Überarbeitung — Präsentation vereinheitlicht, Pinnwand-Hintergrund-Vorschau
+### Einhundertzweite Überarbeitung — Pinnwand-Hintergrund-Vorschau
 
-- Präsentation nutzt jetzt dieselbe Live-Darstellung wie die Pinnwand
-  statt des gespeicherten Bildes - garantiert identisches Aussehen.
 - Neuer Umschalt-Button im Editor zeigt den echten Pinnwand-
   Hintergrund hinter dem Zettel, standardmäßig aktiv.
+- (Die zunächst geplante Umstellung der Präsentation auf dieselbe
+  Live-Darstellung wie die Pinnwand musste wieder zurückgenommen
+  werden - siehe nächster Eintrag.)
+
+### Einhundertdritte/-vierte Überarbeitung — Präsentations-Hotfix, echte Nachbarobjekte im Editor
+
+- Dringender Hotfix: die Präsentations-Umstellung hatte die
+  Präsentation zum Absturz gebracht - zurück auf das gespeicherte
+  Bild, bis die Ursache in Ruhe gefunden ist.
+- Pinnwand-Hintergrund-Vorschau im Editor zeigt jetzt auch die
+  echten Nachbarobjekte (genau die, die bei Fokus in der Präsentation
+  sichtbar bleiben) - nur beim Bearbeiten eines bereits platzierten
+  Objekts.
 
 ## Bekannte Grenzen dieser Version
 

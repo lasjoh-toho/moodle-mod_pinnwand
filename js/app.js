@@ -2412,6 +2412,32 @@
       var bbg = state.background || { type: 'color', color: '#2b2d33' };
       stage.style.backgroundColor = bbg.color || '#2b2d33';
       if (bbg.type === 'photo' && bbg.url) { stage.style.backgroundImage = 'url(' + bbg.url + ')'; stage.style.backgroundSize = 'cover'; stage.style.backgroundPosition = 'center'; }
+      // Nachbarobjekte zeigen, mit denen dieses Textfeld auf der Pinnwand
+      // interagieren soll - genau die, die auch bei Fokus in der
+      // Präsentation sichtbar bleiben (gleiche oder niedrigere Ebene,
+      // siehe Verdeckungs-Logik dort: rec.z > activeZ wird ausgeblendet).
+      // Nur möglich, wenn ein bereits platziertes Objekt bearbeitet wird -
+      // ein neues, noch nicht platziertes Objekt hat keine Board-Position.
+      if (state.editingPhotoId) {
+        var editingRec = state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0];
+        if (editingRec && editingRec.canvasw) {
+          var thisZ = editingRec.canvasz || 0;
+          var scale = tf.w / editingRec.canvasw;
+          var neighborsLayer = el('div', { class: 'ic-tf-neighbors-layer' });
+          state.photos.filter(function (p) {
+            return p.id !== editingRec.id && !p.hiddenfromboard && p.boardplaced &&
+              (p.boardid || 0) === (editingRec.boardid || 0) && (p.canvasz || 0) <= thisZ;
+          }).forEach(function (p) {
+            var nx = (p.canvasx - editingRec.canvasx) * scale, ny = (p.canvasy - editingRec.canvasy) * scale;
+            var nw = p.canvasw * scale;
+            neighborsLayer.appendChild(el('img', {
+              src: p.url, alt: '',
+              style: 'position:absolute;left:' + nx + 'px;top:' + ny + 'px;width:' + nw + 'px;' +
+                'transform:rotate(' + (p.canvasrot || 0) + 'deg);opacity:.85;pointer-events:none;'
+            }));
+          });
+        }
+      }
     }
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0];
     var frame = el('div', {
@@ -2420,6 +2446,7 @@
         (preset.shadow ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') +
         (preset.bg ? '' : 'border:2px dashed rgba(255,255,255,.3);')
     });
+    if (typeof neighborsLayer !== 'undefined' && neighborsLayer) { frame.appendChild(neighborsLayer); }
     // Innerer Container trägt Hintergrundfarbe UND die Formbeschneidung
     // (Kreis/Oval/Rundung) - overflow:hidden bleibt bewusst HIER und nicht
     // auf frame selbst, sonst würde der leicht außerhalb liegende
