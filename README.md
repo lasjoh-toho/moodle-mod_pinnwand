@@ -1293,6 +1293,12 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Text war nach erneutem Öffnen einer WordArt/Bogen-Vorschau nicht
   direkt markierbar - Fokus-Fix ergänzt.
 
+### Einhundertsiebte Überarbeitung — Ebenen-Stapelkontext-Bugfix
+
+- Nachbar-Objekte in der Editor-Vorschau lagen entgegen der
+  Absicht hinter dem simulierten Pinnwand-Hintergrund statt davor -
+  behoben (fehlender eigener Stapelkontext auf dem Zettel-Rahmen).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

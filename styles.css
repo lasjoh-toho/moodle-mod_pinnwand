@@ -543,7 +543,7 @@
 .ic-present-next { right: 16px; }
 
 /* Wortfeld (Textrahmen) */
-.ic-textframe-preview { position: relative; margin: 20px auto; overflow: visible; }
+.ic-textframe-preview { position: relative; margin: 20px auto; overflow: visible; z-index: 0; }
 .ic-textframe-inner { position: relative; width: 100%; height: 100%; z-index: 1; }
 .ic-textframe-obj {
   position: absolute; transform: translate(-50%, -50%); padding: 4px 8px; white-space: pre-wrap;

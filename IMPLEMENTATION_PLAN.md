@@ -2987,3 +2987,19 @@ Siebenundneunzigster Feedback-Durchgang. Betrifft: `js/app.js`.
 **Noch nicht identifiziert**: "Hintergrund und Objekte zeigen sich
 nicht korrekt" in der Editor-Vorschau - Code sieht strukturell korrekt
 aus, konkreter Fehler ohne genauere Rückmeldung nicht gefunden.
+
+---
+
+## Phase 102 — Ebenen-Stapelkontext-Bugfix (Nachbar-Ebene lag hinter Pinnwand-Hintergrund) ✅
+
+Achtundneunzigster Feedback-Durchgang. Betrifft: `styles.css`.
+
+- [x] **Bestätigter Bug**: `frame` (`.ic-textframe-preview`) hatte
+  `position:relative` aber KEINEN eigenen `z-index` - dadurch bildete
+  es keinen eigenen Stapelkontext. Die Nachbar-Ebene (negativer
+  z-index, soll nur hinter der Kartenfläche liegen) "entkam" dadurch
+  bis hinter den simulierten Pinnwand-Hintergrund auf `stage` -
+  entgegen der beabsichtigten Reihenfolge (Hintergrund → Nachbarn →
+  Kartenfläche → Formen/Text). Fix: `z-index:0` auf `frame` ergänzt,
+  wodurch es einen eigenen Stapelkontext bildet und die Nachbar-Ebene
+  korrekt darin eingeschlossen bleibt.
