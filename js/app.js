@@ -2408,35 +2408,50 @@
     var layout = el('div', { class: 'ic-textframe-layout ' + tfOrientation });
     var tfShowBg = state.tfShowBoardBg !== false; // Standardmäßig aktiv, außer der Nutzer hat es explizit ausgeschaltet
     var stage = el('div', { class: 'ic-stage' + (tfShowBg ? ' ic-tf-stage-boardbg' : '') });
+    var editingRec = state.editingPhotoId ? state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0] : null;
+    var hasBoardPos = editingRec && editingRec.canvasw;
+    var bgScale = hasBoardPos ? (tf.w / editingRec.canvasw) : 1;
     if (tfShowBg) {
       var bbg = state.background || { type: 'color', color: '#2b2d33' };
       stage.style.backgroundColor = bbg.color || '#2b2d33';
-      if (bbg.type === 'photo' && bbg.url) { stage.style.backgroundImage = 'url(' + bbg.url + ')'; stage.style.backgroundSize = 'cover'; stage.style.backgroundPosition = 'center'; }
+      if (bbg.type === 'photo' && bbg.url && !hasBoardPos) {
+        // Keine Board-Position bekannt (neues, noch nicht platziertes
+        // Objekt) - einfache Vollbild-Notlösung ohne genauen Bezug.
+        stage.style.backgroundImage = 'url(' + bbg.url + ')'; stage.style.backgroundSize = 'cover'; stage.style.backgroundPosition = 'center';
+      }
       // Nachbarobjekte zeigen, mit denen dieses Textfeld auf der Pinnwand
       // interagieren soll - genau die, die auch bei Fokus in der
       // Präsentation sichtbar bleiben (gleiche oder niedrigere Ebene,
       // siehe Verdeckungs-Logik dort: rec.z > activeZ wird ausgeblendet).
       // Nur möglich, wenn ein bereits platziertes Objekt bearbeitet wird -
       // ein neues, noch nicht platziertes Objekt hat keine Board-Position.
-      if (state.editingPhotoId) {
-        var editingRec = state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0];
-        if (editingRec && editingRec.canvasw) {
-          var thisZ = editingRec.canvasz || 0;
-          var scale = tf.w / editingRec.canvasw;
-          var neighborsLayer = el('div', { class: 'ic-tf-neighbors-layer' });
-          state.photos.filter(function (p) {
-            return p.id !== editingRec.id && !p.hiddenfromboard && p.boardplaced &&
-              (p.boardid || 0) === (editingRec.boardid || 0) && (p.canvasz || 0) <= thisZ;
-          }).forEach(function (p) {
-            var nx = (p.canvasx - editingRec.canvasx) * scale, ny = (p.canvasy - editingRec.canvasy) * scale;
-            var nw = p.canvasw * scale;
-            neighborsLayer.appendChild(el('img', {
-              src: p.url, alt: '',
-              style: 'position:absolute;left:' + nx + 'px;top:' + ny + 'px;width:' + nw + 'px;' +
-                'transform:rotate(' + (p.canvasrot || 0) + 'deg);opacity:.85;pointer-events:none;'
-            }));
-          });
-        }
+      if (hasBoardPos) {
+        var thisZ = editingRec.canvasz || 0;
+        var neighborsLayer = el('div', {
+          class: 'ic-tf-neighbors-layer',
+          style: (bbg.type === 'photo' && bbg.url)
+            // Hintergrundbild an der TATSÄCHLICH richtigen Stelle: das Bild
+            // wird so groß wie das ganze Board dargestellt (BOARD_W/H
+            // skaliert), dann so verschoben, dass genau der Ausschnitt an
+            // der Kartenposition zu sehen ist - statt einer beliebigen
+            // "cover/zentriert"-Notlösung ohne Bezug zur echten Position.
+            ? ('background-image:url(' + bbg.url + ');background-repeat:no-repeat;' +
+              'background-size:' + (BOARD_W * bgScale) + 'px ' + (BOARD_H * bgScale) + 'px;' +
+              'background-position:' + (-editingRec.canvasx * bgScale) + 'px ' + (-editingRec.canvasy * bgScale) + 'px;')
+            : ''
+        });
+        state.photos.filter(function (p) {
+          return p.id !== editingRec.id && !p.hiddenfromboard && p.boardplaced &&
+            (p.boardid || 0) === (editingRec.boardid || 0) && (p.canvasz || 0) <= thisZ;
+        }).forEach(function (p) {
+          var nx = (p.canvasx - editingRec.canvasx) * bgScale, ny = (p.canvasy - editingRec.canvasy) * bgScale;
+          var nw = p.canvasw * bgScale;
+          neighborsLayer.appendChild(el('img', {
+            src: p.url, alt: '',
+            style: 'position:absolute;left:' + nx + 'px;top:' + ny + 'px;width:' + nw + 'px;' +
+              'transform:rotate(' + (p.canvasrot || 0) + 'deg);opacity:.85;pointer-events:none;'
+          }));
+        });
       }
     }
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0];

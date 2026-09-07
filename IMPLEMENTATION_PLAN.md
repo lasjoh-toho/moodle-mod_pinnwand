@@ -2937,3 +2937,28 @@ Klärung). Betrifft: `js/app.js`, `styles.css`.
   oder niedrigere Ebene, gleiche Verdeckungs-Regel wie dort). Nur
   möglich beim Bearbeiten eines bereits platzierten Objekts (neue,
   noch nicht platzierte Objekte haben keine Board-Position).
+
+---
+
+## Phase 100 — Hintergrundbild-Position im Editor korrigiert ✅
+
+Sechsundneunzigster Feedback-Durchgang. Betrifft: `js/app.js`.
+
+- [x] **Hintergrundbild-Positionierung korrigiert**: zeigte bisher eine
+  beliebige "cover/zentriert"-Notlösung ohne Bezug zur echten
+  Kartenposition. Jetzt wird das Bild so groß wie das ganze Board
+  dargestellt (`BOARD_W`/`BOARD_H` skaliert) und exakt so verschoben,
+  dass der Ausschnitt an der tatsächlichen Kartenposition zu sehen
+  ist - dieselbe Skalierung wie bei den Nachbarobjekten.
+- [x] Klargestellt: sowohl positioniertes Hintergrundbild als auch
+  Nachbarobjekte funktionieren nur beim Bearbeiten eines bereits
+  platzierten Objekts - ein neues, noch nicht platziertes Objekt hat
+  keine Board-Position, bleibt bei einfacher Vollbild-Notlösung ohne
+  Nachbarn.
+
+**Weiterhin offen** (zurückgestellt, um keine erneute Regression unter
+Zeitdruck zu riskieren): WordArt/Textfelder sehen in der Präsentation
+noch nicht identisch zur Pinnwand aus - die Vereinheitlichung auf
+`buildTextFrameLiveDom()` hatte die Präsentation zum Absturz gebracht
+und wurde revertiert. Genaue Ursache noch nicht gefunden, soll in Ruhe
+untersucht werden.

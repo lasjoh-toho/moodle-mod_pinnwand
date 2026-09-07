@@ -1279,6 +1279,12 @@ Details und Scoping-Entscheidungen. In Kurzform:
   sichtbar bleiben) - nur beim Bearbeiten eines bereits platzierten
   Objekts.
 
+### Einhundertfünfte Überarbeitung — Hintergrundbild-Position korrigiert
+
+- Hintergrundbild in der Editor-Vorschau zeigt jetzt den tatsächlich
+  richtigen Ausschnitt an der Kartenposition statt einer beliebigen
+  Vollbild-Notlösung.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
