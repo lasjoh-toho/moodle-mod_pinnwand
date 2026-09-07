@@ -6201,20 +6201,7 @@
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
       pEl.style.zIndex = p.canvasz || 0;
-      // Dieselbe Live-Darstellungsfunktion wie auf der Pinnwand nutzen
-      // (statt des gespeicherten Bildes) - garantiert identisches
-      // Aussehen, da es exakt dieselbe Rendering-Funktion ist. Bei
-      // unlesbaren Daten auf das gespeicherte Bild zurückfallen.
-      if (p.wordfielddata) {
-        try {
-          var presentTf = JSON.parse(p.wordfielddata);
-          pEl.appendChild(buildTextFrameLiveDom(presentTf));
-        } catch (e) {
-          pEl.appendChild(el('img', { src: p.url, alt: '' }));
-        }
-      } else {
-        pEl.appendChild(el('img', { src: p.url, alt: '' }));
-      }
+      pEl.appendChild(el('img', { src: p.url, alt: '' }));
       if (!inThreadIds[p.id]) {
         pEl.classList.add('ic-present-addable');
         pEl.title = S.stream_pin_hint;
