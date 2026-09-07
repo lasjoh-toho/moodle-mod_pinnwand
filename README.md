@@ -1285,6 +1285,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
   richtigen Ausschnitt an der Kartenposition statt einer beliebigen
   Vollbild-Notlösung.
 
+### Einhundertsechste Überarbeitung — Export-Verschachtelungs-Bug behoben, Fokus-Fix
+
+- "Repeating black Times" im Export (Präsentation, Klassenübersicht)
+  behoben - Verlauf-Text wird jetzt direkt als natives SVG statt
+  verschachtelt eingebettet.
+- Text war nach erneutem Öffnen einer WordArt/Bogen-Vorschau nicht
+  direkt markierbar - Fokus-Fix ergänzt.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

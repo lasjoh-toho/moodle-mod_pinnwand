@@ -2962,3 +2962,28 @@ noch nicht identisch zur Pinnwand aus - die Vereinheitlichung auf
 `buildTextFrameLiveDom()` hatte die Präsentation zum Absturz gebracht
 und wurde revertiert. Genaue Ursache noch nicht gefunden, soll in Ruhe
 untersucht werden.
+
+---
+
+## Phase 101 — Verschachtelungs-Bug im Export behoben, Fokus-Fix nach Vorschau-Klick 🔄
+
+Siebenundneunzigster Feedback-Durchgang. Betrifft: `js/app.js`.
+
+- [x] **"Repeating black Times" im Export behoben**: der Verlauf-Text
+  wurde über verschachteltes SVG-in-foreignObject-in-SVG eingebettet -
+  manche Rendering-Umgebungen (Präsentation-Sidebars, Klassenübersicht)
+  lösen das nicht korrekt auf und fallen auf Standard-Schwarz zurück.
+  Neue Funktion `buildWordartGradientParts()` liefert nur den reinen
+  Inhalt (defs+g+text ohne äußeres svg-Tag), Export bettet ihn jetzt
+  DIREKT als natives SVG-Element ein (per `<g transform="translate(...)">`),
+  ganz ohne foreignObject/verschachteltes SVG.
+- [x] **Fokus-Bugfix**: nach Klick auf die SVG-Vorschau (Bogen/Verlauf-
+  WordArt) erschien zwar wieder die editierbare Ansicht, bekam aber
+  keinen tatsächlichen Fokus - ein zweiter Klick wäre nötig gewesen, um
+  wirklich einen Cursor zu setzen (erklärt "Text nicht markierbar nach
+  erneutem Öffnen"). Jetzt wird das editierbare Feld nach dem Wechsel
+  explizit fokussiert.
+
+**Noch nicht identifiziert**: "Hintergrund und Objekte zeigen sich
+nicht korrekt" in der Editor-Vorschau - Code sieht strukturell korrekt
+aus, konkreter Fehler ohne genauere Rückmeldung nicht gefunden.

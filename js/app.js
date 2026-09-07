@@ -1812,7 +1812,7 @@
   // zeigt. SVG-Text mit objectBoundingBox-Verlauf (SVG-Standard)
   // orientiert sich exakt an den sichtbaren Buchstaben, genau wie im
   // Original-Prototyp - deshalb hier natives SVG statt CSS.
-  function buildWordartGradientSvg(t, plainText, fontCss, isPrimary) {
+  function buildWordartGradientParts(t, plainText, fontCss) {
     if (!t.wordartStyle || t.wordartStyle === 'none') { return null; }
     var style = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0];
     if (!style || !style.fillGradient) { return null; }
@@ -1845,14 +1845,20 @@
         '" font-size="' + fontSize + '" font-weight="800" fill="' + extrudeColor + '" text-anchor="middle" dominant-baseline="central">' +
         escapeXml(plainText || '') + '</text>';
     }
-    var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" height="100%" style="overflow:visible;display:' +
-      (isPrimary ? 'block' : 'inline-block') + '"><defs>' + gradTag + '</defs>' +
+    var inner = '<defs>' + gradTag + '</defs>' +
       '<g transform="translate(' + (w / 2) + ',' + (h / 2) + ') skewY(' + (skewY + skewFromRotY).toFixed(2) + ') scale(' + scaleX.toFixed(3) + ',' + scaleY + ') rotate(' + rotate + ') translate(' + (-w / 2) + ',' + (-h / 2) + ')">' +
       extrudeText +
       '<text x="' + (w / 2) + '" y="' + (h / 2) + '" font-family="' + fontFamily + '" font-size="' + fontSize +
       '" font-weight="800" fill="url(#' + gid + ')"' + strokeAttr + ' paint-order="stroke fill" text-anchor="middle" dominant-baseline="central">' +
-      escapeXml(plainText || '') + '</text></g></svg>';
-    return { svg: svg, w: w, h: h };
+      escapeXml(plainText || '') + '</text></g>';
+    return { inner: inner, w: w, h: h };
+  }
+  function buildWordartGradientSvg(t, plainText, fontCss, isPrimary) {
+    var parts = buildWordartGradientParts(t, plainText, fontCss);
+    if (!parts) { return null; }
+    var svg = '<svg viewBox="0 0 ' + parts.w + ' ' + parts.h + '" width="100%" height="100%" style="overflow:visible;display:' +
+      (isPrimary ? 'block' : 'inline-block') + '">' + parts.inner + '</svg>';
+    return { svg: svg, w: parts.w, h: parts.h };
   }
   // Direkt aus der Originaldatei übernommene Verlauf-Definitionen (Stopps
   // exakt wie dort), getrennt von WORDART_STYLES gehalten, da CSS- und
@@ -2178,12 +2184,10 @@
         return '<foreignObject x="' + (t.x * tf.w - arcW / 2) + '" y="' + (t.y * tf.h - arcH / 2) + '" width="' + arcW + '" height="' + arcH + '">' +
           '<div xmlns="http://www.w3.org/1999/xhtml">' + arcSvg + '</div></foreignObject>';
       }
-      var wordartSvgExport = buildWordartGradientSvg(t, t.text, fontCss, idx === 0);
-      if (wordartSvgExport) {
+      var wordartParts = buildWordartGradientParts(t, t.text, fontCss);
+      if (wordartParts) {
         var wx = idx === 0 ? tf.w / 2 : t.x * tf.w, wy = idx === 0 ? tf.h / 2 : t.y * tf.h;
-        return '<foreignObject x="' + (wx - wordartSvgExport.w / 2) + '" y="' + (wy - wordartSvgExport.h / 2) +
-          '" width="' + wordartSvgExport.w + '" height="' + wordartSvgExport.h + '">' +
-          '<div xmlns="http://www.w3.org/1999/xhtml">' + wordartSvgExport.svg + '</div></foreignObject>';
+        return '<g transform="translate(' + (wx - wordartParts.w / 2) + ',' + (wy - wordartParts.h / 2) + ')">' + wordartParts.inner + '</g>';
       }
       var html = t.html || (t.text ? escapeXml(t.text) : '');
       if (!html) { return ''; }
@@ -2604,7 +2608,11 @@
           style: 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + Math.max(120, t.size * 6) + 'px;'
         });
         arcWrap.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text)) || '';
-        arcWrap.addEventListener('click', function (ev) { ev.stopPropagation(); selectText(t.id); render(); });
+        arcWrap.addEventListener('click', function (ev) {
+          ev.stopPropagation(); selectText(t.id); render();
+          var freshEl = frame.querySelector('[data-textid="' + t.id + '"]');
+          if (freshEl) { freshEl.focus(); }
+        });
         return arcWrap;
       }
       var wordartSvgPreview = (t.id !== activeId && t.text) ? buildWordartGradientSvg(t, t.text, fontCss, isPrimary) : null;
@@ -2618,7 +2626,11 @@
             ('left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + (wordartSvgPreview.w) + 'px;cursor:text;')
         });
         waWrap.innerHTML = wordartSvgPreview.svg;
-        waWrap.addEventListener('click', function (ev) { ev.stopPropagation(); selectText(t.id); render(); });
+        waWrap.addEventListener('click', function (ev) {
+          ev.stopPropagation(); selectText(t.id); render();
+          var freshEl = frame.querySelector('[data-textid="' + t.id + '"]');
+          if (freshEl) { freshEl.focus(); }
+        });
         return waWrap;
       }
       return el2;
