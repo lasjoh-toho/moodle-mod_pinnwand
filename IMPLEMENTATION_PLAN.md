@@ -2810,3 +2810,31 @@ Neunzigster Feedback-Durchgang. Betrifft: `js/app.js`.
   andere Farbe. Schriftart-Vorgabe je Vorlage ergänzt (fehlte bisher
   komplett - manche Vorlagen wie Chrom nutzen bewusst Times New Roman,
   andere bewusst Impact).
+
+---
+
+## Phase 95 — Echte SVG-Darstellung für Verlauf-WordArt (originalgetreue Metallic-Verläufe), Vorlagen-Layout überarbeitet 🔄
+
+Einundneunzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] **Vorlagen-Layout**: scrollbares Fenster mit exakt drei Spalten
+  statt fünf ungleichmäßigen, größere Kacheln.
+- [x] **3D-Regler in einer gemeinsamen Zeile** statt separater Zeilen.
+- [x] **Echte SVG-Darstellung für Verlauf-WordArt-Vorlagen** (Chrom,
+  Silber, Gold, Regenbogen, etc.): neue Funktion
+  `buildWordartGradientSvg()` - CSS-Verläufe via
+  `background-clip:text` strecken sich über die GESAMTE Textbox
+  inklusive Zeilenhöhe-Puffer, was den "Glanzstreifen" bei
+  metallischen Verläufen an der falschen Stelle zeigt. Natives SVG
+  `<text>` mit `objectBoundingBox`-Verlauf (SVG-Standard) orientiert
+  sich exakt an den sichtbaren Buchstaben, genau wie im Original-
+  Prototyp. Eingebunden in Pinnwand-Live-Darstellung und SVG-Export -
+  exakte Original-Farbstopps aus der hochgeladenen Datei
+  (`WORDART_GRADIENT_SVG_STOPS`).
+
+**Noch offen**: der Editor selbst zeigt während der aktiven
+Bearbeitung noch die CSS-Version, nicht die neue SVG-Version - würde
+denselben "nur sichtbar wenn nicht fokussiert"-Mechanismus brauchen
+wie beim Bogen-Text. Das gespeicherte Ergebnis (Pinnwand/Export) ist
+bereits korrekt.

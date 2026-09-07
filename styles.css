@@ -665,10 +665,13 @@
   .ic-textframe-block-title::after { content: '+'; }
   .ic-textframe-block.ic-tf-expanded .ic-textframe-block-title::after { content: '\2212'; }
 }
-.ic-textframe-wordart-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.ic-textframe-wordart-row {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0;
+  max-height: 40vh; overflow-y: auto; padding-right: 2px;
+}
 .ic-wordart-preset-btn {
-  border: 2px solid transparent; border-radius: 8px; background: #16171b; padding: 8px 12px;
-  font-size: 1rem; font-weight: 800; cursor: pointer;
+  border: 2px solid transparent; border-radius: 8px; background: #16171b; padding: 14px 8px;
+  font-size: 1.15rem; font-weight: 800; cursor: pointer; text-align: center; min-height: 60px;
 }
 .ic-wordart-preset-btn.active { border-color: var(--ic-accent); }
 

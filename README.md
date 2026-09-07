@@ -1235,6 +1235,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Verläufe statt vereinfachter 2-Farben-Näherung, korrekte
   Schriftarten je Vorlage, ein Farbfehler behoben).
 
+### Neunundneunzigste Überarbeitung — Echte SVG-Darstellung für Verlauf-WordArt
+
+- Metallische Verläufe (Chrom, Silber, Gold, etc.) nutzen jetzt echtes
+  SVG statt CSS - der Glanzstreifen orientiert sich dadurch exakt an
+  den sichtbaren Buchstaben, genau wie im Original.
+- Vorlagen-Fenster jetzt scrollbar mit drei Spalten, 3D-Regler in
+  einer Zeile.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

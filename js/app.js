@@ -1805,6 +1805,78 @@
     return null;
   }
   var arcIdCounter = 0;
+  // Native SVG-Text-Darstellung für Verlauf-WordArt-Vorlagen (Chrom,
+  // Silber, Gold etc.) - CSS-Verläufe via background-clip:text strecken
+  // sich über die GESAMTE Textbox inkl. Zeilenhöhe-Puffer, was den
+  // "Glanzstreifen" bei metallischen Verläufen an der falschen Stelle
+  // zeigt. SVG-Text mit objectBoundingBox-Verlauf (SVG-Standard)
+  // orientiert sich exakt an den sichtbaren Buchstaben, genau wie im
+  // Original-Prototyp - deshalb hier natives SVG statt CSS.
+  function buildWordartGradientSvg(t, plainText, fontCss, isPrimary) {
+    if (!t.wordartStyle || t.wordartStyle === 'none') { return null; }
+    var style = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0];
+    if (!style || !style.fillGradient) { return null; }
+    var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (style.extrudeSteps || 0);
+    var extrudeColor = t.extrudeColor || style.extrudeColor || '#000';
+    var scaleY = t.scaleY != null ? t.scaleY : (style.scaleY || 1);
+    var skewY = t.skewY != null ? t.skewY : (style.skewY || 0);
+    var rotate = t.rotate != null ? t.rotate : (style.rotate || 0);
+    var rotY = t.rotY || 0;
+    var scaleX = Math.cos(rotY * Math.PI / 180);
+    var skewFromRotY = Math.sin(rotY * Math.PI / 180) * 12;
+    var fontFamily = style.font || fontCss;
+    var fontSize = t.size;
+    fitCtx.font = fontFamily === fontCss ? (fontSize + 'px ' + fontCss) : ('700 ' + fontSize + 'px ' + fontFamily);
+    var textWidth = Math.max(10, fitCtx.measureText(plainText || '').width);
+    var extrudeOffset = extrudeSteps * 0.8;
+    var pad = fontSize * 0.6 + extrudeOffset + Math.abs(fontSize * scaleY * Math.tan((skewY + skewFromRotY) * Math.PI / 180));
+    var w = textWidth + pad * 2, h = fontSize * 1.5 * scaleY + pad * 2;
+    var gid = 'wagrad' + (arcIdCounter++);
+    var gStops = (WORDART_GRADIENT_SVG_STOPS[t.wordartStyle] || []).map(function (s) {
+      return '<stop offset="' + s.offset + '" stop-color="' + s.color + '"/>';
+    }).join('');
+    var gradTag = (WORDART_GRADIENT_SVG_RADIAL[t.wordartStyle]
+      ? '<radialGradient id="' + gid + '" cx="50%" cy="50%" r="50%">' + gStops + '</radialGradient>'
+      : '<linearGradient id="' + gid + '" x1="0" y1="0" x2="' + (WORDART_GRADIENT_SVG_HORIZ[t.wordartStyle] ? '1' : '0') + '" y2="' + (WORDART_GRADIENT_SVG_HORIZ[t.wordartStyle] ? '0' : '1') + '">' + gStops + '</linearGradient>');
+    var strokeAttr = style.stroke ? ' stroke="' + style.stroke + '" stroke-width="' + (style.strokeWidth || 1) + '"' : '';
+    var extrudeText = '';
+    for (var i = extrudeSteps; i >= 1; i--) {
+      extrudeText += '<text x="' + (w / 2 + i * 0.8) + '" y="' + (h / 2 + i * 0.8) + '" font-family="' + fontFamily +
+        '" font-size="' + fontSize + '" font-weight="800" fill="' + extrudeColor + '" text-anchor="middle" dominant-baseline="central">' +
+        escapeXml(plainText || '') + '</text>';
+    }
+    var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" height="100%" style="overflow:visible;display:' +
+      (isPrimary ? 'block' : 'inline-block') + '"><defs>' + gradTag + '</defs>' +
+      '<g transform="translate(' + (w / 2) + ',' + (h / 2) + ') skewY(' + (skewY + skewFromRotY).toFixed(2) + ') scale(' + scaleX.toFixed(3) + ',' + scaleY + ') rotate(' + rotate + ') translate(' + (-w / 2) + ',' + (-h / 2) + ')">' +
+      extrudeText +
+      '<text x="' + (w / 2) + '" y="' + (h / 2) + '" font-family="' + fontFamily + '" font-size="' + fontSize +
+      '" font-weight="800" fill="url(#' + gid + ')"' + strokeAttr + ' paint-order="stroke fill" text-anchor="middle" dominant-baseline="central">' +
+      escapeXml(plainText || '') + '</text></g></svg>';
+    return { svg: svg, w: w, h: h };
+  }
+  // Direkt aus der Originaldatei übernommene Verlauf-Definitionen (Stopps
+  // exakt wie dort), getrennt von WORDART_STYLES gehalten, da CSS- und
+  // SVG-Verlaufsyntax unterschiedliche Notation brauchen.
+  var WORDART_GRADIENT_SVG_STOPS = {
+    'chrome-ultra': [{ offset: '0%', color: '#2b4756' }, { offset: '20%', color: '#8baac1' }, { offset: '48%', color: '#ffffff' }, { offset: '50%', color: '#161d26' }, { offset: '53%', color: '#3d2c1d' }, { offset: '78%', color: '#a47c50' }, { offset: '100%', color: '#f3e5c8' }],
+    'silver-metal': [{ offset: '0%', color: '#9ca3af' }, { offset: '25%', color: '#e5e7eb' }, { offset: '49%', color: '#ffffff' }, { offset: '50%', color: '#4b5563' }, { offset: '75%', color: '#d1d5db' }, { offset: '100%', color: '#6b7280' }],
+    'gold-extrude': [{ offset: '0%', color: '#fef08a' }, { offset: '30%', color: '#facc15' }, { offset: '49%', color: '#ffffff' }, { offset: '50%', color: '#854d0e' }, { offset: '80%', color: '#eab308' }, { offset: '100%', color: '#713f12' }],
+    'sunset-metal': [{ offset: '0%', color: '#7dd3fc' }, { offset: '48%', color: '#ffffff' }, { offset: '50%', color: '#be123c' }, { offset: '75%', color: '#fb7185' }, { offset: '100%', color: '#fde047' }],
+    'rainbow': [{ offset: '0%', color: '#ff0000' }, { offset: '20%', color: '#ff7f00' }, { offset: '40%', color: '#ffff00' }, { offset: '60%', color: '#00ff00' }, { offset: '80%', color: '#0000ff' }, { offset: '100%', color: '#8b00ff' }],
+    'classic-blue': [{ offset: '0%', color: '#0099ff' }, { offset: '100%', color: '#003399' }],
+    'synthwave': [{ offset: '0%', color: '#ff007f' }, { offset: '50%', color: '#7928ca' }, { offset: '100%', color: '#00f0ff' }],
+    'silver-gradient': [{ offset: '0%', color: '#adadad' }, { offset: '100%', color: '#ffffff' }],
+    'sunburst-yellow': [{ offset: '0%', color: '#fff812' }, { offset: '100%', color: '#ff9a32' }],
+    'purple-skew': [{ offset: '0%', color: '#6900cc' }, { offset: '100%', color: '#cb00cc' }],
+    'rainbow-spectrum': [{ offset: '0%', color: '#a104ad' }, { offset: '16%', color: '#0b2be0' }, { offset: '33%', color: '#329941' }, { offset: '50%', color: '#f7f658' }, { offset: '66%', color: '#f16412' }, { offset: '83%', color: '#e92153' }, { offset: '100%', color: '#aa04a7' }],
+    'cyan-gradient': [{ offset: '0%', color: '#999cfc' }, { offset: '100%', color: '#1b999c' }],
+    'soft-red-extrude': [{ offset: '0%', color: '#fffecb' }, { offset: '100%', color: '#ff9999' }],
+    'flame-gradient': [{ offset: '0%', color: '#551700' }, { offset: '100%', color: '#fecb00' }],
+    'fire-extrude': [{ offset: '0%', color: '#fee601' }, { offset: '100%', color: '#fe4201' }]
+  };
+  var WORDART_GRADIENT_SVG_RADIAL = { 'sunburst-yellow': true };
+  var WORDART_GRADIENT_SVG_HORIZ = { 'rainbow': true, 'rainbow-spectrum': true };
+
   function buildArcTextSvg(t, plainText, fontCss, color) {
     var d = arcSvgPathD(t.arcStyle, t.arcAmount, 300, 120);
     if (!d) { return null; }
@@ -1986,6 +2058,7 @@
     tf.texts.forEach(function (t, idx) {
       var fontCss = resolveFontCss(t.font);
       var textEl2;
+      var wordartSvg = (t.arcStyle && t.arcStyle !== 'none') ? null : buildWordartGradientSvg(t, t.text, fontCss, idx === 0);
       if (t.arcStyle && t.arcStyle !== 'none') {
         textEl2 = el('div', {
           class: 'ic-tf-live-text',
@@ -1993,6 +2066,13 @@
             'width:' + Math.max(120, t.size * 6) + 'px;z-index:1;'
         });
         textEl2.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text)) || '';
+      } else if (wordartSvg) {
+        textEl2 = el('div', {
+          class: 'ic-tf-live-text',
+          style: 'position:absolute;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
+            'width:' + (wordartSvg.w / tf.w * 100) + '%;aspect-ratio:' + wordartSvg.w + '/' + wordartSvg.h + ';z-index:1;'
+        });
+        textEl2.innerHTML = wordartSvg.svg;
       } else {
         var html = t.html || (t.text ? escapeXml(t.text) : '');
         textEl2 = el('div', {
@@ -2098,6 +2178,13 @@
         var arcW = Math.max(120, t.size * 6), arcH = arcW * 0.4;
         return '<foreignObject x="' + (t.x * tf.w - arcW / 2) + '" y="' + (t.y * tf.h - arcH / 2) + '" width="' + arcW + '" height="' + arcH + '">' +
           '<div xmlns="http://www.w3.org/1999/xhtml">' + arcSvg + '</div></foreignObject>';
+      }
+      var wordartSvgExport = buildWordartGradientSvg(t, t.text, fontCss, idx === 0);
+      if (wordartSvgExport) {
+        var wx = idx === 0 ? tf.w / 2 : t.x * tf.w, wy = idx === 0 ? tf.h / 2 : t.y * tf.h;
+        return '<foreignObject x="' + (wx - wordartSvgExport.w / 2) + '" y="' + (wy - wordartSvgExport.h / 2) +
+          '" width="' + wordartSvgExport.w + '" height="' + wordartSvgExport.h + '">' +
+          '<div xmlns="http://www.w3.org/1999/xhtml">' + wordartSvgExport.svg + '</div></foreignObject>';
       }
       var html = t.html || (t.text ? escapeXml(t.text) : '');
       if (!html) { return ''; }
@@ -3304,13 +3391,14 @@
         if (active.wordartStyle && active.wordartStyle !== 'none') {
           var activeWStyle = WORDART_STYLES.filter(function (w) { return w.id === active.wordartStyle; })[0] || {};
           formBox.appendChild(el('div', { class: 'ic-textframe-label' }, [S.wordart_3d_title]));
+          var wSliderRow = el('div', { class: 'ic-textframe-edit ic-effect-sliders-row' });
+          formBox.appendChild(wSliderRow);
           function wSlider(label, key, min, max, step, def) {
-            var row = el('div', { class: 'ic-textframe-edit' });
-            row.appendChild(el('span', { class: 'ic-textframe-label' }, [label]));
-            row.appendChild(numberStepper(active[key] != null ? active[key] : (activeWStyle[key] != null ? activeWStyle[key] : def), min, max, step, step < 1 ? 2 : 0, function (v) {
+            var stepper = numberStepper(active[key] != null ? active[key] : (activeWStyle[key] != null ? activeWStyle[key] : def), min, max, step, step < 1 ? 2 : 0, function (v) {
               active[key] = v; reapplyTextStyle();
-            }));
-            formBox.appendChild(row);
+            });
+            stepper.title = label;
+            wSliderRow.appendChild(stepper);
           }
           wSlider(S.wordart_roty, 'rotY', -90, 90, 5, 0);
           wSlider(S.wordart_extrude, 'extrudeSteps', 0, 20, 1, 0);
