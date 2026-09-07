@@ -1691,6 +1691,7 @@
   function newTextFrame(wordArtMode) {
     return {
       w: wordArtMode ? 320 : 220, h: wordArtMode ? 220 : 320, preset: wordArtMode ? 'none' : 'paper',
+      isWordArt: !!wordArtMode,
       texts: [{ id: 1, text: '', font: 'sans', size: 32, x: 0.5, y: 0.5 }]
     };
   }
@@ -2418,7 +2419,7 @@
     if (tfShowBg) {
       var bbg = state.background || { type: 'color', color: '#2b2d33' };
       stage.style.backgroundColor = bbg.color || '#2b2d33';
-      if (bbg.type === 'photo' && bbg.url && !hasBoardPos) {
+      if ((bbg.type === 'image' || bbg.type === 'url' || bbg.type === 'upload') && bbg.url && !hasBoardPos) {
         // Keine Board-Position bekannt (neues, noch nicht platziertes
         // Objekt) - einfache Vollbild-Notlösung ohne genauen Bezug.
         stage.style.backgroundImage = 'url(' + bbg.url + ')'; stage.style.backgroundSize = 'cover'; stage.style.backgroundPosition = 'center';
@@ -2433,7 +2434,7 @@
         var thisZ = editingRec.canvasz || 0;
         var neighborsLayer = el('div', {
           class: 'ic-tf-neighbors-layer',
-          style: (bbg.type === 'photo' && bbg.url)
+          style: ((bbg.type === 'image' || bbg.type === 'url' || bbg.type === 'upload') && bbg.url)
             // Hintergrundbild an der TATSÄCHLICH richtigen Stelle: das Bild
             // wird so groß wie das ganze Board dargestellt (BOARD_W/H
             // skaliert), dann so verschoben, dass genau der Ausschnitt an
@@ -2610,7 +2611,7 @@
         arcWrap.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text)) || '';
         arcWrap.addEventListener('click', function (ev) {
           ev.stopPropagation(); selectText(t.id); render();
-          var freshEl = frame.querySelector('[data-textid="' + t.id + '"]');
+          var freshEl = body.querySelector('[data-textid="' + t.id + '"]');
           if (freshEl) { freshEl.focus(); }
         });
         return arcWrap;
@@ -2628,7 +2629,7 @@
         waWrap.innerHTML = wordartSvgPreview.svg;
         waWrap.addEventListener('click', function (ev) {
           ev.stopPropagation(); selectText(t.id); render();
-          var freshEl = frame.querySelector('[data-textid="' + t.id + '"]');
+          var freshEl = body.querySelector('[data-textid="' + t.id + '"]');
           if (freshEl) { freshEl.focus(); }
         });
         return waWrap;
@@ -7259,6 +7260,10 @@
         // gerenderten SVG als vermeintlichem "Foto".
         try {
           state.textFrame = JSON.parse(p.wordfielddata);
+          var tfLoaded = state.textFrame;
+          state.wordArtMode = tfLoaded.isWordArt != null
+            ? !!tfLoaded.isWordArt
+            : tfLoaded.texts.some(function (t) { return (t.wordartStyle && t.wordartStyle !== 'none') || (t.arcStyle && t.arcStyle !== 'none'); });
         } catch (e) {
           state.textFrame = null;
         }

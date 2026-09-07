@@ -3003,3 +3003,27 @@ Achtundneunzigster Feedback-Durchgang. Betrifft: `styles.css`.
   Kartenfläche → Formen/Text). Fix: `z-index:0` auf `frame` ergänzt,
   wodurch es einen eigenen Stapelkontext bildet und die Nachbar-Ebene
   korrekt darin eingeschlossen bleibt.
+
+---
+
+## Phase 103 — Drei Bugfixes: Hintergrundbild-Typ, veraltete Fokus-Referenz, falscher Editor-Modus beim Öffnen ✅
+
+Neunundneunzigster Feedback-Durchgang. Betrifft: `js/app.js`.
+
+- [x] **Hintergrundbild-Typ-Bugfix**: Bedingung prüfte auf `'photo'`,
+  ein Wert, der im Code gar nicht existiert (tatsächlich verwendet:
+  `'image'`/`'url'`/`'upload'`) - die Bedingung konnte dadurch nie
+  zutreffen. Jetzt korrigiert.
+- [x] **Cursor-Bugfix (Ursache gefunden)**: der Fokus-Fix aus dem
+  letzten Durchgang nutzte `frame.querySelector(...)` - `frame` ist
+  aber eine lokale Variable, die nach einem Neu-Rendern auf die ALTE,
+  bereits aus dem DOM entfernte Version zeigt. Jetzt wird die stabile,
+  über Neu-Renderns hinweg gültige `body`-Referenz verwendet.
+- [x] **Falscher Editor-Modus beim erneuten Öffnen behoben**:
+  `state.wordArtMode` wurde beim Öffnen eines bestehenden Objekts nie
+  gesetzt und blieb dadurch beim zuletzt verwendeten Modus stehen -
+  ein WordArt öffnete sich fälschlich im normalen Textfeld-Editor.
+  Neues Feld `tf.isWordArt` wird jetzt beim Erstellen gespeichert und
+  beim Öffnen ausgelesen, mit Rückfall-Erkennung (vorhandener
+  WordArt-/Bogen-Stil) für bereits gespeicherte ältere Objekte ohne
+  dieses Feld.

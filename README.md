@@ -1299,6 +1299,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Absicht hinter dem simulierten Pinnwand-Hintergrund statt davor -
   behoben (fehlender eigener Stapelkontext auf dem Zettel-Rahmen).
 
+### Einhundertachte Überarbeitung — Drei Bugfixes
+
+- Hintergrundbild-Typ-Bugfix (falscher, nicht existierender Wert
+  geprüft).
+- Cursor-Bugfix: veraltete DOM-Referenz nach Neu-Rendern behoben.
+- Falscher Editor-Modus beim erneuten Öffnen eines WordArt-Objekts
+  behoben.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
