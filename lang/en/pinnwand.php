@@ -126,6 +126,7 @@ $string['tf_target_card'] = 'Select note/card background';
 $string['tf_send_direct'] = 'Send directly (appears in the post stream right away)';
 $string['tf_aspect_locked'] = 'Aspect ratio locked (click to unlock)';
 $string['tf_aspect_unlocked'] = 'Aspect ratio not locked (click to lock)';
+$string['tf_show_board_bg'] = 'Preview against the board background';
 $string['tf_no_shape_selected'] = 'No shape selected - click a shape on the note first.';
 $string['tf_shadow_angle'] = 'Direction';
 $string['tf_shadow_distance'] = 'Distance';

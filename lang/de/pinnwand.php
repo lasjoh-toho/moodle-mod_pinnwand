@@ -126,6 +126,7 @@ $string['tf_target_card'] = 'Zettel/Kartenfläche auswählen';
 $string['tf_send_direct'] = 'Direkt senden (erscheint sofort im Post-Stream)';
 $string['tf_aspect_locked'] = 'Seitenverhältnis fixiert (klicken zum Lösen)';
 $string['tf_aspect_unlocked'] = 'Seitenverhältnis nicht fixiert (klicken zum Fixieren)';
+$string['tf_show_board_bg'] = 'Pinnwand-Hintergrund zur Vorschau anzeigen';
 $string['tf_no_shape_selected'] = 'Keine Form ausgewählt - klicke zuerst eine Form auf dem Zettel an.';
 $string['tf_shadow_angle'] = 'Richtung';
 $string['tf_shadow_distance'] = 'Entfernung';

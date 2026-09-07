@@ -2898,3 +2898,22 @@ ergab keinen Fehler, könnte an einer nicht aktuellen Version beim
 Testenden liegen. Präsentations-SVG-Anzeige - Fix aus dem letzten
 Durchgang sollte bei NEU gespeicherten Objekten greifen, ältere
 gespeicherte Objekte zeigen weiterhin ihre alte Version.
+
+---
+
+## Phase 98 — Präsentation nutzt Board-Live-Darstellung, Pinnwand-Hintergrund-Vorschau im Editor ✅
+
+Vierundneunzigster Feedback-Durchgang. Betrifft: `js/app.js`, neue
+Strings.
+
+- [x] **Architektonische Vereinheitlichung**: Präsentation nutzt jetzt
+  exakt dieselbe Live-Darstellungsfunktion (`buildTextFrameLiveDom`)
+  wie die Pinnwand, statt das gespeicherte Bild zu zeigen - garantiert
+  identisches Aussehen, da es sich um dieselbe Rendering-Funktion
+  handelt (Fallback aufs Bild bei unlesbaren Daten).
+- [x] **Pinnwand-Hintergrund-Vorschau im Editor**: neuer Umschalt-
+  Button (Augen-Symbol) zeigt den echten Pinnwand-Hintergrund (Farbe
+  oder Bild) hinter dem Zettel - standardmäßig aktiv. Geklärt: der
+  Hintergrund ist aktuell NICHT pro Board unterschiedlich (ein
+  einziger gespeicherter Wert pro Nutzer/Aktivität, `boardid` wird
+  beim Speichern gar nicht mitgegeben) - keine Duplizierung nötig.

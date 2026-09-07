@@ -2406,7 +2406,13 @@
     // Zettel bleibt dagegen bei der gestapelten Anordnung.
     var tfOrientation = (tf.h > tf.w && tf.h > window.innerHeight * 0.5) ? 'ic-tf-portrait' : 'ic-tf-landscape';
     var layout = el('div', { class: 'ic-textframe-layout ' + tfOrientation });
-    var stage = el('div', { class: 'ic-stage' });
+    var tfShowBg = state.tfShowBoardBg !== false; // Standardmäßig aktiv, außer der Nutzer hat es explizit ausgeschaltet
+    var stage = el('div', { class: 'ic-stage' + (tfShowBg ? ' ic-tf-stage-boardbg' : '') });
+    if (tfShowBg) {
+      var bbg = state.background || { type: 'color', color: '#2b2d33' };
+      stage.style.backgroundColor = bbg.color || '#2b2d33';
+      if (bbg.type === 'photo' && bbg.url) { stage.style.backgroundImage = 'url(' + bbg.url + ')'; stage.style.backgroundSize = 'cover'; stage.style.backgroundPosition = 'center'; }
+    }
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0];
     var frame = el('div', {
       class: 'ic-textframe-preview',
@@ -3527,6 +3533,12 @@
     }, [icon(state.tfAspectLocked ? 'lock' : 'unlock')]);
     lockBtn.addEventListener('click', function () { state.tfAspectLocked = !state.tfAspectLocked; render(); });
     tfHeaderRight.appendChild(lockBtn);
+    var boardBgBtn = el('button', {
+      class: 'ic-btn ic-btn-ghost ic-btn-icon' + (state.tfShowBoardBg !== false ? ' active' : ''),
+      title: S.tf_show_board_bg
+    }, [icon('eye')]);
+    boardBgBtn.addEventListener('click', function () { state.tfShowBoardBg = state.tfShowBoardBg === false ? true : false; render(); });
+    tfHeaderRight.appendChild(boardBgBtn);
     tfHeaderRight.appendChild(cancelWizardBtn());
     // Direkt senden: speichert UND schickt das Objekt sofort in den
     // Post-Stream der Masterpinnwand (hiddenfromboard=0), statt erst über
@@ -6189,7 +6201,20 @@
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
       pEl.style.zIndex = p.canvasz || 0;
-      pEl.appendChild(el('img', { src: p.url, alt: '' }));
+      // Dieselbe Live-Darstellungsfunktion wie auf der Pinnwand nutzen
+      // (statt des gespeicherten Bildes) - garantiert identisches
+      // Aussehen, da es exakt dieselbe Rendering-Funktion ist. Bei
+      // unlesbaren Daten auf das gespeicherte Bild zurückfallen.
+      if (p.wordfielddata) {
+        try {
+          var presentTf = JSON.parse(p.wordfielddata);
+          pEl.appendChild(buildTextFrameLiveDom(presentTf));
+        } catch (e) {
+          pEl.appendChild(el('img', { src: p.url, alt: '' }));
+        }
+      } else {
+        pEl.appendChild(el('img', { src: p.url, alt: '' }));
+      }
       if (!inThreadIds[p.id]) {
         pEl.classList.add('ic-present-addable');
         pEl.title = S.stream_pin_hint;

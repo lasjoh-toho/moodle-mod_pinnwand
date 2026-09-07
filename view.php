@@ -264,6 +264,7 @@ $config = [
         'tf_send_direct' => get_string('tf_send_direct', 'pinnwand'),
         'tf_aspect_locked' => get_string('tf_aspect_locked', 'pinnwand'),
         'tf_aspect_unlocked' => get_string('tf_aspect_unlocked', 'pinnwand'),
+        'tf_show_board_bg' => get_string('tf_show_board_bg', 'pinnwand'),
         'tf_no_shape_selected' => get_string('tf_no_shape_selected', 'pinnwand'),
         'tf_shadow_angle' => get_string('tf_shadow_angle', 'pinnwand'),
         'tf_shadow_distance' => get_string('tf_shadow_distance', 'pinnwand'),
