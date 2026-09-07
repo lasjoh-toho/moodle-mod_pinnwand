@@ -1690,7 +1690,7 @@
 
   function newTextFrame(wordArtMode) {
     return {
-      w: wordArtMode ? 320 : 220, h: wordArtMode ? 220 : 320, preset: 'paper',
+      w: wordArtMode ? 320 : 220, h: wordArtMode ? 220 : 320, preset: wordArtMode ? 'none' : 'paper',
       texts: [{ id: 1, text: '', font: 'sans', size: 32, x: 0.5, y: 0.5 }]
     };
   }
@@ -2559,6 +2559,20 @@
         arcWrap.addEventListener('click', function (ev) { ev.stopPropagation(); selectText(t.id); render(); });
         return arcWrap;
       }
+      var wordartSvgPreview = (t.id !== activeId && t.text) ? buildWordartGradientSvg(t, t.text, fontCss, isPrimary) : null;
+      if (wordartSvgPreview) {
+        // Verlauf-Vorschau: dieselbe echte SVG-Darstellung wie auf der
+        // Pinnwand/im Export, solange NICHT gerade bearbeitet wird - beim
+        // Fokussieren erscheint wieder die normale editierbare Ansicht.
+        var waWrap = el('div', {
+          class: 'ic-textframe-obj' + (isPrimary ? ' primary' : ''),
+          style: isPrimary ? 'display:flex;align-items:center;justify-content:center;cursor:text;' :
+            ('left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + (wordartSvgPreview.w) + 'px;cursor:text;')
+        });
+        waWrap.innerHTML = wordartSvgPreview.svg;
+        waWrap.addEventListener('click', function (ev) { ev.stopPropagation(); selectText(t.id); render(); });
+        return waWrap;
+      }
       return el2;
     }
     tf.texts.forEach(function (t, idx) { frameInner.appendChild(textEl(t, idx)); });
@@ -3377,14 +3391,13 @@
       if (state.wordArtMode) {
         var wordartRow = el('div', { class: 'ic-textframe-wordart-row' });
         WORDART_STYLES.forEach(function (w) {
-          var previewSvg = buildWordartGradientSvg({ wordartStyle: w.id }, 'Aa', resolveFontCss('sans'), true);
+          var previewSvg = buildWordartGradientSvg({ wordartStyle: w.id, size: 28 }, w.label, resolveFontCss('sans'), true);
           var wb = el('button', {
             class: 'ic-wordart-preset-btn' + ((active.wordartStyle || 'none') === w.id ? ' active' : ''),
             style: previewSvg ? '' : wordartCssFor({ wordartStyle: w.id }, preset.text, true)
           });
           if (previewSvg) {
             wb.appendChild(el('div', { class: 'ic-wordart-preset-preview', html: previewSvg.svg }));
-            wb.appendChild(el('div', { class: 'ic-wordart-preset-caption' }, [w.label]));
           } else {
             wb.appendChild(document.createTextNode(w.label));
           }

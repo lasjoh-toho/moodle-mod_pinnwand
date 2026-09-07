@@ -1252,6 +1252,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Vorlagen-Kacheln zeigen jetzt echtes SVG statt CSS-Näherung, Bugfix
   für den gemeldeten Linksversatz.
 
+### Einhunderterste Überarbeitung — Text-Eingabe-Bugfix, Editor-SVG-Vorschau
+
+- Kritischer Bugfix: Text ließ sich bei bestimmten WordArt-Vorlagen
+  nicht eintragen (winzige Klickfläche bei leerem Text) - behoben.
+- Editor wechselt jetzt ebenfalls auf echtes SVG für Verlauf-WordArt.
+- Vorlagen-Kacheln zeigen jetzt den echten Namen im Verlauf-Stil,
+  passen sich dem verfügbaren Raum an.
+- WordArt startet standardmäßig ohne Hintergrund.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

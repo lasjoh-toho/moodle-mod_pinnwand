@@ -2869,3 +2869,32 @@ Zweiundneunzigster Feedback-Durchgang. Betrifft: `js/app.js`,
 zwischen Editor/Pinnwand/Präsentation (drei getrennte Rendering-Pfade)
 ist eine größere, fortlaufende Aufgabe - einzelne konkrete Bugs wurden
 behoben, eine vollständige Vereinheitlichung steht noch aus.
+
+---
+
+## Phase 97 — Text-Eingabe-Bugfix, Editor-SVG-Vorschau, Vorlagen-Kacheln-Bugfix, kein Hintergrund per Default ✅
+
+Dreiundneunzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] **Kritischer Bugfix „Text nicht eintragbar"**: die neue Editor-
+  SVG-Vorschau für Verlauf-WordArt erzeugte bei noch leerem Text eine
+  nahezu unsichtbare, winzige Klickfläche. Fix: SVG-Vorschau nur bei
+  vorhandenem Text, bei leerem Text bleibt immer die normale
+  editierbare Ansicht bestehen.
+- [x] **Editor wechselt jetzt auch auf SVG-Darstellung** für Verlauf-
+  WordArt, sobald Text vorhanden ist und nicht gerade bearbeitet wird
+  - analog zum Bogen-Text-Muster.
+- [x] **Vorlagen-Kacheln-Bugfix**: der Vorschau-SVG-Aufruf bekam kein
+  `size` mit (Fake-Objekt ohne Schriftgröße) - führte zu ungültigen
+  (NaN) Maßen. Kacheln zeigen jetzt den echten Vorlagen-Namen im
+  Verlauf-Stil selbst (keine separate Bildunterschrift mehr nötig),
+  passen sich dem verfügbaren Raum an.
+- [x] **WordArt startet jetzt standardmäßig ohne Hintergrund** (preset
+  'none' statt 'paper').
+
+**Nicht bestätigt/unklar**: Schloss-Button-Sichtbarkeit - Code-Prüfung
+ergab keinen Fehler, könnte an einer nicht aktuellen Version beim
+Testenden liegen. Präsentations-SVG-Anzeige - Fix aus dem letzten
+Durchgang sollte bei NEU gespeicherten Objekten greifen, ältere
+gespeicherte Objekte zeigen weiterhin ihre alte Version.
