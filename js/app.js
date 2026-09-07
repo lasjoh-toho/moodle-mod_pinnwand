@@ -2172,9 +2172,8 @@
     // (SVG-<text> unterstützt weder automatischen Umbruch noch Inline-HTML).
     var textEls = tf.texts.map(function (t, idx) {
       var fontCss = resolveFontCss(t.font);
-      if (idx !== 0 && t.arcStyle && t.arcStyle !== 'none') {
-        var arcSvg = buildArcTextSvg(t, t.text, fontCss, t.fillColor || preset.text);
-        if (!arcSvg) { return ''; }
+      var arcSvg = (idx !== 0 && t.arcStyle && t.arcStyle !== 'none') ? buildArcTextSvg(t, t.text, fontCss, t.fillColor || preset.text) : null;
+      if (arcSvg) {
         var arcW = Math.max(120, t.size * 6), arcH = arcW * 0.4;
         return '<foreignObject x="' + (t.x * tf.w - arcW / 2) + '" y="' + (t.y * tf.h - arcH / 2) + '" width="' + arcW + '" height="' + arcH + '">' +
           '<div xmlns="http://www.w3.org/1999/xhtml">' + arcSvg + '</div></foreignObject>';
@@ -2201,18 +2200,20 @@
       }
       // Weitere Textobjekte: frei positioniert, Box-Größe grob aus dem
       // (Klartext-)Inhalt geschätzt (keine Live-DOM-Messung nötig).
+      // Berücksichtigt Schriftgewicht und Laufweite, sonst könnte die Box
+      // bei fettem Text/größerer Laufweite zu schmal geschätzt werden.
       var plain = t.text || '';
       var lines = Math.max(1, (html.match(/<div|<li|<br/gi) || []).length + (plain ? 1 : 0));
-      var textW = Math.min(tf.w * 0.9, fitCtx && plain ? (function () {
-        fitCtx.font = t.size + 'px ' + fontCss;
-        return fitCtx.measureText(plain).width + 24;
+      var textW = Math.min(tf.w * 0.94, fitCtx && plain ? (function () {
+        fitCtx.font = (t.fontWeight || 700) + ' ' + t.size + 'px ' + fontCss;
+        return fitCtx.measureText(plain).width + Math.max(0, plain.length - 1) * (t.letterSpacing || 0) + 32;
       })() : tf.w * 0.5);
       var boxW = Math.max(60, textW);
-      var boxH = lines * t.size * (t.lineHeight || 1.2) + 16;
+      var boxH = lines * t.size * (t.lineHeight || 1.2) + 24;
       var boxX = t.x * tf.w - boxW / 2, boxY = t.y * tf.h - boxH / 2;
       return '<foreignObject x="' + boxX + '" y="' + boxY + '" width="' + boxW + '" height="' + boxH + '">' +
         '<div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;' +
-        'display:flex;align-items:center;justify-content:center;text-align:center;' + baseStyle + '">' +
+        'display:flex;align-items:center;justify-content:center;text-align:center;' + baseStyle + 'overflow:visible;">' +
         html + '</div></foreignObject>';
     }).join('');
     // Zusätzlicher Rand um den eigentlichen Karteninhalt: SVGs beschneiden
@@ -2464,7 +2465,11 @@
         if (!dragging) { return; }
         var p = pt(ev);
         tf.w = Math.max(120, startW + (p.x - startX));
-        tf.h = Math.max(80, startH + (p.y - startY));
+        if (state.tfAspectLocked) {
+          tf.h = Math.max(80, Math.round(tf.w * (startH / startW)));
+        } else {
+          tf.h = Math.max(80, startH + (p.y - startY));
+        }
         frame.style.width = tf.w + 'px'; frame.style.height = tf.h + 'px';
         ev.preventDefault();
       }
@@ -3372,10 +3377,17 @@
       if (state.wordArtMode) {
         var wordartRow = el('div', { class: 'ic-textframe-wordart-row' });
         WORDART_STYLES.forEach(function (w) {
+          var previewSvg = buildWordartGradientSvg({ wordartStyle: w.id }, 'Aa', resolveFontCss('sans'), true);
           var wb = el('button', {
             class: 'ic-wordart-preset-btn' + ((active.wordartStyle || 'none') === w.id ? ' active' : ''),
-            style: wordartCssFor({ wordartStyle: w.id }, preset.text)
-          }, [w.label]);
+            style: previewSvg ? '' : wordartCssFor({ wordartStyle: w.id }, preset.text, true)
+          });
+          if (previewSvg) {
+            wb.appendChild(el('div', { class: 'ic-wordart-preset-preview', html: previewSvg.svg }));
+            wb.appendChild(el('div', { class: 'ic-wordart-preset-caption' }, [w.label]));
+          } else {
+            wb.appendChild(document.createTextNode(w.label));
+          }
           wb.addEventListener('click', function () {
             active.wordartStyle = w.id;
             // Individuelle Regler zurücksetzen, damit die Vorlage sauber
@@ -3494,6 +3506,14 @@
     tfHeaderLeft.appendChild(undoBtn2); tfHeaderLeft.appendChild(redoBtn2);
     tfHeader.appendChild(tfHeaderLeft);
     var tfHeaderRight = el('div', { class: 'ic-tf-header-group' });
+    // Proportionen fixieren/lösen: beim Ziehen des Größenänderungs-Griffs
+    // bleibt bei aktivierter Fixierung das Seitenverhältnis erhalten.
+    var lockBtn = el('button', {
+      class: 'ic-btn ic-btn-ghost ic-btn-icon' + (state.tfAspectLocked ? ' active' : ''),
+      title: state.tfAspectLocked ? S.tf_aspect_locked : S.tf_aspect_unlocked
+    }, [icon(state.tfAspectLocked ? 'lock' : 'unlock')]);
+    lockBtn.addEventListener('click', function () { state.tfAspectLocked = !state.tfAspectLocked; render(); });
+    tfHeaderRight.appendChild(lockBtn);
     tfHeaderRight.appendChild(cancelWizardBtn());
     // Direkt senden: speichert UND schickt das Objekt sofort in den
     // Post-Stream der Masterpinnwand (hiddenfromboard=0), statt erst über
@@ -3730,6 +3750,8 @@
     fonts: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V6l4-4 4 4v14"/><path d="M4 14h8"/><path d="M15 20l4-9 4 9"/><path d="M16.5 16.5h5"/></svg>',
     nomedia: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M21 15l-5-5-5 5"/><line x1="3" y1="21" x2="21" y2="3"/></svg>',
     send: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+    unlock: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>',
     play: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>',
     grid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg>',

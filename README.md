@@ -1243,6 +1243,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Vorlagen-Fenster jetzt scrollbar mit drei Spalten, 3D-Regler in
   einer Zeile.
 
+### Einhundertste Überarbeitung — Präsentations-Textfehler behoben, Proportions-Fixierung, Vorlagen-Kacheln als SVG
+
+- Verschwindender Text und abgeschnittene Wörter in der Präsentation
+  behoben (zwei getrennte Ursachen im Export gefunden).
+- Neuer Schloss-Button oben rechts im Editor zum Fixieren der
+  Rahmen-Proportionen.
+- Vorlagen-Kacheln zeigen jetzt echtes SVG statt CSS-Näherung, Bugfix
+  für den gemeldeten Linksversatz.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

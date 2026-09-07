@@ -2838,3 +2838,34 @@ Bearbeitung noch die CSS-Version, nicht die neue SVG-Version - würde
 denselben "nur sichtbar wenn nicht fokussiert"-Mechanismus brauchen
 wie beim Bogen-Text. Das gespeicherte Ergebnis (Pinnwand/Export) ist
 bereits korrekt.
+
+---
+
+## Phase 96 — Verschwindender Bogen-Text behoben, Textbox-Schätzung verbessert, Proportions-Fixierung, Vorlagen-Kacheln als SVG 🔄
+
+Zweiundneunzigster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`, neue Strings.
+
+- [x] **Verschwindender Text im Export behoben**: wenn die Bogen-SVG-
+  Erzeugung fehlschlug, verschwand das Textobjekt komplett statt auf
+  die normale Darstellung zurückzufallen - erklärt vermutlich "ein
+  Wort erscheint gar nicht" in der Präsentation.
+- [x] **Textbox-Schätzung im Export verbessert**: berücksichtigt jetzt
+  Schriftgewicht und Laufweite (fehlte bisher, konnte bei fettem Text
+  zu einer zu schmalen Box führen), großzügigerer Rand, overflow:visible
+  statt hidden - erklärt vermutlich "ein Wort abgeschnitten".
+- [x] **Proportions-Fixierung ergänzt**: neuer Schloss-Button oben
+  rechts im Editor - bei aktivierter Fixierung bleibt das
+  Seitenverhältnis beim Ziehen des Größenänderungs-Griffs erhalten.
+- [x] **Vorlagen-Kachel-Bugfix gefunden**: Kacheln bekamen fälschlich
+  die Zentrierung (`translate(-50%,-50%)`), obwohl sie gar nicht
+  prozentual positioniert sind - das war der gemeldete Linksversatz.
+- [x] **Vorlagen-Kacheln nutzen jetzt echtes SVG** in der Vorschau
+  (kurzes einheitliches Beispiel "Aa" statt unterschiedlich langer
+  Namen, Name als Bildunterschrift darunter) - entspricht jetzt der
+  tatsächlichen Darstellung.
+
+**Noch offen**: die grundsätzliche Konsistenz von Umbruch/Positionierung
+zwischen Editor/Pinnwand/Präsentation (drei getrennte Rendering-Pfade)
+ist eine größere, fortlaufende Aufgabe - einzelne konkrete Bugs wurden
+behoben, eine vollständige Vereinheitlichung steht noch aus.
