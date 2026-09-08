@@ -287,6 +287,7 @@ $config = [
         'wordart_arc_wave' => get_string('wordart_arc_wave', 'pinnwand'),
         'wordart_arc_circle' => get_string('wordart_arc_circle', 'pinnwand'),
         'wordart_arc_amount' => get_string('wordart_arc_amount', 'pinnwand'),
+        'wordart_pick_template' => get_string('wordart_pick_template', 'pinnwand'),
         'tf_shape_custom' => get_string('tf_shape_custom', 'pinnwand'),
         'tf_shape_custom_hint' => get_string('tf_shape_custom_hint', 'pinnwand'),
         'align_left' => get_string('align_left', 'pinnwand'),

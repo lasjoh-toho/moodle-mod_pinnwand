@@ -3450,29 +3450,45 @@
       // Jeder Button zeigt seinen eigenen Namen bereits im jeweiligen Stil -
       // dient dadurch gleichzeitig als Live-Vorschau ohne separate Tabs.
       if (state.wordArtMode) {
-        var wordartRow = el('div', { class: 'ic-textframe-wordart-row' });
-        WORDART_STYLES.forEach(function (w) {
-          var previewSvg = buildWordartGradientSvg({ wordartStyle: w.id, size: 28 }, w.label, resolveFontCss('sans'), true);
-          var wb = el('button', {
-            class: 'ic-wordart-preset-btn' + ((active.wordartStyle || 'none') === w.id ? ' active' : ''),
-            style: previewSvg ? '' : wordartCssFor({ wordartStyle: w.id }, preset.text, true)
+        var currentWStyle = WORDART_STYLES.filter(function (w) { return w.id === active.wordartStyle; })[0];
+        var pickerRow = el('div', { class: 'ic-textframe-wordart-picker-row' });
+        var currentPreviewSvg = currentWStyle ? buildWordartGradientSvg({ wordartStyle: currentWStyle.id, size: 28 }, currentWStyle.label, resolveFontCss('sans'), true) : null;
+        var currentBtn = el('button', { class: 'ic-wordart-current-btn' });
+        if (currentPreviewSvg) {
+          currentBtn.appendChild(el('div', { class: 'ic-wordart-preset-preview', html: currentPreviewSvg.svg }));
+        } else {
+          currentBtn.appendChild(document.createTextNode(S.wordart_pick_template));
+        }
+        function openWordartPicker() {
+          openDraggableModal(S.wordart_pick_template, currentBtn, function (content) {
+            var wordartRow = el('div', { class: 'ic-textframe-wordart-row' });
+            WORDART_STYLES.forEach(function (w) {
+              var previewSvg = buildWordartGradientSvg({ wordartStyle: w.id, size: 28 }, w.label, resolveFontCss('sans'), true);
+              var wb = el('button', {
+                class: 'ic-wordart-preset-btn' + ((active.wordartStyle || 'none') === w.id ? ' active' : ''),
+                style: previewSvg ? '' : wordartCssFor({ wordartStyle: w.id }, preset.text, true)
+              });
+              if (previewSvg) {
+                wb.appendChild(el('div', { class: 'ic-wordart-preset-preview', html: previewSvg.svg }));
+              } else {
+                wb.appendChild(document.createTextNode(w.label));
+              }
+              wb.addEventListener('click', function () {
+                active.wordartStyle = w.id;
+                // Individuelle Regler zurücksetzen, damit die Vorlage sauber
+                // greift (Regler unten passen sie danach bei Bedarf an).
+                active.extrudeSteps = active.extrudeColor = active.scaleY = active.skewY = active.rotate = active.rotY = null;
+                reapplyTextStyle();
+                refreshControls();
+              });
+              wordartRow.appendChild(wb);
+            });
+            content.appendChild(wordartRow);
           });
-          if (previewSvg) {
-            wb.appendChild(el('div', { class: 'ic-wordart-preset-preview', html: previewSvg.svg }));
-          } else {
-            wb.appendChild(document.createTextNode(w.label));
-          }
-          wb.addEventListener('click', function () {
-            active.wordartStyle = w.id;
-            // Individuelle Regler zurücksetzen, damit die Vorlage sauber
-            // greift (Regler unten passen sie danach bei Bedarf an).
-            active.extrudeSteps = active.extrudeColor = active.scaleY = active.skewY = active.rotate = active.rotY = null;
-            reapplyTextStyle();
-            refreshControls();
-          });
-          wordartRow.appendChild(wb);
-        });
-        formBox.appendChild(wordartRow);
+        }
+        currentBtn.addEventListener('click', openWordartPicker);
+        pickerRow.appendChild(currentBtn);
+        formBox.appendChild(pickerRow);
 
         if (active.wordartStyle && active.wordartStyle !== 'none') {
           var activeWStyle = WORDART_STYLES.filter(function (w) { return w.id === active.wordartStyle; })[0] || {};

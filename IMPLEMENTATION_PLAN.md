@@ -3027,3 +3027,17 @@ Neunundneunzigster Feedback-Durchgang. Betrifft: `js/app.js`.
   beim Öffnen ausgelesen, mit Rückfall-Erkennung (vorhandener
   WordArt-/Bogen-Stil) für bereits gespeicherte ältere Objekte ohne
   dieses Feld.
+
+---
+
+## Phase 104 — WordArt-Vorlagenauswahl als Pop-up statt permanentem Scroll-Raster ✅
+
+Einhundertster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`, neue Strings.
+
+- [x] **Vorlagen-Auswahl umgebaut**: statt eines permanent hohen
+  Scroll-Rasters direkt in der Werkzeugleiste gibt es jetzt eine
+  flache Zeile mit der aktuell gewählten Vorlage - Klick öffnet das
+  volle Raster als verschiebbares Pop-up (mehr Platz als vorher, nicht
+  mehr durch die schmale Seitenleiste begrenzt). Werkzeugleiste bleibt
+  dadurch flach.

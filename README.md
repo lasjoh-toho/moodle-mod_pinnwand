@@ -1307,6 +1307,11 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Falscher Editor-Modus beim erneuten Öffnen eines WordArt-Objekts
   behoben.
 
+### Einhundertneunte Überarbeitung — WordArt-Vorlagenauswahl als Pop-up
+
+- Vorlagen-Auswahl öffnet jetzt als Pop-up statt eines permanent
+  hohen Scroll-Rasters direkt in der Werkzeugleiste.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -149,6 +149,7 @@ $string['wordart_arc_down'] = 'Bogen abwärts';
 $string['wordart_arc_wave'] = 'Welle';
 $string['wordart_arc_circle'] = 'Kreis';
 $string['wordart_arc_amount'] = 'Krümmung';
+$string['wordart_pick_template'] = 'Vorlage wählen';
 $string['tf_shape_custom'] = 'Eigene Form (Punkte)';
 $string['tf_shape_custom_hint'] = 'Klicke Eckpunkte auf den Zettel - Doppelklick oder Eingabetaste schließt die Form ab (mind. 3 Punkte), Escape bricht ab.';
 $string['align_left'] = 'Linksbündig';

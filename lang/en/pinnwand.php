@@ -149,6 +149,7 @@ $string['wordart_arc_down'] = 'Arc down';
 $string['wordart_arc_wave'] = 'Wave';
 $string['wordart_arc_circle'] = 'Circle';
 $string['wordart_arc_amount'] = 'Curvature';
+$string['wordart_pick_template'] = 'Choose template';
 $string['tf_shape_custom'] = 'Custom shape (points)';
 $string['tf_shape_custom_hint'] = 'Click corner points on the note - double-click or Enter finishes the shape (at least 3 points), Escape cancels.';
 $string['align_left'] = 'Align left';
