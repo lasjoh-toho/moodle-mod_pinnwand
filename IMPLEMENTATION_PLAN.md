@@ -3041,3 +3041,25 @@ Einhundertster Feedback-Durchgang. Betrifft: `js/app.js`,
   volle Raster als verschiebbares Pop-up (mehr Platz als vorher, nicht
   mehr durch die schmale Seitenleiste begrenzt). Werkzeugleiste bleibt
   dadurch flach.
+
+---
+
+## Phase 105 — Griffe-Absicherung, Textrahmen-Begrenzung wiederhergestellt 🔄
+
+Einhunderterster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] **Größenänderungs-/Rotations-Griffe abgesichert**: explizit hoher
+  z-index ergänzt, damit sie garantiert über dem WordArt-Inhalt liegen
+  (genaue Ursache ohne Live-Test nicht sicher bestätigt, defensive
+  Absicherung).
+- [x] **Zielkonflikt gelöst**: die WordArt-Beschneidungs-Fix hatte
+  versehentlich die Begrenzung für ALLE Textrahmen entfernt, nicht nur
+  WordArt. Jetzt: WordArt bleibt unbeschnitten (Effekte wie
+  Extrusion/Schrägstellung), normale Textrahmen bekommen ihre
+  Begrenzung auf die Kartengröße zurück (`hasWordart`-Erkennung).
+
+**Noch offen**: "unberechenbare Umbrüche" - Editor und Pinnwand nutzen
+unterschiedliche CSS-Ansätze für die Textpositionierung, was zu
+leicht unterschiedlichem Umbruchverhalten führen kann - genauere
+Angleichung noch nicht umgesetzt.

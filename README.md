@@ -1312,6 +1312,12 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Vorlagen-Auswahl öffnet jetzt als Pop-up statt eines permanent
   hohen Scroll-Rasters direkt in der Werkzeugleiste.
 
+### Einhundertzehnte Überarbeitung — Griffe-Absicherung, Textrahmen-Begrenzung
+
+- Größenänderungs-/Rotations-Griffe auf der Pinnwand abgesichert.
+- Normale Textrahmen bekommen ihre Begrenzung auf die Kartengröße
+  zurück (WordArt bleibt bewusst unbeschnitten).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

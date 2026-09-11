@@ -2031,8 +2031,15 @@
 
   function buildTextFrameLiveDom(tf) {
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
+    // Nur WordArt-Rahmen bleiben unbeschnitten (damit Effekte wie
+    // Extrusion/Schrägstellung nicht abgeschnitten werden) - normale
+    // Textrahmen bekommen wieder eine Begrenzung auf die Kartengröße,
+    // wie im Editor. Sonst könnte normaler Text unvorhersehbar über den
+    // Rahmen hinausgehen.
+    var hasWordart = (tf.texts || []).some(function (t) { return t.wordartStyle && t.wordartStyle !== 'none'; });
     var outer = el('div', {
       class: 'ic-tf-live', style: 'position:relative;width:100%;aspect-ratio:' + tf.w + '/' + tf.h + ';container-type:inline-size;' +
+        (hasWordart ? '' : 'overflow:hidden;border-radius:16px;') +
         (preset.shadow ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') + (preset.bg ? '' : 'border:2px dashed rgba(255,255,255,.3);')
     });
     var cardStyle = tf.cardStyle || {};

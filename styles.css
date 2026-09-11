@@ -905,12 +905,12 @@
 .ic-arrange-item .ic-resize {
   position: absolute; right: -10px; bottom: -10px; width: 26px; height: 26px;
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff;
-  opacity: 0; transition: opacity .15s;
+  opacity: 0; transition: opacity .15s; z-index: 10;
 }
 .ic-arrange-item .ic-rotate-handle {
   position: absolute; left: 50%; top: -28px; transform: translateX(-50%);
   width: 22px; height: 22px; background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff;
-  opacity: 0; transition: opacity .15s;
+  opacity: 0; transition: opacity .15s; z-index: 10;
 }
 .ic-arrange-item .ic-rotate-handle::after {
   content: ''; position: absolute; left: 50%; top: 100%; width: 1px; height: 14px;
