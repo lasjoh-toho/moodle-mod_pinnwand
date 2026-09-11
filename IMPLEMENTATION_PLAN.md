@@ -3063,3 +3063,24 @@ Einhunderterster Feedback-Durchgang. Betrifft: `js/app.js`,
 unterschiedliche CSS-Ansätze für die Textpositionierung, was zu
 leicht unterschiedlichem Umbruchverhalten führen kann - genauere
 Angleichung noch nicht umgesetzt.
+
+---
+
+## Phase 106 — "2 Spalten"-Bugfix, Skew-Rand mit exakten Maßen (nur Export, Präsentation bleibt unverändert lauffähig) ✅
+
+Einhundertzweiter Feedback-Durchgang. Betrifft: `js/app.js`.
+
+- [x] **"2 Spalten"-Bugfix**: mehrzeiliger Text (mehrere `<div>`-Zeilen
+  aus dem Editor) landete im Export in einem Flex-Container ohne
+  `flex-direction:column` - dadurch lagen die Zeilen nebeneinander
+  statt untereinander. `flex-direction:column` an allen betroffenen
+  Stellen ergänzt (Export primär/nicht-primär, Editor-WordArt-Wrapper
+  zur Konsistenz).
+- [x] **Skew-Abschneiden im Export behoben**: die Rand-Berechnung
+  nutzt jetzt `buildWordartGradientParts()` direkt für exakte Maße
+  statt einer separaten, ungenaueren Schätzung.
+
+**Wichtig**: beide Fixes wirken nur auf die Erzeugung des gespeicherten
+Bildes (Präsentation/Meine Dateien/Klassenübersicht) - der Rendering-
+Mechanismus der Präsentation selbst (weiterhin `<img>`) wurde NICHT
+angetastet, um keine erneute Regression zu riskieren.

@@ -2207,7 +2207,7 @@
         // Primäres Textobjekt: füllt den ganzen Rahmen.
         return '<foreignObject x="0" y="0" width="' + tf.w + '" height="' + tf.h + '">' +
           '<div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;padding:12px;' +
-          'display:flex;align-items:center;justify-content:center;text-align:center;' + baseStyle + '">' +
+          'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;' + baseStyle + '">' +
           html + '</div></foreignObject>';
       }
       // Weitere Textobjekte: frei positioniert, Box-Größe grob aus dem
@@ -2225,7 +2225,7 @@
       var boxX = t.x * tf.w - boxW / 2, boxY = t.y * tf.h - boxH / 2;
       return '<foreignObject x="' + boxX + '" y="' + boxY + '" width="' + boxW + '" height="' + boxH + '">' +
         '<div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;' +
-        'display:flex;align-items:center;justify-content:center;text-align:center;' + baseStyle + 'overflow:visible;">' +
+        'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;' + baseStyle + 'overflow:visible;">' +
         html + '</div></foreignObject>';
     }).join('');
     // Zusätzlicher Rand um den eigentlichen Karteninhalt: SVGs beschneiden
@@ -2242,12 +2242,21 @@
     tf.texts.forEach(function (t) {
       if (!t.wordartStyle || t.wordartStyle === 'none') { return; }
       var wStyle = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0] || {};
-      var skewY = Math.abs(t.skewY != null ? t.skewY : (wStyle.skewY || 0));
-      var rotate = Math.abs(t.rotate != null ? t.rotate : (wStyle.rotate || 0));
-      var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (wStyle.extrudeSteps || 0);
-      var scaleY = t.scaleY != null ? t.scaleY : (wStyle.scaleY || 1);
-      var estimate = t.size * scaleY * (Math.tan((skewY + rotate) * Math.PI / 180) + 0.3) + extrudeSteps * 0.8 + 20;
-      margin = Math.max(margin, Math.round(Math.abs(estimate)));
+      if (wStyle.fillGradient) {
+        // Exakte Maße aus derselben Funktion nutzen, die auch die
+        // eigentliche Darstellung erzeugt - statt einer separaten,
+        // ungenaueren Schätzung, die bei starker Schrägstellung nicht
+        // immer ausreichte.
+        var exactParts = buildWordartGradientParts(t, t.text, resolveFontCss(t.font));
+        if (exactParts) { margin = Math.max(margin, Math.round(Math.max(exactParts.w, exactParts.h) / 2)); }
+      } else {
+        var skewY = Math.abs(t.skewY != null ? t.skewY : (wStyle.skewY || 0));
+        var rotate = Math.abs(t.rotate != null ? t.rotate : (wStyle.rotate || 0));
+        var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (wStyle.extrudeSteps || 0);
+        var scaleY = t.scaleY != null ? t.scaleY : (wStyle.scaleY || 1);
+        var estimate = t.size * scaleY * (Math.tan((skewY + rotate) * Math.PI / 180) + 0.3) + extrudeSteps * 0.8 + 20;
+        margin = Math.max(margin, Math.round(Math.abs(estimate)));
+      }
     });
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + (tf.w + margin * 2) + '" height="' + (tf.h + margin * 2) +
       '" viewBox="0 0 ' + (tf.w + margin * 2) + ' ' + (tf.h + margin * 2) + '"><style>' +
@@ -2630,7 +2639,7 @@
         // Fokussieren erscheint wieder die normale editierbare Ansicht.
         var waWrap = el('div', {
           class: 'ic-textframe-obj' + (isPrimary ? ' primary' : ''),
-          style: isPrimary ? 'display:flex;align-items:center;justify-content:center;cursor:text;' :
+          style: isPrimary ? 'display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:text;' :
             ('left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + (wordartSvgPreview.w) + 'px;cursor:text;')
         });
         waWrap.innerHTML = wordartSvgPreview.svg;

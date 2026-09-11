@@ -1318,6 +1318,11 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Normale Textrahmen bekommen ihre Begrenzung auf die Kartengröße
   zurück (WordArt bleibt bewusst unbeschnitten).
 
+### Einhundertelfte Überarbeitung — Export-Bugfixes
+
+- "2 Spalten"-Bug bei mehrzeiligem Text im Export behoben.
+- Skew-Abschneiden im Export behoben (exakte Maße statt Schätzung).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
