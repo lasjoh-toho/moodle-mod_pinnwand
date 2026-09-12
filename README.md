@@ -1330,7 +1330,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
   (eingebettete Bilder, keine Moodle-Abhängigkeit zum Abspielen).
 - Datenformat versioniert und für einen möglichen späteren Re-Import
   vorbereitet (noch nicht selbst gebaut).
-- Bewusst vereinfachte Abspiel-Logik in dieser ersten Fassung.
+
+### Einhundertdreizehnte Überarbeitung — Standalone-Player deutlich näher am Original
+
+- Identische Kamera-Transformation, Bogen-Animation und
+  Verdeckungslogik wie in der echten Präsentation.
+- Rahmen-/Überblick-Stationen sowie manuelles Verschieben/Zoomen
+  ergänzt.
+- Weiterhin offen: Textrahmen/WordArt im Export bleiben einfache
+  Bilder, Stylus-Anmerkungen fehlen.
 
 ## Bekannte Grenzen dieser Version
 

@@ -3115,3 +3115,28 @@ Logik aus dem Plugin (Ebenen-Verdeckung, weichere Übergänge fehlen
 noch). Noch kein Re-Import (Format ist dafür vorbereitet, Funktion
 selbst fehlt). Ungetestet - kein PHP-Interpreter in dieser Umgebung
 verfügbar.
+
+---
+
+## Phase 108 — Standalone-Player deutlich näher am Original angeglichen 🔄
+
+Einhundertdritter Feedback-Durchgang ("nähere die Abspiellogik dem
+Original an"). Betrifft: `export_presentation.php`.
+
+- [x] **Identische Kamera-Transformation**: rotationsbewusstes
+  `translate(tx,ty) rotate(rot) scale(scale)`, 1:1 dieselbe Mathematik
+  wie in `openPresentation()`.
+- [x] **Dieselbe "Bogen"-Animation** beim Übergang zwischen Stationen
+  (weite Wege zoomen kurz stärker heraus, gleiches Easing/gleiche
+  Formel für die Bogenhöhe).
+- [x] **Dieselbe Verdeckungslogik** nach Z-Ebene (nur höhere Ebenen als
+  die aktive Station werden ausgeblendet).
+- [x] **Rahmen-/Überblick-Stationen** als reine Zoom-Ziele unterstützt
+  (nicht nur Foto-Stationen wie in der ersten Fassung).
+- [x] **Manuelles Verschieben/Zoomen** zwischen den Stationen (Ziehen,
+  Mausrad) - wie im Original.
+
+**Weiterhin bestehende Lücken**: Textrahmen/WordArt auf dem Board
+werden im Export weiterhin als einfaches Bild gezeigt (nicht die volle
+Live-Darstellung), Stylus-Anmerkungen fehlen. Ungetestet - kein PHP-
+Interpreter in dieser Umgebung verfügbar.
