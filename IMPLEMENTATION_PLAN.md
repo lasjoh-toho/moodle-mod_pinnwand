@@ -3084,3 +3084,34 @@ Einhundertzweiter Feedback-Durchgang. Betrifft: `js/app.js`.
 Bildes (Präsentation/Meine Dateien/Klassenübersicht) - der Rendering-
 Mechanismus der Präsentation selbst (weiterhin `<img>`) wurde NICHT
 angetastet, um keine erneute Regression zu riskieren.
+
+---
+
+## Phase 107 — Standalone-Präsentations-Export (erste Grundlage) 🔄
+
+Konzept-Anfrage des Nutzers, dann direkt umgesetzt. Betrifft: neue
+Datei `export_presentation.php`, `js/app.js`, neue Strings.
+
+- [x] **Neues Export-Skript** `export_presentation.php`: sammelt den
+  Roten Faden der Lehrkraft (`pinnwand_threads`/`pinnwand_thread_items`)
+  samt aller referenzierten und auf dem Board sichtbaren Fotos, bettet
+  jedes Bild als Base64-Daten-URL ein (keine `pluginfile.php`-
+  Abhängigkeit), baut daraus eine eigenständige HTML-Datei zum
+  Herunterladen.
+- [x] **Datenformat bewusst zweischichtig** (auf Nutzer-Nachfrage zum
+  möglichen Re-Import): ein versionierter (`formatVersion`),
+  maschinenlesbarer JSON-Block in einem eigenen
+  `<script type="application/json">`-Tag, klar getrennt von der
+  Abspiel-Logik selbst - als Grundlage für einen späteren Re-Import,
+  ohne diesen selbst schon zu bauen.
+- [x] Schlanke, von Moodle unabhängige Player-Logik (Pfeiltasten-
+  Navigation mit Pan/Zoom-Übergang, Verdeckung noch nicht wie im
+  Original).
+- [x] Neuer Export-Button in der Klassenübersicht-Werkzeugleiste.
+
+**Bewusste Einschränkungen dieser ersten Fassung**: die Abspiel-Logik
+ist eine vereinfachte Nachbildung, nicht die exakte Präsentations-
+Logik aus dem Plugin (Ebenen-Verdeckung, weichere Übergänge fehlen
+noch). Noch kein Re-Import (Format ist dafür vorbereitet, Funktion
+selbst fehlt). Ungetestet - kein PHP-Interpreter in dieser Umgebung
+verfügbar.

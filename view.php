@@ -73,6 +73,7 @@ $config = [
     'canmanage' => $canmanage,
     'currentuserfullname' => fullname($USER),
     'managerurl' => $canmanage ? (new moodle_url('/mod/pinnwand/manage.php', ['id' => $cm->id]))->out(false) : null,
+    'exportpresentationurl' => $canmanage ? (new moodle_url('/mod/pinnwand/export_presentation.php', ['id' => $cm->id]))->out(false) : null,
     'courseurl' => (new moodle_url('/course/view.php', ['id' => $course->id]))->out(false),
     'isediting' => $isediting,
     'settingsurl' => ($isediting && has_capability('moodle/course:manageactivities', $context))
@@ -262,6 +263,7 @@ $config = [
         'tf_target_shape' => get_string('tf_target_shape', 'pinnwand'),
         'tf_target_card' => get_string('tf_target_card', 'pinnwand'),
         'tf_send_direct' => get_string('tf_send_direct', 'pinnwand'),
+        'export_presentation' => get_string('export_presentation', 'pinnwand'),
         'tf_aspect_locked' => get_string('tf_aspect_locked', 'pinnwand'),
         'tf_aspect_unlocked' => get_string('tf_aspect_unlocked', 'pinnwand'),
         'tf_show_board_bg' => get_string('tf_show_board_bg', 'pinnwand'),

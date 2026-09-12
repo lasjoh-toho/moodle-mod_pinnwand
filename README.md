@@ -1323,6 +1323,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - "2 Spalten"-Bug bei mehrzeiligem Text im Export behoben.
 - Skew-Abschneiden im Export behoben (exakte Maße statt Schätzung).
 
+### Einhundertzwölfte Überarbeitung — Standalone-Präsentations-Export (Grundlage)
+
+- Neuer Export-Button in der Klassenübersicht: lädt eine
+  eigenständige HTML-Datei mit dem Roten Faden der Lehrkraft herunter
+  (eingebettete Bilder, keine Moodle-Abhängigkeit zum Abspielen).
+- Datenformat versioniert und für einen möglichen späteren Re-Import
+  vorbereitet (noch nicht selbst gebaut).
+- Bewusst vereinfachte Abspiel-Logik in dieser ersten Fassung.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
