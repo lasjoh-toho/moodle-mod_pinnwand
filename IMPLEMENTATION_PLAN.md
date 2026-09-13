@@ -3161,3 +3161,27 @@ Strings.
   fälschlich auf die Fläche-Anzeige zurück statt wirklich nichts zu
   zeigen - jetzt korrekt behoben (explizite `=== 'fill'`-Bedingung
   statt reinem `else`).
+
+---
+
+## Phase 110 — Verlauf-Palette-Bugfix, Vorlagen nur über Formen-Spalte, manuelle Export-Rahmen-Griffe (ersetzt Diagnose-Werkzeug) ✅
+
+Einhundertfünfter Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`, neue Strings.
+
+- [x] **Verlauf-Palette-Bugfix**: wenn Verlauf aktiviert wird, aber
+  noch kein Marker angeklickt wurde, blieb die Farbauswahl leer -
+  fällt jetzt automatisch auf die erste Verlauf-Stufe zurück.
+- [x] **Vorlagen-Auswahl jetzt nur über der Formen-Spalte** (war
+  vorher über beiden Spalten - Papier/Dunkel/Hell/Kein Hintergrund
+  ist jetzt erstes Element in der Formen-Spalte selbst).
+- [x] **Diagnose-Werkzeug durch direkte Export-Rahmen-Griffe
+  ersetzt**: zwei neue Griffe (oben-links, unten-rechts) im
+  WordArt-Editor setzen `tf.exportBounds` (die viewBox des
+  gespeicherten SVGs) direkt und verbindlich - Text/WordArt bewegt
+  oder skaliert sich dabei NICHT mit. `buildTextFrameSVG()` nutzt
+  `tf.exportBounds` jetzt vorrangig vor der automatischen Berechnung
+  (ausgelagert in neue Funktion `computeAutoExportBounds()`, weiterhin
+  als Rückfall für ältere Objekte ohne manuell gesetzten Rahmen). Ein
+  Zoom der WordArt selbst läuft wie gewünscht über das Skalieren des
+  fertigen SVGs auf der Pinnwand, nicht über diese Griffe.

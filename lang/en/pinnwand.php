@@ -136,6 +136,7 @@ $string['tf_margin_label'] = 'Margin (px)';
 $string['tf_margin_auto'] = 'automatic';
 $string['tf_margin_apply'] = 'Apply and open preview';
 $string['tf_margin_reset'] = 'Reset (automatic)';
+$string['tf_exportbounds_hint'] = 'Drag the export frame: sets how much margin around the card stays visible in the saved image (the WordArt itself does not move with it)';
 $string['tf_no_shape_selected'] = 'No shape selected - click a shape on the note first.';
 $string['tf_shadow_angle'] = 'Direction';
 $string['tf_shadow_distance'] = 'Distance';

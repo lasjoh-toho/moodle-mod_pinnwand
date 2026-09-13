@@ -2105,6 +2105,30 @@
     return outer;
   }
 
+  function computeAutoExportBounds(tf) {
+    var margin = Math.max(30, Math.round(Math.min(tf.w, tf.h) * 0.15));
+    tf.texts.forEach(function (t) {
+      if (!t.wordartStyle || t.wordartStyle === 'none') { return; }
+      var wStyle = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0] || {};
+      if (wStyle.fillGradient) {
+        // Exakte Maße aus derselben Funktion nutzen, die auch die
+        // eigentliche Darstellung erzeugt - statt einer separaten,
+        // ungenaueren Schätzung, die bei starker Schrägstellung nicht
+        // immer ausreichte.
+        var exactParts = buildWordartGradientParts(t, t.text, resolveFontCss(t.font));
+        if (exactParts) { margin = Math.max(margin, Math.round(Math.max(exactParts.w, exactParts.h) / 2)); }
+      } else {
+        var skewY = Math.abs(t.skewY != null ? t.skewY : (wStyle.skewY || 0));
+        var rotate = Math.abs(t.rotate != null ? t.rotate : (wStyle.rotate || 0));
+        var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (wStyle.extrudeSteps || 0);
+        var scaleY = t.scaleY != null ? t.scaleY : (wStyle.scaleY || 1);
+        var estimate = t.size * scaleY * (Math.tan((skewY + rotate) * Math.PI / 180) + 0.3) + extrudeSteps * 0.8 + 20;
+        margin = Math.max(margin, Math.round(Math.abs(estimate)));
+      }
+    });
+    return { x1: -margin, y1: -margin, x2: tf.w + margin, y2: tf.h + margin };
+  }
+
   function buildTextFrameSVG(tf) {
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
     var cardStyle = tf.cardStyle || {};
@@ -2238,41 +2262,19 @@
     // bei starker diagonaler Verzerrung reichte ein fester Rand nicht aus
     // (Ursache für Abschneiden in der Präsentation bei skew-lastigen
     // WordArt-Stilen).
-    var margin = Math.max(30, Math.round(Math.min(tf.w, tf.h) * 0.15));
-    if (tf.marginOverride != null) {
-      // Manuelle Überschreibung (über das Diagnose-Werkzeug gesetzt) hat
-      // Vorrang vor der automatischen Berechnung - für den Fall, dass
-      // diese bei einer bestimmten Vorlage/Einstellung nicht ausreicht.
-      margin = Math.max(0, Math.round(tf.marginOverride));
-    } else {
-    tf.texts.forEach(function (t) {
-      if (!t.wordartStyle || t.wordartStyle === 'none') { return; }
-      var wStyle = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0] || {};
-      if (wStyle.fillGradient) {
-        // Exakte Maße aus derselben Funktion nutzen, die auch die
-        // eigentliche Darstellung erzeugt - statt einer separaten,
-        // ungenaueren Schätzung, die bei starker Schrägstellung nicht
-        // immer ausreichte.
-        var exactParts = buildWordartGradientParts(t, t.text, resolveFontCss(t.font));
-        if (exactParts) { margin = Math.max(margin, Math.round(Math.max(exactParts.w, exactParts.h) / 2)); }
-      } else {
-        var skewY = Math.abs(t.skewY != null ? t.skewY : (wStyle.skewY || 0));
-        var rotate = Math.abs(t.rotate != null ? t.rotate : (wStyle.rotate || 0));
-        var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (wStyle.extrudeSteps || 0);
-        var scaleY = t.scaleY != null ? t.scaleY : (wStyle.scaleY || 1);
-        var estimate = t.size * scaleY * (Math.tan((skewY + rotate) * Math.PI / 180) + 0.3) + extrudeSteps * 0.8 + 20;
-        margin = Math.max(margin, Math.round(Math.abs(estimate)));
-      }
-    });
-    }
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + (tf.w + margin * 2) + '" height="' + (tf.h + margin * 2) +
-      '" viewBox="0 0 ' + (tf.w + margin * 2) + ' ' + (tf.h + margin * 2) + '"><style>' +
+    // Export-Rechteck: entweder manuell über die zwei Griffe im Editor
+    // gesetzt (tf.exportBounds, hat Vorrang) oder automatisch berechnet
+    // als Rückfall für ältere, noch nicht manuell angepasste Objekte.
+    var eb = tf.exportBounds || computeAutoExportBounds(tf);
+    var ebw = eb.x2 - eb.x1, ebh = eb.y2 - eb.y1;
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + ebw + '" height="' + ebh +
+      '" viewBox="' + eb.x1 + ' ' + eb.y1 + ' ' + ebw + ' ' + ebh + '"><style>' +
       '.ic-frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;' +
       'font-size:.82em;line-height:1.1;margin:0 2px}' +
       '.ic-frac-num{border-bottom:1.5px solid currentColor;padding:0 3px 1px}' +
       '.ic-frac-den{padding:1px 3px 0}' +
-      '</style><g transform="translate(' + margin + ',' + margin + ')">' +
-      defs + bgRect + behindShapesEl + textEls + frontShapesEl + '</g></svg>';
+      '</style>' +
+      defs + bgRect + behindShapesEl + textEls + frontShapesEl + '</svg>';
   }
 
   // Bettet die tatsächlich verwendeten Web-Fonts (aktuell nur "Handschrift")
@@ -2564,6 +2566,60 @@
       window.addEventListener('touchend', up);
     })();
 
+    // Export-Rahmen (tf.exportBounds): zwei eigene Griffe, mit denen sich
+    // die viewBox des gespeicherten SVGs direkt setzen lässt - der Text/
+    // die WordArt selbst bewegt oder skaliert sich dabei NICHT, es wird
+    // nur festgelegt, wie viel Rand um die Karte im gespeicherten Bild
+    // sichtbar bleibt (wichtig bei schräg/gestreckter WordArt, die über
+    // den Kartenrand hinausragt). Ein Zoom der WordArt selbst läuft
+    // später über einen Zoom des fertigen ("gebackenen") SVGs auf der
+    // Pinnwand, nicht über diese Griffe.
+    if (state.wordArtMode) {
+      var eb0 = tf.exportBounds || computeAutoExportBounds(tf);
+      var ebHandleTL = el('div', { class: 'ic-tf-exportbounds-handle ic-tf-exportbounds-tl', title: S.tf_exportbounds_hint });
+      var ebHandleBR = el('div', { class: 'ic-tf-exportbounds-handle ic-tf-exportbounds-br', title: S.tf_exportbounds_hint });
+      frame.appendChild(ebHandleTL);
+      frame.appendChild(ebHandleBR);
+      function positionEbHandles() {
+        var b = tf.exportBounds || eb0;
+        ebHandleTL.style.left = b.x1 + 'px'; ebHandleTL.style.top = b.y1 + 'px';
+        ebHandleBR.style.left = b.x2 + 'px'; ebHandleBR.style.top = b.y2 + 'px';
+      }
+      positionEbHandles();
+      (function () {
+        var dragCorner = null, startX2 = 0, startY2 = 0, startBounds = null;
+        function pt2(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
+        function down2(corner) {
+          return function (ev) {
+            dragCorner = corner; var p = pt2(ev);
+            startX2 = p.x; startY2 = p.y;
+            startBounds = tf.exportBounds ? { x1: tf.exportBounds.x1, y1: tf.exportBounds.y1, x2: tf.exportBounds.x2, y2: tf.exportBounds.y2 } : eb0;
+            ev.stopPropagation(); ev.preventDefault();
+          };
+        }
+        function move2(ev) {
+          if (!dragCorner) { return; }
+          var p = pt2(ev);
+          var dx = p.x - startX2, dy = p.y - startY2;
+          var nb = { x1: startBounds.x1, y1: startBounds.y1, x2: startBounds.x2, y2: startBounds.y2 };
+          if (dragCorner === 'tl') { nb.x1 = startBounds.x1 + dx; nb.y1 = startBounds.y1 + dy; }
+          else { nb.x2 = startBounds.x2 + dx; nb.y2 = startBounds.y2 + dy; }
+          tf.exportBounds = nb;
+          positionEbHandles();
+          ev.preventDefault();
+        }
+        function up2() { dragCorner = null; }
+        ebHandleTL.addEventListener('mousedown', down2('tl'));
+        ebHandleTL.addEventListener('touchstart', down2('tl'), { passive: false });
+        ebHandleBR.addEventListener('mousedown', down2('br'));
+        ebHandleBR.addEventListener('touchstart', down2('br'), { passive: false });
+        window.addEventListener('mousemove', move2);
+        window.addEventListener('touchmove', move2, { passive: false });
+        window.addEventListener('mouseup', up2);
+        window.addEventListener('touchend', up2);
+      })();
+    }
+
     var activeId = null;
     function selectText(id) {
       activeId = id;
@@ -2824,8 +2880,6 @@
       b.addEventListener('click', function () { tf.preset = p.id; render(); });
       presetRow.appendChild(b);
     });
-    blockTemplates.content.appendChild(presetRow);
-
     var columnsWrap = el('div', { class: 'ic-cf-columns' });
     blockTemplates.content.appendChild(columnsWrap);
 
@@ -2835,6 +2889,7 @@
     // Übertragung auf eine bereits ausgewählte mehr) - die neue Form
     // lässt sich danach frei über die anderen ziehen und skalieren.
     var shapesCol = el('div', { class: 'ic-cf-shapes-col' });
+    shapesCol.appendChild(presetRow);
     columnsWrap.appendChild(shapesCol);
     function pickShapeType(id) {
       if (id === '__custom__') { startCustomShapeDraw(null); return; }
@@ -3195,7 +3250,7 @@
           window.addEventListener('touchend', function () { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } });
           gradientBarRow.appendChild(angleKnob);
 
-          var stopSel = stops.filter(function (s2) { return s2.sid === state.gradientStopSid; })[0];
+          var stopSel = stops.filter(function (s2) { return s2.sid === state.gradientStopSid; })[0] || stops[0];
           if (stopSel) {
             function applyGradStopColor(color) {
               // sid MUSS übernommen werden, sonst bekäme diese Stufe beim
@@ -3643,50 +3698,6 @@
     // Beschneiden bei schräger WordArt) konkret nachvollziehen zu können,
     // statt zu mutmaßen. Im neuen Tab lässt sich per Rechtsklick →
     // "Element untersuchen" die genaue viewBox/Breite/Höhe ablesen.
-    var debugSvgBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon', title: S.tf_debug_svg }, [icon('code')]);
-    function openSvgPreview() {
-      try {
-        var svgStr = buildTextFrameSVG(tf);
-        var blob = new Blob([svgStr], { type: 'image/svg+xml' });
-        var url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-      } catch (e) {
-        alert(S.tf_debug_svg_error + ' (' + e.message + ')');
-      }
-    }
-    debugSvgBtn.addEventListener('click', function () {
-      openDraggableModal(S.tf_debug_svg, debugSvgBtn, function (content) {
-        content.appendChild(el('p', { class: 'ic-hint' }, [S.tf_margin_hint]));
-        var row = el('div', { class: 'ic-textframe-edit' });
-        row.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_margin_label]));
-        var marginInput = el('input', {
-          type: 'number', min: '0', step: '1',
-          value: String(tf.marginOverride != null ? Math.round(tf.marginOverride) : '')
-        });
-        marginInput.placeholder = S.tf_margin_auto;
-        row.appendChild(marginInput);
-        content.appendChild(row);
-        var btnRow = el('div', { class: 'ic-textframe-edit' });
-        var applyBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.tf_margin_apply]);
-        applyBtn.addEventListener('click', function () {
-          var v = parseFloat(marginInput.value);
-          tf.marginOverride = isNaN(v) ? null : v;
-          openSvgPreview();
-        });
-        var resetBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_margin_reset]);
-        resetBtn.addEventListener('click', function () {
-          tf.marginOverride = null;
-          marginInput.value = '';
-          openSvgPreview();
-        });
-        btnRow.appendChild(applyBtn); btnRow.appendChild(resetBtn);
-        content.appendChild(btnRow);
-        var openBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_debug_svg]);
-        openBtn.addEventListener('click', openSvgPreview);
-        content.appendChild(openBtn);
-      });
-    });
-    tfHeaderRight.appendChild(debugSvgBtn);
     tfHeaderRight.appendChild(cancelWizardBtn());
     // Direkt senden: speichert UND schickt das Objekt sofort in den
     // Post-Stream der Masterpinnwand (hiddenfromboard=0), statt erst über

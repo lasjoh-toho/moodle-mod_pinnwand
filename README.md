@@ -1342,10 +1342,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
 
 ### Einhundertvierzehnte Überarbeitung — Manuelle Rand-Korrektur, Layout-Anpassungen
 
-- Diagnose-Werkzeug erlaubt jetzt die manuelle Korrektur des
-  Kartenrands, falls die automatische Berechnung nicht ausreicht.
-- Vorlagen-Auswahl (Papier/Dunkel/Hell) steht jetzt vor dem Formen/
-  Farben-Bereich.
+### Einhundertfünfzehnte Überarbeitung — Export-Rahmen-Griffe statt Diagnose-Werkzeug
+
+- Zwei neue Griffe im WordArt-Editor setzen den Export-Rahmen direkt
+  und verbindlich, ohne dass sich der Text dabei bewegt.
+- Vorlagen-Auswahl (Papier/Dunkel/Hell) steht jetzt vor der
+  Formen-Spalte (nicht mehr über beiden Spalten).
+- Verlauf-Palette zeigt jetzt zuverlässig eine Farbauswahl, auch
+  wenn noch kein Marker angeklickt wurde.
 - Farb-Tab lässt sich jetzt zuverlässig durch erneuten Klick
   einklappen.
 

@@ -559,6 +559,12 @@
   position: absolute; right: -10px; bottom: -10px; width: 26px; height: 26px;
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: nwse-resize;
 }
+.ic-tf-exportbounds-handle {
+  position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  background: #ffcc00; border: 2px solid #1a1a1a; cursor: nwse-resize; z-index: 5;
+}
+.ic-tf-exportbounds-tl { border-radius: 2px 8px 2px 2px; }
+.ic-tf-exportbounds-br { border-radius: 2px 2px 2px 8px; }
 .ic-textframe-size-handle {
   position: absolute; right: -9px; bottom: -9px; width: 18px; height: 18px;
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: nwse-resize;

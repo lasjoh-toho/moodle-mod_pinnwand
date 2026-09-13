@@ -136,6 +136,7 @@ $string['tf_margin_label'] = 'Rand (px)';
 $string['tf_margin_auto'] = 'automatisch';
 $string['tf_margin_apply'] = 'Anwenden und Vorschau öffnen';
 $string['tf_margin_reset'] = 'Zurücksetzen (automatisch)';
+$string['tf_exportbounds_hint'] = 'Export-Rahmen ziehen: legt fest, wie viel Rand um die Karte im gespeicherten Bild sichtbar bleibt (WordArt bewegt sich dabei nicht mit)';
 $string['tf_no_shape_selected'] = 'Keine Form ausgewählt - klicke zuerst eine Form auf dem Zettel an.';
 $string['tf_shadow_angle'] = 'Richtung';
 $string['tf_shadow_distance'] = 'Entfernung';
