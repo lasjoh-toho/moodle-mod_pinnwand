@@ -3140,3 +3140,24 @@ Original an"). Betrifft: `export_presentation.php`.
 werden im Export weiterhin als einfaches Bild gezeigt (nicht die volle
 Live-Darstellung), Stylus-Anmerkungen fehlen. Ungetestet - kein PHP-
 Interpreter in dieser Umgebung verfügbar.
+
+---
+
+## Phase 109 — Manuelle Rand-Korrektur im Diagnose-Werkzeug, Vorlagen-Auswahl nach oben, Farb-Tab-Einklapp-Bugfix ✅
+
+Einhundertvierter Feedback-Durchgang. Betrifft: `js/app.js`, neue
+Strings.
+
+- [x] **Diagnose-Werkzeug erweitert**: statt nur die SVG-Vorschau zu
+  öffnen, zeigt ein Modal jetzt den aktuellen Rand-Wert (automatisch
+  oder überschrieben) mit Eingabefeld - `tf.marginOverride` hat
+  Vorrang vor der automatischen Berechnung, falls gesetzt. Wird mit
+  dem Rest der Textrahmen-Daten gespeichert.
+- [x] **Vorlagen-Auswahl (Papier/Dunkel/Hell/Kein Hintergrund) nach
+  oben verschoben** - erscheint jetzt VOR dem großen Formen/Farben-
+  Bereich statt danach.
+- [x] **Farb-Tab-Einklapp-Bugfix**: beim Einklappen (Klick auf
+  bereits aktiven Tab, `state.styleTab = null`) fiel die Logik zuvor
+  fälschlich auf die Fläche-Anzeige zurück statt wirklich nichts zu
+  zeigen - jetzt korrekt behoben (explizite `=== 'fill'`-Bedingung
+  statt reinem `else`).

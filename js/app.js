@@ -2239,6 +2239,12 @@
     // (Ursache für Abschneiden in der Präsentation bei skew-lastigen
     // WordArt-Stilen).
     var margin = Math.max(30, Math.round(Math.min(tf.w, tf.h) * 0.15));
+    if (tf.marginOverride != null) {
+      // Manuelle Überschreibung (über das Diagnose-Werkzeug gesetzt) hat
+      // Vorrang vor der automatischen Berechnung - für den Fall, dass
+      // diese bei einer bestimmten Vorlage/Einstellung nicht ausreicht.
+      margin = Math.max(0, Math.round(tf.marginOverride));
+    } else {
     tf.texts.forEach(function (t) {
       if (!t.wordartStyle || t.wordartStyle === 'none') { return; }
       var wStyle = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0] || {};
@@ -2258,6 +2264,7 @@
         margin = Math.max(margin, Math.round(Math.abs(estimate)));
       }
     });
+    }
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + (tf.w + margin * 2) + '" height="' + (tf.h + margin * 2) +
       '" viewBox="0 0 ' + (tf.w + margin * 2) + ' ' + (tf.h + margin * 2) + '"><style>' +
       '.ic-frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;' +
@@ -2793,6 +2800,32 @@
       content.appendChild(polyBtn);
     }
     tf.shapes = tf.shapes || [];
+
+    // Vorlagen-Auswahl (Papier/Dunkel/Hell/Kein Hintergrund) VOR dem
+    // großen Formen/Farben-Bereich - erst grobe Kartenoptik wählen,
+    // dann ins Detail gehen. War vorher unterhalb, was die Spalte
+    // unnötig hoch wirken ließ, bevor man überhaupt zur Vorlage kam.
+    var presetOrder = state.wordArtMode
+      ? TEXTFRAME_PRESETS
+      : TEXTFRAME_PRESETS.slice().sort(function (a, b) {
+        var order = { paper: 0, none: 1, dark: 2, light: 3 };
+        return order[a.id] - order[b.id];
+      });
+    var presetRow = el('div', { class: 'ic-textframe-presets' });
+    presetOrder.forEach(function (p) {
+      var label = p.id === 'none' ? S.preset_none : p.id === 'paper' ? S.preset_paper : p.id === 'dark' ? S.preset_dark : S.preset_light;
+      var swatchStyle = p.bg
+        ? 'background:' + p.bg + ';box-shadow:inset 0 0 0 2px rgba(255,255,255,.15);'
+        : 'background:repeating-linear-gradient(45deg,rgba(255,255,255,.08),rgba(255,255,255,.08) 4px,transparent 4px,transparent 8px);';
+      var b = el('button', {
+        class: 'ic-preset-swatch' + (tf.preset === p.id ? ' active' : ''), title: label
+      }, [el('span', { style: 'color:' + p.text }, ['A'])]);
+      b.style.cssText += swatchStyle;
+      b.addEventListener('click', function () { tf.preset = p.id; render(); });
+      presetRow.appendChild(b);
+    });
+    blockTemplates.content.appendChild(presetRow);
+
     var columnsWrap = el('div', { class: 'ic-cf-columns' });
     blockTemplates.content.appendChild(columnsWrap);
 
@@ -2867,14 +2900,14 @@
     targetGroup.appendChild(textTargetBtn); targetGroup.appendChild(shapeTargetBtn);
     combinedRow.appendChild(targetGroup);
 
-    state.styleTab = state.styleTab || 'fill';
+    if (state.styleTab === undefined) { state.styleTab = 'fill'; }
     var styleGroup = el('div', { class: 'ic-btn-group' });
     var fillBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (state.styleTab === 'fill' ? ' active' : ''), title: S.tf_fill }, [icon('fillicon')]);
     var outlineBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (state.styleTab === 'outline' ? ' active' : ''), title: S.tf_outline }, [icon('outlineicon')]);
     var effectsBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (state.styleTab === 'effects' ? ' active' : ''), title: S.tf_effects }, [icon('effecticon')]);
-    fillBtn.addEventListener('click', function () { state.styleTab = 'fill'; render(); });
-    outlineBtn.addEventListener('click', function () { state.styleTab = 'outline'; render(); });
-    effectsBtn.addEventListener('click', function () { state.styleTab = 'effects'; render(); });
+    fillBtn.addEventListener('click', function () { state.styleTab = state.styleTab === 'fill' ? null : 'fill'; render(); });
+    outlineBtn.addEventListener('click', function () { state.styleTab = state.styleTab === 'outline' ? null : 'outline'; render(); });
+    effectsBtn.addEventListener('click', function () { state.styleTab = state.styleTab === 'effects' ? null : 'effects'; render(); });
     styleGroup.appendChild(fillBtn); styleGroup.appendChild(outlineBtn); styleGroup.appendChild(effectsBtn);
     combinedRow.appendChild(styleGroup);
     colorsCol.appendChild(combinedRow);
@@ -2895,27 +2928,6 @@
     colorsCol.appendChild(colorTabsRow);
     var bigPaletteContainer = el('div', { class: 'ic-bigpalette-container' });
     colorsCol.appendChild(bigPaletteContainer);
-
-    var presetOrder = state.wordArtMode
-      ? TEXTFRAME_PRESETS
-      : TEXTFRAME_PRESETS.slice().sort(function (a, b) {
-        var order = { paper: 0, none: 1, dark: 2, light: 3 };
-        return order[a.id] - order[b.id];
-      });
-    var presetRow = el('div', { class: 'ic-textframe-presets' });
-    presetOrder.forEach(function (p) {
-      var label = p.id === 'none' ? S.preset_none : p.id === 'paper' ? S.preset_paper : p.id === 'dark' ? S.preset_dark : S.preset_light;
-      var swatchStyle = p.bg
-        ? 'background:' + p.bg + ';box-shadow:inset 0 0 0 2px rgba(255,255,255,.15);'
-        : 'background:repeating-linear-gradient(45deg,rgba(255,255,255,.08),rgba(255,255,255,.08) 4px,transparent 4px,transparent 8px);';
-      var b = el('button', {
-        class: 'ic-preset-swatch' + (tf.preset === p.id ? ' active' : ''), title: label
-      }, [el('span', { style: 'color:' + p.text }, ['A'])]);
-      b.style.cssText += swatchStyle;
-      b.addEventListener('click', function () { tf.preset = p.id; render(); });
-      presetRow.appendChild(b);
-    });
-    blockTemplates.content.appendChild(presetRow);
 
     // Block 2 (Schriften) + Block 3 (Form/Rand/Schatten/Kontur + Farbpalette)
     // werden isoliert neu aufgebaut (refreshControls), NIE über ein volles
@@ -3078,7 +3090,7 @@
             buildBigColorPalette(bigPaletteContainer, styleTarget[pickerKey], null, applyEffectColor, null);
           }
         }
-      } else {
+      } else if (state.styleTab === 'fill') {
         gradientBarRow.innerHTML = '';
         var gradCheck = el('input', { type: 'checkbox' });
         gradCheck.checked = !!styleTarget.fillGradient;
@@ -3626,6 +3638,55 @@
     }, [icon('eye')]);
     boardBgBtn.addEventListener('click', function () { state.tfShowBoardBg = state.tfShowBoardBg === false ? true : false; render(); });
     tfHeaderRight.appendChild(boardBgBtn);
+    // Diagnose: öffnet das tatsächlich erzeugte SVG (inkl. viewBox/Maßen)
+    // in einem neuen Tab - Werkzeug, um Darstellungsprobleme (z.B.
+    // Beschneiden bei schräger WordArt) konkret nachvollziehen zu können,
+    // statt zu mutmaßen. Im neuen Tab lässt sich per Rechtsklick →
+    // "Element untersuchen" die genaue viewBox/Breite/Höhe ablesen.
+    var debugSvgBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon', title: S.tf_debug_svg }, [icon('code')]);
+    function openSvgPreview() {
+      try {
+        var svgStr = buildTextFrameSVG(tf);
+        var blob = new Blob([svgStr], { type: 'image/svg+xml' });
+        var url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      } catch (e) {
+        alert(S.tf_debug_svg_error + ' (' + e.message + ')');
+      }
+    }
+    debugSvgBtn.addEventListener('click', function () {
+      openDraggableModal(S.tf_debug_svg, debugSvgBtn, function (content) {
+        content.appendChild(el('p', { class: 'ic-hint' }, [S.tf_margin_hint]));
+        var row = el('div', { class: 'ic-textframe-edit' });
+        row.appendChild(el('span', { class: 'ic-textframe-label' }, [S.tf_margin_label]));
+        var marginInput = el('input', {
+          type: 'number', min: '0', step: '1',
+          value: String(tf.marginOverride != null ? Math.round(tf.marginOverride) : '')
+        });
+        marginInput.placeholder = S.tf_margin_auto;
+        row.appendChild(marginInput);
+        content.appendChild(row);
+        var btnRow = el('div', { class: 'ic-textframe-edit' });
+        var applyBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.tf_margin_apply]);
+        applyBtn.addEventListener('click', function () {
+          var v = parseFloat(marginInput.value);
+          tf.marginOverride = isNaN(v) ? null : v;
+          openSvgPreview();
+        });
+        var resetBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_margin_reset]);
+        resetBtn.addEventListener('click', function () {
+          tf.marginOverride = null;
+          marginInput.value = '';
+          openSvgPreview();
+        });
+        btnRow.appendChild(applyBtn); btnRow.appendChild(resetBtn);
+        content.appendChild(btnRow);
+        var openBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tf_debug_svg]);
+        openBtn.addEventListener('click', openSvgPreview);
+        content.appendChild(openBtn);
+      });
+    });
+    tfHeaderRight.appendChild(debugSvgBtn);
     tfHeaderRight.appendChild(cancelWizardBtn());
     // Direkt senden: speichert UND schickt das Objekt sofort in den
     // Post-Stream der Masterpinnwand (hiddenfromboard=0), statt erst über
@@ -3862,6 +3923,7 @@
     fonts: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V6l4-4 4 4v14"/><path d="M4 14h8"/><path d="M15 20l4-9 4 9"/><path d="M16.5 16.5h5"/></svg>',
     nomedia: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M21 15l-5-5-5 5"/><line x1="3" y1="21" x2="21" y2="3"/></svg>',
     send: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+    code: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
     download: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M6 12l6 6 6-6"/><path d="M4 21h16"/></svg>',
     lock: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
     unlock: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>',

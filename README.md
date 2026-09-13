@@ -1340,6 +1340,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Weiterhin offen: Textrahmen/WordArt im Export bleiben einfache
   Bilder, Stylus-Anmerkungen fehlen.
 
+### Einhundertvierzehnte Überarbeitung — Manuelle Rand-Korrektur, Layout-Anpassungen
+
+- Diagnose-Werkzeug erlaubt jetzt die manuelle Korrektur des
+  Kartenrands, falls die automatische Berechnung nicht ausreicht.
+- Vorlagen-Auswahl (Papier/Dunkel/Hell) steht jetzt vor dem Formen/
+  Farben-Bereich.
+- Farb-Tab lässt sich jetzt zuverlässig durch erneuten Klick
+  einklappen.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
