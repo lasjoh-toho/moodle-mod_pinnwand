@@ -3185,3 +3185,27 @@ Einhundertfünfter Feedback-Durchgang. Betrifft: `js/app.js`,
   als Rückfall für ältere Objekte ohne manuell gesetzten Rahmen). Ein
   Zoom der WordArt selbst läuft wie gewünscht über das Skalieren des
   fertigen SVGs auf der Pinnwand, nicht über diese Griffe.
+
+---
+
+## Phase 111 — Kernbugfix applyStyle1() für WordArt, Rad/Raster-Einklappen, Griffe defensiv abgesichert 🔄
+
+Einhundertsechster Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] **Kernbugfix gefunden und behoben**: `applyStyle1()` nutzte für
+  WordArt-Text fälschlich `computeStyle1Css()` statt
+  `wordartCssFor()` - überschrieb dadurch die korrekte WordArt-
+  Darstellung mit der falschen (einfachen) Verlauf-Logik, was zu
+  schwarzem Text führte. Zusätzlich wurde bisher immer angehängt
+  (`+=`) statt ersetzt - baute bei wiederholten Änderungen (z.B.
+  mehrfaches Setzen neuer Verlauf-Marker) immer mehr widersprüchliches
+  CSS auf, was die gemeldete Verzögerung erklärt. Jetzt wird der
+  komplette Stil einheitlich wie bei der ursprünglichen Erzeugung neu
+  aufgebaut (nicht angehängt).
+- [x] **Rad/Raster-Umschalter klappt jetzt vollständig ein** - Klick
+  auf die aktive Option zeigt keine der beiden Paletten mehr.
+- [x] **Export-Rahmen-Griffe defensiv abgesichert** (try/catch mit
+  Konsolen-Protokollierung) - genaue Ursache für "Griffe erscheinen
+  nicht" trotz sorgfältiger Code-Durchsicht noch nicht gefunden,
+  braucht Konsolen-Ausgabe vom Nutzer zur weiteren Diagnose.

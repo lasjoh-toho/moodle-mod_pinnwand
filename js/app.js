@@ -2575,6 +2575,7 @@
     // später über einen Zoom des fertigen ("gebackenen") SVGs auf der
     // Pinnwand, nicht über diese Griffe.
     if (state.wordArtMode) {
+      try {
       var eb0 = tf.exportBounds || computeAutoExportBounds(tf);
       var ebHandleTL = el('div', { class: 'ic-tf-exportbounds-handle ic-tf-exportbounds-tl', title: S.tf_exportbounds_hint });
       var ebHandleBR = el('div', { class: 'ic-tf-exportbounds-handle ic-tf-exportbounds-br', title: S.tf_exportbounds_hint });
@@ -2618,6 +2619,9 @@
         window.addEventListener('mouseup', up2);
         window.addEventListener('touchend', up2);
       })();
+      } catch (ebErr) {
+        console.error('Export-Rahmen-Griffe konnten nicht erzeugt werden:', ebErr);
+      }
     }
 
     var activeId = null;
@@ -2974,11 +2978,12 @@
     // Markern.
     var gradientBarRow = el('div', { class: 'ic-gradient-toggle-row' + (state.styleTab !== 'fill' ? ' ic-hidden' : '') });
     colorsCol.appendChild(gradientBarRow);
+    if (state.colorTab === undefined) { state.colorTab = 'grid'; }
     var colorTabsRow = el('div', { class: 'ic-cf-tabs' + (state.styleTab !== 'fill' ? ' ic-hidden' : '') });
-    var tabRaster = el('button', { class: 'ic-cf-tab' + (state.colorTab !== 'wheel' ? ' active' : '') }, [S.tf_tab_grid]);
+    var tabRaster = el('button', { class: 'ic-cf-tab' + (state.colorTab === 'grid' ? ' active' : '') }, [S.tf_tab_grid]);
     var tabWheel = el('button', { class: 'ic-cf-tab' + (state.colorTab === 'wheel' ? ' active' : '') }, [S.tf_tab_wheel]);
-    tabRaster.addEventListener('click', function () { state.colorTab = 'grid'; render(); });
-    tabWheel.addEventListener('click', function () { state.colorTab = 'wheel'; render(); });
+    tabRaster.addEventListener('click', function () { state.colorTab = state.colorTab === 'grid' ? null : 'grid'; render(); });
+    tabWheel.addEventListener('click', function () { state.colorTab = state.colorTab === 'wheel' ? null : 'wheel'; render(); });
     colorTabsRow.appendChild(tabRaster); colorTabsRow.appendChild(tabWheel);
     colorsCol.appendChild(colorTabsRow);
     var bigPaletteContainer = el('div', { class: 'ic-bigpalette-container' });
@@ -3004,7 +3009,18 @@
       // Textobjekt treffen.
       function applyStyle1() {
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.cssText += ';' + computeStyle1Css(active, preset.text); }
+        if (!objEl) { return; }
+        var isPrimaryActive = tf.texts[0] && tf.texts[0].id === active.id;
+        var fontCssActive = resolveFontCss(active.font);
+        // Kompletten Stil neu aufbauen (nicht anhängen) - sonst würde sich
+        // bei wiederholten Änderungen immer mehr, teils widersprüchliches
+        // CSS ansammeln. Für WordArt MUSS wordartCssFor() genutzt werden,
+        // nicht computeStyle1Css() - sonst wird die WordArt-Darstellung
+        // durch die falsche (einfache) Verlauf-Logik überschrieben.
+        objEl.style.cssText = (isPrimaryActive ? '' : 'left:' + (active.x * 100) + '%;top:' + (active.y * 100) + '%;') +
+          'font-family:' + fontCssActive + ';font-size:' + active.size + 'px;font-weight:' + active.fontWeight +
+          ';line-height:' + active.lineHeight + ';letter-spacing:' + active.letterSpacing + 'px;' +
+          (wordartCssFor(active, preset.text, isPrimaryActive) || computeStyle1Css(active, preset.text));
       }
       // Fläche/Kontur/Effekte wirken auf Text ODER die gerade ausgewählte
       // Form - je nachdem, was im T/Rechteck-Umschalter oben gewählt ist
@@ -3070,7 +3086,7 @@
           function applyOutlineColor(color) { styleTarget.outlineColor = color; noteRecentColor(color); applyShapeOrTextChange(); }
           if (state.colorTab === 'wheel') {
             buildColorWheel(bigPaletteContainer, styleTarget.outlineColor || '#000000', applyOutlineColor);
-          } else {
+          } else if (state.colorTab === 'grid') {
             buildBigColorPalette(bigPaletteContainer, styleTarget.outlineColor || '#000000', null, applyOutlineColor, null);
           }
         }
@@ -3141,7 +3157,7 @@
           }
           if (state.colorTab === 'wheel') {
             buildColorWheel(bigPaletteContainer, styleTarget[pickerKey], applyEffectColor);
-          } else {
+          } else if (state.colorTab === 'grid') {
             buildBigColorPalette(bigPaletteContainer, styleTarget[pickerKey], null, applyEffectColor, null);
           }
         }
@@ -3266,7 +3282,7 @@
             }
             if (state.colorTab === 'wheel') {
               buildColorWheel(bigPaletteContainer, stopSel.color, applyGradStopColor);
-            } else {
+            } else if (state.colorTab === 'grid') {
               buildBigColorPalette(bigPaletteContainer, stopSel.color, null, applyGradStopColor, null);
             }
           } else {
@@ -3279,7 +3295,7 @@
           gradientBarRow.appendChild(soloBar);
           if (state.colorTab === 'wheel') {
             buildColorWheel(bigPaletteContainer, styleTarget.fillColor || preset.text, applyFillColor);
-          } else {
+          } else if (state.colorTab === 'grid') {
             buildBigColorPalette(bigPaletteContainer, styleTarget.fillColor || preset.text, null, applyFillColor, null);
           }
         }

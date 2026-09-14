@@ -1353,6 +1353,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Farb-Tab lässt sich jetzt zuverlässig durch erneuten Klick
   einklappen.
 
+### Einhundertsechzehnte Überarbeitung — Kernbugfix WordArt-Verlauf, weitere Layout-Fixes
+
+- Kernbugfix: schwarzer Text und Verzögerung beim Setzen neuer
+  Verlauf-Marker bei WordArt behoben (falsche Stil-Funktion wurde
+  genutzt und CSS unbegrenzt angehängt statt ersetzt).
+- Rad/Raster-Umschalter klappt jetzt vollständig ein.
+- Export-Rahmen-Griffe defensiv abgesichert (Fehlerprotokollierung).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
