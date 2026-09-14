@@ -1372,6 +1372,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Hintergrund/Nachbarobjekte-Vorschau deckt jetzt automatisch den
   gesamten relevanten Bereich ab.
 
+### Einhundertachtzehnte Überarbeitung — Griffe verfeinert, Direkt-Editor-Sprung
+
+- Blaue Griffe skalieren die Schrift nicht mehr mit - neuer roter
+  Griff (oben-rechts) ist jetzt der einzige, der die Schrift
+  tatsächlich größer/kleiner macht.
+- Klick auf ein Wortfeld auf der Pinnwand springt jetzt direkt in
+  den Editor statt erst die Galerie zu öffnen.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

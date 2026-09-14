@@ -3234,3 +3234,28 @@ Einhundertsiebter Feedback-Durchgang (mit Screenshot). Betrifft:
 - [x] Als Nebeneffekt gelöst: Hintergrund/Nachbarobjekte-Vorschau
   deckt jetzt automatisch den gesamten relevanten Bereich ab, da
   dieser jetzt exakt der einen (blauen) Box entspricht.
+
+---
+
+## Phase 113 — Blaue Griffe skalieren Schrift nicht mehr, dritter roter Griff für echte Größenänderung, Direkt-Editor-Sprung 🔄
+
+Einhundertachter Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] **Automatische Schriftgrößen-Anpassung von den blauen Griffen
+  entfernt** (im WordArt-Modus): beide blauen Griffe (unten-rechts,
+  oben-links) erweitern jetzt nur noch den Rahmen, ohne dass Text/
+  WordArt sich dabei bewegt oder mitwächst. Für normale (Nicht-
+  WordArt) Textfelder bleibt die automatische Anpassung erhalten (dort
+  gibt es nur den einen Griff).
+- [x] **Neuer dritter Griff (rot, oben-rechts)** nur im WordArt-Modus:
+  einziger Griff, der die Schrift tatsächlich größer/kleiner macht
+  (ruft `autoFitPrimaryText()` auf).
+- [x] **Direkt-Editor-Sprung**: Klick auf ein Wortfeld-Objekt auf der
+  Pinnwand öffnet jetzt direkt den Textfeld-Editor statt erst die
+  Lightbox-Galerie.
+
+**Bekannte, nicht vollständig gelöste Einschränkung**: der Rahmen
+zentriert sich beim Größenändern automatisch (CSS-Eigenheit), statt
+sich exakt von der gezogenen Ecke aus visuell auszudehnen - die
+Endposition nach dem Loslassen sollte aber korrekt sein.

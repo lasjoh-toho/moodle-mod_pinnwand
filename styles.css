@@ -560,6 +560,10 @@
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: nwse-resize;
 }
 .ic-textframe-preview > .ic-resize-tl { right: auto; bottom: auto; left: -10px; top: -10px; }
+.ic-textframe-preview > .ic-resize-tr {
+  left: auto; bottom: auto; right: -10px; top: -10px;
+  background: #e0503f; cursor: nesw-resize;
+}
 .ic-textframe-size-handle {
   position: absolute; right: -9px; bottom: -9px; width: 18px; height: 18px;
   background: var(--ic-accent); border-radius: 50%; border: 2px solid #fff; cursor: nwse-resize;

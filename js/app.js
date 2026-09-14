@@ -2525,12 +2525,15 @@
     layout.appendChild(stage);
     body.appendChild(layout);
 
-    // Hauptrahmen selbst skalierbar (Eck-Handle unten rechts) - die
-    // Textobjekte sind an ihn gebunden (normalisierte 0..1-Koordinaten),
-    // sie passen sich beim Skalieren automatisch proportional mit an.
+    // Hauptrahmen-Griff unten-rechts: erweitert den Rahmen OHNE dass
+    // sich Text/WordArt dabei bewegt oder mitskaliert - die absolute
+    // Pixelposition jedes Objekts bleibt erhalten (normalisierte
+    // Koordinaten werden nachgerechnet). Für die eigentliche Größen-
+    // änderung der Schrift selbst gibt es im WordArt-Modus den
+    // separaten roten Griff oben-rechts (siehe unten).
     var frameResizeHandle = el('div', { class: 'ic-resize' });
     frame.appendChild(frameResizeHandle);
-    (function () {
+    function attachFrameResizeHandle(handle, cornerX, cornerY, listenerKey) {
       var dragging = false, startX = 0, startY = 0, startW = 0, startH = 0;
       function pt(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
       function down(ev) {
@@ -2541,74 +2544,102 @@
       function move(ev) {
         if (!dragging) { return; }
         var p = pt(ev);
-        tf.w = Math.max(120, startW + (p.x - startX));
-        if (state.tfAspectLocked) {
-          tf.h = Math.max(80, Math.round(tf.w * (startH / startW)));
-        } else {
-          tf.h = Math.max(80, startH + (p.y - startY));
-        }
+        var dx = (p.x - startX) * cornerX, dy = (p.y - startY) * cornerY;
+        var newW = Math.max(120, startW + dx);
+        var newH = state.tfAspectLocked ? Math.max(80, Math.round(newW * (startH / startW))) : Math.max(80, startH + dy);
+        tf.w = newW; tf.h = newH;
         frame.style.width = tf.w + 'px'; frame.style.height = tf.h + 'px';
         ev.preventDefault();
       }
       function up() {
         if (!dragging) { return; }
         dragging = false;
-        var primaryEl = tf.texts[0] && frame.querySelector('[data-textid="' + tf.texts[0].id + '"]');
-        if (primaryEl) { autoFitPrimaryText(primaryEl, tf.texts[0], tf.h); }
+        // Absolute Pixelposition jedes Objekts erhalten: da tf.w/tf.h
+        // die Bezugsgröße für die normalisierten Koordinaten sind,
+        // müssen diese beim Ändern von tf.w/tf.h entsprechend
+        // nachgerechnet werden, damit sich nichts sichtbar verschiebt.
+        // Erst beim Loslassen statt bei jedem Mausschritt, damit das
+        // Ziehen selbst flüssig bleibt.
+        tf.texts.forEach(function (t) { t.x = (t.x * startW) / tf.w; t.y = (t.y * startH) / tf.h; });
+        if (!state.wordArtMode) {
+          // Normale Textfelder: automatische Schriftgrößen-Anpassung
+          // bleibt erhalten (dort gibt es nur diesen einen Griff).
+          var primaryEl = tf.texts[0] && frame.querySelector('[data-textid="' + tf.texts[0].id + '"]');
+          if (primaryEl) { autoFitPrimaryText(primaryEl, tf.texts[0], tf.h); }
+        }
         render();
       }
-      frameResizeHandle.addEventListener('mousedown', down);
-      frameResizeHandle.addEventListener('touchstart', down, { passive: false });
+      // Vorherige Render-Runde: alte window-Listener entfernen, bevor
+      // neue hinzugefügt werden - sonst sammeln sich bei jedem
+      // Neu-Rendern (das bei jeder Steuerelement-Änderung passiert)
+      // immer mehr veraltete Listener mit toten Referenzen an, was das
+      // Ziehen irgendwann unzuverlässig bis unmöglich macht.
+      if (state[listenerKey]) {
+        window.removeEventListener('mousemove', state[listenerKey].move);
+        window.removeEventListener('touchmove', state[listenerKey].move);
+        window.removeEventListener('mouseup', state[listenerKey].up);
+        window.removeEventListener('touchend', state[listenerKey].up);
+      }
+      state[listenerKey] = { move: move, up: up };
+      handle.addEventListener('mousedown', down);
+      handle.addEventListener('touchstart', down, { passive: false });
       window.addEventListener('mousemove', move);
       window.addEventListener('touchmove', move, { passive: false });
       window.addEventListener('mouseup', up);
       window.addEventListener('touchend', up);
-    })();
+    }
+    attachFrameResizeHandle(frameResizeHandle, 1, 1, 'tfResizeListeners');
 
-    // Zweiter Griff oben-links: erweitert den Rahmen von der linken
-    // oberen Ecke aus, OHNE dass sich Text/WordArt dabei bewegt - die
-    // absolute Pixelposition jedes Text-/Formobjekts bleibt erhalten
-    // (nur die normalisierten 0..1-Koordinaten werden nachgerechnet).
-    // Wichtig für schräge/gestreckte WordArt: einfach mehr Platz um den
-    // Text herum schaffen, ohne dessen Position zu verändern.
+    // Zweiter Griff oben-links: dieselbe "Rahmen erweitern ohne Text zu
+    // bewegen"-Logik, nur von der linken oberen Ecke aus (cornerX/Y=-1,
+    // also entgegengesetztes Vorzeichen der Mausbewegung).
     if (state.wordArtMode) {
       var frameResizeHandleTL = el('div', { class: 'ic-resize ic-resize-tl' });
       frame.appendChild(frameResizeHandleTL);
+      attachFrameResizeHandle(frameResizeHandleTL, -1, -1, 'tfResizeTlListeners');
+
+      // Dritter Griff oben-rechts (rot): das ist der einzige Griff, der
+      // die Schrift TATSÄCHLICH größer/kleiner macht (automatische
+      // Schriftgrößen-Anpassung) - bewusst von den beiden blauen Griffen
+      // getrennt, die NUR den Rahmen erweitern sollen.
+      var frameResizeHandleTR = el('div', { class: 'ic-resize ic-resize-tr' });
+      frame.appendChild(frameResizeHandleTR);
       (function () {
-        var dragging2 = false, startX3 = 0, startY3 = 0, startW3 = 0, startH3 = 0;
-        function pt3(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
-        function down3(ev) {
-          dragging2 = true; var p = pt3(ev);
-          startX3 = p.x; startY3 = p.y; startW3 = tf.w; startH3 = tf.h;
+        var draggingTr = false, startXtr = 0, startYtr = 0, startWtr = 0, startHtr = 0;
+        function ptTr(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
+        function downTr(ev) {
+          draggingTr = true; var p = ptTr(ev);
+          startXtr = p.x; startYtr = p.y; startWtr = tf.w; startHtr = tf.h;
           ev.stopPropagation(); ev.preventDefault();
         }
-        function move3(ev) {
-          if (!dragging2) { return; }
-          var p = pt3(ev);
-          var dx = p.x - startX3, dy = p.y - startY3;
-          var newW = Math.max(120, startW3 - dx), newH = Math.max(80, startH3 - dy);
-          tf.w = newW; tf.h = newH;
+        function moveTr(ev) {
+          if (!draggingTr) { return; }
+          var p = ptTr(ev);
+          tf.w = Math.max(120, startWtr + (p.x - startXtr));
+          tf.h = state.tfAspectLocked ? Math.max(80, Math.round(tf.w * (startHtr / startWtr))) : Math.max(80, startHtr - (p.y - startYtr));
           frame.style.width = tf.w + 'px'; frame.style.height = tf.h + 'px';
           ev.preventDefault();
         }
-        function up3() {
-          if (!dragging2) { return; }
-          dragging2 = false;
-          // Absolute Pixelposition jedes Objekts erhalten: da tf.w/tf.h
-          // die Bezugsgröße für die normalisierten Koordinaten sind,
-          // müssen diese beim Ändern von tf.w/tf.h entsprechend
-          // nachgerechnet werden, damit sich nichts sichtbar verschiebt.
-          // Erst beim Loslassen statt bei jedem Mausschritt, damit das
-          // Ziehen selbst flüssig bleibt.
-          tf.texts.forEach(function (t) { t.x = (t.x * startW3) / tf.w; t.y = (t.y * startH3) / tf.h; });
+        function upTr() {
+          if (!draggingTr) { return; }
+          draggingTr = false;
+          var primaryEl = tf.texts[0] && frame.querySelector('[data-textid="' + tf.texts[0].id + '"]');
+          if (primaryEl) { autoFitPrimaryText(primaryEl, tf.texts[0], tf.h); }
           render();
         }
-        frameResizeHandleTL.addEventListener('mousedown', down3);
-        frameResizeHandleTL.addEventListener('touchstart', down3, { passive: false });
-        window.addEventListener('mousemove', move3);
-        window.addEventListener('touchmove', move3, { passive: false });
-        window.addEventListener('mouseup', up3);
-        window.addEventListener('touchend', up3);
+        if (state.tfResizeTrListeners) {
+          window.removeEventListener('mousemove', state.tfResizeTrListeners.move);
+          window.removeEventListener('touchmove', state.tfResizeTrListeners.move);
+          window.removeEventListener('mouseup', state.tfResizeTrListeners.up);
+          window.removeEventListener('touchend', state.tfResizeTrListeners.up);
+        }
+        state.tfResizeTrListeners = { move: moveTr, up: upTr };
+        frameResizeHandleTR.addEventListener('mousedown', downTr);
+        frameResizeHandleTR.addEventListener('touchstart', downTr, { passive: false });
+        window.addEventListener('mousemove', moveTr);
+        window.addEventListener('touchmove', moveTr, { passive: false });
+        window.addEventListener('mouseup', upTr);
+        window.addEventListener('touchend', upTr);
       })();
     }
 
@@ -4706,6 +4737,24 @@
           selectItem(groupKey);
         }
         else if (state.boardDrawMode) { openLightbox(state.photos.indexOf(p), true); }
+        else if (p.wordfielddata) {
+          // Wortfeld: direkt in den Editor springen statt erst die
+          // Lightbox-Galerie zu öffnen - ein Klick weniger für den
+          // häufigen Fall "Textfeld/WordArt bearbeiten".
+          try {
+            state.textFrame = JSON.parse(p.wordfielddata);
+            var tfLoadedDirect = state.textFrame;
+            state.wordArtMode = tfLoadedDirect.isWordArt != null
+              ? !!tfLoadedDirect.isWordArt
+              : tfLoadedDirect.texts.some(function (t) { return (t.wordartStyle && t.wordartStyle !== 'none') || (t.arcStyle && t.arcStyle !== 'none'); });
+            resetTfHistory();
+            state.editingPhotoId = p.id;
+            state.step = 'textframe';
+            render();
+          } catch (e) {
+            openLightbox(state.photos.indexOf(p));
+          }
+        }
         else { openLightbox(state.photos.indexOf(p)); }
       });
       item.addEventListener('dblclick', function (ev) {
