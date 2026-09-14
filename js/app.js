@@ -2261,11 +2261,10 @@
     // Rotations-/Extrusions-Werte, statt eines pauschalen Prozentsatzes -
     // bei starker diagonaler Verzerrung reichte ein fester Rand nicht aus
     // (Ursache für Abschneiden in der Präsentation bei skew-lastigen
-    // WordArt-Stilen).
-    // Export-Rechteck: entweder manuell über die zwei Griffe im Editor
-    // gesetzt (tf.exportBounds, hat Vorrang) oder automatisch berechnet
-    // als Rückfall für ältere, noch nicht manuell angepasste Objekte.
-    var eb = tf.exportBounds || computeAutoExportBounds(tf);
+    // WordArt-Stilen). Der Nutzer kann den Rahmen selbst über die beiden
+    // Größengriffe (unten-rechts, oben-links) erweitern, falls mehr Platz
+    // als dieses automatische Sicherheitsnetz nötig ist.
+    var eb = computeAutoExportBounds(tf);
     var ebw = eb.x2 - eb.x1, ebh = eb.y2 - eb.y1;
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + ebw + '" height="' + ebh +
       '" viewBox="' + eb.x1 + ' ' + eb.y1 + ' ' + ebw + ' ' + ebh + '"><style>' +
@@ -2566,62 +2565,51 @@
       window.addEventListener('touchend', up);
     })();
 
-    // Export-Rahmen (tf.exportBounds): zwei eigene Griffe, mit denen sich
-    // die viewBox des gespeicherten SVGs direkt setzen lässt - der Text/
-    // die WordArt selbst bewegt oder skaliert sich dabei NICHT, es wird
-    // nur festgelegt, wie viel Rand um die Karte im gespeicherten Bild
-    // sichtbar bleibt (wichtig bei schräg/gestreckter WordArt, die über
-    // den Kartenrand hinausragt). Ein Zoom der WordArt selbst läuft
-    // später über einen Zoom des fertigen ("gebackenen") SVGs auf der
-    // Pinnwand, nicht über diese Griffe.
+    // Zweiter Griff oben-links: erweitert den Rahmen von der linken
+    // oberen Ecke aus, OHNE dass sich Text/WordArt dabei bewegt - die
+    // absolute Pixelposition jedes Text-/Formobjekts bleibt erhalten
+    // (nur die normalisierten 0..1-Koordinaten werden nachgerechnet).
+    // Wichtig für schräge/gestreckte WordArt: einfach mehr Platz um den
+    // Text herum schaffen, ohne dessen Position zu verändern.
     if (state.wordArtMode) {
-      try {
-      var eb0 = tf.exportBounds || computeAutoExportBounds(tf);
-      var ebHandleTL = el('div', { class: 'ic-tf-exportbounds-handle ic-tf-exportbounds-tl', title: S.tf_exportbounds_hint });
-      var ebHandleBR = el('div', { class: 'ic-tf-exportbounds-handle ic-tf-exportbounds-br', title: S.tf_exportbounds_hint });
-      frame.appendChild(ebHandleTL);
-      frame.appendChild(ebHandleBR);
-      function positionEbHandles() {
-        var b = tf.exportBounds || eb0;
-        ebHandleTL.style.left = b.x1 + 'px'; ebHandleTL.style.top = b.y1 + 'px';
-        ebHandleBR.style.left = b.x2 + 'px'; ebHandleBR.style.top = b.y2 + 'px';
-      }
-      positionEbHandles();
+      var frameResizeHandleTL = el('div', { class: 'ic-resize ic-resize-tl' });
+      frame.appendChild(frameResizeHandleTL);
       (function () {
-        var dragCorner = null, startX2 = 0, startY2 = 0, startBounds = null;
-        function pt2(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
-        function down2(corner) {
-          return function (ev) {
-            dragCorner = corner; var p = pt2(ev);
-            startX2 = p.x; startY2 = p.y;
-            startBounds = tf.exportBounds ? { x1: tf.exportBounds.x1, y1: tf.exportBounds.y1, x2: tf.exportBounds.x2, y2: tf.exportBounds.y2 } : eb0;
-            ev.stopPropagation(); ev.preventDefault();
-          };
+        var dragging2 = false, startX3 = 0, startY3 = 0, startW3 = 0, startH3 = 0;
+        function pt3(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
+        function down3(ev) {
+          dragging2 = true; var p = pt3(ev);
+          startX3 = p.x; startY3 = p.y; startW3 = tf.w; startH3 = tf.h;
+          ev.stopPropagation(); ev.preventDefault();
         }
-        function move2(ev) {
-          if (!dragCorner) { return; }
-          var p = pt2(ev);
-          var dx = p.x - startX2, dy = p.y - startY2;
-          var nb = { x1: startBounds.x1, y1: startBounds.y1, x2: startBounds.x2, y2: startBounds.y2 };
-          if (dragCorner === 'tl') { nb.x1 = startBounds.x1 + dx; nb.y1 = startBounds.y1 + dy; }
-          else { nb.x2 = startBounds.x2 + dx; nb.y2 = startBounds.y2 + dy; }
-          tf.exportBounds = nb;
-          positionEbHandles();
+        function move3(ev) {
+          if (!dragging2) { return; }
+          var p = pt3(ev);
+          var dx = p.x - startX3, dy = p.y - startY3;
+          var newW = Math.max(120, startW3 - dx), newH = Math.max(80, startH3 - dy);
+          tf.w = newW; tf.h = newH;
+          frame.style.width = tf.w + 'px'; frame.style.height = tf.h + 'px';
           ev.preventDefault();
         }
-        function up2() { dragCorner = null; }
-        ebHandleTL.addEventListener('mousedown', down2('tl'));
-        ebHandleTL.addEventListener('touchstart', down2('tl'), { passive: false });
-        ebHandleBR.addEventListener('mousedown', down2('br'));
-        ebHandleBR.addEventListener('touchstart', down2('br'), { passive: false });
-        window.addEventListener('mousemove', move2);
-        window.addEventListener('touchmove', move2, { passive: false });
-        window.addEventListener('mouseup', up2);
-        window.addEventListener('touchend', up2);
+        function up3() {
+          if (!dragging2) { return; }
+          dragging2 = false;
+          // Absolute Pixelposition jedes Objekts erhalten: da tf.w/tf.h
+          // die Bezugsgröße für die normalisierten Koordinaten sind,
+          // müssen diese beim Ändern von tf.w/tf.h entsprechend
+          // nachgerechnet werden, damit sich nichts sichtbar verschiebt.
+          // Erst beim Loslassen statt bei jedem Mausschritt, damit das
+          // Ziehen selbst flüssig bleibt.
+          tf.texts.forEach(function (t) { t.x = (t.x * startW3) / tf.w; t.y = (t.y * startH3) / tf.h; });
+          render();
+        }
+        frameResizeHandleTL.addEventListener('mousedown', down3);
+        frameResizeHandleTL.addEventListener('touchstart', down3, { passive: false });
+        window.addEventListener('mousemove', move3);
+        window.addEventListener('touchmove', move3, { passive: false });
+        window.addEventListener('mouseup', up3);
+        window.addEventListener('touchend', up3);
       })();
-      } catch (ebErr) {
-        console.error('Export-Rahmen-Griffe konnten nicht erzeugt werden:', ebErr);
-      }
     }
 
     var activeId = null;

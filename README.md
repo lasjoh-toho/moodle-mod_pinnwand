@@ -1359,7 +1359,18 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Verlauf-Marker bei WordArt behoben (falsche Stil-Funktion wurde
   genutzt und CSS unbegrenzt angehängt statt ersetzt).
 - Rad/Raster-Umschalter klappt jetzt vollständig ein.
-- Export-Rahmen-Griffe defensiv abgesichert (Fehlerprotokollierung).
+- (Die zunächst als "Export-Rahmen-Griffe" geplanten gelben Griffe
+  wurden auf Nutzer-Feedback wieder entfernt - siehe nächster
+  Eintrag für die einfachere Lösung.)
+
+### Einhundertsiebzehnte Überarbeitung — Zweiter Größengriff statt separater Export-Griffe
+
+- Die gelben Export-Rahmen-Griffe wurden entfernt, da nicht
+  erkennbar war, was sie bewirken.
+- Stattdessen: zweiter Griff (oben-links) an der bestehenden Box -
+  erweitert den Rahmen, ohne dass sich der Text bewegt.
+- Hintergrund/Nachbarobjekte-Vorschau deckt jetzt automatisch den
+  gesamten relevanten Bereich ab.
 
 ## Bekannte Grenzen dieser Version
 

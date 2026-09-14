@@ -3209,3 +3209,28 @@ Einhundertsechster Feedback-Durchgang. Betrifft: `js/app.js`,
   Konsolen-Protokollierung) - genaue Ursache für "Griffe erscheinen
   nicht" trotz sorgfältiger Code-Durchsicht noch nicht gefunden,
   braucht Konsolen-Ausgabe vom Nutzer zur weiteren Diagnose.
+
+---
+
+## Phase 112 — Gelbe Griffe entfernt, zweiter Griff (oben-links) an der bestehenden blauen Box ✅
+
+Einhundertsiebter Feedback-Durchgang (mit Screenshot). Betrifft:
+`js/app.js`, `styles.css`.
+
+- [x] **Gelbe Export-Rahmen-Griffe komplett entfernt**: der Nutzer
+  konnte nicht erkennen, was sie visuell bewirken, und stellte fest,
+  dass für die tatsächliche Darstellung (Hintergrund/Nachbarobjekte)
+  nur die bestehende blaue Box entscheidend ist.
+- [x] **Zweiter Griff (oben-links) an der bestehenden Box ergänzt**:
+  erweitert `tf.w`/`tf.h` von der linken oberen Ecke aus, OHNE dass
+  sich Text/WordArt dabei bewegt (absolute Pixelposition bleibt
+  erhalten, normalisierte Koordinaten werden beim Loslassen
+  nachgerechnet - Performance-Optimierung: nicht bei jedem
+  Mausschritt, erst beim Loslassen).
+- [x] `buildTextFrameSVG()` vereinfacht: nutzt jetzt direkt die
+  automatische Randberechnung als Sicherheitsnetz, kein separater
+  `tf.exportBounds`-Mechanismus mehr nötig - der Nutzer kann selbst
+  über die beiden Griffe genug Platz schaffen.
+- [x] Als Nebeneffekt gelöst: Hintergrund/Nachbarobjekte-Vorschau
+  deckt jetzt automatisch den gesamten relevanten Bereich ab, da
+  dieser jetzt exakt der einen (blauen) Box entspricht.
