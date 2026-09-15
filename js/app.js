@@ -1251,9 +1251,9 @@
   // ==================================================================
   var TEXTFRAME_FONTS = [
     { id: 'sans', label: 'Sans', css: '-apple-system, Roboto, Arial, sans-serif' },
-    { id: 'serif', label: 'Serif', css: 'Georgia, "Times New Roman", serif' },
-    { id: 'mono', label: 'Mono', css: '"Courier New", monospace' },
-    { id: 'hand', label: 'Handschrift', css: '"Caveat", cursive', webfont: 'Caveat:wght@600' }
+    { id: 'serif', label: 'Serif', css: "Georgia, 'Times New Roman', serif" },
+    { id: 'mono', label: 'Mono', css: "'Courier New', monospace" },
+    { id: 'hand', label: 'Handschrift', css: "'Caveat', cursive", webfont: 'Caveat:wght@600' }
   ];
   var TEXTFRAME_PALETTE = ['#e0503f', '#4f8cff', '#3fcf8e', '#e0b23f', '#b06fe0', '#ffffff', '#111111'];
   var textframeRecentColors = [];
@@ -1450,18 +1450,23 @@
     websafe: ['Open Sans', 'Courier New', 'Arial Narrow', 'Century Gothic', 'Georgia', 'Times New Roman', 'Palatino'],
   };
   var WORDART_WEBSAFE_FONTS = {
-    'Open Sans': '"Open Sans", sans-serif', 'Courier New': '"Courier New", monospace',
-    'Arial Narrow': '"Arial Narrow", Arial, sans-serif', 'Century Gothic': '"Century Gothic", sans-serif',
-    'Georgia': 'Georgia, serif', 'Times New Roman': '"Times New Roman", serif', 'Palatino': 'Palatino, serif'
+    'Open Sans': "'Open Sans', sans-serif", 'Courier New': "'Courier New', monospace",
+    'Arial Narrow': "'Arial Narrow', Arial, sans-serif", 'Century Gothic': "'Century Gothic', sans-serif",
+    'Georgia': 'Georgia, serif', 'Times New Roman': "'Times New Roman', serif", 'Palatino': 'Palatino, serif'
   };
   // "Font Name" -> "Font+Name" für die Google-Fonts-CSS2-API.
   function googleFontParam(name) { return name.replace(/ /g, '+'); }
   // Liefert die einsetzbare font-family-CSS-Deklaration für einen
   // WordArt-Katalogeintrag und lädt bei Bedarf die Google-Fonts-Datei nach.
+  // WICHTIG: einfache statt doppelte Anführungszeichen um Namen mit
+  // Leerzeichen - dieser Wert landet auch als SVG-XML-Attribut
+  // (font-family="..."), das selbst schon doppelt-quotiert ist. Doppelte
+  // Anführungszeichen hier würden das SVG ungültig machen und komplett
+  // zum Verschwinden bringen.
   function wordartFontCss(name) {
     if (WORDART_WEBSAFE_FONTS[name]) { return WORDART_WEBSAFE_FONTS[name]; }
     ensureWebfont(googleFontParam(name));
-    return '"' + name + '", sans-serif';
+    return "'" + name + "', sans-serif";
   }
   // Löst t.font in eine einsetzbare font-family-CSS-Deklaration auf -
   // entweder eine der festen TEXTFRAME_FONTS-IDs oder ein Katalog-Font aus

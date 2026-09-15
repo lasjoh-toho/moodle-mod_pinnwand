@@ -1406,6 +1406,12 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Präsentation erneut auf das gespeicherte Bild zurückgesetzt
   (startete trotz Absicherung weiterhin nicht).
 
+### Einhundertvierundzwanzigste Überarbeitung — Kritischer XML-Quoting-Bugfix
+
+- Font-Namen mit Leerzeichen (Times New Roman, viele Google Fonts)
+  machten das gespeicherte SVG durch ungültiges XML unsichtbar -
+  behoben (einfache statt doppelte Anführungszeichen).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

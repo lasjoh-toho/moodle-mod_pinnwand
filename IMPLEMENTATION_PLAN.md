@@ -3334,3 +3334,21 @@ Aufgabe für später): der robustere Weg wäre eine gemeinsame "Rezept"-
 Funktion, die eine neutrale Beschreibung erzeugt, übersetzt von zwei
 dünnen Renderern (Live-DOM/SVG) - Entscheidungslogik lebt dann nur an
 einer Stelle statt in zwei parallelen Implementierungen.
+
+---
+
+## Phase 117 — Kritischer XML-Quoting-Bugfix für Schriftnamen mit Leerzeichen ✅
+
+Einhundertzwölfter Feedback-Durchgang (dringend). Betrifft: `js/app.js`.
+
+- [x] **Kernbugfix gefunden**: Font-Namen mit Leerzeichen (z.B. "Times
+  New Roman", Google Fonts) wurden mit DOPPELTEN Anführungszeichen
+  umschlossen (Standard-CSS-Praxis: `"Times New Roman", serif`) -
+  diese landen aber auch als SVG-XML-Attribut (`font-family="..."`),
+  das selbst schon doppelt-quotiert ist. Das ergab ungültiges XML,
+  wodurch das gesamte SVG nicht mehr geparst/angezeigt werden konnte
+  - erklärt "WordArt mit anderem Font wird nach dem Speichern gar
+  nicht mehr angezeigt". Betraf sowohl `TEXTFRAME_FONTS` (Serif/Mono/
+  Handschrift) als auch die komplette WordArt-Schriftbibliothek
+  (`WORDART_WEBSAFE_FONTS`, `wordartFontCss()`). Fix: einfache statt
+  doppelte Anführungszeichen an allen betroffenen Stellen.
