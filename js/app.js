@@ -3374,15 +3374,6 @@
           charRow.appendChild(fb);
         });
         fontsBox.appendChild(charRow);
-      // WordArt: eigener "Fonts"-Button öffnet die kuratierte, nach
-      // Kategorien geordnete Schriftbibliothek (siehe WORDART_FONT_CATEGORIES) -
-      // getrennt von der schlichten Basis-Auswahl oben, da "wilde"
-      // Formatierung hier im Vordergrund steht.
-      if (state.wordArtMode) {
-        var fontsBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('fonts'), el('span', {}, [S.wordart_fonts])]);
-        fontsBtn.addEventListener('click', function () { openWordartFontBrowser(active, frame); });
-        typoMainCol.appendChild(fontsBtn);
-      }
       // Schriftart, Schriftdicke und Laufweite gemeinsam in einer Zeile,
       // jeweils mit Beschriftung. Schriftgröße bleibt als eigene Zeile
       // (A-/A+ -Buttons brauchen mehr Platz). Wirken auf die aktuelle
@@ -3394,6 +3385,16 @@
       typoColumns.appendChild(typoMainCol);
       typoColumns.appendChild(typoParaCol);
       fontsBox.appendChild(typoColumns);
+
+      // WordArt: eigener "Fonts"-Button öffnet die kuratierte, nach
+      // Kategorien geordnete Schriftbibliothek (siehe WORDART_FONT_CATEGORIES) -
+      // getrennt von der schlichten Basis-Auswahl oben, da "wilde"
+      // Formatierung hier im Vordergrund steht.
+      if (state.wordArtMode) {
+        var fontsBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('fonts'), el('span', {}, [S.wordart_fonts])]);
+        fontsBtn.addEventListener('click', function () { openWordartFontBrowser(active, frame); });
+        typoMainCol.appendChild(fontsBtn);
+      }
 
       // Schrift-Button: zeigt die aktuell gewählte Schrift in sich selbst
       // dargestellt, Klick öffnet ein Pop-up mit allen Schriften (dort
