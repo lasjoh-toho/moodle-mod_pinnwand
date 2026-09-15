@@ -2302,8 +2302,24 @@
   var fontEmbedCache = {};
   function embedFontsInSVG(svgString, tf) {
     var usedFontIds = {};
-    tf.texts.forEach(function (t) { if (t.html) { usedFontIds[t.font] = true; } });
-    var toEmbed = TEXTFRAME_FONTS.filter(function (f) { return f.webfont && usedFontIds[f.id]; });
+    tf.texts.forEach(function (t) { if (t.html || t.text) { usedFontIds[t.font] = true; } });
+    // Feste 4-Font-Liste (webfont-Eigenschaft = fester Google-Fonts-
+    // Parameter) UND die große WordArt-Schriftbibliothek (Präfix
+    // "google:", Fontname direkt im Wert) gemeinsam einbetten - sonst
+    // verweist das gespeicherte SVG auf eine nicht eingebettete Schrift
+    // und fällt in der Präsentation/Meine Dateien auf die Standardschrift
+    // zurück, obwohl Editor und Pinnwand (live, mit Zugriff auf die im
+    // Dokument geladene Schrift) korrekt aussehen.
+    var toEmbed = [];
+    TEXTFRAME_FONTS.forEach(function (f) { if (f.webfont && usedFontIds[f.id]) { toEmbed.push({ id: f.id, webfont: f.webfont, css: f.css }); } });
+    Object.keys(usedFontIds).forEach(function (fontVal) {
+      if (fontVal && fontVal.indexOf('google:') === 0) {
+        var name = fontVal.slice(7);
+        if (!WORDART_WEBSAFE_FONTS[name]) {
+          toEmbed.push({ id: fontVal, webfont: googleFontParam(name), css: "'" + name + "', sans-serif" });
+        }
+      }
+    });
     if (toEmbed.length === 0) { return Promise.resolve(svgString); }
 
     return Promise.all(toEmbed.map(function (f) {

@@ -126,7 +126,15 @@ $exportdata = [
     'boardPhotos' => $boardphotos,
 ];
 
-$json = json_encode($exportdata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+// JSON_UNESCAPED_SLASHES bewusst NICHT gesetzt: Base64-eingebettete
+// Bilddaten sind zufällig aussehende Zeichenfolgen, die die Sequenz
+// "</script" enthalten könnten (bei genug eingebetteten Bildern
+// praktisch nicht auszuschließen) - das würde den umschließenden
+// <script>-Block vorzeitig beenden und die komplette restliche Seite
+// unbrauchbar machen ("nur graue Fläche" statt der Präsentation).
+// Mit escapten Schrägstrichen (\/) kann "</script" nicht mehr
+// auftreten, ohne die JSON-Gültigkeit zu beeinträchtigen.
+$json = json_encode($exportdata, JSON_UNESCAPED_UNICODE);
 $title = format_string($instance->name) . ' - Präsentation';
 
 // -----------------------------------------------------------------

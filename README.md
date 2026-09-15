@@ -1412,6 +1412,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
   machten das gespeicherte SVG durch ungültiges XML unsichtbar -
   behoben (einfache statt doppelte Anführungszeichen).
 
+### Einhundertfünfundzwanzigste Überarbeitung — Google-Fonts-Einbettung, Standalone-Export-Bugfix
+
+- Google-Fonts-Einbettung vervollständigt (betraf bisher nur die
+  kleine 4-Font-Liste, nicht die WordArt-Schriftbibliothek) - das
+  gespeicherte Bild zeigt jetzt zuverlässiger die gewählte Schrift.
+- Kritischer Bugfix im Standalone-Präsentations-Export: eingebettete
+  Bilddaten konnten den Skript-Block vorzeitig beenden ("nur graue
+  Fläche") - behoben.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

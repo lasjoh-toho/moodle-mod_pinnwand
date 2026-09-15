@@ -3352,3 +3352,27 @@ Einhundertzwölfter Feedback-Durchgang (dringend). Betrifft: `js/app.js`.
   Handschrift) als auch die komplette WordArt-Schriftbibliothek
   (`WORDART_WEBSAFE_FONTS`, `wordartFontCss()`). Fix: einfache statt
   doppelte Anführungszeichen an allen betroffenen Stellen.
+
+---
+
+## Phase 118 — Google-Fonts-Einbettung vervollständigt, kritischer </script>-Bugfix im Standalone-Export ✅
+
+Einhundertdreizehnter Feedback-Durchgang. Betrifft: `js/app.js`,
+`export_presentation.php`.
+
+- [x] **Fehlende Google-Fonts-Einbettung behoben**: `embedFontsInSVG()`
+  bettete bisher nur die kleine 4-Font-Liste ein, NICHT die große
+  WordArt-Schriftbibliothek (Präfix "google:") - das gespeicherte SVG
+  verwies dadurch auf eine nirgends eingebettete Schrift und fiel in
+  Präsentation/Meine Dateien auf die Standardschrift zurück, obwohl
+  Editor/Pinnwand (mit Zugriff auf die im Dokument geladene Schrift)
+  korrekt aussahen. Jetzt werden auch WordArt-Google-Fonts erkannt
+  und eingebettet.
+- [x] **Kritischer Bugfix im Standalone-Export**: `JSON_UNESCAPED_SLASHES`
+  entfernt - Base64-eingebettete Bilddaten sind zufällig aussehende
+  Zeichenfolgen, die die Sequenz "</script" enthalten können (bei
+  genug eingebetteten Bildern praktisch nicht auszuschließen), was
+  den umschließenden `<script>`-Block vorzeitig beendet und die
+  komplette Seite unbrauchbar macht ("nur graue Fläche"). Mit
+  escapten Schrägstrichen (`\/`) kann diese Sequenz nicht mehr
+  auftreten.
