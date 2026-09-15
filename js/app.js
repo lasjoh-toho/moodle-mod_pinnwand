@@ -6455,24 +6455,7 @@
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
       pEl.style.zIndex = p.canvasz || 0;
-      // Dieselbe Live-Darstellungsfunktion wie auf der Pinnwand nutzen
-      // (statt des gespeicherten Bildes) - eine einzige Quelle der
-      // Wahrheit statt zweier getrennter, auseinanderdriftender
-      // Renderpfade. Mit Rückfallebene auf das gespeicherte Bild bei
-      // jedem Fehler (Lehre aus einem früheren, gescheiterten Versuch
-      // ohne Absicherung).
-      var liveRendered = false;
-      if (p.wordfielddata) {
-        try {
-          var presentTf = JSON.parse(p.wordfielddata);
-          var liveEl = buildTextFrameLiveDom(presentTf);
-          pEl.appendChild(liveEl);
-          liveRendered = true;
-        } catch (presentErr) {
-          console.error('Live-Darstellung in der Präsentation fehlgeschlagen, Rückfall auf gespeichertes Bild:', presentErr);
-        }
-      }
-      if (!liveRendered) { pEl.appendChild(el('img', { src: p.url, alt: '' })); }
+      pEl.appendChild(el('img', { src: p.url, alt: '' }));
       if (!inThreadIds[p.id]) {
         pEl.classList.add('ic-present-addable');
         pEl.title = S.stream_pin_hint;
