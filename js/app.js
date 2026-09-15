@@ -353,9 +353,18 @@
       var row = el('div', { class: 'ic-home-row' + rowStateClass(p) });
       var thumb = el('div', { class: 'ic-thumb' + (p.otherboardcount > 0 ? ' ic-thumb-pinned' : '') });
       var imgWrap = el('div', { class: 'ic-thumb-img-wrap' });
-      var img = el('img', { src: p.url, alt: '' });
-      img.addEventListener('click', function () { openLightbox(idx); });
-      imgWrap.appendChild(img);
+      var thumbLiveRendered = false;
+      if (p.wordfielddata) {
+        try {
+          var thumbTf = JSON.parse(p.wordfielddata);
+          imgWrap.appendChild(buildTextFrameLiveDom(thumbTf));
+          thumbLiveRendered = true;
+        } catch (thumbErr) {
+          console.error('Live-Darstellung in Meine Bilder fehlgeschlagen, Rückfall auf gespeichertes Bild:', thumbErr);
+        }
+      }
+      if (!thumbLiveRendered) { imgWrap.appendChild(el('img', { src: p.url, alt: '' })); }
+      imgWrap.addEventListener('click', function () { openLightbox(idx); });
       thumb.appendChild(imgWrap);
       if (state.studentcansend) {
         var sendBtn = el('button', {
@@ -3322,7 +3331,6 @@
 
       // Zeichen-Werkzeuge (wirken auf die aktuelle Zeichen-Auswahl, siehe
       // applyStyleToSelectionOrWhole): Fett/Kursiv/Unterstrichen zuerst.
-      if (!state.wordArtMode) {
         fontsBox.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_group_char]));
         var charRow = el('div', { class: 'ic-textframe-formatgrid' });
         var highlightBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_highlight }, [icon('highlighticon')]);
@@ -3366,6 +3374,14 @@
           charRow.appendChild(fb);
         });
         fontsBox.appendChild(charRow);
+      // WordArt: eigener "Fonts"-Button öffnet die kuratierte, nach
+      // Kategorien geordnete Schriftbibliothek (siehe WORDART_FONT_CATEGORIES) -
+      // getrennt von der schlichten Basis-Auswahl oben, da "wilde"
+      // Formatierung hier im Vordergrund steht.
+      if (state.wordArtMode) {
+        var fontsBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('fonts'), el('span', {}, [S.wordart_fonts])]);
+        fontsBtn.addEventListener('click', function () { openWordartFontBrowser(active, frame); });
+        typoMainCol.appendChild(fontsBtn);
       }
       // Schriftart, Schriftdicke und Laufweite gemeinsam in einer Zeile,
       // jeweils mit Beschriftung. Schriftgröße bleibt als eigene Zeile
@@ -3382,41 +3398,45 @@
       // Schrift-Button: zeigt die aktuell gewählte Schrift in sich selbst
       // dargestellt, Klick öffnet ein Pop-up mit allen Schriften (dort
       // ebenfalls jeweils in sich selbst dargestellt statt als reiner Text).
-      function currentFontCss() {
-        return (TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]).css;
-      }
-      function applyFontChoice(fontId) {
-        var css = (TEXTFRAME_FONTS.filter(function (f) { return f.id === fontId; })[0] || TEXTFRAME_FONTS[0]).css;
-        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (!objEl) { return; }
-        applyStyleToSelectionOrWhole(objEl, 'font-family:' + css + ';', function () {
-          active.font = fontId;
-          objEl.style.fontFamily = css;
-        }, active);
-      }
-      var fontBtn = el('button', {
-        class: 'ic-btn ic-btn-ghost ic-typo-font-btn',
-        style: 'font-family:' + currentFontCss() + ';'
-      }, [(TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]).label]);
-      fontBtn.addEventListener('click', function () {
-        openDraggableModal(S.tf_choose_font, fontBtn, function (content) {
-          var grid = el('div', { class: 'ic-typo-font-grid' });
-          TEXTFRAME_FONTS.forEach(function (f) {
-            var tile = el('button', {
-              class: 'ic-typo-font-tile' + (f.id === active.font ? ' active' : ''),
-              style: 'font-family:' + f.css + ';'
-            }, [f.label]);
-            tile.addEventListener('click', function () {
-              applyFontChoice(f.id);
-              fontBtn.textContent = f.label;
-              fontBtn.style.fontFamily = f.css;
+      // Nur für normale Textfelder - WordArt hat die eigene, größere
+      // Schriftbibliothek weiter oben (fontsBtn).
+      if (!state.wordArtMode) {
+        function currentFontCss() {
+          return (TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]).css;
+        }
+        function applyFontChoice(fontId) {
+          var css = (TEXTFRAME_FONTS.filter(function (f) { return f.id === fontId; })[0] || TEXTFRAME_FONTS[0]).css;
+          var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+          if (!objEl) { return; }
+          applyStyleToSelectionOrWhole(objEl, 'font-family:' + css + ';', function () {
+            active.font = fontId;
+            objEl.style.fontFamily = css;
+          }, active);
+        }
+        var fontBtn = el('button', {
+          class: 'ic-btn ic-btn-ghost ic-typo-font-btn',
+          style: 'font-family:' + currentFontCss() + ';'
+        }, [(TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]).label]);
+        fontBtn.addEventListener('click', function () {
+          openDraggableModal(S.tf_choose_font, fontBtn, function (content) {
+            var grid = el('div', { class: 'ic-typo-font-grid' });
+            TEXTFRAME_FONTS.forEach(function (f) {
+              var tile = el('button', {
+                class: 'ic-typo-font-tile' + (f.id === active.font ? ' active' : ''),
+                style: 'font-family:' + f.css + ';'
+              }, [f.label]);
+              tile.addEventListener('click', function () {
+                applyFontChoice(f.id);
+                fontBtn.textContent = f.label;
+                fontBtn.style.fontFamily = f.css;
+              });
+              grid.appendChild(tile);
             });
-            grid.appendChild(tile);
+            content.appendChild(grid);
           });
-          content.appendChild(grid);
         });
-      });
-      typoMainCol.appendChild(fontBtn);
+        typoMainCol.appendChild(fontBtn);
+      }
 
       // Größe: nur a-/a+ mit direkt editierbarer Dezimalzahl dazwischen,
       // kein separates Textlabel mehr nötig.
@@ -3467,15 +3487,6 @@
       }));
       typoMainCol.appendChild(spaceWeightRow);
 
-      // WordArt: eigener "Fonts"-Button öffnet die kuratierte, nach
-      // Kategorien geordnete Schriftbibliothek (siehe WORDART_FONT_CATEGORIES) -
-      // getrennt von der schlichten Basis-Auswahl oben, da "wilde"
-      // Formatierung hier im Vordergrund steht.
-      if (state.wordArtMode) {
-        var fontsBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('fonts'), el('span', {}, [S.wordart_fonts])]);
-        fontsBtn.addEventListener('click', function () { openWordartFontBrowser(active, frame); });
-        typoMainCol.appendChild(fontsBtn);
-      }
 
       // Schmale Absatz-Spalte: senkrecht gestapelt, Ausrichtung + Zeilen-
       // abstand (\u21A8), wirken auf die markierten Zeilen bzw. das ganze
@@ -3617,6 +3628,13 @@
                 // Individuelle Regler zurücksetzen, damit die Vorlage sauber
                 // greift (Regler unten passen sie danach bei Bedarf an).
                 active.extrudeSteps = active.extrudeColor = active.scaleY = active.skewY = active.rotate = active.rotY = null;
+                // Vorlage übernimmt einen vorgeschlagenen Font als
+                // sinnvollen Startwert - danach über die Schriftbibliothek
+                // jederzeit änderbar.
+                if (w.font) {
+                  var suggestedFont = w.font.split(',')[0].replace(/['"]/g, '').trim();
+                  active.font = suggestedFont;
+                }
                 reapplyTextStyle();
                 refreshControls();
               });
@@ -6436,7 +6454,24 @@
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
       pEl.style.zIndex = p.canvasz || 0;
-      pEl.appendChild(el('img', { src: p.url, alt: '' }));
+      // Dieselbe Live-Darstellungsfunktion wie auf der Pinnwand nutzen
+      // (statt des gespeicherten Bildes) - eine einzige Quelle der
+      // Wahrheit statt zweier getrennter, auseinanderdriftender
+      // Renderpfade. Mit Rückfallebene auf das gespeicherte Bild bei
+      // jedem Fehler (Lehre aus einem früheren, gescheiterten Versuch
+      // ohne Absicherung).
+      var liveRendered = false;
+      if (p.wordfielddata) {
+        try {
+          var presentTf = JSON.parse(p.wordfielddata);
+          var liveEl = buildTextFrameLiveDom(presentTf);
+          pEl.appendChild(liveEl);
+          liveRendered = true;
+        } catch (presentErr) {
+          console.error('Live-Darstellung in der Präsentation fehlgeschlagen, Rückfall auf gespeichertes Bild:', presentErr);
+        }
+      }
+      if (!liveRendered) { pEl.appendChild(el('img', { src: p.url, alt: '' })); }
       if (!inThreadIds[p.id]) {
         pEl.classList.add('ic-present-addable');
         pEl.title = S.stream_pin_hint;

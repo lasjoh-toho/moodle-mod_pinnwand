@@ -3285,3 +3285,27 @@ Einhundertneunter Feedback-Durchgang (sehr dicht). Betrifft:
 **Noch offen**: "Rahmen-Änderung wird nicht in die Präsentation
 übernommen" - Server-seitige Speicher-Logik sieht korrekt aus, genaue
 Ursache noch nicht gefunden, weitere Untersuchung nötig.
+
+---
+
+## Phase 115 — Präsentation+Meine Bilder auf Live-Darstellung umgestellt (mit Rückfallebene), WordArt-Schriftbereich umsortiert 🔄
+
+Einhundertzehnter Feedback-Durchgang. Betrifft: `js/app.js`.
+
+- [x] **Architektonische Vereinheitlichung, zweiter (vorsichtiger)
+  Versuch**: Präsentation UND "Meine Bilder" nutzen jetzt dieselbe
+  Live-Darstellungsfunktion (`buildTextFrameLiveDom()`) wie die
+  Pinnwand - mit `try/catch`-Rückfallebene auf das gespeicherte Bild
+  bei jedem Fehler (Lehre aus dem gescheiterten ersten Versuch ohne
+  Absicherung). Sollte das hartnäckige "Rahmen/Font-Änderung kommt
+  nicht in der Präsentation an"-Problem beheben, da es jetzt nur noch
+  eine Quelle der Wahrheit gibt.
+- [x] **Vorlagen übernehmen jetzt einen vorgeschlagenen Font** (aus
+  `w.font`, falls die Vorlage einen definiert) als sinnvollen
+  Startwert.
+- [x] **4-Schriften-Dropdown im WordArt-Modus entfernt** (bleibt nur
+  für normale Textfelder) - die Schriftbibliothek (`fontsBtn`) ist
+  jetzt die einzige Schriftauswahl dort und steht oben.
+- [x] **Formatierungs-Zeile (B/I/U/Strike/Sup/Sub)** steht jetzt über
+  der Schriftauswahl und ist jetzt auch im WordArt-Modus sichtbar
+  (vorher nur bei normalen Textfeldern).

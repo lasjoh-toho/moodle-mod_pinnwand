@@ -1387,6 +1387,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Pop-up mit Vorschau, kompakte Symbole statt Textlabels).
 - Griffe robuster (größer, höherer z-index).
 
+### Einhundertzwanzigste Überarbeitung — Präsentation vereinheitlicht (zweiter Versuch), WordArt-Schrift neu sortiert
+
+- Präsentation und Meine Bilder nutzen jetzt dieselbe Live-
+  Darstellung wie die Pinnwand (mit Rückfallebene bei Fehlern).
+- WordArt-Vorlagen übernehmen jetzt einen vorgeschlagenen Font.
+- WordArt-Schriftbereich neu sortiert: Formatierungs-Zeile und
+  Schriftbibliothek stehen jetzt oben, das überflüssige 4-Schriften-
+  Dropdown ist dort weg.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
