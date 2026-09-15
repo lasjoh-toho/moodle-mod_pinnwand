@@ -1825,7 +1825,7 @@
     var rotY = t.rotY || 0;
     var scaleX = Math.cos(rotY * Math.PI / 180);
     var skewFromRotY = Math.sin(rotY * Math.PI / 180) * 12;
-    var fontFamily = style.font || fontCss;
+    var fontFamily = fontCss;
     var fontSize = t.size;
     fitCtx.font = fontFamily === fontCss ? (fontSize + 'px ' + fontCss) : ('700 ' + fontSize + 'px ' + fontFamily);
     var textWidth = Math.max(10, fitCtx.measureText(plainText || '').width);
@@ -1917,7 +1917,6 @@
       css += 'color:' + (style.fillColor || fallbackColor) + ';';
     }
     if (style.stroke) { css += '-webkit-text-stroke:' + unit(style.strokeWidth || 1) + ' ' + style.stroke + ';paint-order:stroke fill;'; }
-    if (style.font) { css += 'font-family:' + style.font + ';'; }
     var shadows = [];
     for (var i = extrudeSteps; i >= 1; i--) { shadows.push(unit(i * 0.8) + ' ' + unit(i * 0.8) + ' 0 ' + extrudeColor); }
     if (t.wordartGlow) { shadows.push('0 0 ' + unit(t.wordartGlow) + ' ' + (t.wordartGlowColor || '#fff'), '0 0 ' + unit(t.wordartGlow / 2) + ' ' + (t.wordartGlowColor || '#fff')); }
@@ -3372,23 +3371,101 @@
       // jeweils mit Beschriftung. Schriftgröße bleibt als eigene Zeile
       // (A-/A+ -Buttons brauchen mehr Platz). Wirken auf die aktuelle
       // Zeichen-Auswahl, falls vorhanden, sonst auf das ganze Textobjekt.
-      var fontWeightSpaceRow = el('div', { class: 'ic-textframe-formatgrid' });
-      var fontGroup = el('div', { class: 'ic-textframe-edit' });
-      var fontSel = el('select', { class: 'ic-textframe-select' });
-      TEXTFRAME_FONTS.forEach(function (f) {
-        fontSel.appendChild(el('option', { value: f.id, selected: f.id === active.font ? 'selected' : null }, [f.label]));
-      });
-      fontSel.addEventListener('change', function () {
-        var css = (TEXTFRAME_FONTS.filter(function (f) { return f.id === fontSel.value; })[0] || TEXTFRAME_FONTS[0]).css;
+      // Zeichen-Auswahl, falls vorhanden, sonst auf das ganze Textobjekt.
+      var typoColumns = el('div', { class: 'ic-typo-columns' });
+      var typoMainCol = el('div', { class: 'ic-typo-main-col' });
+      var typoParaCol = el('div', { class: 'ic-typo-para-col' });
+      typoColumns.appendChild(typoMainCol);
+      typoColumns.appendChild(typoParaCol);
+      fontsBox.appendChild(typoColumns);
+
+      // Schrift-Button: zeigt die aktuell gewählte Schrift in sich selbst
+      // dargestellt, Klick öffnet ein Pop-up mit allen Schriften (dort
+      // ebenfalls jeweils in sich selbst dargestellt statt als reiner Text).
+      function currentFontCss() {
+        return (TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]).css;
+      }
+      function applyFontChoice(fontId) {
+        var css = (TEXTFRAME_FONTS.filter(function (f) { return f.id === fontId; })[0] || TEXTFRAME_FONTS[0]).css;
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (!objEl) { return; }
         applyStyleToSelectionOrWhole(objEl, 'font-family:' + css + ';', function () {
-          active.font = fontSel.value;
+          active.font = fontId;
           objEl.style.fontFamily = css;
         }, active);
+      }
+      var fontBtn = el('button', {
+        class: 'ic-btn ic-btn-ghost ic-typo-font-btn',
+        style: 'font-family:' + currentFontCss() + ';'
+      }, [(TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]).label]);
+      fontBtn.addEventListener('click', function () {
+        openDraggableModal(S.tf_choose_font, fontBtn, function (content) {
+          var grid = el('div', { class: 'ic-typo-font-grid' });
+          TEXTFRAME_FONTS.forEach(function (f) {
+            var tile = el('button', {
+              class: 'ic-typo-font-tile' + (f.id === active.font ? ' active' : ''),
+              style: 'font-family:' + f.css + ';'
+            }, [f.label]);
+            tile.addEventListener('click', function () {
+              applyFontChoice(f.id);
+              fontBtn.textContent = f.label;
+              fontBtn.style.fontFamily = f.css;
+            });
+            grid.appendChild(tile);
+          });
+          content.appendChild(grid);
+        });
       });
-      fontGroup.appendChild(fontSel);
-      fontWeightSpaceRow.appendChild(fontGroup);
+      typoMainCol.appendChild(fontBtn);
+
+      // Größe: nur a-/a+ mit direkt editierbarer Dezimalzahl dazwischen,
+      // kein separates Textlabel mehr nötig.
+      var sizeRow2 = el('div', { class: 'ic-typo-compact-row' });
+      var sizeInput = el('input', { type: 'number', step: '0.5', min: '6', max: '400', class: 'ic-typo-num-input', value: String(active.size) });
+      function commitSize(newSize) {
+        newSize = Math.max(6, Math.min(400, newSize));
+        sizeInput.value = String(newSize);
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (!objEl) { return; }
+        applyStyleToSelectionOrWhole(objEl, 'font-size:' + newSize + 'px;', function () {
+          active.size = newSize;
+          objEl.style.fontSize = newSize + 'px';
+        }, active);
+      }
+      var sizeDown2 = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['a\u2212']);
+      var sizeUp2 = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['a+']);
+      sizeDown2.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      sizeUp2.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      sizeDown2.addEventListener('click', function () { commitSize((parseFloat(sizeInput.value) || active.size) - 1); });
+      sizeUp2.addEventListener('click', function () { commitSize((parseFloat(sizeInput.value) || active.size) + 1); });
+      sizeInput.addEventListener('change', function () { commitSize(parseFloat(sizeInput.value) || active.size); });
+      sizeRow2.appendChild(sizeDown2); sizeRow2.appendChild(sizeInput); sizeRow2.appendChild(sizeUp2);
+      typoMainCol.appendChild(sizeRow2);
+
+      // Laufweite (\u2194) und Gewicht (\u2696) mit Symbol statt Textlabel,
+      // in einer gemeinsamen Zeile.
+      var spaceWeightRow = el('div', { class: 'ic-typo-compact-row' });
+      var spaceIcon = el('span', { class: 'ic-typo-symbol', title: S.letterspacing }, ['\u2194']);
+      spaceWeightRow.appendChild(spaceIcon);
+      spaceWeightRow.appendChild(numberStepper(active.letterSpacing || 0, -2, 20, 0.5, 1, function (v) {
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (!objEl) { return; }
+        applyStyleToSelectionOrWhole(objEl, 'letter-spacing:' + v + 'px;', function () {
+          active.letterSpacing = v;
+          objEl.style.letterSpacing = v + 'px';
+        }, active);
+      }));
+      var weightIcon = el('span', { class: 'ic-typo-symbol', title: S.fontweight }, ['\u2696']);
+      spaceWeightRow.appendChild(weightIcon);
+      spaceWeightRow.appendChild(numberStepper(active.fontWeight || 700, 300, 900, 100, 0, function (v) {
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (!objEl) { return; }
+        applyStyleToSelectionOrWhole(objEl, 'font-weight:' + v + ';', function () {
+          active.fontWeight = v;
+          objEl.style.fontWeight = v;
+        }, active);
+      }));
+      typoMainCol.appendChild(spaceWeightRow);
 
       // WordArt: eigener "Fonts"-Button öffnet die kuratierte, nach
       // Kategorien geordnete Schriftbibliothek (siehe WORDART_FONT_CATEGORIES) -
@@ -3397,85 +3474,38 @@
       if (state.wordArtMode) {
         var fontsBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('fonts'), el('span', {}, [S.wordart_fonts])]);
         fontsBtn.addEventListener('click', function () { openWordartFontBrowser(active, frame); });
-        fontsBox.appendChild(fontsBtn);
+        typoMainCol.appendChild(fontsBtn);
       }
 
-      var sizeRow = el('div', { class: 'ic-textframe-edit' });
-      var sizeGroup = el('div', { class: 'ic-textframe-edit' });
-      var sizeDisplay = el('span', { class: 'ic-stepper-value' }, [String(active.size)]);
-      var lastSizeDelta = 0;
-      function setSize(delta) {
-        lastSizeDelta += delta;
-        var newSize = Math.max(10, Math.min(200, active.size + lastSizeDelta));
-        sizeDisplay.textContent = String(newSize);
-        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (!objEl) { return; }
-        applyStyleToSelectionOrWhole(objEl, 'font-size:' + newSize + 'px;', function () {
-          active.size = newSize;
-          objEl.style.fontSize = newSize + 'px';
-          lastSizeDelta = 0;
-        }, active);
-      }
-      var sizeDown = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['A\u2212']);
-      var sizeUp = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['A+']);
-      sizeDown.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-      sizeUp.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-      sizeDown.addEventListener('click', function () { setSize(-2); });
-      sizeUp.addEventListener('click', function () { setSize(2); });
-      sizeGroup.appendChild(sizeDown); sizeGroup.appendChild(sizeDisplay); sizeGroup.appendChild(sizeUp);
-      sizeRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontsize]));
-      sizeRow.appendChild(sizeGroup);
-      fontsBox.appendChild(sizeRow);
-
-      var weightGroup = el('div', { class: 'ic-textframe-edit' });
-      weightGroup.appendChild(el('span', { class: 'ic-textframe-label' }, [S.fontweight]));
-      weightGroup.appendChild(numberStepper(active.fontWeight || 700, 300, 900, 100, 0, function (v) {
-        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (!objEl) { return; }
-        applyStyleToSelectionOrWhole(objEl, 'font-weight:' + v + ';', function () {
-          active.fontWeight = v;
-          objEl.style.fontWeight = v;
-        }, active);
-      }));
-      fontWeightSpaceRow.appendChild(weightGroup);
-
-      var spaceGroup = el('div', { class: 'ic-textframe-edit' });
-      spaceGroup.appendChild(el('span', { class: 'ic-textframe-label' }, [S.letterspacing]));
-      spaceGroup.appendChild(numberStepper(active.letterSpacing || 0, -2, 20, 0.5, 1, function (v) {
-        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (!objEl) { return; }
-        applyStyleToSelectionOrWhole(objEl, 'letter-spacing:' + v + 'px;', function () {
-          active.letterSpacing = v;
-          objEl.style.letterSpacing = v + 'px';
-        }, active);
-      }));
-      fontWeightSpaceRow.appendChild(spaceGroup);
-      fontsBox.appendChild(fontWeightSpaceRow);
-
-      // Absatz-Werkzeuge (wirken auf die markierten Zeilen bzw. das ganze
-      // Textobjekt, nicht auf einzelne Zeichen): Ausrichtung, Zeilenabstand,
-      // Durchgestrichen/Aufzählung.
-      fontsBox.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_group_para]));
-      var alignRow = el('div', { class: 'ic-textframe-formatgrid' });
+      // Schmale Absatz-Spalte: senkrecht gestapelt, Ausrichtung + Zeilen-
+      // abstand (\u21A8), wirken auf die markierten Zeilen bzw. das ganze
+      // Textobjekt, nicht auf einzelne Zeichen.
       [
-        ['justifyLeft', 'alignleft', S.align_left], ['justifyCenter', 'aligncenter', S.align_center],
-        ['justifyRight', 'alignright', S.align_right], ['justifyFull', 'alignjustify', S.align_justify]
+        ['justifyLeft', 'alignleft', S.align_left], ['justifyRight', 'alignright', S.align_right],
+        ['justifyCenter', 'aligncenter', S.align_center], ['justifyFull', 'alignjustify', S.align_justify]
       ].forEach(function (cmd) {
         var ab = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
         ab.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
         ab.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
-        alignRow.appendChild(ab);
+        typoParaCol.appendChild(ab);
       });
-      // Aufzählung gehört inhaltlich ebenfalls zum Absatz und steht in
-      // derselben Zeile wie die Ausrichtung, statt isoliert für sich - nur
-      // im Zettel-Modus (WordArt nutzt die WordArt-Stile weiter unten).
+      var lineHeightRow = el('div', { class: 'ic-typo-compact-row' });
+      lineHeightRow.appendChild(el('span', { class: 'ic-typo-symbol', title: S.lineheight }, ['\u21A8']));
+      lineHeightRow.appendChild(numberStepper(active.lineHeight || 1.2, 0.9, 2.2, 0.1, 1, function (v) {
+        active.lineHeight = v;
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { objEl.style.lineHeight = v; }
+      }));
+      typoParaCol.appendChild(lineHeightRow);
+
+      // Aufzählung gehört inhaltlich ebenfalls zum Absatz - nur im
+      // Zettel-Modus (WordArt nutzt die WordArt-Stile weiter unten).
       if (!state.wordArtMode) {
         var bulletBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_bullets }, [icon('bulleticon')]);
         bulletBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
         bulletBtn.addEventListener('click', function () { document.execCommand('insertUnorderedList', false, null); });
-        alignRow.appendChild(bulletBtn);
+        typoParaCol.appendChild(bulletBtn);
       }
-      fontsBox.appendChild(alignRow);
 
       // Textumfluss der gerade ausgewählten Form: vor dem Text (liegt
       // sichtbar über dem Text), hinter dem Text (Standard), Umfluss
@@ -3497,15 +3527,6 @@
         });
         fontsBox.appendChild(wrapRow);
       }
-
-      var lineRow = el('div', { class: 'ic-textframe-edit' });
-      lineRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.lineheight]));
-      lineRow.appendChild(numberStepper(active.lineHeight || 1.2, 0.9, 2.2, 0.1, 1, function (v) {
-        active.lineHeight = v;
-        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.lineHeight = v; }
-      }));
-      fontsBox.appendChild(lineRow);
 
       // Wendet Farbe UND (falls gesetzt) den WordArt-Stil gemeinsam neu auf
       // das Live-Element an - ein WordArt-Stil kann "color" durch eine

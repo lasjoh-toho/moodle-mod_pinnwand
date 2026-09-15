@@ -1380,6 +1380,13 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Klick auf ein Wortfeld auf der Pinnwand springt jetzt direkt in
   den Editor statt erst die Galerie zu öffnen.
 
+### Einhundertneunzehnte Überarbeitung — Typographie-Neuaufbau, Font-Fix
+
+- WordArt-Vorlagen respektieren jetzt einheitlich die Schriftwahl.
+- Typographie-Block komplett neu aufgebaut (zwei Spalten, Schrift-
+  Pop-up mit Vorschau, kompakte Symbole statt Textlabels).
+- Griffe robuster (größer, höherer z-index).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

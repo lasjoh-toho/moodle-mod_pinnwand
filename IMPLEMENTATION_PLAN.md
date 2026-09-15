@@ -3259,3 +3259,29 @@ Einhundertachter Feedback-Durchgang. Betrifft: `js/app.js`,
 zentriert sich beim Größenändern automatisch (CSS-Eigenheit), statt
 sich exakt von der gezogenen Ecke aus visuell auszudehnen - die
 Endposition nach dem Loslassen sollte aber korrekt sein.
+
+---
+
+## Phase 114 — Font-Konsistenz-Fix, Typographie-Block-Neuaufbau, robustere Griffe ✅
+
+Einhundertneunter Feedback-Durchgang (sehr dicht). Betrifft:
+`js/app.js`, `styles.css`, neue Strings.
+
+- [x] **Font-Inkonsistenz-Bugfix**: manche WordArt-Vorlagen (mit
+  `style.font` gesetzt) erzwangen ihre eigene Schriftart und
+  ignorierten die Nutzerauswahl, andere nicht - jetzt respektiert
+  jede Vorlage einheitlich `t.font` (über `fontCss`).
+- [x] **Typographie-Block komplett neu aufgebaut**: zwei Spalten
+  (Haupt-Spalte + schmale Absatz-Spalte), Schrift-Button zeigt die
+  aktuelle Schrift in sich selbst dargestellt und öffnet ein Pop-up
+  mit allen Schriften (ebenfalls jeweils in sich selbst dargestellt),
+  Größe nur noch a−/a+ mit direkt editierbarer Dezimalzahl, Laufweite
+  mit ↔-Symbol, Gewicht mit ⚖-Symbol statt Textlabels, schmale
+  Absatz-Spalte mit senkrecht gestapelten Ausrichtungs-Symbolen und
+  Zeilenabstand (↨).
+- [x] **Griffe robuster**: größer (34px), deutlich höherer z-index,
+  damit sie zuverlässiger über dem WordArt-Text liegen.
+
+**Noch offen**: "Rahmen-Änderung wird nicht in die Präsentation
+übernommen" - Server-seitige Speicher-Logik sieht korrekt aus, genaue
+Ursache noch nicht gefunden, weitere Untersuchung nötig.

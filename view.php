@@ -275,6 +275,7 @@ $config = [
         'tf_margin_apply' => get_string('tf_margin_apply', 'pinnwand'),
         'tf_margin_reset' => get_string('tf_margin_reset', 'pinnwand'),
         'tf_exportbounds_hint' => get_string('tf_exportbounds_hint', 'pinnwand'),
+        'tf_choose_font' => get_string('tf_choose_font', 'pinnwand'),
         'tf_no_shape_selected' => get_string('tf_no_shape_selected', 'pinnwand'),
         'tf_shadow_angle' => get_string('tf_shadow_angle', 'pinnwand'),
         'tf_shadow_distance' => get_string('tf_shadow_distance', 'pinnwand'),
