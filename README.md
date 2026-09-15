@@ -1395,6 +1395,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - WordArt-Schriftbereich neu sortiert: Formatierungs-Zeile und
   Schriftbibliothek stehen jetzt oben, das überflüssige 4-Schriften-
   Dropdown ist dort weg.
+- (Der Versuch, die Präsentation auf dieselbe Live-Darstellung
+  umzustellen, wurde wieder zurückgenommen - siehe nächster Eintrag.)
+
+### Einhundertdreiundzwanzigste Überarbeitung — Font-Kernbugfix für WordArt, Präsentations-Revert
+
+- Kernbugfix: Schriftwahl bei Verlauf-WordArt (SVG-basiert) hatte
+  keine Wirkung, da die Schrift dort ein SVG-Attribut ist, kein
+  vererbtes CSS - jetzt korrekt behoben.
+- Präsentation erneut auf das gespeicherte Bild zurückgesetzt
+  (startete trotz Absicherung weiterhin nicht).
 
 ## Bekannte Grenzen dieser Version
 

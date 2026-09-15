@@ -3309,3 +3309,28 @@ Einhundertzehnter Feedback-Durchgang. Betrifft: `js/app.js`.
 - [x] **Formatierungs-Zeile (B/I/U/Strike/Sup/Sub)** steht jetzt über
   der Schriftauswahl und ist jetzt auch im WordArt-Modus sichtbar
   (vorher nur bei normalen Textfeldern).
+
+---
+
+## Phase 116 — Font-Kernbugfix für Verlauf-WordArt (SVG-Attribut statt CSS), Präsentation erneut revertiert ✅
+
+Einhundertelfter Feedback-Durchgang (dringend). Betrifft: `js/app.js`.
+
+- [x] **DRINGENDER Revert**: Präsentation startete trotz
+  Rückfallebene weiterhin nicht - sofort zurück auf das gespeicherte
+  Bild. Genaue Ursache noch nicht gefunden.
+- [x] **Font-Kernbugfix gefunden und behoben**: bei Verlauf-WordArt
+  (SVG-basiert, die meisten "schicken" Stile) ist die Schriftart ein
+  natives SVG-Attribut, kein vererbtes CSS - `applyFont()` (Schrift-
+  bibliothek) und `reapplyTextStyle()` setzten bisher nur
+  `style.fontFamily`/`style.cssText`, was bei bereits fertig
+  erzeugtem SVG-Text KEINE Wirkung hatte. Jetzt wird bei Verlauf-
+  WordArt komplett neu gerendert (`render()`), damit das SVG mit der
+  aktuellen Schrift neu erzeugt wird - für nicht-Verlauf-WordArt
+  bleibt der schnelle, direkte Stil-Update-Pfad erhalten.
+
+**Architektur-Antwort an den Nutzer** (noch nicht umgesetzt, größere
+Aufgabe für später): der robustere Weg wäre eine gemeinsame "Rezept"-
+Funktion, die eine neutrale Beschreibung erzeugt, übersetzt von zwei
+dünnen Renderern (Live-DOM/SVG) - Entscheidungslogik lebt dann nur an
+einer Stelle statt in zwei parallelen Implementierungen.

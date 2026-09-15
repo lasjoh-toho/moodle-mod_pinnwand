@@ -1652,9 +1652,13 @@
 
     function applyFont(name) {
       active.font = 'google:' + name;
-      var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-      if (objEl) { objEl.style.fontFamily = resolveFontCss(active.font); }
+      // Bei Verlauf-WordArt (SVG-basiert) ist die Schrift ein natives
+      // SVG-Attribut, kein vererbtes CSS - ein einfaches
+      // objEl.style.fontFamily hätte dort KEINE Wirkung, da die SVG-
+      // Zeichenkette schon fertig generiert vorliegt. Komplett neu
+      // rendern, damit das SVG mit der neuen Schrift neu erzeugt wird.
       overlay.remove();
+      render();
     }
 
     function showCategories() {
@@ -3545,6 +3549,16 @@
       // Verlaufsfüllung (background-clip:text) ersetzen, ein reines
       // objEl.style.color reicht dafür nicht aus.
       function reapplyTextStyle() {
+        // Bei Verlauf-WordArt (SVG-basiert) reicht ein einfaches
+        // objEl.style.cssText-Update NICHT aus - die Darstellung ist
+        // dort natives SVG, keine reine CSS-Eigenschaft. Nur ein
+        // komplettes Neu-Rendern erzeugt das SVG mit den aktuellen
+        // Werten (z.B. neuer Schriftart) neu.
+        var activeStyleDef = WORDART_STYLES.filter(function (w) { return w.id === active.wordartStyle; })[0];
+        if (activeStyleDef && activeStyleDef.fillGradient) {
+          render();
+          return;
+        }
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (!objEl) { return; }
         var isActivePrimary = tf.texts[0] && tf.texts[0].id === active.id;
