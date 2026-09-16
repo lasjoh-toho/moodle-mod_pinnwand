@@ -2721,18 +2721,27 @@
 
     function textEl(t, idx) {
       var isPrimary = idx === 0;
+      // Nur für normale (Nicht-WordArt) Textfelder soll das primäre Objekt
+      // automatisch den ganzen Rahmen ausfüllen und zentrieren
+      // (inset:0+table-cell+vertical-align:middle) - bei WordArt würde das
+      // die t.x/t.y-Positionierung und damit die Kompensation beim
+      // Rahmen-Resize (Griffe) komplett umgehen ("Text rutscht mit").
+      // WordArt nutzt deshalb dieselbe positionsbasierte Darstellung wie
+      // nicht-primäre Objekte - entspricht auch der Darstellung auf der
+      // Pinnwand (buildTextFrameLiveDom), die niemals inset:0 nutzt.
+      var useFillCentering = isPrimary && !state.wordArtMode;
       t.lineHeight = t.lineHeight || 1.2;
       t.letterSpacing = t.letterSpacing || 0;
       t.fontWeight = t.fontWeight || 700;
       var fontCss = resolveFontCss(t.font);
       var el2 = el('div', {
-        class: 'ic-textframe-obj' + (isPrimary ? ' primary' : '') + (t.id === activeId ? ' active' : ''),
+        class: 'ic-textframe-obj' + (useFillCentering ? ' primary' : '') + (t.id === activeId ? ' active' : ''),
         'data-textid': String(t.id),
         contenteditable: 'true',
-        style: (isPrimary ? '' : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;') +
+        style: (useFillCentering ? '' : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;max-width:94%;') +
           'font-family:' + fontCss + ';font-size:' + t.size + 'px;font-weight:' + t.fontWeight +
           ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px;' +
-          (wordartCssFor(t, preset.text, isPrimary) || computeStyle1Css(t, preset.text))
+          (wordartCssFor(t, preset.text, useFillCentering) || computeStyle1Css(t, preset.text))
       });
       // innerHTML statt textContent: so bleiben Fett/Kursiv/Unterstrichen/
       // Durchgestrichen/Aufzählungen (siehe Formatierungswerkzeuge) beim
@@ -2753,20 +2762,23 @@
           el2.classList.remove('active');
         }
       });
-      if (isPrimary) {
-        // Primäres Textobjekt: füllt den ganzen Rahmen, bricht automatisch
-        // um und passt seine Schriftgröße live an (2D-Fit: Breite + Höhe),
-        // statt eines kleinen, frei positionierten einzeiligen Labels.
+      if (useFillCentering) {
+        // Primäres Textobjekt (nur normale Textfelder): füllt den ganzen
+        // Rahmen, bricht automatisch um und passt seine Schriftgröße live
+        // an (2D-Fit: Breite + Höhe), statt eines kleinen, frei
+        // positionierten einzeiligen Labels.
         el2.addEventListener('input', function () {
           t.html = el2.innerHTML; t.text = el2.textContent;
           autoFitPrimaryText(el2, t, tf.h);
         });
       } else {
         el2.addEventListener('input', function () { t.html = el2.innerHTML; t.text = el2.textContent; });
-        var sizeHandle = el('div', { class: 'ic-textframe-size-handle', title: S.fontsize });
-        el2.appendChild(sizeHandle);
-        makeTextObjectMovable(el2, frame, t, sizeHandle);
-        sizeHandle.addEventListener('mousedown', function () { selectText(t.id); });
+        if (!isPrimary) {
+          var sizeHandle = el('div', { class: 'ic-textframe-size-handle', title: S.fontsize });
+          el2.appendChild(sizeHandle);
+          makeTextObjectMovable(el2, frame, t, sizeHandle);
+          sizeHandle.addEventListener('mousedown', function () { selectText(t.id); });
+        }
       }
       if (!isPrimary && t.arcStyle && t.arcStyle !== 'none' && t.id !== activeId) {
         // Bogen-Ansicht: SVG mit pfadfolgendem Text statt des editierbaren
@@ -2791,8 +2803,8 @@
         // Pinnwand/im Export, solange NICHT gerade bearbeitet wird - beim
         // Fokussieren erscheint wieder die normale editierbare Ansicht.
         var waWrap = el('div', {
-          class: 'ic-textframe-obj' + (isPrimary ? ' primary' : ''),
-          style: isPrimary ? 'display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:text;' :
+          class: 'ic-textframe-obj' + (useFillCentering ? ' primary' : ''),
+          style: useFillCentering ? 'display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:text;' :
             ('left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + (wordartSvgPreview.w) + 'px;cursor:text;')
         });
         waWrap.innerHTML = wordartSvgPreview.svg;
@@ -2805,7 +2817,7 @@
       }
       return el2;
     }
-    tf.texts.forEach(function (t, idx) { frameInner.appendChild(textEl(t, idx)); });
+    tf.texts.forEach(function (t, idx) { frame.appendChild(textEl(t, idx)); });
 
     // Die erste Karte ist beim Öffnen des Editors sofort beschreibbar -
     // Cursor direkt gesetzt, kein zusätzlicher Klick nötig.

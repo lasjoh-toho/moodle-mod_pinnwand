@@ -3402,3 +3402,26 @@ Einhundertvierzehnter Feedback-Durchgang. Betrifft: `js/app.js`,
 altes, vor dem letzten Fix gespeichertes Objekt), "Rahmen wird nicht
 korrekt in Meine Dateien übernommen" (Export-Code sieht korrekt aus,
 genaue Ursache noch nicht gefunden).
+
+---
+
+## Phase 120 — Primäres Textobjekt nutzt jetzt konsistente Positionierung, Grenzen-Fix, Ziehbarkeit vorsichtshalber zurückgenommen ✅
+
+Einhundertfünfzehnter Feedback-Durchgang. Betrifft: `js/app.js`.
+
+- [x] **Kernbugfix vertikales Rutschen**: primäres Textobjekt nutzte
+  `inset:0`+`table-cell`+`vertical-align:middle`, was immer
+  automatisch füllte/zentrierte, unabhängig von der Positions-
+  Kompensation beim Rahmen-Resize. Für WordArt nutzt das primäre
+  Objekt jetzt dieselbe positionsbasierte Darstellung wie andere
+  Objekte (und wie die Pinnwand selbst) - neue Variable
+  `useFillCentering` (nur für normale Textfelder true).
+- [x] **Kernbugfix "dritte Grenze"**: Text hing an `frameInner` (mit
+  eigenem `overflow:hidden` für die Kartenform-Beschneidung) statt an
+  `frame` (die von den Größengriffen kontrollierte Box) - jetzt
+  korrigiert, Text hängt an derselben Grenze wie die Griffe.
+- [x] **Vorsichtshalber zurückgenommen**: die neu aktivierte
+  Ziehbarkeit des primären Objekts (`makeTextObjectMovable`) - Nutzer
+  meldete "verschiebt jetzt die ganze Pinnwand", genaue Ursache ohne
+  Live-Test nicht bestätigt, sicherer Revert auf "primäres Objekt
+  nicht direkt verschiebbar".
