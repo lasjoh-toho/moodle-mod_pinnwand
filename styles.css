@@ -544,6 +544,8 @@
 
 /* Wortfeld (Textrahmen) */
 .ic-textframe-preview { position: relative; margin: 20px auto; overflow: visible; z-index: 0; }
+.ic-tf-stage { align-items: flex-start; justify-content: flex-start; padding: 40px; box-sizing: border-box; overflow: auto; }
+.ic-tf-stage > .ic-textframe-preview { margin: 0; }
 .ic-textframe-inner { position: relative; width: 100%; height: 100%; z-index: 1; }
 .ic-textframe-obj {
   position: absolute; transform: translate(-50%, -50%); padding: 4px 8px; white-space: pre-wrap;

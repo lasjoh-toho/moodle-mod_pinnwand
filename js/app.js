@@ -340,6 +340,25 @@
     root.appendChild(overlay);
   }
 
+  function openWordfieldEditorDirectly(p, fallback) {
+    // Wortfeld: direkt in den Editor springen statt erst die Lightbox-
+    // Galerie zu öffnen - ein Klick weniger für den häufigen Fall
+    // "Textfeld/WordArt bearbeiten".
+    try {
+      state.textFrame = JSON.parse(p.wordfielddata);
+      var tfLoadedDirect = state.textFrame;
+      state.wordArtMode = tfLoadedDirect.isWordArt != null
+        ? !!tfLoadedDirect.isWordArt
+        : tfLoadedDirect.texts.some(function (t) { return (t.wordartStyle && t.wordartStyle !== 'none') || (t.arcStyle && t.arcStyle !== 'none'); });
+      resetTfHistory();
+      state.editingPhotoId = p.id;
+      state.step = 'textframe';
+      render();
+    } catch (e) {
+      fallback();
+    }
+  }
+
   function renderHome(body) {
     var wrap = el('div', { class: 'ic-home' });
     var maxreached = state.maxpictures > 0 && state.photos.length >= state.maxpictures;
@@ -364,7 +383,13 @@
         }
       }
       if (!thumbLiveRendered) { imgWrap.appendChild(el('img', { src: p.url, alt: '' })); }
-      imgWrap.addEventListener('click', function () { openLightbox(idx); });
+      imgWrap.addEventListener('click', function () {
+        if (p.wordfielddata) {
+          openWordfieldEditorDirectly(p, function () { openLightbox(idx); });
+        } else {
+          openLightbox(idx);
+        }
+      });
       thumb.appendChild(imgWrap);
       if (state.studentcansend) {
         var sendBtn = el('button', {
@@ -2469,7 +2494,7 @@
     var tfOrientation = (tf.h > tf.w && tf.h > window.innerHeight * 0.5) ? 'ic-tf-portrait' : 'ic-tf-landscape';
     var layout = el('div', { class: 'ic-textframe-layout ' + tfOrientation });
     var tfShowBg = state.tfShowBoardBg !== false; // Standardmäßig aktiv, außer der Nutzer hat es explizit ausgeschaltet
-    var stage = el('div', { class: 'ic-stage' + (tfShowBg ? ' ic-tf-stage-boardbg' : '') });
+    var stage = el('div', { class: 'ic-stage ic-tf-stage' + (tfShowBg ? ' ic-tf-stage-boardbg' : '') });
     var editingRec = state.editingPhotoId ? state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0] : null;
     var hasBoardPos = editingRec && editingRec.canvasw;
     var bgScale = hasBoardPos ? (tf.w / editingRec.canvasw) : 1;
@@ -2568,10 +2593,13 @@
     frame.appendChild(frameResizeHandle);
     function attachFrameResizeHandle(handle, cornerX, cornerY, listenerKey) {
       var dragging = false, startX = 0, startY = 0, startW = 0, startH = 0;
+      var startMarginLeft = 0, startMarginTop = 0;
       function pt(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
       function down(ev) {
         dragging = true; var p = pt(ev);
         startX = p.x; startY = p.y; startW = tf.w; startH = tf.h;
+        startMarginLeft = parseFloat(frame.style.marginLeft) || 0;
+        startMarginTop = parseFloat(frame.style.marginTop) || 0;
         ev.stopPropagation(); ev.preventDefault();
       }
       function move(ev) {
@@ -2582,6 +2610,12 @@
         var newH = state.tfAspectLocked ? Math.max(80, Math.round(newW * (startH / startW))) : Math.max(80, startH + dy);
         tf.w = newW; tf.h = newH;
         frame.style.width = tf.w + 'px'; frame.style.height = tf.h + 'px';
+        // Bei den negativen Ecken (oben-links) wächst der Rahmen zusätzlich
+        // per Margin-Verschiebung visuell von dort aus, wo tatsächlich
+        // gezogen wird, statt stur an der oben-links-Position fixiert zu
+        // bleiben und nur unten-rechts zu wachsen.
+        if (cornerX < 0) { frame.style.marginLeft = (startMarginLeft - (tf.w - startW)) + 'px'; }
+        if (cornerY < 0) { frame.style.marginTop = (startMarginTop - (tf.h - startH)) + 'px'; }
         ev.preventDefault();
       }
       function up() {
@@ -3584,7 +3618,7 @@
         if (!objEl) { return; }
         var isActivePrimary = tf.texts[0] && tf.texts[0].id === active.id;
         objEl.style.cssText += ';' + (wordartCssFor(active, preset.text, isActivePrimary) || ('color:' + (active.color || preset.text) + ';'));
-        if (isActivePrimary) { autoFitPrimaryText(objEl, active, tf.h); }
+        if (isActivePrimary && !state.wordArtMode) { autoFitPrimaryText(objEl, active, tf.h); }
       }
 
       // Formeleditor: Hoch-/Tiefstellen, Bruch, Symbol-Palette - nur im
@@ -4813,22 +4847,7 @@
         }
         else if (state.boardDrawMode) { openLightbox(state.photos.indexOf(p), true); }
         else if (p.wordfielddata) {
-          // Wortfeld: direkt in den Editor springen statt erst die
-          // Lightbox-Galerie zu öffnen - ein Klick weniger für den
-          // häufigen Fall "Textfeld/WordArt bearbeiten".
-          try {
-            state.textFrame = JSON.parse(p.wordfielddata);
-            var tfLoadedDirect = state.textFrame;
-            state.wordArtMode = tfLoadedDirect.isWordArt != null
-              ? !!tfLoadedDirect.isWordArt
-              : tfLoadedDirect.texts.some(function (t) { return (t.wordartStyle && t.wordartStyle !== 'none') || (t.arcStyle && t.arcStyle !== 'none'); });
-            resetTfHistory();
-            state.editingPhotoId = p.id;
-            state.step = 'textframe';
-            render();
-          } catch (e) {
-            openLightbox(state.photos.indexOf(p));
-          }
+          openWordfieldEditorDirectly(p, function () { openLightbox(state.photos.indexOf(p)); });
         }
         else { openLightbox(state.photos.indexOf(p)); }
       });

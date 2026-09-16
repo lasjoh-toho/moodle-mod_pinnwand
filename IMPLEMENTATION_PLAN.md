@@ -3376,3 +3376,29 @@ Einhundertdreizehnter Feedback-Durchgang. Betrifft: `js/app.js`,
   komplette Seite unbrauchbar macht ("nur graue Fläche"). Mit
   escapten Schrägstrichen (`\/`) kann diese Sequenz nicht mehr
   auftreten.
+
+---
+
+## Phase 119 — Direkt-Editor-Sprung in Meine Bilder, blaue Griffe skalieren nicht mehr, Zentrierungs-Bugfix 🔄
+
+Einhundertvierzehnter Feedback-Durchgang. Betrifft: `js/app.js`,
+`styles.css`.
+
+- [x] **Direkt-Editor-Sprung in eine wiederverwendbare Funktion
+  ausgelagert** (`openWordfieldEditorDirectly()`) - jetzt auch in
+  Meine Bilder nutzbar, nicht mehr nur auf der Pinnwand.
+- [x] **Blaue Griffe skalieren nicht mehr**: `reapplyTextStyle()` rief
+  `autoFitPrimaryText` noch unbedingt auf (bei einem früheren Fix
+  übersehen) - jetzt konsequent auf `!state.wordArtMode` beschränkt.
+- [x] **Zentrierungs-Bugfix**: die Editor-Bühne zentrierte den Rahmen
+  bei jeder Größenänderung automatisch neu (Flexbox-Zentrierung) -
+  störte besonders den Griff oben-links. Neue Klasse `.ic-tf-stage`
+  deaktiviert die Zentrierung, Rahmen bekommt stattdessen eine feste
+  Margin-Position, die bei negativen Ecken (oben-links) explizit
+  mitverschoben wird, damit der Rahmen sichtbar von der gezogenen
+  Ecke aus wächst.
+
+**Noch offen**: "Font noch nicht in der Präsentation" (vermutlich
+altes, vor dem letzten Fix gespeichertes Objekt), "Rahmen wird nicht
+korrekt in Meine Dateien übernommen" (Export-Code sieht korrekt aus,
+genaue Ursache noch nicht gefunden).

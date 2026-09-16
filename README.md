@@ -1421,6 +1421,13 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Bilddaten konnten den Skript-Block vorzeitig beenden ("nur graue
   Fläche") - behoben.
 
+### Einhundertsechsundzwanzigste Überarbeitung — Direkt-Editor-Sprung, Griffe-Fixes
+
+- Direkt-Editor-Sprung jetzt auch in Meine Bilder.
+- Blaue Griffe skalieren die Schrift nicht mehr mit.
+- Zentrierungs-Bug behoben, der das Ziehen des Griffs oben-links
+  gestört hat.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
