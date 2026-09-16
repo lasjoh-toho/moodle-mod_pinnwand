@@ -1428,6 +1428,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Zentrierungs-Bug behoben, der das Ziehen des Griffs oben-links
   gestört hat.
 
+### Einhundertsiebenundzwanzigste/-achtzigste Überarbeitung — Positionierungs-Konsistenz, Export-Rand positionsbewusst
+
+- Primäres Textobjekt nutzt jetzt dieselbe Positionierung wie die
+  Pinnwand, Text hängt an der richtigen Beschneidungs-Grenze.
+- Export-Rand-Berechnung grundlegend überarbeitet: positionsbewusst
+  statt symmetrisch, berücksichtigt jetzt auch reine
+  Streckung (ohne Schrägstellung) korrekt.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

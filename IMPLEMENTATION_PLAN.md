@@ -3425,3 +3425,26 @@ Einhundertfünfzehnter Feedback-Durchgang. Betrifft: `js/app.js`.
   meldete "verschiebt jetzt die ganze Pinnwand", genaue Ursache ohne
   Live-Test nicht bestätigt, sicherer Revert auf "primäres Objekt
   nicht direkt verschiebbar".
+
+---
+
+## Phase 121 — computeAutoExportBounds() positionsbewusst statt symmetrisch (externe Analyse) ✅
+
+Einhundertsechzehnter Feedback-Durchgang (basiert auf einer
+detaillierten externen Analyse der Ursache). Betrifft: `js/app.js`.
+
+- [x] **Zwei konkrete Lücken behoben**: (1) ein einziger, symmetrischer
+  Rand um den GANZEN Rahmen ignorierte, dass exzentrisch platzierte
+  (nicht-primäre) WordArt-Objekte ihren Überstand an ihrer
+  TATSÄCHLICHEN Position haben, nicht zentriert um die Rahmenmitte -
+  ein Objekt nah am Rand bekam auf der gegenüberliegenden Seite
+  unnötig Rand, aber auf seiner eigenen Seite zu wenig. (2) die
+  Schätzung für Nicht-Verlauf-Stile nutzte
+  `tan(skewY+rotate)`, was bei reinen Streck-Stilen (skewY=0,
+  rotate=0, aber scaleY bis 1.75, z.B. "Heavy Extrude") `tan(0)=0`
+  ergab - fast kein Rand trotz starker vertikaler Streckung.
+- [x] **Umbau auf positionsbewusste Bounding-Box-Vereinigung**: jedes
+  Textobjekt trägt jetzt eine eigene Box (`union()`) an seiner
+  tatsächlichen Position (`cx`/`cy`) bei, der Gesamtrahmen wächst nur
+  dort, wo es wirklich nötig ist. Vertikale Höhe berücksichtigt jetzt
+  `lineHeight*scaleY` direkt, unabhängig von Schrägstellung/Rotation.

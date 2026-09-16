@@ -2148,27 +2148,50 @@
   }
 
   function computeAutoExportBounds(tf) {
-    var margin = Math.max(30, Math.round(Math.min(tf.w, tf.h) * 0.15));
-    tf.texts.forEach(function (t) {
+    // Statt eines einzigen, symmetrischen Rands um den GANZEN Rahmen wird
+    // pro Textobjekt eine echte Bounding-Box an seiner TATSÄCHLICHEN
+    // Position aufaddiert - ein exzentrisch platziertes, nicht-primäres
+    // WordArt-Objekt nah am Rand bekommt dadurch auf SEINER Seite genug
+    // Rand, statt dass ein symmetrischer Rand auf der Rahmenmitte
+    // zentriert angenommen wird.
+    var eb = { x1: 0, y1: 0, x2: tf.w, y2: tf.h };
+    function union(cx, cy, halfW, halfH) {
+      eb.x1 = Math.min(eb.x1, cx - halfW);
+      eb.y1 = Math.min(eb.y1, cy - halfH);
+      eb.x2 = Math.max(eb.x2, cx + halfW);
+      eb.y2 = Math.max(eb.y2, cy + halfH);
+    }
+    tf.texts.forEach(function (t, idx) {
       if (!t.wordartStyle || t.wordartStyle === 'none') { return; }
       var wStyle = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0] || {};
+      var cx = idx === 0 ? tf.w / 2 : t.x * tf.w;
+      var cy = idx === 0 ? tf.h / 2 : t.y * tf.h;
       if (wStyle.fillGradient) {
         // Exakte Maße aus derselben Funktion nutzen, die auch die
         // eigentliche Darstellung erzeugt - statt einer separaten,
-        // ungenaueren Schätzung, die bei starker Schrägstellung nicht
-        // immer ausreichte.
+        // ungenaueren Schätzung.
         var exactParts = buildWordartGradientParts(t, t.text, resolveFontCss(t.font));
-        if (exactParts) { margin = Math.max(margin, Math.round(Math.max(exactParts.w, exactParts.h) / 2)); }
+        if (exactParts) { union(cx, cy, exactParts.w / 2 + 20, exactParts.h / 2 + 20); }
       } else {
         var skewY = Math.abs(t.skewY != null ? t.skewY : (wStyle.skewY || 0));
         var rotate = Math.abs(t.rotate != null ? t.rotate : (wStyle.rotate || 0));
         var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (wStyle.extrudeSteps || 0);
         var scaleY = t.scaleY != null ? t.scaleY : (wStyle.scaleY || 1);
-        var estimate = t.size * scaleY * (Math.tan((skewY + rotate) * Math.PI / 180) + 0.3) + extrudeSteps * 0.8 + 20;
-        margin = Math.max(margin, Math.round(Math.abs(estimate)));
+        var lineH = t.size * (t.lineHeight || 1.2);
+        // Vertikale Höhe berücksichtigt jetzt lineHeight*scaleY DIREKT,
+        // unabhängig von skewY/rotate - vorher lieferte tan(0)=0 bei
+        // reinen Streck-Stilen (kein Skew/Rotate, aber scaleY bis 1.75)
+        // fast keinen Rand, was zum Abschneiden führte.
+        fitCtx.font = (t.fontWeight || 700) + ' ' + t.size + 'px ' + resolveFontCss(t.font);
+        var textW = Math.max(t.size, fitCtx.measureText(t.text || '').width);
+        var halfH = (lineH * scaleY) / 2 + extrudeSteps * 0.8 + 10;
+        var halfW = (textW + halfH * Math.tan((skewY + rotate) * Math.PI / 180)) / 2 + extrudeSteps * 0.8 + 10;
+        union(cx, cy, halfW, halfH);
       }
     });
-    return { x1: -margin, y1: -margin, x2: tf.w + margin, y2: tf.h + margin };
+    var margin = Math.max(30, Math.round(Math.min(tf.w, tf.h) * 0.15));
+    eb.x1 -= margin; eb.y1 -= margin; eb.x2 += margin; eb.y2 += margin;
+    return eb;
   }
 
   function buildTextFrameSVG(tf) {
