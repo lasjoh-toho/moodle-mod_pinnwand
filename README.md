@@ -1436,6 +1436,12 @@ Details und Scoping-Entscheidungen. In Kurzform:
   statt symmetrisch, berücksichtigt jetzt auch reine
   Streckung (ohne Schrägstellung) korrekt.
 
+### Einhundertneunundzwanzigste Überarbeitung — Rotation vollständig berücksichtigt
+
+- Rotation wurde bisher nur horizontal in die Randberechnung
+  einbezogen, nicht vertikal - "am Ende des Wortes fehlt oben noch
+  ein Stück" behoben.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

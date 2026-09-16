@@ -3448,3 +3448,25 @@ detaillierten externen Analyse der Ursache). Betrifft: `js/app.js`.
   tatsächlichen Position (`cx`/`cy`) bei, der Gesamtrahmen wächst nur
   dort, wo es wirklich nötig ist. Vertikale Höhe berücksichtigt jetzt
   `lineHeight*scaleY` direkt, unabhängig von Schrägstellung/Rotation.
+
+---
+
+## Phase 122 — Rotation korrekt in beide Richtungen berücksichtigt (Bounding-Box eines gedrehten Rechtecks) ✅
+
+Einhundertsiebzehnter Feedback-Durchgang (mit konkreter Test-Export-
+Datei). Betrifft: `js/app.js`.
+
+- [x] **Geometrische Lücke gefunden und behoben**: Rotation wurde in
+  `computeAutoExportBounds()` bisher nur horizontal berücksichtigt
+  (über `tan`), nicht vertikal - bei einer gedrehten Textzeile ragt
+  aber gerade das ENDE der Zeile (die Ecke am Rand) über die reine
+  scaleY-basierte Höhe hinaus. Erklärt "am Ende des Wortes fehlt oben
+  noch ein Stück". Jetzt wird die korrekte Bounding-Box eines um
+  `rotate` gedrehten Rechtecks berechnet
+  (`halfW*|cos|+halfH*|sin|` bzw. umgekehrt für die Höhe),
+  Schrägstellung (Scherung, keine Drehung) bleibt als separater
+  horizontaler Zusatzterm erhalten. Fix in BEIDEN Zweigen angewendet
+  (Verlauf-Stile UND Nicht-Verlauf-Streck-Stile), da
+  `buildWordartGradientParts()`'s eigene w/h-Maße ebenfalls keine
+  Rotation berücksichtigen (die kommt als separate Transformation
+  danach).

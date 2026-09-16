@@ -2169,9 +2169,19 @@
       if (wStyle.fillGradient) {
         // Exakte Maße aus derselben Funktion nutzen, die auch die
         // eigentliche Darstellung erzeugt - statt einer separaten,
-        // ungenaueren Schätzung.
+        // ungenaueren Schätzung. Die dort zurückgegebenen w/h
+        // berücksichtigen aber KEINE Rotation (die kommt als separate
+        // Transformation danach) - deshalb hier zusätzlich die Bounding-
+        // Box des rotierten Rechtecks bilden, sonst ragt gerade das Ende
+        // einer gedrehten Zeile über den berechneten Rand hinaus.
         var exactParts = buildWordartGradientParts(t, t.text, resolveFontCss(t.font));
-        if (exactParts) { union(cx, cy, exactParts.w / 2 + 20, exactParts.h / 2 + 20); }
+        if (exactParts) {
+          var gRotate = t.rotate != null ? t.rotate : (wStyle.rotate || 0);
+          var gRad = gRotate * Math.PI / 180;
+          var gHalfW = exactParts.w / 2 + 20, gHalfH = exactParts.h / 2 + 20;
+          union(cx, cy, gHalfW * Math.abs(Math.cos(gRad)) + gHalfH * Math.abs(Math.sin(gRad)),
+            gHalfW * Math.abs(Math.sin(gRad)) + gHalfH * Math.abs(Math.cos(gRad)));
+        }
       } else {
         var skewY = Math.abs(t.skewY != null ? t.skewY : (wStyle.skewY || 0));
         var rotate = Math.abs(t.rotate != null ? t.rotate : (wStyle.rotate || 0));
@@ -2184,8 +2194,20 @@
         // fast keinen Rand, was zum Abschneiden führte.
         fitCtx.font = (t.fontWeight || 700) + ' ' + t.size + 'px ' + resolveFontCss(t.font);
         var textW = Math.max(t.size, fitCtx.measureText(t.text || '').width);
-        var halfH = (lineH * scaleY) / 2 + extrudeSteps * 0.8 + 10;
-        var halfW = (textW + halfH * Math.tan((skewY + rotate) * Math.PI / 180)) / 2 + extrudeSteps * 0.8 + 10;
+        var baseHalfW = textW / 2 + extrudeSteps * 0.8 + 10;
+        var baseHalfH = (lineH * scaleY) / 2 + extrudeSteps * 0.8 + 10;
+        // Korrekte Bounding-Box eines um "rotate" gedrehten Rechtecks -
+        // vorher wurde Rotation nur horizontal (über tan) berücksichtigt,
+        // wodurch gerade das ENDE einer gedrehten Zeile (obere/untere Ecke
+        // am Rand) über die reine scaleY-Höhe hinausragen konnte, ohne
+        // dass genug Rand vorgesehen war. Schrägstellung (Scherung, keine
+        // Drehung) bleibt als separater horizontaler Zusatzterm erhalten.
+        var rad = rotate * Math.PI / 180;
+        var rotatedHalfW = baseHalfW * Math.abs(Math.cos(rad)) + baseHalfH * Math.abs(Math.sin(rad));
+        var rotatedHalfH = baseHalfW * Math.abs(Math.sin(rad)) + baseHalfH * Math.abs(Math.cos(rad));
+        var skewShift = baseHalfH * Math.tan(skewY * Math.PI / 180);
+        var halfW = rotatedHalfW + Math.abs(skewShift);
+        var halfH = rotatedHalfH;
         union(cx, cy, halfW, halfH);
       }
     });
