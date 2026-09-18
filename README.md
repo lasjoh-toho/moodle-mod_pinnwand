@@ -1442,6 +1442,26 @@ Details und Scoping-Entscheidungen. In Kurzform:
   einbezogen, nicht vertikal - "am Ende des Wortes fehlt oben noch
   ein Stück" behoben.
 
+### Einhundertdreißigste Überarbeitung — Export-Grauflächen-Bugfix, exakte WordArt-Geometrie, Rahmen-Werkzeug entfernt, Präsentations-Überblick
+
+- Standalone-Export zeigte "nur eine graue Fläche": `boardid=0` (erstes
+  Board) wurde durch `!empty()` fälschlich als leer behandelt - behoben.
+- Grundlegende Ursache des Abschneidens bei WordArt gefunden: die
+  Transformationskette wird von rechts nach links angewendet (rotate
+  zuerst, skewY zuletzt) - eine neue gemeinsame Funktion berechnet die
+  Ausdehnung jetzt exakt in dieser Reihenfolge, statt in zwei
+  separaten Näherungen für Pinnwand/Editor und Export.
+- Der bisher unzuverlässige, ziehbare Rahmen im WordArt-Editor wurde
+  entfernt - der Rahmen wird dort jetzt automatisch aus der
+  tatsächlichen Schrift-Ausdehnung berechnet, statt manuell (und ohne
+  verlässliche Wirkung) gesetzt zu werden.
+- Die Präsentation (Plugin wie Standalone-Export) beginnt jetzt immer
+  mit einem Überblick über die ganze Pinnwand, bevor es zu den
+  einzelnen Stationen weitergeht.
+- WordArt-Stationen bekommen beim Heranzoomen in der Präsentation
+  etwas zusätzlichen Platz am oberen Rand, damit die Schrift nicht am
+  Bildschirmrand klebt.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

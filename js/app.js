@@ -1856,6 +1856,51 @@
   // zeigt. SVG-Text mit objectBoundingBox-Verlauf (SVG-Standard)
   // orientiert sich exakt an den sichtbaren Buchstaben, genau wie im
   // Original-Prototyp - deshalb hier natives SVG statt CSS.
+  // Berechnet die exakte halbe Ausdehnung (halfW/halfH) eines WordArt-
+  // Textobjekts NACH Extrusion (asymmetrische Schatten-Kopien nur unten-
+  // rechts) UND der vollständigen Transformationskette (skewY, scaleX,
+  // scaleY, rotate) - eine einzige, gemeinsam genutzte Berechnung für
+  // buildWordartGradientParts() (Board/Editor/Export-SVG) UND
+  // computeAutoExportBounds() (Nicht-Verlauf-Stile), damit beide
+  // garantiert übereinstimmen statt getrennt (und potenziell
+  // unterschiedlich ungenau) zu schätzen.
+  //
+  // WICHTIG zur Transformations-Reihenfolge: sowohl das CSS
+  // "transform: skewY(A) scaleX(B) scaleY(C) rotate(D)" als auch das
+  // äquivalente SVG-<g transform="...">-Pendant wenden die Funktionen
+  // von RECHTS nach LINKS auf einen Punkt an - rotate wirkt also ZUERST
+  // (innen), skewY ZULETZT (außen). Das ist der Reihenfolge im Text
+  // entgegengesetzt und war die Ursache dafür, dass frühere Rand-
+  // Schätzungen bei rotierten UND extrudierten/gestreckten Stilen nicht
+  // ausreichten ("am Ende des Wortes fehlt oben ein Stück").
+  //
+  // Ergebnis ist bewusst symmetrisch (max(|min|,max) je Achse) statt der
+  // tatsächlich asymmetrischen Kontur, damit die aufrufenden Stellen
+  // weiterhin von einer am Anker zentrierten Box ausgehen können
+  // (translate(-50%,-50%) bzw. Box-Mitte bei w/2,h/2) - etwas
+  // großzügiger als nötig, aber ohne jede Konsumentenstelle auf eine
+  // asymmetrische Verankerung umbauen zu müssen.
+  function wordartHalfExtent(halfW, halfH, extrudeOffset, rotateDeg, scaleXVal, scaleYVal, skewYDeg) {
+    var rad = rotateDeg * Math.PI / 180;
+    var tanSkew = Math.tan(skewYDeg * Math.PI / 180);
+    var corners = [
+      [-halfW, -halfH], [halfW + extrudeOffset, -halfH],
+      [-halfW, halfH + extrudeOffset], [halfW + extrudeOffset, halfH + extrudeOffset]
+    ];
+    var maxAbsX = 0, maxAbsY = 0;
+    corners.forEach(function (c) {
+      var x = c[0], y = c[1];
+      var rx = x * Math.cos(rad) - y * Math.sin(rad);
+      var ry = x * Math.sin(rad) + y * Math.cos(rad);
+      ry *= scaleYVal;
+      rx *= scaleXVal;
+      ry += rx * tanSkew;
+      maxAbsX = Math.max(maxAbsX, Math.abs(rx));
+      maxAbsY = Math.max(maxAbsY, Math.abs(ry));
+    });
+    return { halfW: maxAbsX, halfH: maxAbsY };
+  }
+
   function buildWordartGradientParts(t, plainText, fontCss) {
     if (!t.wordartStyle || t.wordartStyle === 'none') { return null; }
     var style = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0];
@@ -1873,8 +1918,14 @@
     fitCtx.font = fontFamily === fontCss ? (fontSize + 'px ' + fontCss) : ('700 ' + fontSize + 'px ' + fontFamily);
     var textWidth = Math.max(10, fitCtx.measureText(plainText || '').width);
     var extrudeOffset = extrudeSteps * 0.8;
-    var pad = fontSize * 0.6 + extrudeOffset + Math.abs(fontSize * scaleY * Math.tan((skewY + skewFromRotY) * Math.PI / 180));
-    var w = textWidth + pad * 2, h = fontSize * 1.5 * scaleY + pad * 2;
+    // Exakte Ausdehnung inkl. Extrusion+Rotation+Skalierung+Schrägstellung
+    // statt der früheren Näherung, die "rotate" komplett ausließ - die
+    // <g>-Transformationskette unten (translate/skewY/scale/rotate/
+    // translate) wendet die Funktionen in genau der Reihenfolge an, die
+    // wordartHalfExtent() nachbildet.
+    var ext = wordartHalfExtent(textWidth / 2, fontSize * 1.5 / 2, extrudeOffset, rotate, scaleX, scaleY, skewY + skewFromRotY);
+    var edgePad = fontSize * 0.15 + 4;
+    var w = ext.halfW * 2 + edgePad * 2, h = ext.halfH * 2 + edgePad * 2;
     var gid = 'wagrad' + (arcIdCounter++);
     var gStops = (WORDART_GRADIENT_SVG_STOPS[t.wordartStyle] || []).map(function (s) {
       return '<stop offset="' + s.offset + '" stop-color="' + s.color + '"/>';
@@ -2147,6 +2198,34 @@
     return outer;
   }
 
+  // Liefert die exakte, transformationsbewusste Ausdehnung EINES
+  // WordArt-Textobjekts (Breite/Höhe des tatsächlich sichtbaren Bereichs
+  // inkl. Extrusion/Schrägstellung/Drehung/Streckung) - gemeinsam genutzt
+  // von computeAutoExportBounds() (Export-Beschneidung) UND vom Editor
+  // selbst (automatische Rahmengröße, siehe renderTextFrame), damit beide
+  // garantiert dieselbe Zahl liefern statt zweier separat gepflegter,
+  // potenziell auseinanderlaufender Schätzungen.
+  function wordartAutoExtent(t) {
+    if (!t.wordartStyle || t.wordartStyle === 'none') { return null; }
+    var fontCss = resolveFontCss(t.font);
+    var gradParts = buildWordartGradientParts(t, t.text, fontCss);
+    if (gradParts) { return { w: gradParts.w, h: gradParts.h }; }
+    var wStyle = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0] || {};
+    var skewY = t.skewY != null ? t.skewY : (wStyle.skewY || 0);
+    var rotate = t.rotate != null ? t.rotate : (wStyle.rotate || 0);
+    var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (wStyle.extrudeSteps || 0);
+    var scaleY = t.scaleY != null ? t.scaleY : (wStyle.scaleY || 1);
+    var rotY = t.rotY || 0;
+    var scaleXVal = Math.cos(rotY * Math.PI / 180);
+    var skewFromRotY = Math.sin(rotY * Math.PI / 180) * 12;
+    var lineH = t.size * (t.lineHeight || 1.2);
+    fitCtx.font = (t.fontWeight || 700) + ' ' + t.size + 'px ' + fontCss;
+    var textW = Math.max(t.size, fitCtx.measureText(t.text || '').width);
+    var ext = wordartHalfExtent(textW / 2, lineH / 2, extrudeSteps * 0.8, rotate, scaleXVal, scaleY, skewY + skewFromRotY);
+    var edgePad = t.size * 0.15 + 4;
+    return { w: ext.halfW * 2 + edgePad * 2, h: ext.halfH * 2 + edgePad * 2 };
+  }
+
   function computeAutoExportBounds(tf) {
     // Statt eines einzigen, symmetrischen Rands um den GANZEN Rahmen wird
     // pro Textobjekt eine echte Bounding-Box an seiner TATSÄCHLICHEN
@@ -2166,50 +2245,12 @@
       var wStyle = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0] || {};
       var cx = idx === 0 ? tf.w / 2 : t.x * tf.w;
       var cy = idx === 0 ? tf.h / 2 : t.y * tf.h;
-      if (wStyle.fillGradient) {
-        // Exakte Maße aus derselben Funktion nutzen, die auch die
-        // eigentliche Darstellung erzeugt - statt einer separaten,
-        // ungenaueren Schätzung. Die dort zurückgegebenen w/h
-        // berücksichtigen aber KEINE Rotation (die kommt als separate
-        // Transformation danach) - deshalb hier zusätzlich die Bounding-
-        // Box des rotierten Rechtecks bilden, sonst ragt gerade das Ende
-        // einer gedrehten Zeile über den berechneten Rand hinaus.
-        var exactParts = buildWordartGradientParts(t, t.text, resolveFontCss(t.font));
-        if (exactParts) {
-          var gRotate = t.rotate != null ? t.rotate : (wStyle.rotate || 0);
-          var gRad = gRotate * Math.PI / 180;
-          var gHalfW = exactParts.w / 2 + 20, gHalfH = exactParts.h / 2 + 20;
-          union(cx, cy, gHalfW * Math.abs(Math.cos(gRad)) + gHalfH * Math.abs(Math.sin(gRad)),
-            gHalfW * Math.abs(Math.sin(gRad)) + gHalfH * Math.abs(Math.cos(gRad)));
-        }
-      } else {
-        var skewY = Math.abs(t.skewY != null ? t.skewY : (wStyle.skewY || 0));
-        var rotate = Math.abs(t.rotate != null ? t.rotate : (wStyle.rotate || 0));
-        var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (wStyle.extrudeSteps || 0);
-        var scaleY = t.scaleY != null ? t.scaleY : (wStyle.scaleY || 1);
-        var lineH = t.size * (t.lineHeight || 1.2);
-        // Vertikale Höhe berücksichtigt jetzt lineHeight*scaleY DIREKT,
-        // unabhängig von skewY/rotate - vorher lieferte tan(0)=0 bei
-        // reinen Streck-Stilen (kein Skew/Rotate, aber scaleY bis 1.75)
-        // fast keinen Rand, was zum Abschneiden führte.
-        fitCtx.font = (t.fontWeight || 700) + ' ' + t.size + 'px ' + resolveFontCss(t.font);
-        var textW = Math.max(t.size, fitCtx.measureText(t.text || '').width);
-        var baseHalfW = textW / 2 + extrudeSteps * 0.8 + 10;
-        var baseHalfH = (lineH * scaleY) / 2 + extrudeSteps * 0.8 + 10;
-        // Korrekte Bounding-Box eines um "rotate" gedrehten Rechtecks -
-        // vorher wurde Rotation nur horizontal (über tan) berücksichtigt,
-        // wodurch gerade das ENDE einer gedrehten Zeile (obere/untere Ecke
-        // am Rand) über die reine scaleY-Höhe hinausragen konnte, ohne
-        // dass genug Rand vorgesehen war. Schrägstellung (Scherung, keine
-        // Drehung) bleibt als separater horizontaler Zusatzterm erhalten.
-        var rad = rotate * Math.PI / 180;
-        var rotatedHalfW = baseHalfW * Math.abs(Math.cos(rad)) + baseHalfH * Math.abs(Math.sin(rad));
-        var rotatedHalfH = baseHalfW * Math.abs(Math.sin(rad)) + baseHalfH * Math.abs(Math.cos(rad));
-        var skewShift = baseHalfH * Math.tan(skewY * Math.PI / 180);
-        var halfW = rotatedHalfW + Math.abs(skewShift);
-        var halfH = rotatedHalfH;
-        union(cx, cy, halfW, halfH);
-      }
+      // Gemeinsame Funktion statt getrennter Gradient-/Nicht-Gradient-
+      // Sonderfälle hier im Export - dieselbe Zahl, die auch der Editor
+      // selbst für die automatische Rahmengröße nutzt (siehe
+      // wordartAutoExtent(), renderTextFrame()).
+      var autoExt = wordartAutoExtent(t);
+      if (autoExt) { union(cx, cy, autoExt.w / 2 + 10, autoExt.h / 2 + 10); }
     });
     var margin = Math.max(30, Math.round(Math.min(tf.w, tf.h) * 0.15));
     eb.x1 -= margin; eb.y1 -= margin; eb.x2 += margin; eb.y2 += margin;
@@ -2497,6 +2538,26 @@
     var tf = state.textFrame;
     TEXTFRAME_FONTS.forEach(function (f) { if (f.webfont) { ensureWebfont(f.webfont); } });
 
+    // WordArt: der frei ziehbare Rahmen (siehe attachFrameResizeHandle
+    // weiter unten) hat sich als nicht verlässlich funktional erwiesen -
+    // er beeinflusste weder das Abschneiden noch etwas anderes Sichtbares
+    // konsistent, weil die eigentliche Kontur längst durch die exakte
+    // WordArt-Geometrie (Extrusion/Schrägstellung/Drehung/Streckung,
+    // siehe wordartAutoExtent) bestimmt wird. Deshalb wird tf.w/tf.h im
+    // WordArt-Modus jetzt bei jedem Rendern automatisch auf genau diese
+    // tatsächliche Ausdehnung gesetzt statt manuell ziehbar zu sein - der
+    // Rahmen zeigt damit immer den echten, verbindlichen Umriss. Das
+    // eigentliche Ziehwerkzeug bleibt für den separat zu planenden
+    // "Zettel"/Längere-Texte-Editor bestehen (dort weiterhin
+    // funktionsfähig, siehe attachFrameResizeHandle-Aufruf unten).
+    if (state.wordArtMode && tf.texts[0]) {
+      var tfAutoExt = wordartAutoExtent(tf.texts[0]);
+      if (tfAutoExt) {
+        tf.w = Math.max(60, Math.round(tfAutoExt.w));
+        tf.h = Math.max(40, Math.round(tfAutoExt.h));
+      }
+    }
+
     // Undo/Redo: erkennt Zustandsänderungen zentral bei jedem Rendern
     // (statt jeden der vielen Änderungs-Punkte im Editor einzeln
     // verdrahten zu müssen) - jede tatsächliche Änderung an tf wird
@@ -2631,11 +2692,13 @@
     // Hauptrahmen-Griff unten-rechts: erweitert den Rahmen OHNE dass
     // sich Text/WordArt dabei bewegt oder mitskaliert - die absolute
     // Pixelposition jedes Objekts bleibt erhalten (normalisierte
-    // Koordinaten werden nachgerechnet). Für die eigentliche Größen-
-    // änderung der Schrift selbst gibt es im WordArt-Modus den
-    // separaten roten Griff oben-rechts (siehe unten).
-    var frameResizeHandle = el('div', { class: 'ic-resize' });
-    frame.appendChild(frameResizeHandle);
+    // Koordinaten werden nachgerechnet). NUR für normale Textrahmen
+    // ("Zettel") - im WordArt-Modus wird der Rahmen jetzt automatisch aus
+    // der tatsächlichen Schrift-Ausdehnung berechnet (siehe oben), ein
+    // manuelles Ziehen hätte dort ohnehin keine verlässliche Wirkung
+    // gehabt und wurde deshalb entfernt statt weiter repariert.
+    var frameResizeHandle = state.wordArtMode ? null : el('div', { class: 'ic-resize' });
+    if (frameResizeHandle) { frame.appendChild(frameResizeHandle); }
     function attachFrameResizeHandle(handle, cornerX, cornerY, listenerKey) {
       var dragging = false, startX = 0, startY = 0, startW = 0, startH = 0;
       var startMarginLeft = 0, startMarginTop = 0;
@@ -2700,61 +2763,29 @@
       window.addEventListener('mouseup', up);
       window.addEventListener('touchend', up);
     }
-    attachFrameResizeHandle(frameResizeHandle, 1, 1, 'tfResizeListeners');
+    if (frameResizeHandle) { attachFrameResizeHandle(frameResizeHandle, 1, 1, 'tfResizeListeners'); }
 
-    // Zweiter Griff oben-links: dieselbe "Rahmen erweitern ohne Text zu
-    // bewegen"-Logik, nur von der linken oberen Ecke aus (cornerX/Y=-1,
-    // also entgegengesetztes Vorzeichen der Mausbewegung).
-    if (state.wordArtMode) {
-      var frameResizeHandleTL = el('div', { class: 'ic-resize ic-resize-tl' });
-      frame.appendChild(frameResizeHandleTL);
-      attachFrameResizeHandle(frameResizeHandleTL, -1, -1, 'tfResizeTlListeners');
-
-      // Dritter Griff oben-rechts (rot): das ist der einzige Griff, der
-      // die Schrift TATSÄCHLICH größer/kleiner macht (automatische
-      // Schriftgrößen-Anpassung) - bewusst von den beiden blauen Griffen
-      // getrennt, die NUR den Rahmen erweitern sollen.
-      var frameResizeHandleTR = el('div', { class: 'ic-resize ic-resize-tr' });
-      frame.appendChild(frameResizeHandleTR);
-      (function () {
-        var draggingTr = false, startXtr = 0, startYtr = 0, startWtr = 0, startHtr = 0;
-        function ptTr(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
-        function downTr(ev) {
-          draggingTr = true; var p = ptTr(ev);
-          startXtr = p.x; startYtr = p.y; startWtr = tf.w; startHtr = tf.h;
-          ev.stopPropagation(); ev.preventDefault();
-        }
-        function moveTr(ev) {
-          if (!draggingTr) { return; }
-          var p = ptTr(ev);
-          tf.w = Math.max(120, startWtr + (p.x - startXtr));
-          tf.h = state.tfAspectLocked ? Math.max(80, Math.round(tf.w * (startHtr / startWtr))) : Math.max(80, startHtr - (p.y - startYtr));
-          frame.style.width = tf.w + 'px'; frame.style.height = tf.h + 'px';
-          ev.preventDefault();
-        }
-        function upTr() {
-          if (!draggingTr) { return; }
-          draggingTr = false;
-          var primaryEl = tf.texts[0] && frame.querySelector('[data-textid="' + tf.texts[0].id + '"]');
-          if (primaryEl) { autoFitPrimaryText(primaryEl, tf.texts[0], tf.h); }
-          render();
-        }
-        if (state.tfResizeTrListeners) {
-          window.removeEventListener('mousemove', state.tfResizeTrListeners.move);
-          window.removeEventListener('touchmove', state.tfResizeTrListeners.move);
-          window.removeEventListener('mouseup', state.tfResizeTrListeners.up);
-          window.removeEventListener('touchend', state.tfResizeTrListeners.up);
-        }
-        state.tfResizeTrListeners = { move: moveTr, up: upTr };
-        frameResizeHandleTR.addEventListener('mousedown', downTr);
-        frameResizeHandleTR.addEventListener('touchstart', downTr, { passive: false });
-        window.addEventListener('mousemove', moveTr);
-        window.addEventListener('touchmove', moveTr, { passive: false });
-        window.addEventListener('mouseup', upTr);
-        window.addEventListener('touchend', upTr);
-      })();
+    // Die früheren zusätzlichen WordArt-Griffe (blau oben-links zum
+    // Rahmen-Erweitern, rot oben-rechts zur Schriftgröße) sind entfallen -
+    // der Rahmen wird dort jetzt automatisch berechnet (siehe oben) und
+    // die Schriftgröße wird bereits über den Größen-Regler im
+    // "Form"-Block gesteuert. Alte, jetzt ungenutzte Fenster-Listener
+    // aus einer vorherigen Render-Runde vorsorglich entfernen, damit
+    // keine toten Referenzen übrig bleiben.
+    if (state.tfResizeTlListeners) {
+      window.removeEventListener('mousemove', state.tfResizeTlListeners.move);
+      window.removeEventListener('touchmove', state.tfResizeTlListeners.move);
+      window.removeEventListener('mouseup', state.tfResizeTlListeners.up);
+      window.removeEventListener('touchend', state.tfResizeTlListeners.up);
+      state.tfResizeTlListeners = null;
     }
-
+    if (state.tfResizeTrListeners) {
+      window.removeEventListener('mousemove', state.tfResizeTrListeners.move);
+      window.removeEventListener('touchmove', state.tfResizeTrListeners.move);
+      window.removeEventListener('mouseup', state.tfResizeTrListeners.up);
+      window.removeEventListener('touchend', state.tfResizeTrListeners.up);
+      state.tfResizeTrListeners = null;
+    }
     var activeId = null;
     function selectText(id) {
       activeId = id;
@@ -6584,7 +6615,7 @@
         });
       }
       canvasEl.appendChild(pEl);
-      photoRecs[p.id] = { el: pEl, z: p.canvasz || 0 };
+      photoRecs[p.id] = { el: pEl, z: p.canvasz || 0, wordart: !!p.wordfielddata };
     });
 
     // Stylus-Anmerkungen des Boards - über den Fotos, damit Linien auch
@@ -6636,15 +6667,24 @@
       // eine grobe Näherung (4:3), damit der erste Zoom nicht völlig daneben
       // liegt.
       var natH = (img.naturalWidth && img.naturalHeight) ? natW * (img.naturalHeight / img.naturalWidth) : natW * 0.75;
+      // Wortfeld/WordArt-Stationen bekommen etwas Puffer NUR am oberen
+      // Rand, damit die Schrift beim Heranzoomen nicht direkt am
+      // Bildschirmrand klebt - der untere Rand bleibt unverändert eng
+      // (Höhe wächst nur nach oben, Mittelpunkt verschiebt sich passend
+      // nach oben mit).
+      var topPad = rec.wordart ? natH * 0.12 : 0;
       var stepData = {
         el: rec.el,
         cx: parseFloat(rec.el.style.left) + natW / 2,
-        cy: parseFloat(rec.el.style.top) + natH / 2,
-        w: natW, h: natH, z: rec.z, rot: 0
+        cy: parseFloat(rec.el.style.top) + natH / 2 - topPad / 2,
+        w: natW, h: natH + topPad, z: rec.z, rot: 0
       };
       if (!img.complete) {
         img.addEventListener('load', function () {
-          stepData.h = natW * (img.naturalHeight / img.naturalWidth);
+          var loadedH = natW * (img.naturalHeight / img.naturalWidth);
+          var loadedTopPad = rec.wordart ? loadedH * 0.12 : 0;
+          stepData.h = loadedH + loadedTopPad;
+          stepData.cy = parseFloat(rec.el.style.top) + loadedH / 2 - loadedTopPad / 2;
           if (steps[currentIdx] === stepData) { goToStep(currentIdx, true); }
         });
       }
@@ -6655,6 +6695,15 @@
       .filter(function (it) { return (it.boardid || 0) === firstBoardId; })
       .map(buildStep)
       .filter(Boolean);
+
+    // Präsentation startet immer mit einem Überblick über die ganze
+    // Pinnwand (falls der Rote Faden nicht selbst schon mit einer
+    // Überblick-Station beginnt) - erst danach folgen die eigentlichen
+    // Stationen. Manuelles Verschieben/Zoomen ist von dort aus bereits
+    // möglich, bevor man zur ersten echten Station weitergeht.
+    if (steps.length && !steps[0].overview) {
+      steps.unshift({ el: null, cx: BOARD_W / 2, cy: BOARD_H / 2, w: BOARD_W, h: BOARD_H, rot: 0, overview: true });
+    }
 
     function targetFor(s) {
       return {

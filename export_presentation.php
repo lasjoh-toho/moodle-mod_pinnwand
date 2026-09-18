@@ -58,6 +58,7 @@ function pinnwand_export_photo_data($photoid, $context, $fs, &$photocache) {
         'canvasw' => (float) $photo->canvasw,
         'canvasrot' => (float) $photo->canvasrot,
         'canvasz' => (int) $photo->canvasz,
+        'iswordart' => !empty($photo->wordfielddata),
     ];
     return $photocache[$photoid] = $result;
 }
@@ -83,9 +84,15 @@ foreach ($items as $it) {
 // platziert sind - für den Hintergrund-Kontext während der Präsentation
 // (nicht nur die Stationen selbst, siehe Verdeckungslogik der Live-
 // Präsentation: Objekte auf niedrigeren Ebenen bleiben sichtbar).
+// WICHTIG: Boards sind 0-indiziert (state.currentBoard startet bei 0
+// im Client) - !empty($it->boardid) hätte jedes Item auf dem ERSTEN
+// Board (boardid=0) fälschlich ausgeschlossen, da PHP 0 als "leer"
+// behandelt. Das führte dazu, dass $boardids in der Praxis meist leer
+// blieb und boardPhotos dadurch leer exportiert wurde ("nur graue
+// Fläche" im Standalone-Export, da der Canvas keine Bild-Ebenen bekam).
 $boardids = [];
 foreach ($items as $it) {
-    if (!empty($it->boardid)) {
+    if ($it->boardid !== null) {
         $boardids[$it->boardid] = true;
     }
 }
@@ -214,7 +221,7 @@ function pinnwand_export_build_html($title, $json) {
     img.src = p.url; img.alt = '';
     pel.appendChild(img);
     canvas.appendChild(pel);
-    photoRecs[p.id] = { el: pel, z: p.canvasz || 0 };
+    photoRecs[p.id] = { el: pel, z: p.canvasz || 0, wordart: !!p.iswordart };
   });
 
   // Stationen (Fotos, Rahmen als reine Zoom-Ziele, Überblick) genau wie
@@ -236,10 +243,30 @@ function pinnwand_export_build_html($title, $json) {
       var natW = it.photo.canvasw;
       var img2 = rec ? rec.el.querySelector('img') : null;
       var natH = (img2 && img2.naturalWidth) ? natW * (img2.naturalHeight / img2.naturalWidth) : natW * 0.75;
-      return { cx: it.photo.canvasx + natW / 2, cy: it.photo.canvasy + natH / 2, w: natW, h: natH, rot: 0, z: it.photo.canvasz || 0 };
+      // Wortfeld/WordArt-Stationen bekommen etwas Puffer NUR am oberen
+      // Rand, damit die Schrift beim Heranzoomen nicht direkt am
+      // Bildschirmrand klebt - der untere Rand bleibt unverändert eng
+      // (Höhe wächst nur nach oben, Mittelpunkt verschiebt sich passend
+      // nach oben, siehe Herleitung: neue Kante oben = alte Kante oben -
+      // topPad, neue Kante unten = alte Kante unten).
+      var topPad = (rec && rec.wordart) ? natH * 0.12 : 0;
+      return {
+        cx: it.photo.canvasx + natW / 2, cy: it.photo.canvasy + natH / 2 - topPad / 2,
+        w: natW, h: natH + topPad, rot: 0, z: it.photo.canvasz || 0
+      };
     }
     return null;
   }).filter(Boolean);
+
+  // Präsentation startet immer mit einem Überblick über die ganze
+  // Pinnwand (falls der Rote Faden nicht selbst schon mit einer
+  // Überblick-Station beginnt) - erst danach folgen die eigentlichen
+  // Stationen. Manuelles Verschieben/Zoomen (siehe weiter unten) ist von
+  // dieser Überblick-Station aus bereits möglich, bevor man mit den
+  // Pfeiltasten/Klicks weiter zur ersten echten Station geht.
+  if (steps.length && !steps[0].overview) {
+    steps.unshift({ cx: (data.boardWidth || 1400) / 2, cy: (data.boardHeight || 1000) / 2, w: data.boardWidth || 1400, h: data.boardHeight || 1000, rot: 0, overview: true });
+  }
 
   function targetFor(s) {
     return { scale: Math.min(window.innerWidth / s.w, window.innerHeight / s.h), cx: s.cx, cy: s.cy, rot: s.rot || 0 };

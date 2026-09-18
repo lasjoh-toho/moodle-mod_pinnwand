@@ -3470,3 +3470,64 @@ Datei). Betrifft: `js/app.js`.
   `buildWordartGradientParts()`'s eigene w/h-Maße ebenfalls keine
   Rotation berücksichtigen (die kommt als separate Transformation
   danach).
+
+
+## Phase 123 — Export-Grauflächen-Bugfix (boardid=0), exakte Transform-Reihenfolge in der WordArt-Geometrie, Rahmen-Werkzeug für WordArt entfernt, Präsentation startet mit Überblick + Padding ✅
+
+Betrifft: `export_presentation.php`, `js/app.js`.
+
+- [x] **Root Cause des "nur graue Fläche"-Exports gefunden und behoben**:
+  `!empty($it->boardid)` behandelt `boardid=0` (das ERSTE Board, da
+  0-indiziert im Client) als "leer" - dadurch blieben alle Items auf
+  dem ersten Board beim Sammeln der `$boardids` fälschlich außen vor,
+  `$boardphotos` blieb praktisch immer leer. Fix: `$it->boardid !==
+  null` statt `!empty(...)`. Verifiziert mit echter, vom Nutzer
+  hochgeladener Export-Datei (`Test-praesentation.html`) in echtem
+  Headless-Chromium (Playwright): 16 Bild-Ebenen bauen sich jetzt
+  korrekt auf.
+- [x] **Tieferliegende Ursache des Abschneidens gefunden**: Die CSS/SVG-
+  Transformationskette `skewY() scaleX() scaleY() rotate()` wird von
+  rechts nach links auf einen Punkt angewendet (rotate zuerst/innen,
+  skewY zuletzt/außen) - eine unintuitive, aber exakte Regel. Sowohl
+  `computeAutoExportBounds()` (nur beim Export) als auch
+  `buildWordartGradientParts()` (die Basisfunktion, die AUCH die
+  Pinnwand- und Editor-Vorschau bestimmt) hatten Näherungen, die diese
+  Reihenfolge nicht exakt nachbildeten. Neue gemeinsame Funktion
+  `wordartHalfExtent()` berechnet die Ausdehnung exakt über eine
+  4-Eck-Transformation in der korrekten Reihenfolge; eine weitere neue
+  Funktion `wordartAutoExtent()` bündelt Gradient- und
+  Nicht-Gradient-Fall in einer einzigen Stelle, die jetzt sowohl von
+  `computeAutoExportBounds()` als auch vom Editor selbst (siehe
+  nächster Punkt) genutzt wird - verhindert genau die Art von
+  Auseinanderlaufen zwischen Pinnwand/Editor/Export, die sich durch
+  dieses Projekt gezogen hat.
+- [x] **Nicht-funktionaler Rahmen-Griff im WordArt-Editor entfernt**: Der
+  Nutzer bestätigte, dass das manuelle Ziehen des Rahmens im
+  WordArt-Modus keine verlässliche Wirkung auf das Abschneiden hatte -
+  folgerichtig, da die tatsächliche Kontur längst durch die exakte
+  WordArt-Geometrie bestimmt wird, nicht durch `tf.w`/`tf.h`. Alle drei
+  Griffe (blau unten-rechts, blau oben-links, rot oben-rechts) wurden
+  für den WordArt-Modus entfernt; `tf.w`/`tf.h` werden dort jetzt bei
+  jedem Rendern automatisch aus `wordartAutoExtent()` gesetzt, sodass
+  der angezeigte Rahmen IMMER dem tatsächlichen, verbindlichen Umriss
+  entspricht. Für normale Textrahmen ("Zettel") bleibt der eine
+  bisherige Griff unverändert funktionsfähig - jenes Werkzeug muss für
+  den separat geplanten Zettel-Editor ohnehin noch einmal grundlegend
+  überarbeitet werden und wurde hier bewusst nicht angefasst.
+- [x] **Präsentation startet jetzt immer mit einem Überblick**: Sowohl im
+  Plugin selbst (`openPresentation()`) als auch im Standalone-Export
+  wird - falls der Rote Faden nicht bereits selbst mit einer
+  Überblick-Station beginnt - automatisch eine synthetische
+  Überblick-Station vorangestellt (ganze Pinnwand sichtbar). Manuelles
+  Verschieben/Zoomen war an dieser Stelle bereits vorhanden (Drag zum
+  Verschieben, Mausrad zum Zoomen) und funktioniert von dort aus direkt
+  weiter zur ersten echten Station.
+- [x] **Padding am oberen Rand für WordArt-Stationen in der
+  Präsentation**: Anhand des bereits vorhandenen `wordfielddata`-Felds
+  (client- wie serverseitig, keine Schemaänderung nötig) wird eine
+  Station als WordArt/Wortfeld erkannt. Die Kamera-Rahmung bekommt für
+  solche Stationen zusätzlichen Platz NUR am oberen Rand (unterer Rand
+  bleibt unverändert eng), damit die Schrift beim Heranzoomen nicht
+  direkt am Bildschirmrand klebt. Verifiziert mit einer synthetischen
+  Testdatei in echtem Headless-Chromium: sichtbarer dunkler Rand oben,
+  kein Rand unten.
