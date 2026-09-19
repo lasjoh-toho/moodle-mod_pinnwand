@@ -286,29 +286,49 @@ function pinnwand_export_build_html($title, $json) {
   .ph img{width:100%;display:block;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.5);}
   .ph.wordart img{border-radius:0;box-shadow:none;}
   .ph.occluded{opacity:0;pointer-events:none;}
-  #hint{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(0,0,0,.55);
+  #hint{position:fixed;top:16px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(0,0,0,.55);
     padding:6px 16px;border-radius:20px;font-size:.85rem;z-index:20;pointer-events:none;}
-  /* Zähler + Zurück-/Vorwärts-Pfeil unten mittig, dieselbe Anordnung wie
-     die Präsentation im Plugin selbst (siehe .ic-present-bottombar). */
-  #bottombar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;
-    display:flex;align-items:center;gap:14px;}
-  #counter{color:#fff;background:rgba(0,0,0,.55);padding:6px 16px;border-radius:20px;font-size:.85rem;
-    cursor:pointer;user-select:none;white-space:nowrap;}
-  #counter:hover{background:rgba(0,0,0,.75);}
-  .navbtn{width:44px;height:44px;border-radius:50%;background:rgba(20,21,24,.7);color:#fff;border:none;
-    font-size:1.3rem;cursor:pointer;flex:0 0 auto;}
-  /* Gestapelte Fortschrittsanzeige über der Zähler-Zeile - siehe
-     .ic-present-stack in styles.css: kommende Stationen als Kartenstapel,
-     letzte Station ganz oben, bereits gezeigte verschmelzen zu einer
-     flachen Ablage direkt über dem Zähler. */
-  #stack{position:fixed;left:50%;bottom:62px;transform:translateX(-50%);z-index:20;
-    display:flex;flex-direction:column;align-items:center;pointer-events:none;}
-  .stackseg{width:130px;border-radius:2px;background:rgba(255,255,255,.28);pointer-events:auto;
-    cursor:pointer;transition:background .15s ease;}
-  .stackseg:hover{background:rgba(255,255,255,.5);}
-  .stackseg.stacklast{background:#4f8cff;}
-  .stackseg.stacklast:hover{background:#4f8cff;opacity:.85;}
-  .stackplayed{width:130px;height:6px;border-radius:2px;background:rgba(255,255,255,.08);}
+  /* Bedienelemente (Zurück/Vorwärts) OHNE grauen Kasten/Rand - nur ein
+     kleiner Weichzeichner (blur) des Hintergrunds dahinter plus eine
+     kontrastreiche Symbolfarbe (weiß mit dunklem Schlagschatten) heben
+     sie hervor, egal was dahinter liegt. */
+  #progress{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;
+    display:flex;flex-direction:column;align-items:center;}
+  #progresshint{color:rgba(255,255,255,.55);font-size:.7rem;text-align:center;margin-bottom:4px;
+    text-shadow:0 1px 3px rgba(0,0,0,.7);pointer-events:none;}
+  #bottombar{display:flex;align-items:center;gap:14px;}
+  #counter{color:#fff;background:rgba(255,255,255,.08);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    padding:6px 16px;border-radius:20px;font-size:.85rem;cursor:pointer;user-select:none;white-space:nowrap;
+    text-shadow:0 1px 3px rgba(0,0,0,.85),0 0 8px rgba(0,0,0,.5);transition:background .15s ease;}
+  #counter:hover{background:rgba(255,255,255,.18);}
+  .navbtn{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.08);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;border:none;
+    text-shadow:0 1px 3px rgba(0,0,0,.85),0 0 8px rgba(0,0,0,.5);
+    font-size:1.3rem;cursor:pointer;flex:0 0 auto;transition:background .15s ease;}
+  .navbtn:hover{background:rgba(255,255,255,.18);}
+  /* Gestapelte Fortschrittsanzeige - standardmäßig unsichtbar, erscheint
+     erst bei Hover über den ganzen Bedienbereich (#progress:hover), zeigt
+     dann ALLE Stationen (nicht nur kommende - auch Rücksprünge möglich),
+     die letzte Station ganz oben. Bereits gezeigte bleiben matt. */
+  #stack{display:flex;flex-direction:column;align-items:center;
+    opacity:0;max-height:0;overflow:hidden;pointer-events:none;transition:opacity .15s ease;}
+  #progress:hover #stack{opacity:1;max-height:60vh;pointer-events:auto;margin-bottom:8px;}
+  .stackseg{width:130px;border-radius:2px;background:rgba(255,255,255,.32);pointer-events:auto;
+    cursor:pointer;transition:background .15s ease,transform .1s ease;}
+  .stackseg:hover{background:rgba(255,255,255,.85);transform:scaleX(1.04);}
+  .stackseg.stackplayed{background:rgba(255,255,255,.12);}
+  .stackseg.stackplayed:hover{background:rgba(255,255,255,.4);}
+  .stackseg.stackcurrent{background:#4f8cff;}
+  .stackseg.stacklast{box-shadow:0 0 0 1px rgba(255,255,255,.6) inset;}
+  /* Vorschau-Kachel beim Durchhovern - immer an derselben Bildschirm-
+     position, wie ein Daumenkino durchfahrbar. */
+  #stackpreview{position:fixed;left:50%;bottom:130px;transform:translateX(-50%);
+    width:220px;height:150px;border-radius:8px;z-index:21;
+    background:rgba(20,21,24,.85) center/cover no-repeat;
+    box-shadow:0 8px 28px rgba(0,0,0,.55);opacity:0;transition:opacity .1s ease;
+    pointer-events:none;display:flex;align-items:center;justify-content:center;
+    color:rgba(255,255,255,.7);font-size:.8rem;text-align:center;padding:8px;box-sizing:border-box;}
+  #stackpreview.visible{opacity:1;}
   .navzone{position:fixed;top:0;bottom:0;width:16%;z-index:15;cursor:pointer;background:transparent;border:none;}
   .navzone.prev{left:0;} .navzone.next{right:0;}
 </style>
@@ -317,11 +337,15 @@ function pinnwand_export_build_html($title, $json) {
 <div id="stage">
   <div id="canvas"></div>
 </div>
-<div id="stack"></div>
-<div id="bottombar">
-  <button class="navbtn" id="prevbtn" aria-label="Zur&uuml;ck">&#8249;</button>
-  <div id="counter"></div>
-  <button class="navbtn" id="nextbtn" aria-label="Weiter">&#8250;</button>
+<div id="stackpreview"></div>
+<div id="progress">
+  <div id="stack"></div>
+  <div id="progresshint">&#8963;</div>
+  <div id="bottombar">
+    <button class="navbtn" id="prevbtn" aria-label="Zur&uuml;ck">&#8249;</button>
+    <div id="counter"></div>
+    <button class="navbtn" id="nextbtn" aria-label="Weiter">&#8250;</button>
+  </div>
 </div>
 <div id="hint">&#8592; &#8594; oder Leertaste zum Navigieren, Klick au&szlig;erhalb zum Verschieben, Mausrad zum Zoomen</div>
 <button class="navzone prev" aria-label="Zur&uuml;ck"></button>
@@ -337,6 +361,8 @@ function pinnwand_export_build_html($title, $json) {
   var counter = document.getElementById('counter');
   var hint = document.getElementById('hint');
   var stackEl = document.getElementById('stack');
+  var previewEl = document.getElementById('stackpreview');
+  var progressEl = document.getElementById('progress');
   var prevBtn = document.getElementById('prevbtn');
   var nextBtn = document.getElementById('nextbtn');
 
@@ -407,7 +433,7 @@ function pinnwand_export_build_html($title, $json) {
     if (it.itemtype === 'frame') {
       return {
         cx: it.framex + it.framew / 2, cy: it.framey + it.frameh / 2,
-        w: it.framew, h: it.frameh, rot: -(it.framerot || 0), z: 0
+        w: it.framew, h: it.frameh, rot: -(it.framerot || 0), z: 0, frame: true
       };
     }
     if (it.photo) {
@@ -424,7 +450,8 @@ function pinnwand_export_build_html($title, $json) {
       var topPad = (rec && rec.wordart) ? natH * 0.12 : 0;
       return {
         cx: it.photo.canvasx + natW / 2, cy: it.photo.canvasy + natH / 2 - topPad / 2,
-        w: natW, h: natH + topPad, rot: 0, z: it.photo.canvasz || 0
+        w: natW, h: natH + topPad, rot: 0, z: it.photo.canvasz || 0,
+        url: img2 ? img2.src : null
       };
     }
     return null;
@@ -502,30 +529,50 @@ function pinnwand_export_build_html($title, $json) {
     });
   }
 
-  // Gestapelte Fortschrittsanzeige über der Zähler-Zeile: alle noch
-  // kommenden Stationen als Kartenstapel, die LETZTE Station ganz oben
-  // (am weitesten von der Zähler-Zeile entfernt), darunter der Reihe nach
-  // die noch folgenden; bereits gezeigte Stationen verschmelzen zu einer
-  // einzigen flachen Ablage direkt über dem Zähler. Klick auf eine
-  // einzelne Karte springt direkt dorthin - siehe .ic-present-stack im
-  // Plugin selbst (dieselbe Darstellung).
+  // Vorschau-Kachel beim Durchhovern des Stapels - immer an derselben
+  // Bildschirmposition, unabhängig davon, welche Karte gerade gehovert
+  // wird (Daumenkino-Effekt).
+  function showPreview(s) {
+    if (s.url) {
+      previewEl.style.backgroundImage = "url('" + s.url + "')";
+      previewEl.textContent = '';
+    } else {
+      previewEl.style.backgroundImage = 'none';
+      previewEl.textContent = s.overview ? 'Übersicht' : (s.frame ? 'Rahmen' : '');
+    }
+    previewEl.classList.add('visible');
+  }
+  function hidePreview() { previewEl.classList.remove('visible'); }
+  progressEl.addEventListener('mouseleave', hidePreview);
+
+  // Gestapelte Fortschrittsanzeige, standardmäßig unsichtbar (siehe
+  // #progress:hover in <style>) - bei Hover über den Bedienbereich
+  // erscheint sie vollständig mit ALLEN Stationen (nicht nur kommenden -
+  // auch Rücksprünge sind so möglich), die LETZTE Station ganz oben.
+  // Bereits gezeigte Stationen bleiben matt, die aktuelle ist
+  // hervorgehoben. Hover über eine Karte zeigt deren Vorschau, Klick
+  // springt direkt dorthin - siehe .ic-present-stack im Plugin selbst
+  // (dieselbe Darstellung).
   function renderStack() {
     stackEl.innerHTML = '';
-    var upcoming = [];
-    for (var si = steps.length - 1; si > idx; si--) { upcoming.push(si); }
-    var segH = Math.max(2, Math.min(5, Math.floor(110 / Math.max(1, upcoming.length))));
+    var segH = Math.max(2, Math.min(6, Math.floor(320 / Math.max(1, steps.length))));
     var gap = segH >= 4 ? 2 : 1;
-    upcoming.forEach(function (si) {
-      var seg = document.createElement('div');
-      seg.className = 'stackseg' + (si === steps.length - 1 ? ' stacklast' : '');
-      seg.style.height = segH + 'px';
-      seg.style.marginBottom = gap + 'px';
-      seg.addEventListener('click', function () { goToStep(si); });
-      stackEl.appendChild(seg);
-    });
-    var played = document.createElement('div');
-    played.className = 'stackplayed';
-    stackEl.appendChild(played);
+    for (var si = steps.length - 1; si >= 0; si--) {
+      (function (si) {
+        var cls = 'stackseg';
+        if (si === steps.length - 1) { cls += ' stacklast'; }
+        if (si === idx) { cls += ' stackcurrent'; }
+        else if (si < idx) { cls += ' stackplayed'; }
+        var seg = document.createElement('div');
+        seg.className = cls;
+        seg.style.height = segH + 'px';
+        seg.style.marginBottom = gap + 'px';
+        seg.addEventListener('click', function () { goToStep(si); });
+        seg.addEventListener('mouseenter', function () { showPreview(steps[si]); });
+        seg.addEventListener('mouseleave', hidePreview);
+        stackEl.appendChild(seg);
+      })(si);
+    }
   }
 
   var idx = 0;

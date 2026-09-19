@@ -3608,3 +3608,54 @@ Betrifft: `export_presentation.php`, `js/app.js`, `styles.css`.
   Mit synthetischem Mehr-Stationen-Testfall in Headless-Chromium
   verifiziert (Zähler, Stapelgröße je Schritt, Klick-auf-Zähler→Übersicht,
   Vor-/Zurück-Buttons - alle korrekt, keine Konsolenfehler).
+
+## Phase 126 — Bedienelemente ohne grauen Kasten (Blur+Kontrast statt Fläche), Stapel nur bei Hover (alle Stationen, mit Vorschau-Kachel)
+
+Betrifft: `export_presentation.php`, `js/app.js`, `styles.css`, `view.php`,
+`lang/de/pinnwand.php`, `lang/en/pinnwand.php`.
+
+- [x] **Hintergrundfarbe erneut geprüft (3. Meldung)**: Diesmal mit drei
+  unabhängigen Methoden erneut verifiziert - (a) `pinnwand_export_background_data()`
+  isoliert mit einem echten PHP-Interpreter (nicht nur Playwright) gegen
+  eine simulierte gespeicherte Präferenz ausgeführt, korrektes Ergebnis;
+  (b) reine Farbe testweise mit `#ff3300`/`#113355` in Headless-Chromium
+  gerendert, korrekt; (c) Bild-Hintergrund mit "Füllen" (contain) UND
+  deutlich abweichender Buchstabenfarbe für die Ränder (Letterbox)
+  getestet - auch dort korrekt. Kein Bug im Code gefunden, weder in
+  `pinnwand_export_background_data()`/`get_background_data()` noch im
+  clientseitigen `applyBackground()` (Board, Textfeld-Editor, Präsentation,
+  Export nutzen alle dieselbe Funktion/Logik). Verdacht: entweder ein
+  Server-/Browser-Cache-Effekt oder ein noch nicht identifiziertes
+  Detail, das sich nur mit echten Live-Daten reproduzieren lässt -
+  Rückfrage an Jo gestellt, wo genau (Board/Präsentation/Export) und was
+  genau zu sehen ist.
+- [x] **Bedienelemente ohne grauen Kasten/Rand**: Schließen-/Zurück-/
+  Vorwärts-Button (`.ic-present-close`, `.ic-present-nav` im Plugin,
+  `.navbtn` im Export) sowie der Zähler (`.ic-present-counter`/`#counter`)
+  hatten bisher eine feste graue Fläche (`rgba(20,21,24,.7)` bzw.
+  `rgba(0,0,0,.55)`). Jetzt: nur noch ein leichter Weichzeichner
+  (`backdrop-filter: blur(6px)`) des tatsächlichen Hintergrunds dahinter
+  plus kontrastreiche weiße Schrift/Symbolfarbe mit dunklem Schlagschatten
+  - dadurch bleiben sie vor JEDEM Hintergrund (dunkel, hell, Foto) lesbar,
+  ohne als eigener grauer Kasten zu wirken.
+- [x] **Stapel nur bei Hover, dann vollständig (auch Rücksprünge
+  möglich)**: Der Kartenstapel ist jetzt standardmäßig unsichtbar
+  (`opacity:0; max-height:0`) und erscheint erst, wenn die Maus über den
+  gesamten Bedienbereich (`.ic-present-progress`/`#progress`) fährt - ein
+  kleines "⌃"-Symbol über dem Zähler dient als stille Erinnerung, dass dort
+  mehr zu finden ist. Bei Hover zeigt der Stapel jetzt ALLE Stationen
+  (vorher nur die noch kommenden) - bereits gezeigte bleiben matt
+  (`.ic-present-stack-played`), die aktuelle ist hervorgehoben
+  (`.ic-present-stack-current`), damit auch rückwärts direkt an eine
+  frühere Station gesprungen werden kann.
+- [x] **Vorschau-Kachel beim Durchhovern**: Neue fest positionierte Kachel
+  (`.ic-present-stack-preview`/`#stackpreview`, immer an derselben
+  Bildschirmstelle über dem Stapel) zeigt beim Hovern einer einzelnen
+  Karte deren Vorschaubild (Foto-Stationen) bzw. einen Textplatzhalter
+  ("Übersicht"/"Rahmen" - neue Sprachstrings `present_overview`/
+  `present_frame`) - dadurch lässt sich der Stapel wie ein Daumenkino
+  durchfahren, ohne die Kamera tatsächlich zu bewegen. Identische
+  Umsetzung in Live-Präsentation und Export, mit Playwright verifiziert
+  (Stapel standardmäßig unsichtbar, bei Hover alle 5 synthetischen
+  Stationen sichtbar, Vorschau-Kachel erscheint korrekt, Button-Hintergrund
+  jetzt teiltransparent mit `backdrop-filter` statt grauer Fläche).

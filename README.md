@@ -1492,6 +1492,24 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Stationen als Kartenstapel (letzte Station ganz oben), bereits gezeigte
   verschmelzen zu einer flachen Ablage.
 
+### Einhundertdreiunddreißigste Überarbeitung — Bedienelemente ohne grauen Kasten, Stapel nur bei Hover mit Vorschau
+
+- Schließen-/Zurück-/Vorwärts-Button und Zähler haben keinen grauen
+  Kasten/Rand mehr, sondern nur noch einen leichten Weichzeichner
+  (Blur) des Hintergrunds dahinter plus kontrastreiche weiße Schrift/
+  Symbolfarbe - bleiben so vor jedem Hintergrund lesbar.
+- Der Kartenstapel ist jetzt standardmäßig unsichtbar und erscheint erst
+  bei Hover über den Bedienbereich - dann mit ALLEN Stationen (nicht nur
+  kommenden), damit auch rückwärts gesprungen werden kann. Bereits
+  gezeigte Stationen bleiben matt, die aktuelle ist hervorgehoben.
+- Neue Vorschau-Kachel: beim Durchhovern des Stapels erscheint an
+  fester Bildschirmposition eine Vorschau der jeweiligen Station (Foto
+  bzw. Textplatzhalter bei Rahmen/Übersicht) - wie ein Daumenkino.
+- Hintergrundfarbe wurde ein drittes Mal mit mehreren unabhängigen
+  Methoden geprüft (echter PHP-Interpreter, mehrere Playwright-Tests
+  inkl. Bild-Letterbox) - kein Bug im Code gefunden. Rückfrage an Jo
+  gestellt, wo genau sie noch fehlt.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -6988,39 +6988,73 @@
     counterEl.addEventListener('click', function () { goToStep(overviewIdx); });
     var bottomBar = el('div', { class: 'ic-present-bottombar' }, [prevBtn, counterEl, nextBtn]);
 
-    // Gestapelte Fortschrittsanzeige über der Zähler-Zeile: alle noch
-    // kommenden Stationen liegen wie ein Kartenstapel übereinander - die
-    // LETZTE Station ganz oben (am weitesten von der Zähler-Zeile weg),
-    // darunter der Reihe nach die noch folgenden; die bereits gezeigten
-    // Stationen verschmelzen zu einer einzigen, flachen Ablage direkt über
-    // der Zähler-Zeile ("darunter die abgespielten"). Klick auf eine
-    // einzelne Karte springt direkt dorthin.
+    // Vorschau-Kachel beim Durchhovern des Stapels - immer an derselben
+    // Bildschirmposition (siehe .ic-present-stack-preview), damit man den
+    // Stapel wie ein Daumenkino durchfahren kann.
+    var previewEl = el('div', { class: 'ic-present-stack-preview' });
+    function stepPreviewLabel(s) {
+      if (s.overview) { return S.present_overview || 'Übersicht'; }
+      if (s.frame) { return S.present_frame || 'Rahmen'; }
+      return '';
+    }
+    function showPreview(s) {
+      var img = s.el ? s.el.querySelector('img') : null;
+      if (img && img.src) {
+        previewEl.style.backgroundImage = 'url(' + img.src + ')';
+        previewEl.textContent = '';
+      } else {
+        previewEl.style.backgroundImage = 'none';
+        previewEl.textContent = stepPreviewLabel(s);
+      }
+      previewEl.classList.add('visible');
+    }
+    function hidePreview() { previewEl.classList.remove('visible'); }
+
+    // Gestapelte Fortschrittsanzeige, standardmäßig unsichtbar (siehe
+    // .ic-present-progress:hover in styles.css) - bei Hover über den
+    // Bedienbereich erscheint sie vollständig mit ALLEN Stationen (nicht
+    // nur den kommenden, damit auch zurückgesprungen werden kann), die
+    // LETZTE Station ganz oben. Bereits gezeigte Stationen bleiben matt,
+    // die aktuelle ist hervorgehoben. Hover über eine einzelne Karte zeigt
+    // deren Vorschau, Klick springt direkt dorthin.
     var stackEl = el('div', { class: 'ic-present-stack' });
     function renderStack() {
       stackEl.innerHTML = '';
-      var upcoming = [];
-      for (var si = steps.length - 1; si > currentIdx; si--) { upcoming.push(si); }
-      // Kartenhöhe schrumpft automatisch, wenn viele Stationen übrig sind,
-      // damit der Stapel nie über einen sinnvollen Bildschirmanteil hinauswächst.
-      var segH = Math.max(2, Math.min(5, Math.floor(110 / Math.max(1, upcoming.length))));
+      // Kartenhöhe schrumpft automatisch bei vielen Stationen, damit der
+      // Stapel nie über einen sinnvollen Bildschirmanteil hinauswächst.
+      var segH = Math.max(2, Math.min(6, Math.floor(320 / Math.max(1, steps.length))));
       var gap = segH >= 4 ? 2 : 1;
-      upcoming.forEach(function (si) {
-        var seg = el('div', { class: 'ic-present-stack-seg' + (si === steps.length - 1 ? ' ic-present-stack-last' : '') });
-        seg.style.height = segH + 'px';
-        seg.style.marginBottom = gap + 'px';
-        seg.addEventListener('click', function () { goToStep(si); });
-        stackEl.appendChild(seg);
-      });
-      stackEl.appendChild(el('div', { class: 'ic-present-stack-played' }));
+      for (var si = steps.length - 1; si >= 0; si--) {
+        (function (si) {
+          var cls = 'ic-present-stack-seg';
+          if (si === steps.length - 1) { cls += ' ic-present-stack-last'; }
+          if (si === currentIdx) { cls += ' ic-present-stack-current'; }
+          else if (si < currentIdx) { cls += ' ic-present-stack-played'; }
+          var seg = el('div', { class: cls });
+          seg.style.height = segH + 'px';
+          seg.style.marginBottom = gap + 'px';
+          seg.addEventListener('click', function () { goToStep(si); });
+          seg.addEventListener('mouseenter', function () { showPreview(steps[si]); });
+          seg.addEventListener('mouseleave', hidePreview);
+          stackEl.appendChild(seg);
+        })(si);
+      }
     }
     function updateCounter() {
       counterEl.textContent = (currentIdx + 1) + ' / ' + steps.length;
       renderStack();
     }
 
+    var progressEl = el('div', { class: 'ic-present-progress' }, [
+      stackEl,
+      el('div', { class: 'ic-present-progress-hint' }, ['⌃']),
+      bottomBar
+    ]);
+    progressEl.addEventListener('mouseleave', hidePreview);
+
     overlay.appendChild(closeBtn);
-    overlay.appendChild(stackEl);
-    overlay.appendChild(bottomBar);
+    overlay.appendChild(previewEl);
+    overlay.appendChild(progressEl);
     document.body.appendChild(overlay);
 
     if (steps.length > 0) {

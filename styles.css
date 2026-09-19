@@ -534,44 +534,82 @@
 .ic-present-step-frame {
   position: absolute; box-sizing: border-box;
 }
+/* Bedienelemente (Schließen, Zurück/Vorwärts) tragen bewusst KEINEN
+   grauen Kasten/Rand mehr - nur ein kleiner Weichzeichner (blur) des
+   Hintergrunds dahinter plus eine kontrastreiche Symbolfarbe (weißes
+   Symbol mit dunklem Schlagschatten) heben sie hervor, unabhängig davon,
+   was gerade dahinter liegt (dunkler/heller Hintergrund, Foto, Text). */
+.ic-present-close, .ic-present-nav {
+  background: rgba(255,255,255,.08);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  border: none; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.85), 0 0 8px rgba(0,0,0,.5);
+  transition: background .15s ease;
+}
+.ic-present-close:hover, .ic-present-nav:hover { background: rgba(255,255,255,.18); }
 .ic-present-close {
   position: fixed; top: 16px; right: 16px; z-index: 10001; width: 40px; height: 40px;
-  border-radius: 50%; background: rgba(20,21,24,.7);
+  border-radius: 50%;
 }
 /* Zurück-/Vorwärts-Pfeil sitzen jetzt zusammen mit der Zähler-Anzeige
    unten mittig (.ic-present-bottombar), nicht mehr freistehend an den
    Bildschirmrändern - die Größe (44px, rund) bleibt unverändert. */
 .ic-present-nav {
-  position: static; width: 44px; height: 44px; border-radius: 50%; background: rgba(20,21,24,.7);
+  position: static; width: 44px; height: 44px; border-radius: 50%;
   flex: 0 0 auto;
 }
-.ic-present-bottombar {
+/* Gemeinsamer Hover-Bereich: Zähler-Zeile bleibt immer sichtbar, der
+   Kartenstapel darüber blendet sich erst ein, sobald man mit der Maus in
+   diesen Bereich kommt (Zähler-Zeile ODER bereits eingeblendeten Stapel) -
+   dadurch bleibt der Blick auf die Pinnwand standardmäßig frei. */
+.ic-present-progress {
   position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 10001;
-  display: flex; align-items: center; gap: 14px;
+  display: flex; flex-direction: column; align-items: center;
 }
+.ic-present-progress-hint {
+  color: rgba(255,255,255,.55); font-size: .7rem; text-align: center; margin-bottom: 4px;
+  text-shadow: 0 1px 3px rgba(0,0,0,.7); pointer-events: none;
+}
+.ic-present-bottombar { display: flex; align-items: center; gap: 14px; }
 .ic-present-counter {
-  color: #fff; background: rgba(0,0,0,.55); padding: 6px 16px; border-radius: 20px;
-  font-size: .85rem; cursor: pointer; user-select: none; white-space: nowrap;
+  color: #fff; background: rgba(255,255,255,.08); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  padding: 6px 16px; border-radius: 20px; text-shadow: 0 1px 3px rgba(0,0,0,.85), 0 0 8px rgba(0,0,0,.5);
+  font-size: .85rem; cursor: pointer; user-select: none; white-space: nowrap; transition: background .15s ease;
 }
-.ic-present-counter:hover { background: rgba(0,0,0,.75); }
-/* Gestapelte Fortschrittsanzeige direkt über der Zähler-Zeile - noch
-   kommende Stationen als schmale, übereinandergelegte Karten (die letzte
-   Station ganz oben), bereits gezeigte Stationen verschmelzen zu einer
-   einzigen flachen Ablage direkt über dem Zähler. */
+.ic-present-counter:hover { background: rgba(255,255,255,.18); }
+/* Gestapelte Fortschrittsanzeige über der Zähler-Zeile - standardmäßig
+   unsichtbar, erscheint erst bei Hover über den ganzen Bedienbereich
+   (.ic-present-progress:hover), zeigt dann ALLE Stationen (nicht nur
+   kommende - auch Rücksprünge sind so möglich), die letzte Station ganz
+   oben. Bereits gezeigte Stationen bleiben matter/gedimmt. */
 .ic-present-stack {
-  position: fixed; left: 50%; bottom: 62px; transform: translateX(-50%); z-index: 10001;
-  display: flex; flex-direction: column; align-items: center; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center;
+  opacity: 0; max-height: 0; overflow: hidden; pointer-events: none;
+  transition: opacity .15s ease; margin-bottom: 0;
+}
+.ic-present-progress:hover .ic-present-stack {
+  opacity: 1; max-height: 60vh; pointer-events: auto; margin-bottom: 8px;
 }
 .ic-present-stack-seg {
-  width: 130px; border-radius: 2px; background: rgba(255,255,255,.28);
-  pointer-events: auto; cursor: pointer; transition: background .15s ease;
+  width: 130px; border-radius: 2px; background: rgba(255,255,255,.32);
+  pointer-events: auto; cursor: pointer; transition: background .15s ease, transform .1s ease;
 }
-.ic-present-stack-seg:hover { background: rgba(255,255,255,.5); }
-.ic-present-stack-seg.ic-present-stack-last { background: var(--ic-accent, #4f8cff); }
-.ic-present-stack-seg.ic-present-stack-last:hover { background: var(--ic-accent, #4f8cff); opacity: .85; }
-.ic-present-stack-played {
-  width: 130px; height: 6px; border-radius: 2px; background: rgba(255,255,255,.08);
+.ic-present-stack-seg:hover { background: rgba(255,255,255,.85); transform: scaleX(1.04); }
+.ic-present-stack-seg.ic-present-stack-played { background: rgba(255,255,255,.12); }
+.ic-present-stack-seg.ic-present-stack-played:hover { background: rgba(255,255,255,.4); }
+.ic-present-stack-seg.ic-present-stack-current { background: var(--ic-accent, #4f8cff); }
+.ic-present-stack-seg.ic-present-stack-last { box-shadow: 0 0 0 1px rgba(255,255,255,.6) inset; }
+/* Vorschau-Kachel beim Durchhovern des Stapels - immer an derselben
+   Bildschirmposition (unabhängig davon, welche Karte gerade gehovert
+   wird), damit man den Stapel wie ein Daumenkino "durchfahren" kann. */
+.ic-present-stack-preview {
+  position: fixed; left: 50%; bottom: 130px; transform: translateX(-50%);
+  width: 220px; height: 150px; border-radius: 8px; z-index: 10002;
+  background: rgba(20,21,24,.85) center/cover no-repeat;
+  box-shadow: 0 8px 28px rgba(0,0,0,.55); opacity: 0; transition: opacity .1s ease;
+  pointer-events: none; display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,.7); font-size: .8rem; text-align: center; padding: 8px; box-sizing: border-box;
 }
+.ic-present-stack-preview.visible { opacity: 1; }
 
 /* Wortfeld (Textrahmen) */
 .ic-textframe-preview { position: relative; margin: 20px auto; overflow: visible; z-index: 0; }
