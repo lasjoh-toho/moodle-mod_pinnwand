@@ -103,16 +103,62 @@ foreach ($items as $it) {
 // sammelte alle boardids, die IRGENDEINE Roter-Faden-Station referenzierte,
 // und mischte so ggf. mehrere Boards auf einer Leinwand zusammen - siehe
 // Begründung bei $boardid weiter oben.
+//
+// Zwei weitere, bis hierhin unentdeckte Bugs derselben Abfrage: (1) es
+// fehlte "userid" - boardid ist NICHT global eindeutig, sondern nur pro
+// Person (jede Person zählt ihre eigenen Boards bei 0 los), d.h. Board 0
+// der Lehrkraft und Board 0 JEDES Lernenden wurden alle zusammen
+// eingesammelt und übereinandergelegt ("Dateien doppelt auf der
+// exportierten Pinnwand"). (2) es fehlte "status" - gelöschte Objekte
+// werden nicht sofort entfernt, sondern landen nur mit status=trash im
+// Papierkorb (siehe pinnwand_photos.status-Kommentar), erschienen aber
+// im Export weiter ("Dateien, die schon gelöscht worden waren, stören").
 $boardphotos = [];
-$records = $DB->get_records(
-    'pinnwand_photos',
-    ['pinnwandid' => $instance->id, 'boardid' => $boardid, 'boardplaced' => 1, 'hiddenfromboard' => 0]
-);
+$seenphotoids = [];
+$records = $DB->get_records('pinnwand_photos', [
+    'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $boardid,
+    'boardplaced' => 1, 'hiddenfromboard' => 0, 'status' => 'active',
+]);
 foreach ($records as $r) {
     $data = pinnwand_export_photo_data((int) $r->id, $context, $fs, $photocache);
     if ($data) {
         $boardphotos[] = $data;
+        $seenphotoids[$r->id] = true;
     }
+}
+
+// Zusätzliche Platzierungen desselben Boards (z.B. nach Board-Klonen,
+// siehe pinnwand_object_placements-Tabellenkommentar): das Objekt selbst
+// existiert weiterhin nur einmal in pinnwand_photos, hat aber eine
+// EIGENE Position/Rotation/Ebene auf diesem weiteren Board - im Export
+// bislang komplett übergangen, dadurch fehlten geklonte Board-Inhalte.
+$placements = $DB->get_records_sql(
+    "SELECT pl.*
+       FROM {pinnwand_object_placements} pl
+       JOIN {pinnwand_photos} p ON p.id = pl.photoid
+      WHERE pl.pinnwandid = :icid AND pl.boardid = :boardid AND pl.status = 'active'
+        AND pl.boardplaced = 1 AND p.userid = :userid AND p.status = 'active'",
+    ['icid' => $instance->id, 'boardid' => $boardid, 'userid' => $USER->id]
+);
+foreach ($placements as $pl) {
+    if (isset($seenphotoids[$pl->photoid])) {
+        // Dasselbe Foto ist auf diesem Board bereits über seine
+        // Heimat-Platzierung vertreten - keine zweite Kachel.
+        continue;
+    }
+    $photodata = pinnwand_export_photo_data((int) $pl->photoid, $context, $fs, $photocache);
+    if (!$photodata) {
+        continue;
+    }
+    // Position/Rotation/Ebene DIESER Platzierung verwenden, nicht die der
+    // Heimat-Platzierung (die zeigt auf ein anderes Board).
+    $photodata['canvasx'] = (float) $pl->canvasx;
+    $photodata['canvasy'] = (float) $pl->canvasy;
+    $photodata['canvasw'] = (float) $pl->canvasw;
+    $photodata['canvasrot'] = (float) $pl->canvasrot;
+    $photodata['canvasz'] = (int) $pl->canvasz;
+    $boardphotos[] = $photodata;
+    $seenphotoids[$pl->photoid] = true;
 }
 
 // -----------------------------------------------------------------
@@ -238,10 +284,31 @@ function pinnwand_export_build_html($title, $json) {
   #canvas.animated{transition:none;}
   .ph{position:absolute;transition:opacity .2s;}
   .ph img{width:100%;display:block;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.5);}
+  .ph.wordart img{border-radius:0;box-shadow:none;}
   .ph.occluded{opacity:0;pointer-events:none;}
-  #hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(0,0,0,.55);
+  #hint{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(0,0,0,.55);
     padding:6px 16px;border-radius:20px;font-size:.85rem;z-index:20;pointer-events:none;}
-  #counter{position:fixed;top:14px;right:16px;color:#fff;background:rgba(0,0,0,.55);padding:5px 12px;border-radius:12px;font-size:.85rem;z-index:20;}
+  /* Zähler + Zurück-/Vorwärts-Pfeil unten mittig, dieselbe Anordnung wie
+     die Präsentation im Plugin selbst (siehe .ic-present-bottombar). */
+  #bottombar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;
+    display:flex;align-items:center;gap:14px;}
+  #counter{color:#fff;background:rgba(0,0,0,.55);padding:6px 16px;border-radius:20px;font-size:.85rem;
+    cursor:pointer;user-select:none;white-space:nowrap;}
+  #counter:hover{background:rgba(0,0,0,.75);}
+  .navbtn{width:44px;height:44px;border-radius:50%;background:rgba(20,21,24,.7);color:#fff;border:none;
+    font-size:1.3rem;cursor:pointer;flex:0 0 auto;}
+  /* Gestapelte Fortschrittsanzeige über der Zähler-Zeile - siehe
+     .ic-present-stack in styles.css: kommende Stationen als Kartenstapel,
+     letzte Station ganz oben, bereits gezeigte verschmelzen zu einer
+     flachen Ablage direkt über dem Zähler. */
+  #stack{position:fixed;left:50%;bottom:62px;transform:translateX(-50%);z-index:20;
+    display:flex;flex-direction:column;align-items:center;pointer-events:none;}
+  .stackseg{width:130px;border-radius:2px;background:rgba(255,255,255,.28);pointer-events:auto;
+    cursor:pointer;transition:background .15s ease;}
+  .stackseg:hover{background:rgba(255,255,255,.5);}
+  .stackseg.stacklast{background:#4f8cff;}
+  .stackseg.stacklast:hover{background:#4f8cff;opacity:.85;}
+  .stackplayed{width:130px;height:6px;border-radius:2px;background:rgba(255,255,255,.08);}
   .navzone{position:fixed;top:0;bottom:0;width:16%;z-index:15;cursor:pointer;background:transparent;border:none;}
   .navzone.prev{left:0;} .navzone.next{right:0;}
 </style>
@@ -250,7 +317,12 @@ function pinnwand_export_build_html($title, $json) {
 <div id="stage">
   <div id="canvas"></div>
 </div>
-<div id="counter"></div>
+<div id="stack"></div>
+<div id="bottombar">
+  <button class="navbtn" id="prevbtn" aria-label="Zur&uuml;ck">&#8249;</button>
+  <div id="counter"></div>
+  <button class="navbtn" id="nextbtn" aria-label="Weiter">&#8250;</button>
+</div>
 <div id="hint">&#8592; &#8594; oder Leertaste zum Navigieren, Klick au&szlig;erhalb zum Verschieben, Mausrad zum Zoomen</div>
 <button class="navzone prev" aria-label="Zur&uuml;ck"></button>
 <button class="navzone next" aria-label="Weiter"></button>
@@ -264,6 +336,9 @@ function pinnwand_export_build_html($title, $json) {
   var canvas = document.getElementById('canvas');
   var counter = document.getElementById('counter');
   var hint = document.getElementById('hint');
+  var stackEl = document.getElementById('stack');
+  var prevBtn = document.getElementById('prevbtn');
+  var nextBtn = document.getElementById('nextbtn');
 
   // Hintergrund (Farbe/Bild) - bisher im Export komplett ignoriert (fest
   // dunkelgrau). Dieselbe Logik wie applyBackground() im Plugin selbst:
@@ -308,7 +383,7 @@ function pinnwand_export_build_html($title, $json) {
   (data.boardPhotos || []).forEach(function (p) {
     if (!p) { return; }
     var pel = document.createElement('div');
-    pel.className = 'ph';
+    pel.className = 'ph' + (p.iswordart ? ' wordart' : '');
     pel.style.left = p.canvasx + 'px';
     pel.style.top = p.canvasy + 'px';
     pel.style.width = p.canvasw + 'px';
@@ -427,8 +502,38 @@ function pinnwand_export_build_html($title, $json) {
     });
   }
 
+  // Gestapelte Fortschrittsanzeige über der Zähler-Zeile: alle noch
+  // kommenden Stationen als Kartenstapel, die LETZTE Station ganz oben
+  // (am weitesten von der Zähler-Zeile entfernt), darunter der Reihe nach
+  // die noch folgenden; bereits gezeigte Stationen verschmelzen zu einer
+  // einzigen flachen Ablage direkt über dem Zähler. Klick auf eine
+  // einzelne Karte springt direkt dorthin - siehe .ic-present-stack im
+  // Plugin selbst (dieselbe Darstellung).
+  function renderStack() {
+    stackEl.innerHTML = '';
+    var upcoming = [];
+    for (var si = steps.length - 1; si > idx; si--) { upcoming.push(si); }
+    var segH = Math.max(2, Math.min(5, Math.floor(110 / Math.max(1, upcoming.length))));
+    var gap = segH >= 4 ? 2 : 1;
+    upcoming.forEach(function (si) {
+      var seg = document.createElement('div');
+      seg.className = 'stackseg' + (si === steps.length - 1 ? ' stacklast' : '');
+      seg.style.height = segH + 'px';
+      seg.style.marginBottom = gap + 'px';
+      seg.addEventListener('click', function () { goToStep(si); });
+      stackEl.appendChild(seg);
+    });
+    var played = document.createElement('div');
+    played.className = 'stackplayed';
+    stackEl.appendChild(played);
+  }
+
   var idx = 0;
   var currentTransform = null;
+  // Übersicht-Station (falls vorhanden) merken - ein Klick auf den Zähler
+  // selbst springt direkt dorthin, unabhängig von der aktuellen Position.
+  var overviewIdx = 0;
+  for (var oi = 0; oi < steps.length; oi++) { if (steps[oi].overview) { overviewIdx = oi; break; } }
   function goToStep(newIdx, skipTransition) {
     var fromIdx = idx;
     idx = Math.max(0, Math.min(steps.length - 1, newIdx));
@@ -437,6 +542,7 @@ function pinnwand_export_build_html($title, $json) {
     var target = targetFor(s);
     updateOcclusion();
     counter.textContent = (idx + 1) + ' / ' + steps.length;
+    renderStack();
     if (skipTransition || fromIdx === idx || !currentTransform) {
       if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
       applyTransform(target.scale, target.cx, target.cy, target.rot);
@@ -454,6 +560,9 @@ function pinnwand_export_build_html($title, $json) {
   });
   document.querySelector('.navzone.prev').addEventListener('click', function () { pinnwandStep(-1); });
   document.querySelector('.navzone.next').addEventListener('click', function () { pinnwandStep(1); });
+  prevBtn.addEventListener('click', function () { pinnwandStep(-1); });
+  nextBtn.addEventListener('click', function () { pinnwandStep(1); });
+  counter.addEventListener('click', function () { goToStep(overviewIdx); });
 
   // Manuelles Verschieben/Zoomen zwischen den Stationen - wie im Original,
   // damit man sich die Umgebung auch selbst ansehen kann.

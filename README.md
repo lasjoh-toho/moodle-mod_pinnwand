@@ -1474,6 +1474,24 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Dropdown, welches Board exportiert werden soll (wie der bestehende
   Board-Wechsler auf der Pinnwand selbst).
 
+### Einhundertzweiunddreißigste Überarbeitung — Export-Duplikate/Geisterbilder gefixt, WordArt ohne Rahmen/Schatten, neue Fortschrittsanzeige
+
+- Root Cause für weiterhin doppelte bzw. bereits gelöschte Bilder im
+  Export gefunden: die Board-Abfrage filterte weder nach Nutzer*in noch
+  nach Status - Board 0 der Lehrkraft und Board 0 jeder/jedes Lernenden
+  wurden zusammen eingesammelt, gelöschte (Papierkorb-)Objekte blieben
+  sichtbar. Beide Filter ergänzt; zusätzliche Board-Platzierungen (z.B.
+  nach Board-Klonen) werden jetzt ebenfalls mit eingesammelt.
+- WordArt-Rahmen/Schatten waren nur auf den ersten Blick unsichtbar -
+  beim Überfahren/Auswählen auf dem Board und in Live-Präsentation/Export
+  kamen Rahmen bzw. Schatten wieder zum Vorschein. Jetzt konsequent
+  überall weg.
+- Neue Fortschrittsanzeige in Präsentation und Export: "X / Y"-Zähler mit
+  Zurück-/Vorwärts-Pfeil unten mittig (Klick auf den Zähler springt zur
+  Übersicht), darüber ein gestapelter Fortschrittsbalken - kommende
+  Stationen als Kartenstapel (letzte Station ganz oben), bereits gezeigte
+  verschmelzen zu einer flachen Ablage.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

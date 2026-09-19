@@ -526,6 +526,9 @@
   position: absolute; padding: 0; transition: opacity .25s ease;
 }
 .ic-present-photo img { width: 100%; display: block; border-radius: 4px; }
+/* Wortfeld/WordArt-Stationen bleiben auch in der Präsentation ohne
+   Foto-Rahmen (reiner Text, siehe .ic-wordfield-item auf dem Board). */
+.ic-present-photo.ic-present-wordart img { border-radius: 0; }
 .ic-present-photo.ic-present-occluded { opacity: 0; pointer-events: none; }
 .ic-present-photo.ic-present-addable { cursor: pointer; }
 .ic-present-step-frame {
@@ -535,12 +538,40 @@
   position: fixed; top: 16px; right: 16px; z-index: 10001; width: 40px; height: 40px;
   border-radius: 50%; background: rgba(20,21,24,.7);
 }
+/* Zurück-/Vorwärts-Pfeil sitzen jetzt zusammen mit der Zähler-Anzeige
+   unten mittig (.ic-present-bottombar), nicht mehr freistehend an den
+   Bildschirmrändern - die Größe (44px, rund) bleibt unverändert. */
 .ic-present-nav {
-  position: fixed; top: 50%; transform: translateY(-50%); z-index: 10001;
-  width: 44px; height: 44px; border-radius: 50%; background: rgba(20,21,24,.7);
+  position: static; width: 44px; height: 44px; border-radius: 50%; background: rgba(20,21,24,.7);
+  flex: 0 0 auto;
 }
-.ic-present-prev { left: 16px; }
-.ic-present-next { right: 16px; }
+.ic-present-bottombar {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 10001;
+  display: flex; align-items: center; gap: 14px;
+}
+.ic-present-counter {
+  color: #fff; background: rgba(0,0,0,.55); padding: 6px 16px; border-radius: 20px;
+  font-size: .85rem; cursor: pointer; user-select: none; white-space: nowrap;
+}
+.ic-present-counter:hover { background: rgba(0,0,0,.75); }
+/* Gestapelte Fortschrittsanzeige direkt über der Zähler-Zeile - noch
+   kommende Stationen als schmale, übereinandergelegte Karten (die letzte
+   Station ganz oben), bereits gezeigte Stationen verschmelzen zu einer
+   einzigen flachen Ablage direkt über dem Zähler. */
+.ic-present-stack {
+  position: fixed; left: 50%; bottom: 62px; transform: translateX(-50%); z-index: 10001;
+  display: flex; flex-direction: column; align-items: center; pointer-events: none;
+}
+.ic-present-stack-seg {
+  width: 130px; border-radius: 2px; background: rgba(255,255,255,.28);
+  pointer-events: auto; cursor: pointer; transition: background .15s ease;
+}
+.ic-present-stack-seg:hover { background: rgba(255,255,255,.5); }
+.ic-present-stack-seg.ic-present-stack-last { background: var(--ic-accent, #4f8cff); }
+.ic-present-stack-seg.ic-present-stack-last:hover { background: var(--ic-accent, #4f8cff); opacity: .85; }
+.ic-present-stack-played {
+  width: 130px; height: 6px; border-radius: 2px; background: rgba(255,255,255,.08);
+}
 
 /* Wortfeld (Textrahmen) */
 .ic-textframe-preview { position: relative; margin: 20px auto; overflow: visible; z-index: 0; }
@@ -876,6 +907,7 @@
 .ic-arrange-item img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
 .ic-arrange-item.ic-wordfield-item img { border-radius: 0; box-shadow: none; }
 .ic-arrange-item.ic-in-thread img { outline: 3px solid #e0503f; outline-offset: 2px; border-radius: 4px; }
+.ic-arrange-item.ic-wordfield-item.ic-in-thread img { border-radius: 0; }
 .ic-extra-placement img { outline: 2px dashed #4f8cff; outline-offset: 2px; }
 .ic-extra-placement-unpin {
   position: absolute; top: -12px; right: -12px; width: 26px; height: 26px; border-radius: 50%;
@@ -883,8 +915,14 @@
   cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.4); opacity: 0; transition: opacity .15s;
 }
 .ic-extra-placement:hover .ic-extra-placement-unpin { opacity: 1; }
+/* Hover-/Auswahl-Schatten NICHT für Wortfeld/WordArt-Kacheln - die Basis-
+   Regel oben macht sie bewusst rahmen-/schattenlos (reiner Text ohne
+   Foto-Optik), dieser Zustand darf beim Überfahren/Auswählen nicht
+   plötzlich wieder einen Schatten "aufblitzen" lassen. */
 .ic-arrange-item:hover img, .ic-arrange-item:hover .ic-tf-live,
 .ic-arrange-item.selected img, .ic-arrange-item.selected .ic-tf-live { box-shadow: 0 4px 24px rgba(0,0,0,.6); }
+.ic-arrange-item.ic-wordfield-item:hover img, .ic-arrange-item.ic-wordfield-item:hover .ic-tf-live,
+.ic-arrange-item.ic-wordfield-item.selected img, .ic-arrange-item.ic-wordfield-item.selected .ic-tf-live { box-shadow: none; }
 .ic-arrange-item.multi-selected img { outline: 3px dashed var(--ic-thread-color, #4f8cff); outline-offset: 3px; }
 .ic-thread-frame-onboard {
   position: absolute; border-style: dashed; border-radius: 6px; pointer-events: none;

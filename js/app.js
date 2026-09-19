@@ -6644,7 +6644,7 @@
     thread.items.forEach(function (it) { if (it.itemtype === 'photo') { inThreadIds[it.photoid] = true; } });
     boardPhotos.forEach(function (p) {
       var pEl = el('div', {
-        class: 'ic-present-photo',
+        class: 'ic-present-photo' + (p.wordfielddata ? ' ic-present-wordart' : ''),
         style: 'left:' + p.canvasx + 'px;top:' + p.canvasy + 'px;width:' + p.canvasw + 'px;' +
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
@@ -6908,6 +6908,7 @@
       // Ankommen der Kamera schon sichtbar ist statt erst danach
       // "aufzutauchen".
       updateOcclusion();
+      updateCounter();
 
       if (skipTransition || fromIdx === currentIdx || !currentTransform) {
         if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
@@ -6976,9 +6977,50 @@
     document.addEventListener('keydown', keyNav);
     overlay._icKeyHandler = keyNav;
 
+    // Schritt-Anzeige unten mittig, flankiert von Zurück-/Vorwärts-Pfeil -
+    // dieselbe Zeile wie zuvor die freistehenden Rand-Pfeile, nur jetzt
+    // zusammen mit dem "X / Y"-Zähler gruppiert (vorher gab es in der
+    // Live-Präsentation gar keine Zähler-Anzeige). Ein Klick auf den
+    // Zähler selbst springt direkt zur Übersicht-Station.
+    var overviewIdx = 0;
+    for (var oi = 0; oi < steps.length; oi++) { if (steps[oi].overview) { overviewIdx = oi; break; } }
+    var counterEl = el('div', { class: 'ic-present-counter' });
+    counterEl.addEventListener('click', function () { goToStep(overviewIdx); });
+    var bottomBar = el('div', { class: 'ic-present-bottombar' }, [prevBtn, counterEl, nextBtn]);
+
+    // Gestapelte Fortschrittsanzeige über der Zähler-Zeile: alle noch
+    // kommenden Stationen liegen wie ein Kartenstapel übereinander - die
+    // LETZTE Station ganz oben (am weitesten von der Zähler-Zeile weg),
+    // darunter der Reihe nach die noch folgenden; die bereits gezeigten
+    // Stationen verschmelzen zu einer einzigen, flachen Ablage direkt über
+    // der Zähler-Zeile ("darunter die abgespielten"). Klick auf eine
+    // einzelne Karte springt direkt dorthin.
+    var stackEl = el('div', { class: 'ic-present-stack' });
+    function renderStack() {
+      stackEl.innerHTML = '';
+      var upcoming = [];
+      for (var si = steps.length - 1; si > currentIdx; si--) { upcoming.push(si); }
+      // Kartenhöhe schrumpft automatisch, wenn viele Stationen übrig sind,
+      // damit der Stapel nie über einen sinnvollen Bildschirmanteil hinauswächst.
+      var segH = Math.max(2, Math.min(5, Math.floor(110 / Math.max(1, upcoming.length))));
+      var gap = segH >= 4 ? 2 : 1;
+      upcoming.forEach(function (si) {
+        var seg = el('div', { class: 'ic-present-stack-seg' + (si === steps.length - 1 ? ' ic-present-stack-last' : '') });
+        seg.style.height = segH + 'px';
+        seg.style.marginBottom = gap + 'px';
+        seg.addEventListener('click', function () { goToStep(si); });
+        stackEl.appendChild(seg);
+      });
+      stackEl.appendChild(el('div', { class: 'ic-present-stack-played' }));
+    }
+    function updateCounter() {
+      counterEl.textContent = (currentIdx + 1) + ' / ' + steps.length;
+      renderStack();
+    }
+
     overlay.appendChild(closeBtn);
-    overlay.appendChild(prevBtn);
-    overlay.appendChild(nextBtn);
+    overlay.appendChild(stackEl);
+    overlay.appendChild(bottomBar);
     document.body.appendChild(overlay);
 
     if (steps.length > 0) {
@@ -6991,6 +7033,7 @@
         applyTransform(direct.scale, direct.cx, direct.cy, direct.rot);
         currentTransform = direct;
         updateOcclusion();
+        updateCounter();
       } else {
         // Beim Start zoomt die Kamera aus einer Übersicht in die erste
         // Station hinein, statt sofort scharf gestellt zu erscheinen -
@@ -7000,6 +7043,7 @@
         var overview = { scale: first.scale * 0.3, cx: first.cx, cy: first.cy, rot: first.rot };
         applyTransform(overview.scale, overview.cx, overview.cy, overview.rot);
         currentTransform = overview;
+        updateCounter();
         requestAnimationFrame(function () {
           animateCamera(overview, first, function () {
             currentTransform = first;

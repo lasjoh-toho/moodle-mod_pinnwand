@@ -3566,3 +3566,45 @@ Betrifft: `export_presentation.php`, `js/app.js`, `view.php`, `lang/de/pinnwand.
   `openMultiBoardDeleteModal()`) mit den Board-Namen - Auswahl hängt
   `&boardid=X` an die Export-URL an. Neue Sprachstrings
   `export_presentation_pickboard` (DE/EN).
+
+## Phase 125 — Export-Duplikate/Geisterbilder gefixt, WordArt ohne Rahmen/Schatten, Fortschrittsanzeige unten mittig mit Kartenstapel ✅
+
+Betrifft: `export_presentation.php`, `js/app.js`, `styles.css`.
+
+- [x] **Root Cause für "Bilder doppelt"/"gelöschte Bilder stören" (Phase
+  124 hatte den falschen boardid-Bug gefixt, aber zwei weitere Bugs
+  IN DERSELBEN Abfrage übersehen)**: Der Export-Query auf
+  `pinnwand_photos` für `$boardphotos` filterte weder `userid` noch
+  `status`. (1) `boardid` ist NICHT global eindeutig, sondern zählt pro
+  Person bei 0 los - ohne `userid`-Filter wurden Board 0 der Lehrkraft
+  UND Board 0 jedes einzelnen Lernenden zusammen eingesammelt und
+  übereinandergelegt. (2) gelöschte Objekte werden nicht sofort entfernt,
+  sondern landen mit `status=trash` im Papierkorb - ohne `status`-Filter
+  blieben sie im Export sichtbar. Beide Filter ergänzt. Zusätzlich bisher
+  komplett übergangen: zusätzliche Objekt-Platzierungen aus
+  `pinnwand_object_placements` (z.B. nach Board-Klonen) - werden jetzt
+  mit eigener Position/Rotation/Ebene mit eingesammelt, dedupliziert
+  gegen die Heimat-Platzierung.
+- [x] **WordArt-Rahmen/Schatten waren nicht überall unsichtbar**: Die
+  Basis-Regel auf dem Board (`.ic-wordfield-item img { border-radius: 0;
+  box-shadow: none; }`) wurde beim Hovern/Auswählen sowie bei
+  Rot-Umrandung (im Roten Faden) durch nachfolgende CSS-Regeln wieder
+  überschrieben (Schatten "blitzte" bei Interaktion auf). Fix in
+  `styles.css` (Board-Editor), plus neue `iswordart`/`wordfielddata`-
+  Klasse an den Foto-Kacheln in der Live-Präsentation
+  (`ic-present-wordart`) und im Export (`.ph.wordart`), damit
+  Rahmen/Schatten dort von Anfang an konsequent wegfallen statt nur im
+  Editor.
+- [x] **Fortschrittsanzeige neu**: "X / Y"-Zähler zusammen mit Zurück-/
+  Vorwärts-Pfeil unten mittig gruppiert (`.ic-present-bottombar` im
+  Plugin, `#bottombar` im Export) - in der Live-Präsentation gab es
+  vorher gar keinen Zähler, nur freistehende Rand-Pfeile. Klick auf den
+  Zähler selbst springt direkt zur Übersicht-Station. Neuer gestapelter
+  Fortschrittsbalken darüber (`.ic-present-stack`/`#stack`): alle noch
+  kommenden Stationen als schmale Karten übereinander, die LETZTE Station
+  ganz oben, bereits gezeigte Stationen verschmelzen zu einer flachen
+  Ablage direkt über dem Zähler; Kartenhöhe schrumpft automatisch bei
+  vielen Stationen. Identische Umsetzung in Live-Präsentation und Export.
+  Mit synthetischem Mehr-Stationen-Testfall in Headless-Chromium
+  verifiziert (Zähler, Stapelgröße je Schritt, Klick-auf-Zähler→Übersicht,
+  Vor-/Zurück-Buttons - alle korrekt, keine Konsolenfehler).
