@@ -1510,6 +1510,20 @@ Details und Scoping-Entscheidungen. In Kurzform:
   inkl. Bild-Letterbox) - kein Bug im Code gefunden. Rückfrage an Jo
   gestellt, wo genau sie noch fehlt.
 
+### Einhundertvierunddreißigste Überarbeitung — Export-Hintergrundfarbe endlich gefunden, Stapel-Hover eingegrenzt
+
+- **Hintergrundfarbe im Export endlich gefunden**: Jo hatte SOWOHL eine
+  Farbe ALS AUCH ein Hintergrundbild gewählt (mit "Füllen"/`cover`) - in
+  dieser Kombination war die Farbe im Export architekturbedingt IMMER
+  unsichtbar (das Bild füllt bei `cover` lückenlos die komplette Fläche,
+  die Farbe liegt nur dahinter). Die Live-Präsentation hatte dafür längst
+  ein Sicherheitsnetz (Farbe zusätzlich aufs ganze Overlay gelegt) - das
+  fehlte im Export komplett, dort blieb stattdessen die feste dunkelgraue
+  Farbe sichtbar. Jetzt ergänzt und mit Playwright bestätigt (vorher/
+  nachher-Vergleich: `#2b2d33` vs. korrekt gewählte Farbe).
+- Stapel erscheint jetzt nur noch bei Hover über den Zähler selbst, nicht
+  mehr bei Hover über die Zurück-/Vorwärts-Pfeile daneben.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

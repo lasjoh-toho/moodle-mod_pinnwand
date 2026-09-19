@@ -3659,3 +3659,55 @@ Betrifft: `export_presentation.php`, `js/app.js`, `styles.css`, `view.php`,
   (Stapel standardmäßig unsichtbar, bei Hover alle 5 synthetischen
   Stationen sichtbar, Vorschau-Kachel erscheint korrekt, Button-Hintergrund
   jetzt teiltransparent mit `backdrop-filter` statt grauer Fläche).
+
+## Phase 127 — Export-Hintergrundfarbe-Bug endlich gefunden (Farbe+Bild kombiniert), Stapel-Hover auf Zähler eingegrenzt ✅
+
+Jo lieferte die entscheidende Präzisierung ("Hintergrundfarbe erscheint
+nicht in der exportierten Datei") und - auf Bitte - direkt die tatsächlich
+exportierte HTML-Datei zum Hochladen, nachdem drei Runden reiner
+Code-Prüfung (echter PHP-Test, Playwright mit synthetischen Farb-/Bild-
+Daten, vollständiger Codevergleich) keinen Fehler gefunden hatten. Die
+echte Datei zeigte den entscheidenden Hinweis sofort: `background` war
+`{"type":"image", "color":"#888d70", "url":"data:image/jpeg;...",
+"fit":"cover", ...}` - Jo hatte also SOWOHL eine Hintergrundfarbe ALS AUCH
+ein Hintergrundbild gewählt, mit `fit:"cover"`.
+
+**Root Cause gefunden**: `applyBackground()`/die Export-Entsprechung
+zeichnen die Farbe NUR auf dem äußeren `#bg`/`.ic-canvas-bg`-Element,
+während das innere `#bg-image`/`.ic-canvas-bg-image` exakt darüber liegt
+und - bei `fit:"cover"` - IMMER lückenlos die komplette 1400x1000-Fläche
+füllt. Die Farbe ist dadurch architektonisch bedingt unsichtbar, sobald
+Bild+Farbe kombiniert sind, AUSSER das äußere Element ist selbst größer
+als 1400x1000 (Buchstaben "wächst mit dem Bildschirm mit", siehe Kommentar
+in `.ic-canvas-bg`). Genau das ist auf dem Board/Editor immer der Fall
+(`.ic-canvas-bg` nutzt `inset:0` innerhalb eines größeren Containers), in
+der Live-Präsentation ABER nur dank eines schon vorhandenen Sicherheitsnetzes:
+`overlay.style.backgroundColor = state.background.color` wird zusätzlich
+direkt aufs Präsentations-Overlay gelegt (Kommentar dort verweist explizit
+auf genau dieses Szenario: "wenn 'Füllen' einen Rand lässt oder beim
+Herauszoomen der 1400x1000-Bereich nicht die ganze Bildschirmfläche
+ausfüllt"). Dieses Sicherheitsnetz existierte in `export_presentation.php`
+NIE - dort blieb stattdessen die fest verdrahtete dunkelgraue
+`body{background:#2b2d33}`-Farbe sichtbar, sobald Farbe+Bild kombiniert
+waren (bei reiner Farbe ohne Bild, dem bisher einzigen getesteten Fall,
+trat der Bug nicht auf - daher unsichtbar in allen bisherigen synthetischen
+Tests). Fix: `document.body.style.backgroundColor = bg.color || '#2b2d33';`
+direkt zu Beginn der Hintergrund-Logik im Export-Player ergänzt, exakt wie
+im Plugin. Mit Playwright verifiziert: `getComputedStyle(document.body)`
+zeigt vor dem Fix `#2b2d33`, danach korrekt die gewählte Farbe, sowohl im
+Nicht-"bgmoves"-Fall (Farbe rahmt das 1400x1000-Bild bei abweichendem
+Fenster-Seitenverhältnis) als auch im "bgmoves"-Fall (Farbe blitzt an den
+Rändern durch, wenn die gezoomte Leinwand kleiner ist als der Bildschirm).
+- [x] **Stapel-Hover auf Zähler eingegrenzt**: Jo wollte den Stapel NUR
+  bei Hover über den Navigations-Zähler selbst sehen, NICHT bei Hover über
+  die Zurück-/Vorwärts-Pfeile daneben (bisher löste der gesamte
+  Bedienbereich `.ic-present-progress`/`#progress` den Hover aus). Fix:
+  `:has()`-Selektor (`.ic-present-progress:has(.ic-present-counter:hover)
+  .ic-present-stack`) statt des bisherigen direkten `:hover` auf dem
+  gesamten Container - nötig, weil der Stapel im DOM VOR dem Zähler liegt
+  und ein einfacher nachfolgender Sibling-Selektor (`~`) das nicht
+  abbilden könnte. Mit Playwright verifiziert: Hover auf Zurück-/
+  Vorwärts-Pfeil lässt den Stapel unsichtbar, Hover auf den Zähler zeigt
+  ihn zuverlässig.
+
+Shipped als Version `2026083132` / `0.134.0`.

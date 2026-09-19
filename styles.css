@@ -577,16 +577,20 @@
 }
 .ic-present-counter:hover { background: rgba(255,255,255,.18); }
 /* Gestapelte Fortschrittsanzeige über der Zähler-Zeile - standardmäßig
-   unsichtbar, erscheint erst bei Hover über den ganzen Bedienbereich
-   (.ic-present-progress:hover), zeigt dann ALLE Stationen (nicht nur
-   kommende - auch Rücksprünge sind so möglich), die letzte Station ganz
-   oben. Bereits gezeigte Stationen bleiben matter/gedimmt. */
+   unsichtbar, erscheint erst bei Hover über die Zähler-Anzeige selbst -
+   AUSDRÜCKLICH NICHT bei Hover über die Zurück-/Vorwärts-Pfeile daneben,
+   die sollen ohne den aufklappenden Stapel bedienbar bleiben. :has() statt
+   eines einfachen Sibling-Selektors, weil der Stapel im DOM VOR der
+   Zähler-Zeile liegt (der Hinweis-Pfeil darüber hat pointer-events:none
+   und kann daher selbst nie gehovert werden). Zeigt dann ALLE Stationen
+   (nicht nur kommende - auch Rücksprünge sind so möglich), die letzte
+   Station ganz oben. Bereits gezeigte Stationen bleiben matter/gedimmt. */
 .ic-present-stack {
   display: flex; flex-direction: column; align-items: center;
   opacity: 0; max-height: 0; overflow: hidden; pointer-events: none;
   transition: opacity .15s ease; margin-bottom: 0;
 }
-.ic-present-progress:hover .ic-present-stack {
+.ic-present-progress:has(.ic-present-counter:hover) .ic-present-stack {
   opacity: 1; max-height: 60vh; pointer-events: auto; margin-bottom: 8px;
 }
 .ic-present-stack-seg {

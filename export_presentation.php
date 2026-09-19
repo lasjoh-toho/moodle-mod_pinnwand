@@ -307,12 +307,15 @@ function pinnwand_export_build_html($title, $json) {
     font-size:1.3rem;cursor:pointer;flex:0 0 auto;transition:background .15s ease;}
   .navbtn:hover{background:rgba(255,255,255,.18);}
   /* Gestapelte Fortschrittsanzeige - standardmäßig unsichtbar, erscheint
-     erst bei Hover über den ganzen Bedienbereich (#progress:hover), zeigt
-     dann ALLE Stationen (nicht nur kommende - auch Rücksprünge möglich),
-     die letzte Station ganz oben. Bereits gezeigte bleiben matt. */
+     erst bei Hover über die Zähler-Anzeige selbst - AUSDRÜCKLICH NICHT bei
+     Hover über die Zurück-/Vorwärts-Pfeile daneben. :has() statt Sibling-
+     Selektor, weil #stack im DOM VOR #counter liegt (der Hinweis-Pfeil
+     darüber hat pointer-events:none und kann selbst nie gehovert werden).
+     Zeigt dann ALLE Stationen (nicht nur kommende - auch Rücksprünge
+     möglich), die letzte Station ganz oben. Bereits gezeigte bleiben matt. */
   #stack{display:flex;flex-direction:column;align-items:center;
     opacity:0;max-height:0;overflow:hidden;pointer-events:none;transition:opacity .15s ease;}
-  #progress:hover #stack{opacity:1;max-height:60vh;pointer-events:auto;margin-bottom:8px;}
+  #progress:has(#counter:hover) #stack{opacity:1;max-height:60vh;pointer-events:auto;margin-bottom:8px;}
   .stackseg{width:130px;border-radius:2px;background:rgba(255,255,255,.32);pointer-events:auto;
     cursor:pointer;transition:background .15s ease,transform .1s ease;}
   .stackseg:hover{background:rgba(255,255,255,.85);transform:scaleX(1.04);}
@@ -375,6 +378,15 @@ function pinnwand_export_build_html($title, $json) {
   // gezoomten Leinwand ist (#canvas) oder bildschirmfüllend fest steht
   // (#stage, Größe an window.innerWidth/Height gebunden).
   var bg = data.background || { type: 'color', color: '#2b2d33' };
+  // Die gewählte Hintergrundfarbe zusätzlich direkt auf body legen, damit
+  // sie in JEDEM Fall sichtbar bleibt - genau wie in der echten Präsentation
+  // (openPresentation() in app.js): bei bgmoves=true liegt #bg-image exakt
+  // deckungsgleich über #bg (beide 1400x1000), die Farbe von #bg selbst
+  // kommt dadurch NIE zur Geltung; bei "Füllen"/cover lässt das Bild ohnehin
+  // keinen Rand, in dem die Farbe sichtbar würde. Ohne diesen Fallback
+  // blieb stattdessen die feste dunkelgraue body-Farbe sichtbar, sobald
+  // Farbe UND Bild zusammen gewählt waren.
+  document.body.style.backgroundColor = bg.color || '#2b2d33';
   var bgEl = document.createElement('div');
   bgEl.id = 'bg';
   bgEl.style.backgroundColor = bg.color || '#2b2d33';
