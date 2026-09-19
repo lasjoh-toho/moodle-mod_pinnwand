@@ -3531,3 +3531,38 @@ Betrifft: `export_presentation.php`, `js/app.js`.
   direkt am Bildschirmrand klebt. Verifiziert mit einer synthetischen
   Testdatei in echtem Headless-Chromium: sichtbarer dunkler Rand oben,
   kein Rand unten.
+
+
+## Phase 124 — Export: Hintergrund eingebettet, verbindliche Board-Auswahl (Dropdown), keine Board-Vermischung mehr ✅
+
+Betrifft: `export_presentation.php`, `js/app.js`, `view.php`, `lang/de/pinnwand.php`, `lang/en/pinnwand.php`.
+
+- [x] **Hintergrund (Farbe/Bild) wurde im Export komplett ignoriert** (fest
+  `#2b2d33`). Neue Funktion `pinnwand_export_background_data()` liest
+  dieselbe Nutzer-Präferenz wie `get_background_data()` im Plugin und
+  bettet Bild-/Upload-Hintergründe als Base64 ein (Typ "url" wird direkt
+  referenziert, kein serverseitiger Cross-Origin-Fetch). Im Export-Player
+  neu gebaut: `#bg`/`#bg-image`, exakt dieselbe Farbe/Bild/Fit/Helligkeit/
+  Sättigung-Logik wie `applyBackground()` im Plugin, inkl. `bgmoves`
+  (Hintergrund Teil der gezoomten Leinwand vs. bildschirmfüllend fest).
+  Mit synthetischen Testdateien in echtem Headless-Chromium verifiziert
+  (Farb- und Bild-Hintergrund, beide korrekt).
+- [x] **Root Cause für "Dateien doppelt"/"Dateien, die nicht auf der
+  Pinnwand sind" gefunden**: Der Export sammelte bisher ALLE boardids,
+  die IRGENDEINE Station des Roten Fadens referenzierte, und mischte
+  dadurch ggf. mehrere Boards auf derselben 1400x1000-Leinwand
+  zusammen - Fotos von Board 0 und Board 1 lagen dann exakt
+  übereinander/nebeneinander, obwohl sie zu unterschiedlichen Boards
+  gehören. Fix: `export_presentation.php` verlangt jetzt einen
+  expliziten `boardid`-Parameter und filtert sowohl die Roter-Faden-
+  Stationen als auch `boardPhotos` ausschließlich auf dieses EINE Board
+  (einfache `boardid = ?`-Abfrage statt IN-Liste über mehrere IDs).
+- [x] **Board-Wechsel-Dropdown vor dem Export** (wie im Original
+  gewünscht): neue Funktion `startPresentationExport()` in js/app.js
+  ermittelt die eigenen Boards (dieselbe `mod_pinnwand_get_all_boards`-
+  Quelle wie der bestehende Board-Umschalter), exportiert bei genau
+  einem eigenen Board direkt, zeigt bei mehreren ein einfaches Auswahl-
+  Modal (`openExportBoardPicker()`, gleiches Muster wie
+  `openMultiBoardDeleteModal()`) mit den Board-Namen - Auswahl hängt
+  `&boardid=X` an die Export-URL an. Neue Sprachstrings
+  `export_presentation_pickboard` (DE/EN).

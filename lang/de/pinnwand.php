@@ -126,6 +126,7 @@ $string['tf_target_card'] = 'Zettel/Kartenfläche auswählen';
 $string['tf_send_direct'] = 'Direkt senden (erscheint sofort im Post-Stream)';
 $string['nothreadtoexport'] = 'Es gibt noch keinen eigenen Roten Faden mit Stationen, der exportiert werden könnte.';
 $string['export_presentation'] = 'Als eigenständige Präsentation exportieren';
+$string['export_presentation_pickboard'] = 'Welches Board soll exportiert werden?';
 $string['tf_aspect_locked'] = 'Seitenverhältnis fixiert (klicken zum Lösen)';
 $string['tf_aspect_unlocked'] = 'Seitenverhältnis nicht fixiert (klicken zum Fixieren)';
 $string['tf_show_board_bg'] = 'Pinnwand-Hintergrund zur Vorschau anzeigen';

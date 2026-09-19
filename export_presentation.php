@@ -3,6 +3,18 @@ require_once(__DIR__ . '/../../config.php');
 require_once(__DIR__ . '/lib.php');
 
 $id = required_param('id', PARAM_INT); // course_module id
+// Welches Board exportiert werden soll - MUSS explizit übergeben werden
+// (der Button in der Klassenübersicht fragt das jetzt vorher ab, analog
+// zum Board-Wechsel-Dropdown auf der Pinnwand selbst). Ohne Angabe wird
+// Board 0 angenommen (Rückwärtskompatibilität mit alten, gespeicherten
+// Export-Links). WICHTIG: vorher wurden die exportierten Boards allein
+// aus den boardid-Werten der Roter-Faden-Stationen "erraten" - lag der
+// Faden (auch nur teilweise, z.B. durch eine einzelne ältere Station)
+// über mehrere Boards verteilt, wurden deren Fotos alle auf DIESELBEN
+// 1400x1000-Koordinaten übereinandergelegt ("Dateien doppelt auf der
+// exportierten Pinnwand" bzw. "Dateien, die nicht auf der Pinnwand
+// sind"). Jetzt wird immer genau EIN Board exportiert.
+$boardid = optional_param('boardid', 0, PARAM_INT);
 
 $cm = get_coursemodule_from_id('pinnwand', $id, 0, false, MUST_EXIST);
 $course = get_course($cm->course);
@@ -15,12 +27,16 @@ require_capability('mod/pinnwand:viewall', $context);
 // -----------------------------------------------------------------
 // Eigenen Roten Faden (den "offiziellen" der Lehrkraft) + Stationen
 // laden - dieselbe Quelle wie die normale Präsentation im Plugin.
+// Nur Stationen DIESES Boards werden übernommen (siehe Begründung oben).
 // -----------------------------------------------------------------
 $thread = $DB->get_record('pinnwand_threads', ['pinnwandid' => $instance->id, 'userid' => $USER->id]);
 if (!$thread) {
     throw new moodle_exception('nothreadtoexport', 'mod_pinnwand', new moodle_url('/mod/pinnwand/view.php', ['id' => $cm->id]));
 }
-$items = $DB->get_records('pinnwand_thread_items', ['threadid' => $thread->id], 'sortorder ASC');
+$allitems = $DB->get_records('pinnwand_thread_items', ['threadid' => $thread->id], 'sortorder ASC');
+$items = array_filter($allitems, function ($it) use ($boardid) {
+    return (int) $it->boardid === $boardid;
+});
 
 $fs = get_file_storage();
 
@@ -80,37 +96,78 @@ foreach ($items as $it) {
     $exportitems[] = $entry;
 }
 
-// Alle Fotos, die überhaupt auf dem/den betroffenen Board(s) sichtbar
-// platziert sind - für den Hintergrund-Kontext während der Präsentation
-// (nicht nur die Stationen selbst, siehe Verdeckungslogik der Live-
-// Präsentation: Objekte auf niedrigeren Ebenen bleiben sichtbar).
-// WICHTIG: Boards sind 0-indiziert (state.currentBoard startet bei 0
-// im Client) - !empty($it->boardid) hätte jedes Item auf dem ERSTEN
-// Board (boardid=0) fälschlich ausgeschlossen, da PHP 0 als "leer"
-// behandelt. Das führte dazu, dass $boardids in der Praxis meist leer
-// blieb und boardPhotos dadurch leer exportiert wurde ("nur graue
-// Fläche" im Standalone-Export, da der Canvas keine Bild-Ebenen bekam).
-$boardids = [];
-foreach ($items as $it) {
-    if ($it->boardid !== null) {
-        $boardids[$it->boardid] = true;
+// Alle Fotos, die auf GENAU DIESEM Board sichtbar platziert sind - für
+// den Hintergrund-Kontext während der Präsentation (nicht nur die
+// Stationen selbst, siehe Verdeckungslogik der Live-Präsentation:
+// Objekte auf niedrigeren Ebenen bleiben sichtbar). Frühere Version
+// sammelte alle boardids, die IRGENDEINE Roter-Faden-Station referenzierte,
+// und mischte so ggf. mehrere Boards auf einer Leinwand zusammen - siehe
+// Begründung bei $boardid weiter oben.
+$boardphotos = [];
+$records = $DB->get_records(
+    'pinnwand_photos',
+    ['pinnwandid' => $instance->id, 'boardid' => $boardid, 'boardplaced' => 1, 'hiddenfromboard' => 0]
+);
+foreach ($records as $r) {
+    $data = pinnwand_export_photo_data((int) $r->id, $context, $fs, $photocache);
+    if ($data) {
+        $boardphotos[] = $data;
     }
 }
-$boardphotos = [];
-if (!empty($boardids)) {
-    [$insql, $inparams] = $DB->get_in_or_equal(array_keys($boardids));
-    $records = $DB->get_records_select(
-        'pinnwand_photos',
-        "pinnwandid = ? AND boardplaced = 1 AND hiddenfromboard = 0 AND boardid $insql",
-        array_merge([$instance->id], $inparams)
-    );
-    foreach ($records as $r) {
-        $data = pinnwand_export_photo_data((int) $r->id, $context, $fs, $photocache);
-        if ($data) {
-            $boardphotos[] = $data;
+
+// -----------------------------------------------------------------
+// Hintergrund (Farbe/Bild) der Lehrkraft einbetten - bisher im Export
+// komplett ignoriert (fest #2b2d33). Eigenständige Datei darf auch hier
+// keine pluginfile.php-URLs referenzieren, deshalb Bild-/Upload-
+// Hintergründe als Base64 einbetten; ein extern verlinkter Hintergrund
+// (Typ "url") wird direkt referenziert, da ein serverseitiger Fremd-
+// Fetch hier nicht zuverlässig möglich ist. Der Hintergrund ist laut
+// Plugin-Design NICHT pro Board unterschiedlich (ein globaler Wert pro
+// Person), daher unabhängig von $boardid.
+function pinnwand_export_background_data($instance, $context, $fs) {
+    global $USER, $DB;
+    $result = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'fit' => 'contain'];
+    $raw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
+    if (!$raw) {
+        return $result;
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return $result;
+    }
+    $type = $decoded['type'] ?? 'color';
+    $result['color'] = clean_param($decoded['color'] ?? $result['color'], PARAM_TEXT);
+    $result['brightness'] = max(20, min(180, (int) ($decoded['brightness'] ?? 100)));
+    $result['saturation'] = max(0, min(200, (int) ($decoded['saturation'] ?? 100)));
+    $fitval = $decoded['fit'] ?? 'contain';
+    $result['fit'] = in_array($fitval, ['cover', 'contain'], true) ? $fitval : 'contain';
+    if ($type === 'image' && !empty($decoded['photoid'])) {
+        $photo = $DB->get_record('pinnwand_photos', ['id' => (int) $decoded['photoid'], 'pinnwandid' => $instance->id]);
+        if ($photo) {
+            $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id, 'filename', false);
+            $file = reset($files);
+            if ($file) {
+                $result['type'] = 'image';
+                $result['url'] = 'data:' . ($file->get_mimetype() ?: 'image/jpeg') . ';base64,' . base64_encode($file->get_content());
+            }
+        }
+    } else if ($type === 'upload') {
+        $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'background', $USER->id, 'filename', false);
+        $file = reset($files);
+        if ($file) {
+            $result['type'] = 'upload';
+            $result['url'] = 'data:' . ($file->get_mimetype() ?: 'image/jpeg') . ';base64,' . base64_encode($file->get_content());
+        }
+    } else if ($type === 'url') {
+        $url = clean_param($decoded['url'] ?? '', PARAM_URL);
+        if ($url !== '') {
+            $result['type'] = 'url';
+            $result['url'] = $url;
         }
     }
+    return $result;
 }
+$background = pinnwand_export_background_data($instance, $context, $fs);
 
 // -----------------------------------------------------------------
 // Versionierter Datenblock - bewusst so aufgebaut, dass ein späterer
@@ -122,8 +179,10 @@ $exportdata = [
     'formatVersion' => 1,
     'exportedAt' => time(),
     'pluginVersion' => get_config('mod_pinnwand', 'version'),
+    'boardid' => $boardid,
     'boardWidth' => 1400,
     'boardHeight' => 1000,
+    'background' => $background,
     'thread' => [
         'color' => $thread->color,
         'linewidth' => (float) $thread->linewidth,
@@ -173,6 +232,9 @@ function pinnwand_export_build_html($title, $json) {
   #stage{position:fixed;inset:0;overflow:hidden;cursor:grab;}
   #stage.dragging{cursor:grabbing;}
   #canvas{position:absolute;left:0;top:0;transform-origin:0 0;}
+  #bg{position:absolute;z-index:0;}
+  #bg.moves{left:0;top:0;width:1400px;height:1000px;}
+  #bg-image{position:absolute;left:0;top:0;width:1400px;height:1000px;background-repeat:no-repeat;background-position:center;}
   #canvas.animated{transition:none;}
   .ph{position:absolute;transition:opacity .2s;}
   .ph img{width:100%;display:block;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.5);}
@@ -202,6 +264,41 @@ function pinnwand_export_build_html($title, $json) {
   var canvas = document.getElementById('canvas');
   var counter = document.getElementById('counter');
   var hint = document.getElementById('hint');
+
+  // Hintergrund (Farbe/Bild) - bisher im Export komplett ignoriert (fest
+  // dunkelgrau). Dieselbe Logik wie applyBackground() im Plugin selbst:
+  // äußeres Element trägt die reine Farbe (auch als "Letterbox" um ein im
+  // "contain"-Modus eingepasstes Bild herum), inneres Element (exakt
+  // 1400x1000, dasselbe Koordinatensystem wie die Fotos) trägt das
+  // eigentliche Bild. "bgmoves" entscheidet, ob der Hintergrund Teil der
+  // gezoomten Leinwand ist (#canvas) oder bildschirmfüllend fest steht
+  // (#stage, Größe an window.innerWidth/Height gebunden).
+  var bg = data.background || { type: 'color', color: '#2b2d33' };
+  var bgEl = document.createElement('div');
+  bgEl.id = 'bg';
+  bgEl.style.backgroundColor = bg.color || '#2b2d33';
+  var bgImage = document.createElement('div');
+  bgImage.id = 'bg-image';
+  bgEl.appendChild(bgImage);
+  if ((bg.type === 'image' || bg.type === 'url' || bg.type === 'upload') && bg.url) {
+    bgImage.style.backgroundColor = bg.color || '#2b2d33';
+    bgImage.style.backgroundImage = "url('" + bg.url + "')";
+    bgImage.style.backgroundSize = bg.fit === 'cover' ? 'cover' : 'contain';
+  } else {
+    bgImage.style.backgroundColor = bg.color || '#2b2d33';
+  }
+  var bgBrightness = (bg.brightness != null ? bg.brightness : 100);
+  var bgSaturation = (bg.saturation != null ? bg.saturation : 100);
+  bgImage.style.filter = 'brightness(' + bgBrightness + '%) saturate(' + bgSaturation + '%)';
+  if (data.thread && data.thread.bgmoves) {
+    bgEl.classList.add('moves');
+    canvas.appendChild(bgEl);
+  } else {
+    bgEl.style.left = '0'; bgEl.style.top = '0';
+    bgEl.style.width = window.innerWidth + 'px';
+    bgEl.style.height = window.innerHeight + 'px';
+    stage.insertBefore(bgEl, canvas);
+  }
 
   // Alle Board-Fotos als feste Ebene aufbauen (Positionen exakt wie auf
   // dem Board) - dieselbe Grundlage wie in der echten Präsentation, wo

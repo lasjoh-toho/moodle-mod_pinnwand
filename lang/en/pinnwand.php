@@ -126,6 +126,7 @@ $string['tf_target_card'] = 'Select note/card background';
 $string['tf_send_direct'] = 'Send directly (appears in the post stream right away)';
 $string['nothreadtoexport'] = 'There is no own thread with waypoints yet that could be exported.';
 $string['export_presentation'] = 'Export as standalone presentation';
+$string['export_presentation_pickboard'] = 'Which board should be exported?';
 $string['tf_aspect_locked'] = 'Aspect ratio locked (click to unlock)';
 $string['tf_aspect_unlocked'] = 'Aspect ratio not locked (click to lock)';
 $string['tf_show_board_bg'] = 'Preview against the board background';

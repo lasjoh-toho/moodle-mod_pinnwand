@@ -264,6 +264,7 @@ $config = [
         'tf_target_card' => get_string('tf_target_card', 'pinnwand'),
         'tf_send_direct' => get_string('tf_send_direct', 'pinnwand'),
         'export_presentation' => get_string('export_presentation', 'pinnwand'),
+        'export_presentation_pickboard' => get_string('export_presentation_pickboard', 'pinnwand'),
         'tf_aspect_locked' => get_string('tf_aspect_locked', 'pinnwand'),
         'tf_aspect_unlocked' => get_string('tf_aspect_unlocked', 'pinnwand'),
         'tf_show_board_bg' => get_string('tf_show_board_bg', 'pinnwand'),

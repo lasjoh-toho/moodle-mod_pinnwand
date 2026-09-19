@@ -1462,6 +1462,18 @@ Details und Scoping-Entscheidungen. In Kurzform:
   etwas zusätzlichen Platz am oberen Rand, damit die Schrift nicht am
   Bildschirmrand klebt.
 
+### Einhunderteinunddreißigste Überarbeitung — Export: Hintergrund eingebettet, Board-Auswahl vor dem Export
+
+- Der Standalone-Export ignorierte bisher Hintergrundfarbe/-bild
+  komplett - jetzt eingebettet, inklusive Bild-Anpassung (füllen/
+  ausschneiden), Helligkeit/Sättigung und ob der Hintergrund mitzoomt.
+- Root Cause für vermischte/doppelte Dateien im Export gefunden: es
+  wurden Fotos mehrerer Boards auf eine Leinwand gelegt. Der Export
+  exportiert jetzt immer genau EIN explizit gewähltes Board.
+- Bei mehreren eigenen Boards fragt der Export-Button vorher per
+  Dropdown, welches Board exportiert werden soll (wie der bestehende
+  Board-Wechsler auf der Pinnwand selbst).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

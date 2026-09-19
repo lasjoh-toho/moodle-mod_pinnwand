@@ -4619,6 +4619,58 @@
     return '';
   }
 
+  // Präsentations-Export: MUSS ein einzelnes Board benennen (siehe
+  // export_presentation.php) - vorher wurde serverseitig "erraten", was
+  // exportiert werden soll, was bei mehreren Boards Fotos verschiedener
+  // Boards auf derselben Leinwand vermischte ("Dateien doppelt"/"Dateien,
+  // die nicht auf der Pinnwand sind"). Bei genau einem eigenen Board wird
+  // direkt exportiert, bei mehreren erscheint ein Wechsel-Dropdown wie
+  // beim normalen Board-Wechsel auf der Pinnwand.
+  function startPresentationExport() {
+    var ownBoards = boardList().map(function (bid) {
+      return { boardid: bid, name: state.boardNames && state.boardNames[bid] };
+    });
+    callAjax('mod_pinnwand_get_all_boards', { cmid: cfg.cmid }).then(function (res) {
+      (res.boards || []).forEach(function (b) {
+        if (b.isown && !ownBoards.some(function (o) { return o.boardid === b.boardid; })) {
+          ownBoards.push({ boardid: b.boardid, name: b.name });
+        }
+      });
+      goExportWithBoards(ownBoards);
+    }).catch(function () { goExportWithBoards(ownBoards); });
+  }
+  function goExportWithBoards(ownBoards) {
+    if (ownBoards.length <= 1) {
+      var onlyBoardId = ownBoards.length ? ownBoards[0].boardid : (state.currentBoard || 0);
+      window.location.href = cfg.exportpresentationurl + '&boardid=' + onlyBoardId;
+      return;
+    }
+    openExportBoardPicker(ownBoards);
+  }
+  function openExportBoardPicker(ownBoards) {
+    var overlay = el('div', { class: 'ic-modal-overlay' });
+    overlay.addEventListener('click', function (ev) { if (ev.target === overlay) { overlay.remove(); } });
+    var panel = el('div', { class: 'ic-add-modal' });
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.export_presentation_pickboard]));
+    var list = el('div', {});
+    panel.appendChild(list);
+    ownBoards.slice().sort(function (a, b) { return a.boardid - b.boardid; }).forEach(function (b) {
+      var row = el('div', { class: 'ic-thread-item' });
+      var label = el('span', { class: 'ic-thread-item-label', style: 'cursor:pointer;' }, [b.name || boardDisplayName(b.boardid)]);
+      label.addEventListener('click', function () {
+        overlay.remove();
+        window.location.href = cfg.exportpresentationurl + '&boardid=' + b.boardid;
+      });
+      row.appendChild(label);
+      list.appendChild(row);
+    });
+    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel }, ['✕']);
+    closeBtn.addEventListener('click', function () { overlay.remove(); });
+    panel.appendChild(closeBtn);
+    overlay.appendChild(panel);
+    root.appendChild(overlay);
+  }
+
   function renderArrange(body) {
     // Fadenfarbe als CSS-Variable bereitstellen - die Umrandung der
     // Mehrfachauswahl soll der Fadenfarbe entsprechen statt einem fest
@@ -7031,7 +7083,7 @@
 
     if (cfg.exportpresentationurl) {
       var exportBtn = toolBtn('download', S.export_presentation);
-      exportBtn.addEventListener('click', function () { window.location.href = cfg.exportpresentationurl; });
+      exportBtn.addEventListener('click', function () { startPresentationExport(); });
       toolbar.appendChild(exportBtn);
     }
 
