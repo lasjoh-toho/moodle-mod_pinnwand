@@ -625,7 +625,12 @@
 
 /* Wortfeld (Textrahmen) */
 .ic-textframe-preview { position: relative; margin: 20px auto; overflow: visible; z-index: 0; }
-.ic-tf-stage { align-items: flex-start; justify-content: flex-start; padding: 40px; box-sizing: border-box; overflow: auto; }
+/* top-Padding groesser als die anderen Seiten: .ic-tf-header (Undo/Redo
+   links, weitere Knoepfe rechts) schwebt als Overlay bei top:60px ueber
+   der Buehne - ohne diesen Abstand lag der Zettel/WordArt-Rahmen (der
+   sich bei padding:40px direkt an der oberen linken Ecke aufbaut) genau
+   darunter, die Undo/Redo-Knoepfe verdeckten ihn dadurch teilweise. */
+.ic-tf-stage { align-items: flex-start; justify-content: flex-start; padding: 112px 40px 40px 40px; box-sizing: border-box; overflow: auto; }
 .ic-tf-stage > .ic-textframe-preview { margin: 0; }
 .ic-textframe-inner { position: relative; width: 100%; height: 100%; z-index: 1; }
 .ic-textframe-obj {
@@ -753,6 +758,19 @@
   .ic-textframe-block-title::after { content: '+'; }
   .ic-textframe-block.ic-tf-expanded .ic-textframe-block-title::after { content: '\2212'; }
 }
+/* Gemeinsamer "Alle Bedienpanels einklappen"-Schalter (Kopfzeilen-Button,
+   siehe panelsToggleBtn) - reduziert alle drei Blöcke (Vorlagen/Schrift/
+   Form) auf ihre reine Titelzeile, unabhängig von der Bildschirmgröße,
+   damit auf einem kleineren Fenster mehr Platz für die eigentliche
+   Arbeitsfläche bleibt. Zustand liegt in state.tfPanelsCollapsed (siehe
+   renderTextFrame), nicht nur als lokale DOM-Klasse, damit er einen
+   Neu-Render übersteht. */
+.ic-textframe-blocks.ic-tf-panels-collapsed .ic-textframe-block-content { display: none; }
+.ic-textframe-blocks.ic-tf-panels-collapsed .ic-textframe-block { flex: 0 0 auto; }
+.ic-textframe-blocks.ic-tf-panels-collapsed.ic-tf-portrait { flex: 0 0 auto; }
+.ic-textframe-layout.ic-tf-portrait .ic-textframe-blocks.ic-tf-panels-collapsed { flex: 0 0 auto; }
+.ic-textframe-blocks.ic-tf-panels-collapsed .ic-textframe-block-title { margin-bottom: 0; }
+.ic-textframe-blocks.ic-tf-panels-collapsed .ic-textframe-block-title::after { content: '+'; }
 .ic-textframe-wordart-row {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0;
   max-height: 60vh; overflow-y: auto; padding-right: 2px; min-width: 280px;

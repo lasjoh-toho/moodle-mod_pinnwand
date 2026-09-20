@@ -2896,14 +2896,15 @@
       t.letterSpacing = t.letterSpacing || 0;
       t.fontWeight = t.fontWeight || 700;
       var fontCss = resolveFontCss(t.font);
+      var elStyle = (useFillCentering ? '' : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;max-width:94%;') +
+        'font-family:' + fontCss + ';font-size:' + t.size + 'px;font-weight:' + t.fontWeight +
+        ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px;' +
+        (wordartCssFor(t, preset.text, useFillCentering) || computeStyle1Css(t, preset.text));
       var el2 = el('div', {
         class: 'ic-textframe-obj' + (useFillCentering ? ' primary' : '') + (t.id === activeId ? ' active' : ''),
         'data-textid': String(t.id),
         contenteditable: 'true',
-        style: (useFillCentering ? '' : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;max-width:94%;') +
-          'font-family:' + fontCss + ';font-size:' + t.size + 'px;font-weight:' + t.fontWeight +
-          ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px;' +
-          (wordartCssFor(t, preset.text, useFillCentering) || computeStyle1Css(t, preset.text))
+        style: elStyle
       });
       // innerHTML statt textContent: so bleiben Fett/Kursiv/Unterstrichen/
       // Durchgestrichen/Aufzählungen (siehe Formatierungswerkzeuge) beim
@@ -2917,12 +2918,26 @@
       // noch bevor überhaupt etwas eingegeben werden kann. Stattdessen wird
       // nur die aktive Markierung + das Steuerelemente-Panel isoliert
       // aktualisiert (siehe selectText/refreshControls).
-      el2.addEventListener('focus', function () { selectText(t.id); });
+      // Während der Bearbeitung (Fokus) wird bei WordArt die CSS-Transform
+      // (skewY/scaleX/scaleY/rotate aus wordartCssFor) vorübergehend
+      // entfernt: Klicken/Ziehen zum Markieren einzelner Buchstaben in
+      // einem contenteditable-Element ist mit aktiver Transform (v.a.
+      // skewY+scaleY kombiniert) browserübergreifend sehr unzuverlässig -
+      // der Browser bildet Mausposition und Zeichen-Trefferbereich dann
+      // nicht mehr präzise aufeinander ab. Farbe/Kontur/Schatten bleiben
+      // unverändert, nur die Verzerrung/Drehung wird kurz ausgesetzt; beim
+      // Verlassen des Felds (blur) wird exakt der ursprüngliche Stil
+      // wiederhergestellt.
+      el2.addEventListener('focus', function () {
+        selectText(t.id);
+        if (t.wordartStyle && t.wordartStyle !== 'none') { el2.style.transform = 'none'; }
+      });
       el2.addEventListener('blur', function () {
         if (activeId === t.id) {
           activeId = null;
           el2.classList.remove('active');
         }
+        if (t.wordartStyle && t.wordartStyle !== 'none') { el2.style.cssText = elStyle; }
       });
       if (useFillCentering) {
         // Primäres Textobjekt (nur normale Textfelder): füllt den ganzen
@@ -3003,7 +3018,7 @@
     // nebeneinander) richtet sich nach dem Seitenverhältnis des Zettels
     // selbst (nicht nach der Bildschirmgröße), siehe CSS .ic-tf-landscape/
     // .ic-tf-portrait.
-    var blocksWrap = el('div', { class: 'ic-textframe-blocks ' + tfOrientation });
+    var blocksWrap = el('div', { class: 'ic-textframe-blocks ' + tfOrientation + (state.tfPanelsCollapsed ? ' ic-tf-panels-collapsed' : '') });
     // Akkordeon: Überschrift antippen klappt den jeweiligen Block ein/aus -
     // auf dem Handy starten alle Blöcke eingeklappt (siehe CSS), auf
     // größeren Bildschirmen bleiben sie offen.
@@ -3995,6 +4010,17 @@
     undoBtn2.addEventListener('click', tfUndo);
     redoBtn2.addEventListener('click', tfRedo);
     tfHeaderLeft.appendChild(undoBtn2); tfHeaderLeft.appendChild(redoBtn2);
+    // Bedienpanels (Vorlagen/Schrift/Form) komplett einklappen - reduziert
+    // sie auf eine einzige Titelzeile je Block, damit auf kleineren
+    // Fenstern mehr Platz für die eigentliche Arbeitsfläche bleibt. Der
+    // Zustand liegt in state (nicht nur als DOM-Klasse), damit er einen
+    // Neu-Render (der bei fast jeder Formularänderung passiert) übersteht.
+    var panelsToggleBtn = el('button', {
+      class: 'ic-btn ic-btn-ghost ic-btn-icon' + (state.tfPanelsCollapsed ? ' active' : ''),
+      title: state.tfPanelsCollapsed ? S.tf_panels_expand : S.tf_panels_collapse
+    }, [icon(state.tfPanelsCollapsed ? 'chevronup' : 'chevrondown')]);
+    panelsToggleBtn.addEventListener('click', function () { state.tfPanelsCollapsed = !state.tfPanelsCollapsed; render(); });
+    tfHeaderLeft.appendChild(panelsToggleBtn);
     tfHeader.appendChild(tfHeaderLeft);
     var tfHeaderRight = el('div', { class: 'ic-tf-header-group' });
     // Proportionen fixieren/lösen: beim Ziehen des Größenänderungs-Griffs
@@ -4293,6 +4319,8 @@
     link: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
     brush: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5 3 21"/><path d="M14 3c2 0 4 2 4 4 0 3-3 4-5 6l-4 4-3-3 4-4c2-2 3-5 6-5 0 0 0-2-2-2z"/></svg>',
     arrowleft: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
+    chevrondown: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
+    chevronup: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>',
     fullscreen: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/></svg>',
     thumbtack: '<svg viewBox="0 0 1502 1502" width="16" height="16" fill="currentColor"><path d="M887.379 265.37c-71.92 39.67-90.783 153.676-73.858 220.443 25.373 89.642 120.263 184.87 208.333 223.115 88.825 39.357 213.79 19.878 236.138-70.095 17.062-70.586-14.408-161.368-105.1-252.481-51.592-61.787-195.222-150.364-265.514-120.983zm230.112 132.709c146.728 158.437 175.269 364.057-102.498 170.535-34.831-24.267-35.33-25.11-63.176-61.653-180.218-260.581 36.104-234.896 165.675-108.882zm-427.136 211.52c-30.14 129.742 141.096 224.808 206.885 226.635l115.713-114.768s-15.115-7.428-22.352-9.622c-95.305-35.201-153.483-115.01-186.185-198.223zM485.279 724.858c11.704 135.014 160.179 270.964 278.146 298.044 94.23 22.034 149.97-90.424 137.659-165.743-124.499-1.779-264.574-142.482-229.575-240.563-75.865-20.138-185.011 41.747-186.23 108.261zm-183.466 469.254c-10.709 15.142 2.074 28.789 19.1 14.38l288.835-244.45c-32.143-18.286-42.019-27.02-60.405-61.83 0 0-161.602 197.241-247.53 291.9z"/></svg>',
     hand: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v7"/><path d="M10 10.5V6a2 2 0 0 0-4 0v10"/><path d="M6 14l-1.5-1.8a1.8 1.8 0 0 0-2.7 2.3L6 21h9a4 4 0 0 0 4-4v-5a2 2 0 0 0-4 0"/></svg>',

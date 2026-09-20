@@ -3851,3 +3851,74 @@ Objekte lassen sich also wieder normal mehrzeilig eintippen, ohne dass
 der Rahmen sich selbstständig verkleinert.
 
 Shipped als Version `2026083135` / `0.137.0`.
+
+## Phase 131
+
+Nutzer bestätigte: WordArt-Export ist jetzt zum ersten Mal nicht mehr
+abgeschnitten. Neues Feedback in derselben Nachricht, drei Punkte
+bearbeitet (ein vierter - verschobener Skalierungs-Rahmen auf der
+Pinnwand - noch offen, siehe unten):
+
+**1) Buchstaben in der WordArt kaum markierbar, Placeholder erschwert
+das Schreiben.** Root Cause: `wordartCssFor()` setzt die volle WordArt-
+Transformation (`skewY() scaleX() scaleY() rotate()`) direkt inline auf
+das `contenteditable`-Element selbst - auch WÄHREND der Bearbeitung.
+Klicken/Ziehen zum Markieren einzelner Buchstaben ist in Kombination
+mit aktiver CSS-Transform (besonders skewY+scaleY zusammen) browser-
+übergreifend nachweislich unzuverlässig, weil der Browser Mausposition
+und Zeichen-Trefferbereich durch die Verzerrung nicht mehr präzise
+aufeinander abbildet - das erklärte sowohl die schwer markierbaren
+Buchstaben als auch den schwer klickbaren (und bei leerem Feld über
+`content:attr(data-placeholder)` denselben Stil erbenden) Placeholder.
+
+Fix: bei Fokus auf ein WordArt-Textobjekt wird die Transform
+vorübergehend auf `none` gesetzt (Farbe/Kontur/Schatten bleiben
+unverändert), bei `blur` wird exakt der ursprüngliche Stil (in einer
+Variablen zwischengespeichert) wiederhergestellt - kein `render()`
+nötig, Cursor/Fokus bleiben dabei erhalten. Mit Playwright verifiziert:
+`getComputedStyle(...).transform` ist während des Fokus exakt `none`,
+nach `blur` wieder exakt die ursprüngliche Matrix.
+
+**2) WordArt-Rahmen im Editor zu nah am linken Rand, Undo/Redo-Buttons
+verdecken ihn.** `.ic-tf-header` (Undo/Redo links, weitere Knöpfe
+rechts) schwebt als Overlay bei `top:60px` über der Bühne; `.ic-tf-
+stage` hatte bisher `padding:40px` auf allen Seiten, wodurch der
+Zettel/WordArt-Rahmen (der sich direkt an der oberen linken Ecke der
+gepolsterten Bühne aufbaut) in denselben Bereich wie der Header ragte.
+Fix: `padding` auf `112px 40px 40px 40px` geändert (nur oben mehr
+Abstand) - mit Playwright verifiziert, dass Header-Unterkante und
+Rahmen-Oberkante sich nicht mehr überschneiden (vorher überlappend,
+nachher ca. 50px Abstand in einer synthetischen 1000×800-Testseite).
+
+**3) Bedienpanels sollen sich auf eine Zeile einklappen lassen.** Die
+Akkordeon-Logik (Block-Titel antippen klappt ein/aus) existierte
+bereits, war aber NUR innerhalb `@media (max-width:640px)` mit CSS
+hinterlegt - auf dem Desktop hatte ein Klick auf den Titel keine
+sichtbare Wirkung, die drei Blöcke (Vorlagen/Schrift/Form) blieben
+immer voll ausgeklappt und nahmen (besonders bei "Landscape"-Karten,
+wo sie UNTER der Bühne liegen) spürbar Platz weg. Neuer, bildschirm-
+größenunabhängiger Sammel-Schalter (`state.tfPanelsCollapsed`, Knopf
+in der Kopfzeile links neben Undo/Redo) klappt alle drei Blöcke auf
+einmal auf ihre reine Titelzeile zusammen - der Zustand liegt in
+`state` (nicht nur als DOM-Klasse), damit er einen Neu-Render (der bei
+fast jeder Formularänderung passiert) übersteht. Mit Playwright
+verifiziert: Höhe des Panel-Containers sinkt nach dem Umschalten
+messbar.
+
+**4) NOCH OFFEN: "Der Rahmen, der auf der Pinnwand zum Skalieren
+angezeigt wird, ist nach rechts verschoben. Die Handles sollen der
+viewbox entsprechen."** Ohne die tatsächliche Datei/einen Screenshot
+von Jos konkretem Fall ließ sich die genaue Ursache nicht sicher genug
+eingrenzen, um einen gezielten Fix zu riskieren (mögliche Hypothese:
+bei mehreren WordArt-Textobjekten auf derselben Karte kann
+`computeAutoExportBounds()`s Summen-Bounding-Box asymmetrisch um das
+primäre Objekt herum wachsen, wodurch dessen sichtbare Position
+innerhalb des gewachsenen Gesamtbilds nicht mehr mittig liegt - die
+Ziehgriffe auf der Pinnwand umschließen aber immer das GESAMTE Bild,
+nicht nur den sichtbaren Text). Jo um eine exportierte Beispieldatei
+oder einen Screenshot des betroffenen Rahmens gebeten, bevor hier
+geraten statt gezielt repariert wird - WICHTIG: die neue, großzügigere
+viewBox aus Phase 128 (die WordArt jetzt vollständig zeigt) bleibt in
+jedem Fall unangetastet, das war eine explizite Vorgabe.
+
+Shipped als Version `2026083136` / `0.138.0`.

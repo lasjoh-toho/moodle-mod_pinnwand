@@ -1563,6 +1563,23 @@ Details und Scoping-Entscheidungen. In Kurzform:
   automatischen Export-Beschneidungsrand gebraucht (Basis der WordArt-
   Export-Fixes aus Phase 128/129).
 
+### Einhundertachtunddreißigste Überarbeitung — WordArt-Bearbeitung leichter, Bedienpanels einklappbar
+
+- Buchstaben in der WordArt waren kaum markierbar, der Placeholder
+  erschwerte das Schreiben zusätzlich: Ursache war die live auf das
+  bearbeitbare Feld angewendete CSS-Transformation (Schrägstellung/
+  Streckung/Drehung), die Klicken/Markieren browserübergreifend
+  unzuverlässig macht. Während der Bearbeitung wird die Transformation
+  jetzt vorübergehend ausgesetzt, beim Verlassen des Felds automatisch
+  wiederhergestellt.
+- Der WordArt-Rahmen im Editor lag zu nah am linken Rand, Undo/Redo-
+  Buttons verdeckten ihn teilweise - mehr Abstand oben in der
+  Editor-Bühne geschaffen.
+- Neuer Sammel-Schalter in der Kopfzeile klappt alle drei Bedienpanels
+  (Vorlagen/Schrift/Form) auf einmal auf ihre Titelzeile zusammen -
+  vorher ging das nur auf dem Handy, jetzt unabhängig von der
+  Bildschirmgröße, für mehr Platz auf der Arbeitsfläche.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
