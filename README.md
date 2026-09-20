@@ -1524,6 +1524,18 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Stapel erscheint jetzt nur noch bei Hover über den Zähler selbst, nicht
   mehr bei Hover über die Zurück-/Vorwärts-Pfeile daneben.
 
+### Einhundertfünfunddreißigste Überarbeitung — WordArt-Export-Beschneidung endgültig behoben
+
+- Root Cause für das bekannte "WordArt wird abgeschnitten"-Problem
+  gefunden: der großzügige Rand fürs äußere SVG-Canvas schützte den Text
+  gar nicht, weil das `<foreignObject>` des Textes selbst weiterhin exakt
+  auf die knappe Rahmengröße begrenzt war - ein `foreignObject`
+  beschneidet immer an der eigenen Größe, unabhängig vom umschließenden
+  SVG. Jetzt vereinheitlicht: Sizing-Box und Clip-Box sind dieselbe Box.
+  Mit echtem Headless-Chromium vorher/nachher verifiziert (stark
+  extrudierter/schräggestellter WordArt-Text vorher abgeschnitten, jetzt
+  vollständig sichtbar; normaler Kartentext pixelidentisch).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

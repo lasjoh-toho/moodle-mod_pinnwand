@@ -2332,6 +2332,15 @@
     }
     var behindShapesEl = (tf.shapes || []).filter(function (s) { return s.wrapMode !== 'front'; }).map(renderShapeSvg).join('');
     var frontShapesEl = (tf.shapes || []).filter(function (s) { return s.wrapMode === 'front'; }).map(renderShapeSvg).join('');
+    // Großzügiger äußerer Rand (siehe Kommentar bei computeAutoExportBounds)
+    // MUSS jetzt schon feststehen, BEVOR die foreignObject-Boxen gebaut
+    // werden - siehe idx===0-Zweig unten: die Box, die die GRÖSSE bestimmt,
+    // und die Box, die tatsächlich beschneidet, müssen dieselbe sein, sonst
+    // schützt der großzügige Rand am äußeren <svg> gar nichts (ein
+    // foreignObject beschneidet seinen Inhalt an der EIGENEN width/height,
+    // unabhängig davon, wie groß das umschließende <svg> ist).
+    var eb = computeAutoExportBounds(tf);
+    var ebw = eb.x2 - eb.x1, ebh = eb.y2 - eb.y1;
     // Alle Textobjekte (nicht nur das primäre) laufen über foreignObject mit
     // echtem HTML-Markup - so bleiben Fett/Kursiv/Unterstrichen/
     // Durchgestrichen/Aufzählung sowie Zeilenabstand/Laufweite erhalten
@@ -2356,11 +2365,32 @@
         ';letter-spacing:' + (t.letterSpacing || 0) + 'px;white-space:pre-wrap;word-wrap:break-word;overflow:hidden;' +
         (wordartCssFor(t, preset.text, true) || computeStyle1Css(t, preset.text));
       if (idx === 0) {
-        // Primäres Textobjekt: füllt den ganzen Rahmen.
-        return '<foreignObject x="0" y="0" width="' + tf.w + '" height="' + tf.h + '">' +
-          '<div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;padding:12px;' +
-          'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;' + baseStyle + '">' +
-          html + '</div></foreignObject>';
+        // Primäres Textobjekt: füllt den ganzen Rahmen (tf.w x tf.h) - ABER
+        // die foreignObject-Box selbst ist jetzt genauso groß wie der
+        // großzügige äußere Rand (eb/ebw/ebh), sonst beschneidet das
+        // foreignObject (das IMMER an der eigenen width/height beschneidet,
+        // egal wie groß das umschließende <svg> ist) über den Rahmen
+        // hinausragende Effekte (WordArt-Streckung/Schrägstellung/
+        // Extrusion, Kartenschatten) trotz des großzügigen äußeren Rands.
+        // Die ursprüngliche tf.w x tf.h-Box mit identischer Flexbox-
+        // Zentrierung sitzt als absolut positionierter innerer Wrapper an
+        // exakt derselben Stelle wie vorher (Offset -eb.x1/-eb.y1) -
+        // dadurch bleibt die sichtbare Position/Größe unverändert, nur der
+        // Beschneidungsrahmen wächst mit. WICHTIG: baseStyle setzt selbst
+        // "overflow:hidden" (für normalen Fließtext gedacht) - das MUSS
+        // hier explizit NACH baseStyle auf "visible" überschrieben werden
+        // (spätere Deklaration im selben style-Attribut gewinnt), sonst
+        // beschneidet dieser innere tf.w x tf.h-Wrapper selbst weiterhin
+        // exakt wie vorher, egal wie groß das umschließende foreignObject
+        // ist - Sizing-Box und Clip-Box wären sonst zwar beim foreignObject
+        // vereinheitlicht, aber durch dieses zusätzliche overflow:hidden
+        // sofort wieder auseinandergerissen.
+        return '<foreignObject x="' + eb.x1 + '" y="' + eb.y1 + '" width="' + ebw + '" height="' + ebh + '">' +
+          '<div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:100%;height:100%;overflow:visible;">' +
+          '<div style="position:absolute;left:' + (-eb.x1) + 'px;top:' + (-eb.y1) + 'px;width:' + tf.w + 'px;height:' + tf.h + 'px;' +
+          'box-sizing:border-box;padding:12px;' +
+          'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;' + baseStyle + 'overflow:visible;">' +
+          html + '</div></div></foreignObject>';
       }
       // Weitere Textobjekte: frei positioniert, Box-Größe grob aus dem
       // (Klartext-)Inhalt geschätzt (keine Live-DOM-Messung nötig).
@@ -2380,20 +2410,20 @@
         'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;' + baseStyle + 'overflow:visible;">' +
         html + '</div></foreignObject>';
     }).join('');
-    // Zusätzlicher Rand um den eigentlichen Karteninhalt: SVGs beschneiden
-    // standardmäßig am eigenen Viewport - ohne diesen Rand würden über den
-    // Kartenrand hinausragende Effekte (WordArt-Streckung/Schrägstellung/
-    // Extrusion) abgeschnitten, sobald das Ergebnis als <img> angezeigt
-    // wird (betraf "Meine Dateien" und die Klassenübersicht).
-    // Rand berücksichtigt die tatsächlich verwendeten Schrägstellungs-/
-    // Rotations-/Extrusions-Werte, statt eines pauschalen Prozentsatzes -
-    // bei starker diagonaler Verzerrung reichte ein fester Rand nicht aus
-    // (Ursache für Abschneiden in der Präsentation bei skew-lastigen
-    // WordArt-Stilen). Der Nutzer kann den Rahmen selbst über die beiden
-    // Größengriffe (unten-rechts, oben-links) erweitern, falls mehr Platz
-    // als dieses automatische Sicherheitsnetz nötig ist.
-    var eb = computeAutoExportBounds(tf);
-    var ebw = eb.x2 - eb.x1, ebh = eb.y2 - eb.y1;
+    // eb/ebw/ebh (großzügiger äußerer Rand) wurden schon VOR textEls oben
+    // berechnet, siehe Kommentar dort - hier nur noch fürs äußere <svg>
+    // selbst verwendet. SVGs beschneiden standardmäßig am eigenen
+    // Viewport - ohne diesen Rand würden über den Kartenrand hinausragende
+    // Effekte (WordArt-Streckung/Schrägstellung/Extrusion, Kartenschatten)
+    // abgeschnitten, sobald das Ergebnis als <img> angezeigt wird (betraf
+    // "Meine Dateien" und die Klassenübersicht). Rand berücksichtigt die
+    // tatsächlich verwendeten Schrägstellungs-/Rotations-/Extrusions-Werte,
+    // statt eines pauschalen Prozentsatzes - bei starker diagonaler
+    // Verzerrung reichte ein fester Rand nicht aus (Ursache für Abschneiden
+    // in der Präsentation bei skew-lastigen WordArt-Stilen). Der Nutzer
+    // kann den Rahmen selbst über die beiden Größengriffe (unten-rechts,
+    // oben-links) erweitern, falls mehr Platz als dieses automatische
+    // Sicherheitsnetz nötig ist.
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + ebw + '" height="' + ebh +
       '" viewBox="' + eb.x1 + ' ' + eb.y1 + ' ' + ebw + ' ' + ebh + '"><style>' +
       '.ic-frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;' +

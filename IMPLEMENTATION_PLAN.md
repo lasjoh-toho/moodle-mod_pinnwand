@@ -3711,3 +3711,53 @@ Rändern durch, wenn die gezoomte Leinwand kleiner ist als der Bildschirm).
   ihn zuverlässig.
 
 Shipped als Version `2026083132` / `0.134.0`.
+
+## Phase 128 — WordArt-Export-Beschneidung: Sizing-Box und Clip-Box vereinheitlicht (externe Analyse) ✅
+
+Jo brachte - wie schon einmal in Phase 114 - eine externe Code-Analyse
+(Opus) zum bekannten "WordArt wird beim Export/in Meine Dateien
+abgeschnitten"-Thema mit. Kernaussage: `computeAutoExportBounds()`
+berechnet zwar einen großzügigen äußeren Rand (`eb`) fürs `<svg
+viewBox>`, aber das `<foreignObject>` für das primäre WordArt-/Text-
+Objekt in `buildTextFrameSVG()` blieb weiterhin exakt auf `tf.w x tf.h`
+begrenzt (`x="0" y="0" width={tf.w} height={tf.h}`). Ein `foreignObject`
+beschneidet seinen Inhalt aber IMMER an der EIGENEN width/height, egal
+wie groß das umschließende `<svg>` ist - der großzügige Rand am äußeren
+SVG schützte den Text also gar nicht vor dem Abschneiden. Nachvollzogen
+und bestätigt: **zwei getrennte Boxen (eine knappe fürs Clipping, eine
+großzügige nur fürs Canvas) - Sizing-Box und Clip-Box müssen dieselbe
+Box sein.**
+
+**Fix (surgical statt der von der externen Analyse vorgeschlagenen
+kompletten Neuschreibung mit eigener `wordartExactBounds()`/Pivot-
+Transform-Funktion)**: `eb`/`ebw`/`ebh` werden jetzt VOR dem Bauen der
+Text-Elemente berechnet. Das primäre `<foreignObject>` (idx===0) ist
+jetzt genauso groß wie `eb` (identisch mit dem äußeren `<svg>`-Rand)
+statt `tf.w x tf.h`. Die ursprüngliche `tf.w x tf.h`-Box mit identischer
+Flexbox-Zentrierung sitzt als absolut positionierter innerer Wrapper an
+exakt derselben Stelle wie vorher (Offset `-eb.x1`/`-eb.y1`) - dadurch
+bleibt die sichtbare Position/Größe für den Normalfall unverändert, nur
+der Beschneidungsrahmen wächst mit. **Zweite, beim ersten Testlauf
+entdeckte Falle**: `baseStyle` selbst setzt `overflow:hidden` (für
+normalen Fließtext gedacht) - das überschrieb den neuen großzügigen
+Rahmen sofort wieder auf Ebene des inneren Wrappers. Fix: `overflow:
+visible;` explizit NACH `baseStyle` angehängt (spätere Deklaration im
+selben `style`-Attribut gewinnt) - identisch zum Muster, das
+nicht-primäre Textobjekte schon immer nutzen.
+
+Verifiziert mit echtem Headless-Chromium: die betroffenen Funktionen
+(`buildTextFrameSVG`, `computeAutoExportBounds`, `wordartAutoExtent`,
+`wordartHalfExtent` u.a.) wurden 1:1 aus `js/app.js` extrahiert (vor UND
+nach dem Fix, per `git show <alter-commit>:js/app.js`) und in einer
+Standalone-Testseite ausgeführt. Ergebnis eindeutig: derselbe Testfall
+("G" in starkem "Deep 3D Shadow"-Stil, `extrudeSteps:18`, `skewY:15`,
+`rotate:-3`, Rahmen bewusst knapp gewählt) zeigt VOR dem Fix nur ein
+abgeschnittenes Fragment des Buchstabens, NACH dem Fix den vollständigen
+Buchstaben inkl. Extrusion/Schrägstellung. Regressionstest mit normalem
+Kartentext ("Hallo Welt", kein WordArt) liefert VOR und NACH dem Fix
+pixelidentische Screenshots - keine sichtbare Änderung im Normalfall.
+Die SVG-native Gradient-WordArt (`buildWordartGradientParts`, z.B.
+"Chrom", "Gold Metallik") war von diesem Bug nie betroffen (kein
+foreignObject involviert) und wurde nicht verändert.
+
+Shipped als Version `2026083133` / `0.135.0`.
