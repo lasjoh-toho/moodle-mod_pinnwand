@@ -371,11 +371,23 @@
     state.photos.forEach(function (p, idx) {
       var row = el('div', { class: 'ic-home-row' + rowStateClass(p) });
       var thumb = el('div', { class: 'ic-thumb' + (p.otherboardcount > 0 ? ' ic-thumb-pinned' : '') });
-      var imgWrap = el('div', { class: 'ic-thumb-img-wrap' });
-      var thumbLiveRendered = false;
+      // WordArt-Erkennung VOR dem Anlegen von imgWrap, damit dessen
+      // overflow:hidden (nötig fürs normale Thumbnail-Grid, siehe
+      // .ic-thumb-img-wrap) für WordArt gezielt aufgehoben werden kann -
+      // sonst beschneidet dieser äußere Wrap die Extrusion/Schrägstellung
+      // genauso, wie es vorher das foreignObject im Export tat (Phase 128).
+      var thumbHasWordart = false;
+      var thumbTf = null;
       if (p.wordfielddata) {
         try {
-          var thumbTf = JSON.parse(p.wordfielddata);
+          thumbTf = JSON.parse(p.wordfielddata);
+          thumbHasWordart = (thumbTf.texts || []).some(function (t) { return t.wordartStyle && t.wordartStyle !== 'none'; });
+        } catch (parseErr) { thumbTf = null; }
+      }
+      var imgWrap = el('div', { class: 'ic-thumb-img-wrap' + (thumbHasWordart ? ' ic-thumb-img-wrap-wordart' : '') });
+      var thumbLiveRendered = false;
+      if (thumbTf) {
+        try {
           imgWrap.appendChild(buildTextFrameLiveDom(thumbTf));
           thumbLiveRendered = true;
         } catch (thumbErr) {

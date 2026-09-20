@@ -1536,6 +1536,15 @@ Details und Scoping-Entscheidungen. In Kurzform:
   extrudierter/schräggestellter WordArt-Text vorher abgeschnitten, jetzt
   vollständig sichtbar; normaler Kartentext pixelidentisch).
 
+### Einhundertsechsunddreißigste Überarbeitung — WordArt-Beschneidung auch in "Meine Dateien" behoben
+
+- Dieselbe Art von Fehler wie eben, nur eine Ebene höher: die separate
+  Live-Vorschau in "Meine Dateien" rendert WordArt selbst schon
+  unbeschnitten, saß aber in einem äußeren Thumbnail-Wrap, der immer
+  beschnitt. Jetzt bekommt dieser Wrap für WordArt-Thumbnails gezielt
+  `overflow: visible`, alle anderen Thumbnails bleiben wie gewohnt
+  beschnitten.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

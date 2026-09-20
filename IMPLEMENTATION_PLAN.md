@@ -3761,3 +3761,46 @@ Die SVG-native Gradient-WordArt (`buildWordartGradientParts`, z.B.
 foreignObject involviert) und wurde nicht verändert.
 
 Shipped als Version `2026083133` / `0.135.0`.
+
+## Phase 129 — WordArt-Beschneidung auch in "Meine Dateien" behoben (zweite Fundstelle desselben Musters) ✅
+
+Jo bestätigte nach dem Re-Speichern des Objekts: "Es sieht schon in Meine
+Dateien komisch gechoppt aus" - Phase 128 hatte nur `buildTextFrameSVG()`
+(die gespeicherte Bilddatei, genutzt von Export/Präsentation) korrigiert,
+NICHT die separate Live-DOM-Rendering-Pipeline `buildTextFrameLiveDom()`,
+die "Meine Dateien" (siehe `renderHome()`) für Thumbnails nutzt (echtes
+DOM statt eingefrorenes Bild, historisch aus Phase 91ff. für den Umfluss
+um Formen).
+
+**Root Cause - exakt dasselbe Muster wie Phase 128, nur eine Ebene
+höher**: `buildTextFrameLiveDom()` selbst lässt WordArt-Rahmen schon
+bewusst unbeschnitten (`hasWordart`-Fall, kein `overflow:hidden` am
+eigenen `outer`-Element). Aber der AUFRUFENDE Code in `renderHome()`
+packt das Ergebnis in einen `imgWrap` mit der Klasse
+`.ic-thumb-img-wrap`, die IMMER `overflow:hidden` hat (nötig fürs
+normale Thumbnail-Grid) - dieser äußere Wrap beschnitt die Extrusion/
+Schrägstellung also trotzdem, unabhängig davon, dass die Funktion selbst
+schon korrekt unbeschnitten rendert. Wieder: eine Box, die rendert
+(unbeschnitten), eine andere Box (eine Ebene höher), die trotzdem
+beschneidet.
+
+**Fix**: WordArt-Erkennung (`(tf.texts||[]).some(t => t.wordartStyle &&
+t.wordartStyle !== 'none')`) jetzt VOR dem Anlegen von `imgWrap` in
+`renderHome()`, neue Modifier-Klasse `.ic-thumb-img-wrap-wordart` nur
+für WordArt-Thumbnails, CSS-Override `.ic-thumb-img-wrap.ic-thumb-img-
+wrap-wordart { overflow: visible; }`. Nicht-WordArt-Thumbnails (die
+meisten) bleiben unverändert beschnitten (wichtig fürs Grid-Layout).
+`.ic-arrange-item` (Board selbst) geprüft und hatte nie ein eigenes
+`overflow:hidden` - dort war also nie ein Problem.
+
+Cache-Aspekt geprüft: `photo_url()` hängt `?v={timemodified}` an, ein
+Re-Speichern ändert also zuverlässig die URL (kein Browser-Cache-
+Risiko für die Präsentation/den Export nach einem echten Re-Save).
+
+Verifiziert mit echtem Headless-Chromium: `buildTextFrameLiveDom()` 1:1
+aus `js/app.js` extrahiert, zwei Wrap-Varianten (mit/ohne die neue
+Modifier-Klasse) nebeneinander gerendert - ohne Klasse wird die
+Extrusion sichtbar an der Thumbnail-Kante abgeschnitten, mit Klasse
+vollständig sichtbar, deutlich über die Thumbnail-Box hinausragend.
+
+Shipped als Version `2026083134` / `0.136.0`.

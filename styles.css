@@ -221,6 +221,14 @@
   border: none; background: rgba(20,21,24,.8); color: #fff; align-items: center; justify-content: center; padding: 0;
 }
 .ic-thumb-img-wrap { position: relative; width: 100%; height: 100%; border-radius: 0; overflow: hidden; }
+/* WordArt-Thumbnails in "Meine Dateien" laufen über buildTextFrameLiveDom
+   (siehe renderHome), das seine Extrusion/Schrägstellung bewusst NICHT an
+   der eigenen tf.w x tf.h-Box beschneidet (hasWordart-Fall dort) - aber
+   dieser äußere Wrap hier hätte mit seinem eigenen overflow:hidden (nötig
+   fürs normale Thumbnail-Grid) trotzdem wieder alles abgeschnitten, exakt
+   dasselbe Muster wie beim foreignObject-Bug im Export (siehe Phase 128).
+   Für WordArt-Thumbnails deshalb sichtbar lassen. */
+.ic-thumb-img-wrap.ic-thumb-img-wrap-wordart { overflow: visible; }
 .ic-home-row .ic-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
 .ic-home-row .ic-thumb .ic-del {
   position: absolute; bottom: 0; right: -25px; z-index: 2;
