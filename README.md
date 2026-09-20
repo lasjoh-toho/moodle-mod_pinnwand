@@ -1545,6 +1545,24 @@ Details und Scoping-Entscheidungen. In Kurzform:
   `overflow: visible`, alle anderen Thumbnails bleiben wie gewohnt
   beschnitten.
 
+### Einhundertsiebenunddreißigste Überarbeitung — WordArt-Editor: automatische Rahmengröße zurückgenommen
+
+- Die seit Phase 123 bei jedem Rendern automatisch aus der Schrift-
+  Ausdehnung berechnete Rahmengröße im WordArt-Modus schätzte die
+  Breite anhand des GESAMTEN Texts als eine ungebrochene Zeile - bei
+  mehrzeiligem Text ergab das einen zu schmalen Rahmen, der sich bei
+  jedem automatischen Rendern weiter verengte (Text brach in immer
+  mehr Zeilen mit wenigen Buchstaben um, unten abgeschnitten, Tippen
+  kaum mehr möglich).
+- Zustand gezielt auf den Stand direkt nach dem ersten externen
+  (Opus-)Tipp zurückgesetzt: der Rahmen ist im WordArt-Modus wieder
+  manuell ziehbar (drei Griffe wie zuvor), keine automatische
+  Neuberechnung mehr bei jedem Rendern.
+- Die zugrundeliegende `wordartAutoExtent()`/`wordartHalfExtent()`-
+  Berechnung bleibt unverändert bestehen - sie wird weiterhin für den
+  automatischen Export-Beschneidungsrand gebraucht (Basis der WordArt-
+  Export-Fixes aus Phase 128/129).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

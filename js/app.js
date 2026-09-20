@@ -2580,25 +2580,20 @@
     var tf = state.textFrame;
     TEXTFRAME_FONTS.forEach(function (f) { if (f.webfont) { ensureWebfont(f.webfont); } });
 
-    // WordArt: der frei ziehbare Rahmen (siehe attachFrameResizeHandle
-    // weiter unten) hat sich als nicht verlässlich funktional erwiesen -
-    // er beeinflusste weder das Abschneiden noch etwas anderes Sichtbares
-    // konsistent, weil die eigentliche Kontur längst durch die exakte
-    // WordArt-Geometrie (Extrusion/Schrägstellung/Drehung/Streckung,
-    // siehe wordartAutoExtent) bestimmt wird. Deshalb wird tf.w/tf.h im
-    // WordArt-Modus jetzt bei jedem Rendern automatisch auf genau diese
-    // tatsächliche Ausdehnung gesetzt statt manuell ziehbar zu sein - der
-    // Rahmen zeigt damit immer den echten, verbindlichen Umriss. Das
-    // eigentliche Ziehwerkzeug bleibt für den separat zu planenden
-    // "Zettel"/Längere-Texte-Editor bestehen (dort weiterhin
-    // funktionsfähig, siehe attachFrameResizeHandle-Aufruf unten).
-    if (state.wordArtMode && tf.texts[0]) {
-      var tfAutoExt = wordartAutoExtent(tf.texts[0]);
-      if (tfAutoExt) {
-        tf.w = Math.max(60, Math.round(tfAutoExt.w));
-        tf.h = Math.max(40, Math.round(tfAutoExt.h));
-      }
-    }
+    // Zurückgenommen (Wunsch des Nutzers, Phase 130): der automatische
+    // tf.w/tf.h-Rahmen aus wordartAutoExtent() bei JEDEM Rendern im
+    // WordArt-Modus (eingeführt Phase 123) schätzte die Breite über
+    // fitCtx.measureText() als EINE ungebrochene Zeile - bei mehrzeilig
+    // umbrochenem Text ergab das einen viel zu schmalen Rahmen, der beim
+    // nächsten Rendern (z.B. nach Verlassen des Textfelds) den Text in
+    // immer mehr kurze Zeilen zwang ("zwei Buchstaben pro Zeile", unten
+    // abgeschnitten) und das Tippen selbst kaum mehr möglich machte.
+    // wordartAutoExtent()/wordartHalfExtent() bleiben unverändert bestehen
+    // - sie werden weiterhin von computeAutoExportBounds() für den
+    // Export-Beschneidungsrand gebraucht (Phase 121-129) - nur der
+    // EDITOR erzwingt tf.w/tf.h damit nicht mehr bei jedem Rendern; der
+    // Rahmen ist wieder manuell ziehbar wie vor Phase 123 (siehe
+    // attachFrameResizeHandle-Aufrufe unten).
 
     // Undo/Redo: erkennt Zustandsänderungen zentral bei jedem Rendern
     // (statt jeden der vielen Änderungs-Punkte im Editor einzeln
@@ -2734,13 +2729,11 @@
     // Hauptrahmen-Griff unten-rechts: erweitert den Rahmen OHNE dass
     // sich Text/WordArt dabei bewegt oder mitskaliert - die absolute
     // Pixelposition jedes Objekts bleibt erhalten (normalisierte
-    // Koordinaten werden nachgerechnet). NUR für normale Textrahmen
-    // ("Zettel") - im WordArt-Modus wird der Rahmen jetzt automatisch aus
-    // der tatsächlichen Schrift-Ausdehnung berechnet (siehe oben), ein
-    // manuelles Ziehen hätte dort ohnehin keine verlässliche Wirkung
-    // gehabt und wurde deshalb entfernt statt weiter repariert.
-    var frameResizeHandle = state.wordArtMode ? null : el('div', { class: 'ic-resize' });
-    if (frameResizeHandle) { frame.appendChild(frameResizeHandle); }
+    // Koordinaten werden nachgerechnet). Wieder für BEIDE Modi aktiv
+    // (Phase 130 - siehe Kommentar oben zur Rücknahme der automatischen
+    // WordArt-Rahmengröße).
+    var frameResizeHandle = el('div', { class: 'ic-resize' });
+    frame.appendChild(frameResizeHandle);
     function attachFrameResizeHandle(handle, cornerX, cornerY, listenerKey) {
       var dragging = false, startX = 0, startY = 0, startW = 0, startH = 0;
       var startMarginLeft = 0, startMarginTop = 0;
@@ -2807,26 +2800,77 @@
     }
     if (frameResizeHandle) { attachFrameResizeHandle(frameResizeHandle, 1, 1, 'tfResizeListeners'); }
 
-    // Die früheren zusätzlichen WordArt-Griffe (blau oben-links zum
-    // Rahmen-Erweitern, rot oben-rechts zur Schriftgröße) sind entfallen -
-    // der Rahmen wird dort jetzt automatisch berechnet (siehe oben) und
-    // die Schriftgröße wird bereits über den Größen-Regler im
-    // "Form"-Block gesteuert. Alte, jetzt ungenutzte Fenster-Listener
-    // aus einer vorherigen Render-Runde vorsorglich entfernen, damit
-    // keine toten Referenzen übrig bleiben.
-    if (state.tfResizeTlListeners) {
-      window.removeEventListener('mousemove', state.tfResizeTlListeners.move);
-      window.removeEventListener('touchmove', state.tfResizeTlListeners.move);
-      window.removeEventListener('mouseup', state.tfResizeTlListeners.up);
-      window.removeEventListener('touchend', state.tfResizeTlListeners.up);
-      state.tfResizeTlListeners = null;
-    }
-    if (state.tfResizeTrListeners) {
-      window.removeEventListener('mousemove', state.tfResizeTrListeners.move);
-      window.removeEventListener('touchmove', state.tfResizeTrListeners.move);
-      window.removeEventListener('mouseup', state.tfResizeTrListeners.up);
-      window.removeEventListener('touchend', state.tfResizeTrListeners.up);
-      state.tfResizeTrListeners = null;
+    // Zweiter Griff oben-links: dieselbe "Rahmen erweitern ohne Text zu
+    // bewegen"-Logik, nur von der linken oberen Ecke aus (cornerX/Y=-1,
+    // also entgegengesetztes Vorzeichen der Mausbewegung). Wieder aktiv
+    // im WordArt-Modus (Phase 130 - siehe Kommentar oben).
+    if (state.wordArtMode) {
+      var frameResizeHandleTL = el('div', { class: 'ic-resize ic-resize-tl' });
+      frame.appendChild(frameResizeHandleTL);
+      attachFrameResizeHandle(frameResizeHandleTL, -1, -1, 'tfResizeTlListeners');
+
+      // Dritter Griff oben-rechts (rot): das ist der einzige Griff, der
+      // die Schrift TATSÄCHLICH größer/kleiner macht (automatische
+      // Schriftgrößen-Anpassung) - bewusst von den beiden blauen Griffen
+      // getrennt, die NUR den Rahmen erweitern sollen.
+      var frameResizeHandleTR = el('div', { class: 'ic-resize ic-resize-tr' });
+      frame.appendChild(frameResizeHandleTR);
+      (function () {
+        var draggingTr = false, startXtr = 0, startYtr = 0, startWtr = 0, startHtr = 0;
+        function ptTr(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
+        function downTr(ev) {
+          draggingTr = true; var p = ptTr(ev);
+          startXtr = p.x; startYtr = p.y; startWtr = tf.w; startHtr = tf.h;
+          ev.stopPropagation(); ev.preventDefault();
+        }
+        function moveTr(ev) {
+          if (!draggingTr) { return; }
+          var p = ptTr(ev);
+          tf.w = Math.max(120, startWtr + (p.x - startXtr));
+          tf.h = state.tfAspectLocked ? Math.max(80, Math.round(tf.w * (startHtr / startWtr))) : Math.max(80, startHtr - (p.y - startYtr));
+          frame.style.width = tf.w + 'px'; frame.style.height = tf.h + 'px';
+          ev.preventDefault();
+        }
+        function upTr() {
+          if (!draggingTr) { return; }
+          draggingTr = false;
+          var primaryEl = tf.texts[0] && frame.querySelector('[data-textid="' + tf.texts[0].id + '"]');
+          if (primaryEl) { autoFitPrimaryText(primaryEl, tf.texts[0], tf.h); }
+          render();
+        }
+        if (state.tfResizeTrListeners) {
+          window.removeEventListener('mousemove', state.tfResizeTrListeners.move);
+          window.removeEventListener('touchmove', state.tfResizeTrListeners.move);
+          window.removeEventListener('mouseup', state.tfResizeTrListeners.up);
+          window.removeEventListener('touchend', state.tfResizeTrListeners.up);
+        }
+        state.tfResizeTrListeners = { move: moveTr, up: upTr };
+        frameResizeHandleTR.addEventListener('mousedown', downTr);
+        frameResizeHandleTR.addEventListener('touchstart', downTr, { passive: false });
+        window.addEventListener('mousemove', moveTr);
+        window.addEventListener('touchmove', moveTr, { passive: false });
+        window.addEventListener('mouseup', upTr);
+        window.addEventListener('touchend', upTr);
+      })();
+    } else {
+      // Alte, jetzt ungenutzte Fenster-Listener aus einer vorherigen
+      // Render-Runde vorsorglich entfernen, damit keine toten Referenzen
+      // übrig bleiben, falls zwischen WordArt- und normalem Modus
+      // gewechselt wird.
+      if (state.tfResizeTlListeners) {
+        window.removeEventListener('mousemove', state.tfResizeTlListeners.move);
+        window.removeEventListener('touchmove', state.tfResizeTlListeners.move);
+        window.removeEventListener('mouseup', state.tfResizeTlListeners.up);
+        window.removeEventListener('touchend', state.tfResizeTlListeners.up);
+        state.tfResizeTlListeners = null;
+      }
+      if (state.tfResizeTrListeners) {
+        window.removeEventListener('mousemove', state.tfResizeTrListeners.move);
+        window.removeEventListener('touchmove', state.tfResizeTrListeners.move);
+        window.removeEventListener('mouseup', state.tfResizeTrListeners.up);
+        window.removeEventListener('touchend', state.tfResizeTrListeners.up);
+        state.tfResizeTrListeners = null;
+      }
     }
     var activeId = null;
     function selectText(id) {

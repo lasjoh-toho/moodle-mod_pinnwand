@@ -3804,3 +3804,50 @@ Extrusion sichtbar an der Thumbnail-Kante abgeschnitten, mit Klasse
 vollständig sichtbar, deutlich über die Thumbnail-Box hinausragend.
 
 Shipped als Version `2026083134` / `0.136.0`.
+
+## Phase 130
+
+Nutzer-Report: Text-Eingabe im WordArt-Editor kaum mehr möglich, Text
+der auf der Pinnwand gut in zwei Zeilen aussieht wird im Editor in viele
+Zeilen mit je zwei Buchstaben umgebrochen und unten abgeschnitten.
+Wunsch: Zustand genau wie direkt nach dem ersten externen (Opus-)Tipp
+wiederherstellen (das war der Stand nach Commit `64ed81a`, Version
+`2026083126`, VOR Phase 123).
+
+**Root Cause**: Phase 123 hatte den manuell ziehbaren WordArt-Rahmen-
+Griff komplett entfernt und stattdessen `tf.w`/`tf.h` im WordArt-Modus
+bei JEDEM Rendern automatisch aus `wordartAutoExtent()` neu gesetzt.
+Diese Funktion schätzt die Breite über `fitCtx.measureText(t.text)` -
+das misst den GESAMTEN Text als EINE ungebrochene Zeile, unabhängig
+davon, wie viele Zeilen tatsächlich sichtbar sind. Bei mehrzeilig
+umbrochenem Text (genau der Fall, den der Nutzer schildert) ergab das
+einen viel zu schmalen automatischen Rahmen. Da `render()` bei diversen
+Interaktionen (Blur, Stilwechsel im Formular) läuft, wurde der Rahmen
+dabei immer wieder auf diese zu schmale Breite zurückgesetzt - der
+gerade eingegebene, eigentlich zweizeilige Text musste sich dann in
+diesen viel zu schmalen Rahmen zwängen (Zeilenumbruch nach 1-2
+Buchstaben), was zusammen mit fixer Höhe zum Abschneiden unten führte
+und das Tippen selbst nahezu unmöglich machte (der Rahmen schrumpfte
+bei jedem Auslöser des automatischen Renderns weiter mit).
+
+**Fix (gezielter Revert, nur dieser eine Punkt)**: die automatische
+`tf.w`/`tf.h`-Neuberechnung in `renderTextFrame()` entfernt, die drei
+manuellen Größengriffe aus der Zeit vor Phase 123 wiederhergestellt
+(blauer Haupt-Griff unten-rechts, blauer Griff oben-links zum
+Rahmen-Erweitern, roter Griff oben-rechts zur Schriftgrößen-Anpassung) -
+Code-Vergleich per Python-Diff gegen den exakten Stand von Commit
+`64ed81a` (direkt nach dem ersten externen Tipp) bestätigt: der
+wiederhergestellte Block ist bis auf Kommentare und eine zusätzliche
+Aufräum-Sicherung für verwaiste Fenster-Listener beim Moduswechsel
+(harmlos, kein Verhaltensunterschied) identisch.
+
+WICHTIG: `wordartAutoExtent()`/`wordartHalfExtent()` selbst blieben
+UNVERÄNDERT bestehen - diese werden weiterhin von
+`computeAutoExportBounds()` für den Export-Beschneidungsrand gebraucht
+(Basis der Phase-128/129-Fixes gegen abgeschnittenes WordArt im Export/
+"Meine Dateien"). Nur der EDITOR erzwingt `tf.w`/`tf.h` damit nicht mehr
+bei jedem Rendern - der Rahmen ist wieder manuell ziehbar, WordArt-
+Objekte lassen sich also wieder normal mehrzeilig eintippen, ohne dass
+der Rahmen sich selbstständig verkleinert.
+
+Shipped als Version `2026083135` / `0.137.0`.
