@@ -204,6 +204,10 @@ $config = [
         'present_smallscreen' => get_string('present_smallscreen', 'pinnwand'),
         'present_overview' => get_string('present_overview', 'pinnwand'),
         'present_frame' => get_string('present_frame', 'pinnwand'),
+        'present_hint' => get_string('present_hint', 'pinnwand'),
+        'present_empty' => get_string('present_empty', 'pinnwand'),
+        'present_prev' => get_string('present_prev', 'pinnwand'),
+        'present_next' => get_string('present_next', 'pinnwand'),
         'exitpresent' => get_string('exitpresent', 'pinnwand'),
         'emptyframe' => get_string('emptyframe', 'pinnwand'),
         'threads_empty' => get_string('threads_empty', 'pinnwand'),
@@ -385,6 +389,7 @@ echo $OUTPUT->header();
 <script>
   window.pinnwandConfig = <?php echo json_encode($config); ?>;
 </script>
+<script src="<?php echo (new moodle_url('/mod/pinnwand/js/presentation-player.js', ['v' => get_config('mod_pinnwand', 'version')]))->out(false); ?>"></script>
 <script src="<?php echo (new moodle_url('/mod/pinnwand/js/app.js', ['v' => get_config('mod_pinnwand', 'version')]))->out(false); ?>"></script>
 <?php
 echo $OUTPUT->footer();

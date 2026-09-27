@@ -1491,6 +1491,7 @@ class mod_pinnwand_external extends external_api {
                 'hiddenfromboard' => (bool) $r->hiddenfromboard,
                 'otherboardcount' => $placementcounts[$r->id] ?? 0,
                 'timecreated' => (int) $r->timecreated,
+                'wordfielddata' => (string) ($r->wordfielddata ?? ''),
             ];
         }
         return [
@@ -1519,6 +1520,7 @@ class mod_pinnwand_external extends external_api {
                 'hiddenfromboard' => new external_value(PARAM_BOOL, 'Von der Pinnwand ausgeblendet'),
                 'otherboardcount' => new external_value(PARAM_INT, 'Anzahl zusätzlicher aktiver Platzierungen auf anderen Boards'),
                 'timecreated' => new external_value(PARAM_INT, 'Hochgeladen am'),
+                'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON) oder leer', VALUE_DEFAULT, ''),
             ])),
         ]);
     }

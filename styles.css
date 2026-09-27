@@ -221,14 +221,20 @@
   border: none; background: rgba(20,21,24,.8); color: #fff; align-items: center; justify-content: center; padding: 0;
 }
 .ic-thumb-img-wrap { position: relative; width: 100%; height: 100%; border-radius: 0; overflow: hidden; }
-/* WordArt-Thumbnails in "Meine Dateien" laufen über buildTextFrameLiveDom
-   (siehe renderHome), das seine Extrusion/Schrägstellung bewusst NICHT an
-   der eigenen tf.w x tf.h-Box beschneidet (hasWordart-Fall dort) - aber
-   dieser äußere Wrap hier hätte mit seinem eigenen overflow:hidden (nötig
-   fürs normale Thumbnail-Grid) trotzdem wieder alles abgeschnitten, exakt
-   dasselbe Muster wie beim foreignObject-Bug im Export (siehe Phase 128).
-   Für WordArt-Thumbnails deshalb sichtbar lassen. */
-.ic-thumb-img-wrap.ic-thumb-img-wrap-wordart { overflow: visible; }
+/* Wortfeld-Vorschau (Zettel/WordArt) in "Meine Dateien" und der
+   Klassenübersicht: dieselbe Live-Darstellung wie auf der Pinnwand, als
+   Ganzes (inkl. über die Karte hinausragender WordArt) mittig in die feste
+   Box eingepasst, siehe buildWordfieldFit(). Kein eigener Box-Schatten -
+   der lag bei transparenter WordArt als dunkler "Rahmen" dahinter; ein
+   Zettel bringt seinen Kartenschatten selbst mit. */
+.ic-wordfield-fit { position: relative; width: 100%; height: 100%; container-type: size; overflow: hidden; }
+.ic-wordfield-fit-view {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  max-width: 100cqw; max-height: 100cqh;
+}
+.ic-home-row .ic-thumb.ic-thumb-pinned .ic-thumb-img-wrap-wordfield .ic-wordfield-fit {
+  transform: translateY(-18px) scale(1.04); transition: transform .15s ease;
+}
 .ic-home-row .ic-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
 .ic-home-row .ic-thumb .ic-del {
   position: absolute; bottom: 0; right: -25px; z-index: 2;
@@ -297,6 +303,9 @@
 .ic-home-row .ic-thumb.ic-thumb-pinned .ic-thumb-img-wrap {
   box-shadow: 0 10px 14px rgba(0,0,0,.5);
 }
+/* Wortfeld-Vorschau ohne Box-Schatten (siehe .ic-wordfield-fit) - muss
+   NACH den beiden Schatten-Regeln oben stehen (gleiche Spezifität). */
+.ic-home-row .ic-thumb .ic-thumb-img-wrap.ic-thumb-img-wrap-wordfield { box-shadow: none; }
 
 /* Slider-Panel (Farbe/Raster) */
 .ic-panel {
@@ -515,21 +524,18 @@
 }
 .ic-stream-card.collapsed .ic-stream-pin-btn { display: none; }
 
-/* Präsentationsmodus (eigene Kamera-Transformation, kein impress.js mehr -
-   siehe openPresentation(): .ic-present-stage ist der feste Bildschirm-
-   Ausschnitt, .ic-present-bg eine eigenständige, NICHT mitgezoomte
-   Hintergrund-Ebene (bleibt dadurch immer bildschirmfüllend), und
-   .ic-present-canvas die per translate()+scale() bewegte/gezoomte
-   "Leinwand" mit allen Fotos/Rahmen. */
+/* Präsentationsmodus: Navigation, Kamera und Bedienelemente (Zähler,
+   Stapel, Pfeile, Klickzonen, Hinweis) kommen aus js/presentation-player.js
+   (Klassen .pwp-*, CSS dort eingebettet) - dieselbe Datei wie in der
+   exportierten HTML-Präsentation. Hier nur noch die Moodle-spezifischen
+   Teile: Overlay, Hintergrund-Ebene, Objekte und Schließen-Knopf. */
 .ic-present-overlay { position: fixed; inset: 0; z-index: 10000; background: #0b0c0e; overflow: hidden; }
-.ic-present-stage { position: absolute; inset: 0; overflow: hidden; }
 .ic-present-bg { position: absolute; z-index: 0; }
 .ic-present-bg.ic-present-bg-moves {
   /* Teil der gezoomten Leinwand (siehe openPresentation): deckt die
      Board-Koordinatenfläche ab, statt bildschirmfüllend fest zu stehen. */
   inset: auto; left: 0; top: 0; width: 1400px; height: 1000px;
 }
-.ic-present-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; z-index: 1; }
 .ic-present-photo {
   position: absolute; padding: 0; transition: opacity .25s ease;
 }
@@ -537,91 +543,21 @@
 /* Wortfeld/WordArt-Stationen bleiben auch in der Präsentation ohne
    Foto-Rahmen (reiner Text, siehe .ic-wordfield-item auf dem Board). */
 .ic-present-photo.ic-present-wordart img { border-radius: 0; }
-.ic-present-photo.ic-present-occluded { opacity: 0; pointer-events: none; }
 .ic-present-photo.ic-present-addable { cursor: pointer; }
 .ic-present-step-frame {
   position: absolute; box-sizing: border-box;
 }
-/* Bedienelemente (Schließen, Zurück/Vorwärts) tragen bewusst KEINEN
-   grauen Kasten/Rand mehr - nur ein kleiner Weichzeichner (blur) des
-   Hintergrunds dahinter plus eine kontrastreiche Symbolfarbe (weißes
-   Symbol mit dunklem Schlagschatten) heben sie hervor, unabhängig davon,
-   was gerade dahinter liegt (dunkler/heller Hintergrund, Foto, Text). */
-.ic-present-close, .ic-present-nav {
+/* Schließen-Knopf: kein grauer Kasten, nur Weichzeichner + kontrastreiches
+   Symbol (wie die Bedienelemente des Players). */
+.ic-present-close {
+  position: fixed; top: 16px; right: 16px; z-index: 10001; width: 40px; height: 40px;
+  border-radius: 50%;
   background: rgba(255,255,255,.08);
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   border: none; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.85), 0 0 8px rgba(0,0,0,.5);
   transition: background .15s ease;
 }
-.ic-present-close:hover, .ic-present-nav:hover { background: rgba(255,255,255,.18); }
-.ic-present-close {
-  position: fixed; top: 16px; right: 16px; z-index: 10001; width: 40px; height: 40px;
-  border-radius: 50%;
-}
-/* Zurück-/Vorwärts-Pfeil sitzen jetzt zusammen mit der Zähler-Anzeige
-   unten mittig (.ic-present-bottombar), nicht mehr freistehend an den
-   Bildschirmrändern - die Größe (44px, rund) bleibt unverändert. */
-.ic-present-nav {
-  position: static; width: 44px; height: 44px; border-radius: 50%;
-  flex: 0 0 auto;
-}
-/* Gemeinsamer Hover-Bereich: Zähler-Zeile bleibt immer sichtbar, der
-   Kartenstapel darüber blendet sich erst ein, sobald man mit der Maus in
-   diesen Bereich kommt (Zähler-Zeile ODER bereits eingeblendeten Stapel) -
-   dadurch bleibt der Blick auf die Pinnwand standardmäßig frei. */
-.ic-present-progress {
-  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 10001;
-  display: flex; flex-direction: column; align-items: center;
-}
-.ic-present-progress-hint {
-  color: rgba(255,255,255,.55); font-size: .7rem; text-align: center; margin-bottom: 4px;
-  text-shadow: 0 1px 3px rgba(0,0,0,.7); pointer-events: none;
-}
-.ic-present-bottombar { display: flex; align-items: center; gap: 14px; }
-.ic-present-counter {
-  color: #fff; background: rgba(255,255,255,.08); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-  padding: 6px 16px; border-radius: 20px; text-shadow: 0 1px 3px rgba(0,0,0,.85), 0 0 8px rgba(0,0,0,.5);
-  font-size: .85rem; cursor: pointer; user-select: none; white-space: nowrap; transition: background .15s ease;
-}
-.ic-present-counter:hover { background: rgba(255,255,255,.18); }
-/* Gestapelte Fortschrittsanzeige über der Zähler-Zeile - standardmäßig
-   unsichtbar, erscheint erst bei Hover über die Zähler-Anzeige selbst -
-   AUSDRÜCKLICH NICHT bei Hover über die Zurück-/Vorwärts-Pfeile daneben,
-   die sollen ohne den aufklappenden Stapel bedienbar bleiben. :has() statt
-   eines einfachen Sibling-Selektors, weil der Stapel im DOM VOR der
-   Zähler-Zeile liegt (der Hinweis-Pfeil darüber hat pointer-events:none
-   und kann daher selbst nie gehovert werden). Zeigt dann ALLE Stationen
-   (nicht nur kommende - auch Rücksprünge sind so möglich), die letzte
-   Station ganz oben. Bereits gezeigte Stationen bleiben matter/gedimmt. */
-.ic-present-stack {
-  display: flex; flex-direction: column; align-items: center;
-  opacity: 0; max-height: 0; overflow: hidden; pointer-events: none;
-  transition: opacity .15s ease; margin-bottom: 0;
-}
-.ic-present-progress:has(.ic-present-counter:hover) .ic-present-stack {
-  opacity: 1; max-height: 60vh; pointer-events: auto; margin-bottom: 8px;
-}
-.ic-present-stack-seg {
-  width: 130px; border-radius: 2px; background: rgba(255,255,255,.32);
-  pointer-events: auto; cursor: pointer; transition: background .15s ease, transform .1s ease;
-}
-.ic-present-stack-seg:hover { background: rgba(255,255,255,.85); transform: scaleX(1.04); }
-.ic-present-stack-seg.ic-present-stack-played { background: rgba(255,255,255,.12); }
-.ic-present-stack-seg.ic-present-stack-played:hover { background: rgba(255,255,255,.4); }
-.ic-present-stack-seg.ic-present-stack-current { background: var(--ic-accent, #4f8cff); }
-.ic-present-stack-seg.ic-present-stack-last { box-shadow: 0 0 0 1px rgba(255,255,255,.6) inset; }
-/* Vorschau-Kachel beim Durchhovern des Stapels - immer an derselben
-   Bildschirmposition (unabhängig davon, welche Karte gerade gehovert
-   wird), damit man den Stapel wie ein Daumenkino "durchfahren" kann. */
-.ic-present-stack-preview {
-  position: fixed; left: 50%; bottom: 130px; transform: translateX(-50%);
-  width: 220px; height: 150px; border-radius: 8px; z-index: 10002;
-  background: rgba(20,21,24,.85) center/cover no-repeat;
-  box-shadow: 0 8px 28px rgba(0,0,0,.55); opacity: 0; transition: opacity .1s ease;
-  pointer-events: none; display: flex; align-items: center; justify-content: center;
-  color: rgba(255,255,255,.7); font-size: .8rem; text-align: center; padding: 8px; box-sizing: border-box;
-}
-.ic-present-stack-preview.visible { opacity: 1; }
+.ic-present-close:hover { background: rgba(255,255,255,.18); }
 
 /* Wortfeld (Textrahmen) */
 .ic-textframe-preview { position: relative; margin: 20px auto; overflow: visible; z-index: 0; }
@@ -1208,6 +1144,7 @@
 .ic-thumb-cluster-controls .ic-me-check { font-size: .7rem; padding: 3px 8px; white-space: nowrap; }
 .ic-thumb-cluster-controls .ic-btn-danger { padding: 6px 10px; }
 .ic-moderate-thumb img { width: 64px; height: 64px; object-fit: cover; border-radius: 0; display: block; }
+.ic-moderate-thumb-wordfield { width: 64px; height: 64px; }
 .ic-thumb-btn {
   position: absolute; width: 22px; height: 22px; border-radius: 50%; border: none;
   background: rgba(20,21,24,.8); color: #fff; font-size: .75rem; padding: 0;
@@ -1268,6 +1205,7 @@
 .ic-wide-only { display: none; }
 @media (min-width: 900px) {
   .ic-moderate-thumb img { width: 110px; height: 110px; }
+  .ic-moderate-thumb-wordfield { width: 110px; height: 110px; }
 }
 
 /* Anordnung: Metadaten-Overlay ("Daten anzeigen") */

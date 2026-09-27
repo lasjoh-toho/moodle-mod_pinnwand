@@ -371,24 +371,20 @@
     state.photos.forEach(function (p, idx) {
       var row = el('div', { class: 'ic-home-row' + rowStateClass(p) });
       var thumb = el('div', { class: 'ic-thumb' + (p.otherboardcount > 0 ? ' ic-thumb-pinned' : '') });
-      // WordArt-Erkennung VOR dem Anlegen von imgWrap, damit dessen
-      // overflow:hidden (nötig fürs normale Thumbnail-Grid, siehe
-      // .ic-thumb-img-wrap) für WordArt gezielt aufgehoben werden kann -
-      // sonst beschneidet dieser äußere Wrap die Extrusion/Schrägstellung
-      // genauso, wie es vorher das foreignObject im Export tat (Phase 128).
-      var thumbHasWordart = false;
+      // Wortfelder (Zettel/WordArt) laufen über dieselbe Live-Darstellung
+      // wie auf der Pinnwand, als Ganzes in die Thumbnail-Box eingepasst
+      // (buildWordfieldFit) - vorher quoll WordArt über die Box hinaus bzw.
+      // wurde vom Box-Schatten als dunkler "Rahmen" hinterlegt, Zettel
+      // wurden unten abgeschnitten.
       var thumbTf = null;
       if (p.wordfielddata) {
-        try {
-          thumbTf = JSON.parse(p.wordfielddata);
-          thumbHasWordart = (thumbTf.texts || []).some(function (t) { return t.wordartStyle && t.wordartStyle !== 'none'; });
-        } catch (parseErr) { thumbTf = null; }
+        try { thumbTf = JSON.parse(p.wordfielddata); } catch (parseErr) { thumbTf = null; }
       }
-      var imgWrap = el('div', { class: 'ic-thumb-img-wrap' + (thumbHasWordart ? ' ic-thumb-img-wrap-wordart' : '') });
+      var imgWrap = el('div', { class: 'ic-thumb-img-wrap' + (thumbTf ? ' ic-thumb-img-wrap-wordfield' : '') });
       var thumbLiveRendered = false;
       if (thumbTf) {
         try {
-          imgWrap.appendChild(buildTextFrameLiveDom(thumbTf));
+          imgWrap.appendChild(buildWordfieldFit(thumbTf));
           thumbLiveRendered = true;
         } catch (thumbErr) {
           console.error('Live-Darstellung in Meine Bilder fehlgeschlagen, Rückfall auf gespeichertes Bild:', thumbErr);
@@ -2134,18 +2130,30 @@
     }).catch(function () { /* Umfluss bleibt aus, normale Darstellung bleibt bestehen */ });
   }
 
-  function buildTextFrameLiveDom(tf) {
+  // opts.noGuide: die gestrichelte Hilfslinie um transparente Rahmen
+  // weglassen - sie ist auf der Pinnwand nur eine Bearbeitungshilfe (zeigt,
+  // wo man anfassen kann), gehört aber nicht zum Inhalt selbst und wird
+  // deshalb in Meine Dateien, Klassenübersicht, Präsentation und im
+  // gespeicherten SVG nicht gezeichnet.
+  // Alle Maße sind relativ zu tf.w (Prozent bzw. cqw) und box-sizing ist
+  // explizit gesetzt, damit die Darstellung bei JEDER Anzeigegröße und in
+  // JEDEM Umfeld (Pinnwand innerhalb .pinnwand-app, Präsentations-Overlay
+  // direkt im <body>, foreignObject im gespeicherten SVG) exakt dieselbe
+  // bleibt wie im Editor (dort 1:1 in Pixeln).
+  function buildTextFrameLiveDom(tf, opts) {
+    opts = opts || {};
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
     // Nur WordArt-Rahmen bleiben unbeschnitten (damit Effekte wie
     // Extrusion/Schrägstellung nicht abgeschnitten werden) - normale
     // Textrahmen bekommen wieder eine Begrenzung auf die Kartengröße,
     // wie im Editor. Sonst könnte normaler Text unvorhersehbar über den
     // Rahmen hinausgehen.
-    var hasWordart = (tf.texts || []).some(function (t) { return t.wordartStyle && t.wordartStyle !== 'none'; });
+    var hasWordart = wordfieldHasWordart(tf);
     var outer = el('div', {
-      class: 'ic-tf-live', style: 'position:relative;width:100%;aspect-ratio:' + tf.w + '/' + tf.h + ';container-type:inline-size;' +
+      class: 'ic-tf-live', style: 'position:relative;box-sizing:border-box;width:100%;aspect-ratio:' + tf.w + '/' + tf.h + ';container-type:inline-size;' +
         (hasWordart ? '' : 'overflow:hidden;border-radius:16px;') +
-        (preset.shadow ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') + (preset.bg ? '' : 'border:2px dashed rgba(255,255,255,.3);')
+        (preset.shadow ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') +
+        (preset.bg || opts.noGuide ? '' : 'border:2px dashed rgba(255,255,255,.3);')
     });
     var cardStyle = tf.cardStyle || {};
     var cardBg = cardStyle.fillGradient
@@ -2153,7 +2161,7 @@
       : (cardStyle.fillColor ? 'background:' + cardStyle.fillColor + ';' : (preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;'));
     var cardBorder = cardStyle.outlineWidth ? 'box-shadow:inset 0 0 0 ' + cardStyle.outlineWidth + 'px ' + (cardStyle.outlineColor || '#000') + ';' : '';
     var inner = el('div', {
-      class: 'ic-tf-live-inner', style: 'position:relative;width:100%;height:100%;overflow:hidden;border-radius:16px;z-index:1;' + cardBg + cardBorder
+      class: 'ic-tf-live-inner', style: 'position:relative;box-sizing:border-box;width:100%;height:100%;overflow:hidden;border-radius:16px;z-index:1;' + cardBg + cardBorder
     });
     outer.appendChild(inner);
     (tf.shapes || []).forEach(function (s) {
@@ -2179,16 +2187,20 @@
       var textEl2;
       var wordartSvg = (t.arcStyle && t.arcStyle !== 'none') ? null : buildWordartGradientSvg(t, t.text, fontCss, idx === 0);
       if (t.arcStyle && t.arcStyle !== 'none') {
+        // Breite relativ zu tf.w (im Editor dieselbe Zahl in Pixeln bei
+        // 1:1-Maßstab) - vorher feste Pixel, dadurch war der Bogentext auf
+        // einer verkleinerten/vergrößerten Karte und in Vorschaubildern
+        // unterschiedlich groß im Verhältnis zum Rest.
         textEl2 = el('div', {
           class: 'ic-tf-live-text',
-          style: 'position:absolute;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
-            'width:' + Math.max(120, t.size * 6) + 'px;z-index:1;'
+          style: 'position:absolute;box-sizing:border-box;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
+            'width:' + (Math.max(120, t.size * 6) / tf.w * 100) + '%;z-index:1;'
         });
         textEl2.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text)) || '';
       } else if (wordartSvg) {
         textEl2 = el('div', {
           class: 'ic-tf-live-text',
-          style: 'position:absolute;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
+          style: 'position:absolute;box-sizing:border-box;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
             'width:' + (wordartSvg.w / tf.w * 100) + '%;aspect-ratio:' + wordartSvg.w + '/' + wordartSvg.h + ';z-index:1;'
         });
         textEl2.innerHTML = wordartSvg.svg;
@@ -2196,8 +2208,8 @@
         var html = t.html || (t.text ? escapeXml(t.text) : '');
         textEl2 = el('div', {
           class: 'ic-tf-live-text', html: html,
-          style: 'position:absolute;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
-            'padding:4px 8px;white-space:pre-wrap;text-align:center;max-width:94%;z-index:1;' +
+          style: 'position:absolute;box-sizing:border-box;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
+            'padding:' + (4 / tf.w * 100) + 'cqw ' + (8 / tf.w * 100) + 'cqw;white-space:pre-wrap;text-align:center;max-width:94%;z-index:1;' +
             'font-family:' + fontCss + ';font-size:' + (t.size / tf.w * 100) + 'cqw;font-weight:' + (t.fontWeight || 700) +
             ';line-height:' + (t.lineHeight || 1.2) + ';letter-spacing:' + ((t.letterSpacing || 0) / tf.w * 100) + 'cqw;' +
             (wordartCssFor(t, preset.text, false, 100 / tf.w) || computeStyle1Css(t, preset.text))
@@ -2208,6 +2220,151 @@
     });
     applyTextWrapLive(tf, textElByIdx, inner);
     return outer;
+  }
+
+  function wordfieldHasWordart(tf) {
+    return (tf.texts || []).some(function (t) { return t.wordartStyle && t.wordartStyle !== 'none'; });
+  }
+  // WordArt-Rahmen im weiteren Sinn: im WordArt-Modus angelegt ODER
+  // mindestens ein Text mit WordArt-Stil - genau die Rahmen, deren Inhalt
+  // über die tf.w x tf.h-Box hinausragen darf.
+  function wordfieldIsWordart(tf) {
+    return !!tf.isWordArt || wordfieldHasWordart(tf);
+  }
+
+  // Zusätzlicher Rand für Effekte, die getBoundingClientRect() NICHT
+  // erfasst (text-shadow für Extrusion/Schatten/Glow, Textkontur).
+  function wordfieldEffectPad(tf) {
+    var pad = 4;
+    (tf.texts || []).forEach(function (t) {
+      var st = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0] || {};
+      var extrude = (t.wordartStyle && t.wordartStyle !== 'none')
+        ? (t.extrudeSteps != null ? t.extrudeSteps : (st.extrudeSteps || 0)) * 0.8 : 0;
+      var glow = t.wordartGlow ? t.wordartGlow * 1.5 : 0;
+      var shadow = t.shadowOn ? (t.shadowDistance != null ? t.shadowDistance : 3) + (t.shadowBlur || 4) * 1.5 : 0;
+      var glow2 = t.glowOn ? (t.glowWidth || 8) * 1.5 : 0;
+      pad = Math.max(pad, 4 + extrude + glow + shadow + glow2 + (t.outlineWidth || 0) + (st.strokeWidth || 0));
+    });
+    return pad;
+  }
+
+  // Tatsächlich sichtbarer Bereich eines Wortfelds in tf-Koordinaten
+  // (0..tf.w / 0..tf.h = die Karte selbst, WordArt darf darüber hinaus
+  // ragen). Statt einer Schätzung über measureText (einzeilig, kennt
+  // weder Zeilenumbruch noch die Transformationskette zuverlässig) wird
+  // die Live-Darstellung - exakt dieselbe wie auf der Pinnwand - kurz
+  // unsichtbar in voller Größe aufgebaut und ausgemessen.
+  // getBoundingClientRect() berücksichtigt dabei alle CSS-Transforms
+  // (skewY/scaleY/rotate der WordArt), nur text-shadow nicht (siehe
+  // wordfieldEffectPad). Gemeinsame Grundlage für Vorschaubilder,
+  // Präsentations-Zoom und das gespeicherte SVG, damit alle drei denselben
+  // Ausschnitt zeigen.
+  var wordfieldBoundsCache = {};
+  if (document.fonts && document.fonts.addEventListener) {
+    // Später nachgeladene Schriften ändern die Textbreite - Messungen
+    // danach neu durchführen statt veraltete Werte weiterzuverwenden.
+    document.fonts.addEventListener('loadingdone', function () { wordfieldBoundsCache = {}; });
+  }
+  function measureWordfieldBounds(tf) {
+    var key = JSON.stringify(tf);
+    var cached = wordfieldBoundsCache[key];
+    if (cached) { return { x1: cached.x1, y1: cached.y1, x2: cached.x2, y2: cached.y2 }; }
+    var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
+    var cardStyle = tf.cardStyle || {};
+    var cardVisible = !!(preset.bg || cardStyle.fillColor || cardStyle.fillGradient || cardStyle.outlineWidth);
+    var b = null;
+    function union(x1, y1, x2, y2) {
+      if (!b) { b = { x1: x1, y1: y1, x2: x2, y2: y2 }; return; }
+      b.x1 = Math.min(b.x1, x1); b.y1 = Math.min(b.y1, y1);
+      b.x2 = Math.max(b.x2, x2); b.y2 = Math.max(b.y2, y2);
+    }
+    if (!wordfieldIsWordart(tf)) {
+      // Normale Zettel beschneiden ihren Inhalt an der Karte selbst.
+      union(0, 0, tf.w, tf.h);
+    } else {
+      var host = null;
+      try {
+        host = el('div', {
+          style: 'position:fixed;left:-100000px;top:0;width:' + tf.w + 'px;visibility:hidden;pointer-events:none;'
+        });
+        var live = buildTextFrameLiveDom(tf, { noGuide: true });
+        host.appendChild(live);
+        document.body.appendChild(host);
+        var base = live.getBoundingClientRect();
+        if (base.width > 0) {
+          var k = tf.w / base.width;
+          if (cardVisible) { union(0, 0, tf.w, tf.h); }
+          live.querySelectorAll('.ic-tf-live-text, .ic-tf-live-text-wrap > div, .ic-tf-live-shape').forEach(function (n) {
+            var r = n.getBoundingClientRect();
+            if (r.width <= 0 && r.height <= 0) { return; }
+            union((r.left - base.left) * k, (r.top - base.top) * k, (r.right - base.left) * k, (r.bottom - base.top) * k);
+          });
+        }
+      } catch (e) {
+        b = null;
+      }
+      if (host && host.parentNode) { host.parentNode.removeChild(host); }
+      if (!b) {
+        // Rückfall (z.B. leerer Rahmen): die bisherige, rein rechnerische
+        // Schätzung ohne ihren pauschalen Sicherheitsrand.
+        var est = computeAutoExportBounds(tf);
+        var m = Math.max(30, Math.round(Math.min(tf.w, tf.h) * 0.15));
+        b = { x1: est.x1 + m, y1: est.y1 + m, x2: est.x2 - m, y2: est.y2 - m };
+      }
+    }
+    var pad = wordfieldEffectPad(tf) + (preset.shadow ? 20 : 0);
+    b.x1 -= pad; b.y1 -= pad; b.x2 += pad; b.y2 += pad;
+    wordfieldBoundsCache[key] = b;
+    return { x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2 };
+  }
+
+  // Wortfeld als Vorschaubild (Meine Dateien, Klassenübersicht): dieselbe
+  // Live-Darstellung wie auf der Pinnwand, als Ganzes (inkl. über die Karte
+  // hinausragender WordArt) mittig in die umgebende Box eingepasst - statt
+  // eines per object-fit:cover beschnittenen Bildes bzw. einer über die
+  // Box hinausquellenden Darstellung. Die Box muss selbst eine feste Größe
+  // haben (container-type:size), alles darin ist relativ, passt sich also
+  // auch an responsive Thumbnail-Größen an.
+  function buildWordfieldFit(tf) {
+    var b = measureWordfieldBounds(tf);
+    var bw = b.x2 - b.x1, bh = b.y2 - b.y1;
+    var box = el('div', { class: 'ic-wordfield-fit' });
+    var view = el('div', {
+      class: 'ic-wordfield-fit-view',
+      style: 'aspect-ratio:' + bw + '/' + bh + ';width:min(100cqw, calc(100cqh * ' + (bw / bh).toFixed(5) + '));'
+    });
+    var pos = el('div', {
+      style: 'position:absolute;left:' + (-b.x1 / bw * 100) + '%;top:' + (-b.y1 / bh * 100) + '%;width:' + (tf.w / bw * 100) + '%;'
+    });
+    pos.appendChild(buildTextFrameLiveDom(tf, { noGuide: true }));
+    view.appendChild(pos);
+    box.appendChild(view);
+    return box;
+  }
+
+  // Gespeichertes Bild eines WordArt-Rahmens: exakt die Live-Darstellung der
+  // Pinnwand (serialisiert per XMLSerializer, damit gültiges XHTML im SVG
+  // landet) in einem foreignObject, viewBox = tatsächlich sichtbarer Bereich
+  // (measureWordfieldBounds). Vorher baute buildTextFrameSVG() WordArt über
+  // eine eigene, abweichende Logik nach (primärer Text immer mittig statt an
+  // t.x/t.y, andere Umbruchbreite/Innenabstände, geschätzte Ränder) - dadurch
+  // sah WordArt in der Präsentation/im Export anders aus als auf der
+  // Pinnwand und wurde teils abgeschnitten.
+  function buildTextFrameLiveSvg(tf) {
+    var b = measureWordfieldBounds(tf);
+    var bw = b.x2 - b.x1, bh = b.y2 - b.y1;
+    var xml = new XMLSerializer().serializeToString(buildTextFrameLiveDom(tf, { noGuide: true }));
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + bw + '" height="' + bh +
+      '" viewBox="' + b.x1 + ' ' + b.y1 + ' ' + bw + ' ' + bh + '"><style>' +
+      '.ic-frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;' +
+      'font-size:.82em;line-height:1.1;margin:0 2px}' +
+      '.ic-frac-num{border-bottom:1.5px solid currentColor;padding:0 3px 1px}' +
+      '.ic-frac-den{padding:1px 3px 0}' +
+      '</style>' +
+      '<foreignObject x="' + b.x1 + '" y="' + b.y1 + '" width="' + bw + '" height="' + bh + '">' +
+      '<div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:' + bw + 'px;height:' + bh + 'px;margin:0;">' +
+      '<div style="position:absolute;left:' + (-b.x1) + 'px;top:' + (-b.y1) + 'px;width:' + tf.w + 'px;">' +
+      xml + '</div></div></foreignObject></svg>';
   }
 
   // Liefert die exakte, transformationsbewusste Ausdehnung EINES
@@ -2270,6 +2427,7 @@
   }
 
   function buildTextFrameSVG(tf) {
+    if (wordfieldIsWordart(tf)) { return buildTextFrameLiveSvg(tf); }
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
     var cardStyle = tf.cardStyle || {};
     var defs = '';
@@ -6701,73 +6859,108 @@
     return panel;
   }
 
+  // Rand (Anteil je Seite) um eine Station beim Heranzoomen, damit ein
+  // Objekt nicht direkt am Bildschirmrand klebt - identisch in der
+  // exportierten Datei (export_presentation.php, PRESENT_STEP_MARGIN).
+  var PRESENT_STEP_MARGIN = 0.05;
+
+  // Zoom-Ziel (Board-Koordinaten) für ein Wortfeld: der tatsächlich
+  // sichtbare Bereich (measureWordfieldBounds, inkl. über die Karte
+  // hinausragender WordArt) statt nur der Kartenbox - sonst wurde
+  // schräggestellte/extrudierte WordArt beim Heranzoomen vom
+  // Bildschirmrand abgeschnitten.
+  function wordfieldStepBox(p, tf) {
+    var b = measureWordfieldBounds(tf);
+    var k = (p.canvasw || tf.w) / tf.w;
+    var x1 = p.canvasx + b.x1 * k, y1 = p.canvasy + b.y1 * k;
+    var w = (b.x2 - b.x1) * k, h = (b.y2 - b.y1) * k;
+    return { cx: x1 + w / 2, cy: y1 + h / 2, w: w * (1 + 2 * PRESENT_STEP_MARGIN), h: h * (1 + 2 * PRESENT_STEP_MARGIN) };
+  }
+
+  // Präsentation innerhalb von Moodle. Navigation/Kamera/Bedienelemente
+  // kommen aus js/presentation-player.js - DERSELBEN Datei, die auch in die
+  // exportierte HTML-Präsentation eingebettet wird, damit sich beide exakt
+  // gleich bedienen lassen (Klickzonen links/rechts, Pfeiltasten/Leertaste,
+  // Zähler + Stapel, Ziehen, Mausrad, Pinch). Hier kommen nur die
+  // Moodle-spezifischen Teile dazu: Schließen-Knopf/Escape, Stylus-Ebene
+  // und das Anhängen noch nicht enthaltener Objekte per Klick.
   function openPresentation(thread, startIndex) {
     if (window.innerWidth < 900) { alert(S.present_smallscreen); return false; }
+    if (!window.PinnwandPresentation) { return false; }
     var overlay = el('div', { class: 'ic-present-overlay' });
-    var stageEl = el('div', { class: 'ic-present-stage' });
-    var bgLayer = el('div', { class: 'ic-present-bg' + (thread.bgmoves ? ' ic-present-bg-moves' : '') });
-    applyBackground(bgLayer);
     // Die gewählte Hintergrundfarbe zusätzlich aufs Overlay selbst legen,
     // damit sie in jedem Fall sichtbar bleibt (z.B. wenn "Füllen" einen
     // Rand lässt oder beim Herauszoomen der 1400x1000-Bereich nicht die
-    // ganze Bildschirmfläche ausfüllt) - sonst zeigte sich dort die feste
-    // dunkle Overlay-Farbe statt der gewählten Hintergrundfarbe.
+    // ganze Bildschirmfläche ausfüllt).
     overlay.style.backgroundColor = (state.background && state.background.color) || '#2b2d33';
-    var canvasEl = el('div', { class: 'ic-present-canvas' });
+    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-present-close', title: S.exitpresent }, ['✕']);
+    var player = window.PinnwandPresentation.create(overlay, {
+      labels: {
+        overview: S.present_overview, frame: S.present_frame, hint: S.present_hint,
+        empty: S.present_empty, prev: S.present_prev, next: S.present_next
+      },
+      onEscape: function () { closeBtn.click(); }
+    });
+    var stageEl = player.stage;
+    var canvasEl = player.canvas;
+    canvasEl.classList.add('ic-present-canvas');
+
+    var bgLayer = el('div', { class: 'ic-present-bg' + (thread.bgmoves ? ' ic-present-bg-moves' : '') });
+    applyBackground(bgLayer);
     // Hintergrund bewegt sich beim Zoom mit (Checkbox im Faden-Panel): Teil
     // der gezoomten Leinwand, exakt 1400x1000 - dasselbe Koordinatensystem
-    // wie Fotos/Rahmen (siehe .ic-canvas-bg auf der echten Pinnwand) - so
-    // zeigen Rahmen zuverlässig auf dieselbe Stelle im Hintergrundbild wie
-    // beim Einrichten auf dem Board. Sonst (Standard) eine eigenständige,
-    // bildschirmfüllende Ebene dahinter - Maße explizit per JS gesetzt statt
-    // über eine CSS-Vererbungskette, um jede Mehrdeutigkeit auszuschließen.
+    // wie Fotos/Rahmen. Sonst eine eigenständige, bildschirmfüllende Ebene
+    // dahinter.
     if (thread.bgmoves) {
       canvasEl.appendChild(bgLayer);
     } else {
       bgLayer.style.left = '0'; bgLayer.style.top = '0';
       bgLayer.style.width = window.innerWidth + 'px';
       bgLayer.style.height = window.innerHeight + 'px';
-      stageEl.appendChild(bgLayer);
+      stageEl.insertBefore(bgLayer, canvasEl);
     }
-    stageEl.appendChild(canvasEl);
-    overlay.appendChild(stageEl);
 
-    // Alle Stationen müssen vom selben Board stammen, um gemeinsam
-    // dargestellt zu werden. Beim eigenen Faden ist das Referenz-Board das
-    // gerade angezeigte Board (nicht mehr das Board der allerersten
-    // jemals hinzugefügten Station - das führte dazu, dass neu
-    // hinzugefügte Stationen auf einem anderen Board unsichtbar aus der
-    // Präsentation herausfielen, obwohl sie im Faden-Panel - das alle
-    // Boards ungefiltert zeigt - ganz normal erschienen). Bei einem
-    // FREMDEN (geteilten) Faden hat state.currentBoard keine Bedeutung
-    // für dessen Board-Nummernschema - dort bleibt die Station der
-    // ersten Station die Referenz.
+    // Alle Stationen müssen vom selben Board stammen. Beim eigenen Faden ist
+    // das Referenz-Board das gerade angezeigte Board, bei einem FREMDEN
+    // (geteilten) Faden das Board der ersten Station.
     var firstBoardId = thread.isown
       ? (state.currentBoard || 0)
       : (thread.items.length ? (thread.items[0].boardid || 0) : 0);
 
-    // Alle auf diesem Board platzierten Fotos zeigen (nicht nur die des
-    // Fadens) - Textrahmen (Wortfeld) sind technisch auch nur Fotos und
-    // erscheinen dadurch automatisch mit. Ein Klick auf ein noch nicht im
-    // Faden enthaltenes Foto hängt es direkt ans Ende des Fadens an.
+    // Alle auf diesem Board platzierten Objekte zeigen (nicht nur die des
+    // Fadens). Wortfelder (Zettel/WordArt) erscheinen in DERSELBEN
+    // Live-Darstellung wie auf der Pinnwand (buildTextFrameLiveDom) statt
+    // als gespeichertes Bild - dadurch sehen sie in der Präsentation exakt
+    // so aus wie auf der Pinnwand und im Editor. Ein Klick auf ein noch
+    // nicht im Faden enthaltenes Objekt hängt es direkt ans Ende an.
     var boardPhotos = state.photos.filter(function (p) {
       return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === firstBoardId;
     });
     var photoRecs = {};
+    var occludables = [];
     var inThreadIds = {};
     thread.items.forEach(function (it) { if (it.itemtype === 'photo') { inThreadIds[it.photoid] = true; } });
     boardPhotos.forEach(function (p) {
+      var tf = null;
+      if (p.wordfielddata) {
+        try { tf = JSON.parse(p.wordfielddata); } catch (e) { tf = null; }
+      }
       var pEl = el('div', {
         class: 'ic-present-photo' + (p.wordfielddata ? ' ic-present-wordart' : ''),
         style: 'left:' + p.canvasx + 'px;top:' + p.canvasy + 'px;width:' + p.canvasw + 'px;' +
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
       pEl.style.zIndex = p.canvasz || 0;
-      pEl.appendChild(el('img', { src: p.url, alt: '' }));
+      var live = null;
+      if (tf) {
+        try { live = buildTextFrameLiveDom(tf, { noGuide: true }); } catch (e2) { live = null; tf = null; }
+      }
+      pEl.appendChild(live || el('img', { src: p.url, alt: '' }));
       if (!inThreadIds[p.id]) {
         pEl.classList.add('ic-present-addable');
         pEl.title = S.stream_pin_hint;
         pEl.addEventListener('click', function () {
+          if (inThreadIds[p.id]) { return; }
           callAjax('mod_pinnwand_add_thread_item', {
             cmid: cfg.cmid, itemtype: 'photo', photoid: p.id, boardid: firstBoardId
           }).then(function (res) {
@@ -6775,18 +6968,20 @@
             thread.items.push(newItem);
             inThreadIds[p.id] = true;
             pEl.classList.remove('ic-present-addable');
-            steps.push(buildStep(newItem));
-            goToStep(steps.length - 1);
+            pEl.removeAttribute('title');
+            var newStep = buildStep(newItem);
+            if (newStep) { player.addStep(newStep); }
           });
         });
       }
       canvasEl.appendChild(pEl);
-      photoRecs[p.id] = { el: pEl, z: p.canvasz || 0, wordart: !!p.wordfielddata };
+      photoRecs[p.id] = { el: pEl, z: p.canvasz || 0, photo: p, tf: tf };
+      occludables.push(photoRecs[p.id]);
     });
 
     // Stylus-Anmerkungen des Boards - über den Fotos, damit Linien auch
-    // über Objekte hinweg gemalt sichtbar bleiben (nicht von der
-    // Occlusion-Logik betroffen, da sie kein "photoRecs"-Eintrag sind).
+    // über Objekte hinweg gemalt sichtbar bleiben (nicht von der Verdeckung
+    // betroffen).
     var presentInkCanvas = el('canvas', {
       class: 'ic-board-ink-layer', width: String(BOARD_W), height: String(BOARD_H), style: 'z-index:600'
     });
@@ -6797,21 +6992,18 @@
       redrawInk(presentInkCanvas, presentInkCanvas.getContext('2d'), strokes);
     });
 
-    // Für jede Station (Foto oder Leerrahmen) Zielposition/-größe merken -
-    // Kamera-Transformation wird komplett selbst berechnet (siehe goToStep),
-    // ohne uns auf interne Skalierungs-Mechanik einer Bibliothek zu
-    // verlassen.
+    function overviewStep() {
+      return { el: null, cx: BOARD_W / 2, cy: BOARD_H / 2, w: BOARD_W, h: BOARD_H, rot: 0, overview: true };
+    }
+
+    // Für jede Station (Foto, Wortfeld, Leerrahmen, Überblick) den
+    // Bereich festlegen, auf den die Kamera zoomt.
     function buildStep(it) {
-      if (it.itemtype === 'overview') {
-        // Kein sichtbares Element nötig - reiner Kamera-Haltepunkt, der auf
-        // das ganze Board zoomt (Überblick, siehe "Überblick einfügen").
-        return { el: null, cx: BOARD_W / 2, cy: BOARD_H / 2, w: BOARD_W, h: BOARD_H, rot: 0, overview: true };
-      }
+      if (it.itemtype === 'overview') { return overviewStep(); }
       if (it.itemtype === 'frame') {
-        // Unsichtbar in der Präsentation - dient nur als Zoom-Ziel, damit
-        // auf Details des Hintergrunds/anderer Objekte hingewiesen werden
-        // kann, ohne selbst als Kasten sichtbar zu sein. Ist der Rahmen
-        // gedreht, dreht sich die Kamera beim Anfliegen mit.
+        // Unsichtbar in der Präsentation - dient nur als Zoom-Ziel. Ist der
+        // Rahmen gedreht, dreht sich die Kamera ENTGEGENGESETZT mit, damit
+        // der eingerahmte Bereich am Ende gerade erscheint.
         var fEl = el('div', {
           class: 'ic-present-step-frame',
           style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;'
@@ -6819,388 +7011,57 @@
         canvasEl.appendChild(fEl);
         return {
           el: fEl, cx: it.framex + it.framew / 2, cy: it.framey + it.frameh / 2,
-          // Die Kamera muss der Rahmen-Drehung ENTGEGENGESETZT drehen, damit
-          // der eingerahmte Bereich am Ende gerade (nicht schief) erscheint -
-          // sonst würde sich die Neigung verdoppeln statt aufgehoben zu werden.
           w: it.framew, h: it.frameh, rot: -(it.framerot || 0), z: it.framez || 0, frame: true
         };
       }
       var rec = photoRecs[it.photoid];
       if (!rec) { return null; }
-      var natW = parseFloat(rec.el.style.width) || 200;
+      var p = rec.photo;
+      if (rec.tf) {
+        var box = wordfieldStepBox(p, rec.tf);
+        return { el: rec.el, cx: box.cx, cy: box.cy, w: box.w, h: box.h, z: rec.z, rot: 0, previewUrl: p.url };
+      }
+      var natW = p.canvasw || 200;
       var img = rec.el.querySelector('img');
       // Echtes Seitenverhältnis, sobald das Bild geladen ist - bis dahin
-      // eine grobe Näherung (4:3), damit der erste Zoom nicht völlig daneben
-      // liegt.
+      // eine grobe Näherung (4:3).
       var natH = (img.naturalWidth && img.naturalHeight) ? natW * (img.naturalHeight / img.naturalWidth) : natW * 0.75;
-      // Wortfeld/WordArt-Stationen bekommen etwas Puffer NUR am oberen
-      // Rand, damit die Schrift beim Heranzoomen nicht direkt am
-      // Bildschirmrand klebt - der untere Rand bleibt unverändert eng
-      // (Höhe wächst nur nach oben, Mittelpunkt verschiebt sich passend
-      // nach oben mit).
-      var topPad = rec.wordart ? natH * 0.12 : 0;
       var stepData = {
-        el: rec.el,
-        cx: parseFloat(rec.el.style.left) + natW / 2,
-        cy: parseFloat(rec.el.style.top) + natH / 2 - topPad / 2,
-        w: natW, h: natH + topPad, z: rec.z, rot: 0
+        el: rec.el, cx: p.canvasx + natW / 2, cy: p.canvasy + natH / 2,
+        w: natW, h: natH, z: rec.z, rot: 0, previewUrl: p.url
       };
-      if (!img.complete) {
+      if (!img.complete || !img.naturalWidth) {
         img.addEventListener('load', function () {
           var loadedH = natW * (img.naturalHeight / img.naturalWidth);
-          var loadedTopPad = rec.wordart ? loadedH * 0.12 : 0;
-          stepData.h = loadedH + loadedTopPad;
-          stepData.cy = parseFloat(rec.el.style.top) + loadedH / 2 - loadedTopPad / 2;
-          if (steps[currentIdx] === stepData) { goToStep(currentIdx, true); }
+          stepData.h = loadedH;
+          stepData.cy = p.canvasy + loadedH / 2;
+          player.refreshStep(stepData);
         });
       }
       return stepData;
     }
 
-    var steps = thread.items
-      .filter(function (it) { return (it.boardid || 0) === firstBoardId; })
-      .map(buildStep)
-      .filter(Boolean);
+    // Station je Faden-Eintrag merken, damit startIndex (Index in der
+    // nach Board gefilterten Faden-Liste, siehe openPresentationAtItem)
+    // auch dann die richtige Station trifft, wenn vorne noch der
+    // automatische Überblick eingefügt wird.
+    var boardItems = thread.items.filter(function (it) { return (it.boardid || 0) === firstBoardId; });
+    var stepByItem = boardItems.map(buildStep);
+    var steps = stepByItem.filter(Boolean);
 
     // Präsentation startet immer mit einem Überblick über die ganze
-    // Pinnwand (falls der Rote Faden nicht selbst schon mit einer
-    // Überblick-Station beginnt) - erst danach folgen die eigentlichen
-    // Stationen. Manuelles Verschieben/Zoomen ist von dort aus bereits
-    // möglich, bevor man zur ersten echten Station weitergeht.
-    if (steps.length && !steps[0].overview) {
-      steps.unshift({ el: null, cx: BOARD_W / 2, cy: BOARD_H / 2, w: BOARD_W, h: BOARD_H, rot: 0, overview: true });
-    }
+    // Pinnwand (falls der Rote Faden nicht selbst schon damit beginnt).
+    if (steps.length && !steps[0].overview) { steps.unshift(overviewStep()); }
 
-    function targetFor(s) {
-      return {
-        scale: Math.min(window.innerWidth / s.w, window.innerHeight / s.h),
-        cx: s.cx, cy: s.cy, rot: s.rot || 0
-      };
-    }
-
-    function applyTransform(scale, cx, cy, rot) {
-      // Die Kamera-Transformation ist translate(tx,ty) rotate(rot) scale(scale)
-      // mit transform-origin 0 0 - das bedeutet, cx/cy müssen VOR der
-      // Verschiebungsberechnung ebenfalls um "rot" gedreht werden, sonst
-      // landet der Zielpunkt bei gedrehten Rahmen nicht in der Bildschirm-
-      // mitte (bei rot=0 war der Fehler unsichtbar, da cos(0)=1/sin(0)=0).
-      var rad = (rot || 0) * Math.PI / 180;
-      var rx = cx * Math.cos(rad) - cy * Math.sin(rad);
-      var ry = cx * Math.sin(rad) + cy * Math.cos(rad);
-      var tx = window.innerWidth / 2 - scale * rx;
-      var ty = window.innerHeight / 2 - scale * ry;
-      canvasEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) rotate(' + (rot || 0) + 'deg) scale(' + scale + ')';
-    }
-
-    // Easing für den Zeitverlauf selbst (nicht die Bogenhöhe!) - langsamer,
-    // schwungvoller Start, gleichmäßige Mitte, sanfte Landung.
-    function easeInOutCubic(x) {
-      return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-    }
-
-    var cameraFrame = null;
-
-    // Eine einzige durchgehende Animation von "from" nach "to" - kein
-    // zweigeteilter Übergang mit Pause dazwischen mehr. Bei kurzen Wegen
-    // ("elastisches Gleiten") bleibt die Zoom-Kurve nahezu gerade; bei
-    // weiten Wegen wölbt sie sich wie eine Parabel nach oben (kurzzeitig
-    // stärker herauszoomen, um einen Überblick über die Strecke zu geben),
-    // bevor sie zur Zielstation landet. Die Bogenhöhe folgt sin(t·π), damit
-    // sie am Anfang UND Ende sanft bei 0 ist (keine Ecke), unabhängig von
-    // der Zeit-Easing-Funktion, die den Bewegungsablauf selbst gestaltet.
-    function animateCamera(from, to, onDone) {
-      if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
-      var dist = Math.sqrt(Math.pow(to.cx - from.cx, 2) + Math.pow(to.cy - from.cy, 2));
-      var duration = Math.min(2400, Math.max(500, 550 + dist * 0.55));
-      // 0 bei sehr kurzen Wegen (reines elastisches Gleiten) bis 0.55 bei
-      // sehr weiten Wegen (deutlicher Bogen/Sprung).
-      var hopFactor = Math.min(0.55, Math.max(0, (dist - 120) / 1800));
-      var minScale = Math.min(from.scale, to.scale);
-      var hopAmount = minScale * hopFactor;
-      var rotDelta = (to.rot - from.rot + 540) % 360 - 180; // kürzester Drehweg
-
-      var start = null;
-      function frame(now) {
-        if (start === null) { start = now; }
-        var raw = Math.min(1, (now - start) / duration);
-        var te = easeInOutCubic(raw);
-        var arc = Math.sin(te * Math.PI) * hopAmount;
-        var scale = from.scale + (to.scale - from.scale) * te - arc;
-        var cx = from.cx + (to.cx - from.cx) * te;
-        var cy = from.cy + (to.cy - from.cy) * te;
-        var rot = from.rot + rotDelta * te;
-        applyTransform(scale, cx, cy, rot);
-        if (raw < 1) {
-          cameraFrame = requestAnimationFrame(frame);
-        } else {
-          cameraFrame = null;
-          if (onDone) { onDone(); }
-        }
-      }
-      cameraFrame = requestAnimationFrame(frame);
-    }
-
-    var currentIdx = 0;
-    var currentTransform = null; // { scale, cx, cy, rot } - letzter tatsächlich erreichter Zustand
-
-    // Manuelles Zoomen/Verschieben während der Präsentation (Mausrad, Ziehen
-    // auf leerer Fläche, Pinch) - aktualisiert currentTransform direkt, damit
-    // der nächste Vorwärts-/Zurück-Schritt von der manuell angepassten
-    // Ansicht aus normal fortsetzt, statt zur automatischen Position
-    // zurückzuspringen.
-    function manualZoomAt(newScale, clientX, clientY) {
-      if (!currentTransform) { return; }
-      newScale = Math.max(0.05, Math.min(8, newScale));
-      var rad = (currentTransform.rot || 0) * Math.PI / 180;
-      var cos = Math.cos(rad), sin = Math.sin(rad);
-      var dx = clientX - window.innerWidth / 2, dy = clientY - window.innerHeight / 2;
-      // Bildschirm-Versatz -> Welt-Versatz: inverse Rotation (R(-rot)) anwenden,
-      // da die Kamera selbst um "rot" gedreht ist (siehe applyTransform).
-      var wx = currentTransform.cx + (dx * cos + dy * sin) / currentTransform.scale;
-      var wy = currentTransform.cy + (-dx * sin + dy * cos) / currentTransform.scale;
-      currentTransform.scale = newScale;
-      currentTransform.cx = wx - (dx * cos + dy * sin) / newScale;
-      currentTransform.cy = wy - (-dx * sin + dy * cos) / newScale;
-      applyTransform(currentTransform.scale, currentTransform.cx, currentTransform.cy, currentTransform.rot);
-    }
-    var presentPanDragging = false, presentPanStartX = 0, presentPanStartY = 0, presentPanStartCx = 0, presentPanStartCy = 0;
-    stageEl.addEventListener('pointerdown', function (ev) {
-      if (ev.target.closest('.ic-present-close, .ic-present-nav') || !currentTransform) { return; }
-      presentPanDragging = true;
-      presentPanStartX = ev.clientX; presentPanStartY = ev.clientY;
-      presentPanStartCx = currentTransform.cx; presentPanStartCy = currentTransform.cy;
-    });
-    stageEl.addEventListener('pointermove', function (ev) {
-      if (!presentPanDragging || !currentTransform) { return; }
-      var scale = currentTransform.scale;
-      var rad = (currentTransform.rot || 0) * Math.PI / 180;
-      var cos = Math.cos(rad), sin = Math.sin(rad);
-      var dx = ev.clientX - presentPanStartX, dy = ev.clientY - presentPanStartY;
-      // Bildschirm-Versatz -> Welt-Versatz: inverse Rotation (R(-rot))
-      // anwenden, da die Kamera selbst um "rot" gedreht ist.
-      currentTransform.cx = presentPanStartCx - (dx * cos + dy * sin) / scale;
-      currentTransform.cy = presentPanStartCy - (-dx * sin + dy * cos) / scale;
-      applyTransform(currentTransform.scale, currentTransform.cx, currentTransform.cy, currentTransform.rot);
-    });
-    window.addEventListener('pointerup', function () { presentPanDragging = false; });
-    stageEl.addEventListener('wheel', function (ev) {
-      ev.preventDefault();
-      var factor = ev.deltaY < 0 ? 1.1 : 1 / 1.1;
-      manualZoomAt((currentTransform ? currentTransform.scale : 1) * factor, ev.clientX, ev.clientY);
-    }, { passive: false });
-    var presentPinchDist = 0, presentPinchScale = 1, presentPinchMidX = 0, presentPinchMidY = 0;
-    function presentTouchDist(t) {
-      var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    }
-    stageEl.addEventListener('touchstart', function (ev) {
-      if (ev.touches.length === 2 && currentTransform) {
-        presentPanDragging = false;
-        presentPinchDist = presentTouchDist(ev.touches) || 1;
-        presentPinchScale = currentTransform.scale;
-        presentPinchMidX = (ev.touches[0].clientX + ev.touches[1].clientX) / 2;
-        presentPinchMidY = (ev.touches[0].clientY + ev.touches[1].clientY) / 2;
-      }
-    }, { passive: true });
-    stageEl.addEventListener('touchmove', function (ev) {
-      if (ev.touches.length !== 2) { return; }
-      ev.preventDefault();
-      var dist = presentTouchDist(ev.touches) || 1;
-      manualZoomAt(presentPinchScale * (dist / presentPinchDist), presentPinchMidX, presentPinchMidY);
-    }, { passive: false });
-
-    function goToStep(idx, skipTransition) {
-      var fromIdx = currentIdx;
-      currentIdx = Math.max(0, Math.min(steps.length - 1, idx));
-      var s = steps[currentIdx];
-      if (!s) { return; }
-      var target = targetFor(s);
-
-      // Das neue Ziel zuerst schnell einblenden (falls es zuvor wegen
-      // einer höheren Z-Ebene ausgeblendet war), DANN erst die Kamera
-      // dorthin schwenken - sorgt für Orientierung, da das Objekt beim
-      // Ankommen der Kamera schon sichtbar ist statt erst danach
-      // "aufzutauchen".
-      updateOcclusion();
-      updateCounter();
-
-      if (skipTransition || fromIdx === currentIdx || !currentTransform) {
-        if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
-        applyTransform(target.scale, target.cx, target.cy, target.rot);
-        currentTransform = target;
-        return;
-      }
-
-      animateCamera(currentTransform, target, function () {
-        currentTransform = target;
-      });
-      currentTransform = target;
-    }
-
-    // Occlusion: nur Fotos, die die aktive Station vom Z-Level her
-    // überlappend verdecken würden, werden ausgeblendet - alle anderen
-    // (auch Hintergrund und nicht überlappende Fotos) bleiben sichtbar.
-    function updateOcclusion() {
-      var active = steps[currentIdx];
-      if (!active || active.overview) {
-        // Überblick (reiner Kamera-Haltepunkt ohne eigenes Element, zoomt
-        // aufs ganze Board) - hier ergibt eine Verdeckung nach Z keinen
-        // Sinn, alles bleibt sichtbar.
-        Object.keys(photoRecs).forEach(function (pid) { photoRecs[pid].el.classList.remove('ic-present-occluded'); });
-        return;
-      }
-      var activeZ = active.z || 0;
-      // Alle Objekte mit höherem Z-Wert als das fokussierte Objekt/den
-      // fokussierten Rahmen werden ausgeblendet - unabhängig von
-      // räumlicher Überlappung. Gilt jetzt auch, wenn ein Rahmen (nicht
-      // nur ein Foto) der aktuelle Schritt ist (siehe z bei buildStep).
-      Object.keys(photoRecs).forEach(function (pid) {
-        var rec = photoRecs[pid];
-        if (rec.el === active.el) { rec.el.classList.remove('ic-present-occluded'); return; }
-        rec.el.classList.toggle('ic-present-occluded', rec.z > activeZ);
-      });
-    }
-
-    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-present-close', title: S.exitpresent }, ['\u2715']);
-    var prevBtn = el('button', { class: 'ic-btn ic-present-nav ic-present-prev' }, ['\u2039']);
-    var nextBtn = el('button', { class: 'ic-btn ic-present-nav ic-present-next' }, ['\u203A']);
-    prevBtn.addEventListener('click', function () { goToStep(currentIdx - 1); });
-    nextBtn.addEventListener('click', function () {
-      if (currentIdx >= steps.length - 1) {
-        // Letzter Schritt: zur Board-Übersicht fliegen und danach die
-        // Präsentation automatisch verlassen, statt einfach stehenzubleiben.
-        var overviewTarget = { scale: Math.min(window.innerWidth / BOARD_W, window.innerHeight / BOARD_H), cx: BOARD_W / 2, cy: BOARD_H / 2, rot: 0 };
-        animateCamera(currentTransform, overviewTarget, function () {
-          setTimeout(function () { closeBtn.click(); }, 400);
-        });
-        currentTransform = overviewTarget;
-        return;
-      }
-      goToStep(currentIdx + 1);
-    });
     closeBtn.addEventListener('click', function () {
-      document.removeEventListener('keydown', keyNav);
-      if (cameraFrame) { cancelAnimationFrame(cameraFrame); }
+      player.destroy();
       overlay.remove();
     });
-    function keyNav(ev) {
-      if (ev.key === 'ArrowRight' || ev.key === ' ') { goToStep(currentIdx + 1); }
-      else if (ev.key === 'ArrowLeft') { goToStep(currentIdx - 1); }
-      else if (ev.key === 'Escape') { closeBtn.click(); }
-    }
-    document.addEventListener('keydown', keyNav);
-    overlay._icKeyHandler = keyNav;
-
-    // Schritt-Anzeige unten mittig, flankiert von Zurück-/Vorwärts-Pfeil -
-    // dieselbe Zeile wie zuvor die freistehenden Rand-Pfeile, nur jetzt
-    // zusammen mit dem "X / Y"-Zähler gruppiert (vorher gab es in der
-    // Live-Präsentation gar keine Zähler-Anzeige). Ein Klick auf den
-    // Zähler selbst springt direkt zur Übersicht-Station.
-    var overviewIdx = 0;
-    for (var oi = 0; oi < steps.length; oi++) { if (steps[oi].overview) { overviewIdx = oi; break; } }
-    var counterEl = el('div', { class: 'ic-present-counter' });
-    counterEl.addEventListener('click', function () { goToStep(overviewIdx); });
-    var bottomBar = el('div', { class: 'ic-present-bottombar' }, [prevBtn, counterEl, nextBtn]);
-
-    // Vorschau-Kachel beim Durchhovern des Stapels - immer an derselben
-    // Bildschirmposition (siehe .ic-present-stack-preview), damit man den
-    // Stapel wie ein Daumenkino durchfahren kann.
-    var previewEl = el('div', { class: 'ic-present-stack-preview' });
-    function stepPreviewLabel(s) {
-      if (s.overview) { return S.present_overview || 'Übersicht'; }
-      if (s.frame) { return S.present_frame || 'Rahmen'; }
-      return '';
-    }
-    function showPreview(s) {
-      var img = s.el ? s.el.querySelector('img') : null;
-      if (img && img.src) {
-        previewEl.style.backgroundImage = 'url(' + img.src + ')';
-        previewEl.textContent = '';
-      } else {
-        previewEl.style.backgroundImage = 'none';
-        previewEl.textContent = stepPreviewLabel(s);
-      }
-      previewEl.classList.add('visible');
-    }
-    function hidePreview() { previewEl.classList.remove('visible'); }
-
-    // Gestapelte Fortschrittsanzeige, standardmäßig unsichtbar (siehe
-    // .ic-present-progress:hover in styles.css) - bei Hover über den
-    // Bedienbereich erscheint sie vollständig mit ALLEN Stationen (nicht
-    // nur den kommenden, damit auch zurückgesprungen werden kann), die
-    // LETZTE Station ganz oben. Bereits gezeigte Stationen bleiben matt,
-    // die aktuelle ist hervorgehoben. Hover über eine einzelne Karte zeigt
-    // deren Vorschau, Klick springt direkt dorthin.
-    var stackEl = el('div', { class: 'ic-present-stack' });
-    function renderStack() {
-      stackEl.innerHTML = '';
-      // Kartenhöhe schrumpft automatisch bei vielen Stationen, damit der
-      // Stapel nie über einen sinnvollen Bildschirmanteil hinauswächst.
-      var segH = Math.max(2, Math.min(6, Math.floor(320 / Math.max(1, steps.length))));
-      var gap = segH >= 4 ? 2 : 1;
-      for (var si = steps.length - 1; si >= 0; si--) {
-        (function (si) {
-          var cls = 'ic-present-stack-seg';
-          if (si === steps.length - 1) { cls += ' ic-present-stack-last'; }
-          if (si === currentIdx) { cls += ' ic-present-stack-current'; }
-          else if (si < currentIdx) { cls += ' ic-present-stack-played'; }
-          var seg = el('div', { class: cls });
-          seg.style.height = segH + 'px';
-          seg.style.marginBottom = gap + 'px';
-          seg.addEventListener('click', function () { goToStep(si); });
-          seg.addEventListener('mouseenter', function () { showPreview(steps[si]); });
-          seg.addEventListener('mouseleave', hidePreview);
-          stackEl.appendChild(seg);
-        })(si);
-      }
-    }
-    function updateCounter() {
-      counterEl.textContent = (currentIdx + 1) + ' / ' + steps.length;
-      renderStack();
-    }
-
-    var progressEl = el('div', { class: 'ic-present-progress' }, [
-      stackEl,
-      el('div', { class: 'ic-present-progress-hint' }, ['⌃']),
-      bottomBar
-    ]);
-    progressEl.addEventListener('mouseleave', hidePreview);
-
     overlay.appendChild(closeBtn);
-    overlay.appendChild(previewEl);
-    overlay.appendChild(progressEl);
     document.body.appendChild(overlay);
 
-    if (steps.length > 0) {
-      var initialIdx = (typeof startIndex === 'number' && steps[startIndex]) ? startIndex : 0;
-      if (initialIdx > 0) {
-        // Direkt-Vorschau eines einzelnen Objekts (Doppelklick im Layer-/
-        // Faden-Modus) - sofort dorthin springen, kein Übersichts-Effekt.
-        currentIdx = initialIdx;
-        var direct = targetFor(steps[initialIdx]);
-        applyTransform(direct.scale, direct.cx, direct.cy, direct.rot);
-        currentTransform = direct;
-        updateOcclusion();
-        updateCounter();
-      } else {
-        // Beim Start zoomt die Kamera aus einer Übersicht in die erste
-        // Station hinein, statt sofort scharf gestellt zu erscheinen -
-        // dieselbe Flugbahn-Logik wie zwischen zwei Stationen.
-        currentIdx = 0;
-        var first = targetFor(steps[0]);
-        var overview = { scale: first.scale * 0.3, cx: first.cx, cy: first.cy, rot: first.rot };
-        applyTransform(overview.scale, overview.cx, overview.cy, overview.rot);
-        currentTransform = overview;
-        updateCounter();
-        requestAnimationFrame(function () {
-          animateCamera(overview, first, function () {
-            currentTransform = first;
-            updateOcclusion();
-          });
-          currentTransform = first;
-        });
-      }
-    }
+    var startStep = (typeof startIndex === 'number' && stepByItem[startIndex]) ? steps.indexOf(stepByItem[startIndex]) : 0;
+    player.start(steps, occludables, Math.max(0, startStep));
     return true;
   }
 
@@ -7299,8 +7160,24 @@
       var row = el('div', { class: 'ic-moderate-row' + rowStateClass(p) });
       var thumbCluster = el('div', { class: 'ic-thumb-cluster' });
       var thumbWrap = el('div', { class: 'ic-moderate-thumb' });
-      var img = el('img', { src: p.url, alt: '' });
-      thumbWrap.appendChild(img);
+      // Wortfelder wie auf der Pinnwand (Live-Darstellung, als Ganzes
+      // eingepasst) statt des gespeicherten Bildes mit object-fit:cover,
+      // das WordArt an den Seiten abschnitt.
+      var modTf = null;
+      if (p.wordfielddata) {
+        try { modTf = JSON.parse(p.wordfielddata); } catch (modErr) { modTf = null; }
+      }
+      var modLive = null;
+      if (modTf) {
+        try { modLive = buildWordfieldFit(modTf); } catch (modErr2) { modLive = null; }
+      }
+      if (modLive) {
+        var modBox = el('div', { class: 'ic-moderate-thumb-wordfield' });
+        modBox.appendChild(modLive);
+        thumbWrap.appendChild(modBox);
+      } else {
+        thumbWrap.appendChild(el('img', { src: p.url, alt: '' }));
+      }
 
       // Kompakte Overlay-Steuerung direkt auf dem Thumbnail - der Pin sitzt
       // bei unbefestigten Bildern oben rechts, bei befestigten mittig oben

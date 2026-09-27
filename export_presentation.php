@@ -76,6 +76,33 @@ function pinnwand_export_photo_data($photoid, $context, $fs, &$photocache) {
         'canvasz' => (int) $photo->canvasz,
         'iswordart' => !empty($photo->wordfielddata),
     ];
+    // Wortfelder (Zettel/WordArt): auf der Pinnwand entspricht canvasw der
+    // Breite der KARTE (tf.w), das gespeicherte SVG ist aber größer (viewBox
+    // umfasst zusätzlich über die Karte hinausragende WordArt, x/y meist
+    // negativ). Wurde das SVG einfach auf canvasw Breite gezeigt, erschien
+    // der Inhalt kleiner und verschoben gegenüber der Pinnwand. Mit
+    // Kartengröße + viewBox kann die Abspiel-Logik das Bild so platzieren,
+    // dass die Karte exakt auf ihrer Board-Position liegt.
+    if (!empty($photo->wordfielddata)) {
+        $tf = json_decode($photo->wordfielddata, true);
+        if (is_array($tf) && !empty($tf['w']) && !empty($tf['h'])) {
+            $result['tfw'] = (float) $tf['w'];
+            $result['tfh'] = (float) $tf['h'];
+            $haswordart = !empty($tf['isWordArt']);
+            foreach (($tf['texts'] ?? []) as $t) {
+                if (!empty($t['wordartStyle']) && $t['wordartStyle'] !== 'none') {
+                    $haswordart = true;
+                }
+            }
+            $result['wordartframe'] = $haswordart;
+            if (preg_match('/<svg\b[^>]*\sviewBox="([^"]+)"/i', $binary, $m)) {
+                $vb = array_map('floatval', preg_split('/[\s,]+/', trim($m[1])));
+                if (count($vb) === 4 && $vb[2] > 0 && $vb[3] > 0) {
+                    $result['vb'] = $vb;
+                }
+            }
+        }
+    }
     return $photocache[$photoid] = $result;
 }
 
@@ -88,6 +115,7 @@ foreach ($items as $it) {
         'framew' => (float) $it->framew,
         'frameh' => (float) $it->frameh,
         'framerot' => (float) $it->framerot,
+        'framez' => (int) ($it->framez ?? 0),
         'framelabel' => (string) ($it->framelabel ?? ''),
     ];
     if ($it->itemtype === 'photo' && $it->photoid) {
@@ -266,6 +294,12 @@ die;
 
 function pinnwand_export_build_html($title, $json) {
     $titleesc = htmlspecialchars($title, ENT_QUOTES);
+    // Navigation/Kamera/Bedienelemente: WÖRTLICH dieselbe Datei wie die
+    // Live-Präsentation in Moodle (js/presentation-player.js) - dadurch
+    // bedienen sich Export und Moodle-Präsentation garantiert identisch.
+    // Die Datei enthält kein "</script" (würde den Block vorzeitig
+    // beenden) - zur Sicherheit trotzdem entschärft.
+    $player = str_ireplace('</script', '<\/script', (string) file_get_contents(__DIR__ . '/js/presentation-player.js'));
     return <<<HTML
 <!DOCTYPE html>
 <html lang="de">
@@ -275,117 +309,46 @@ function pinnwand_export_build_html($title, $json) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   html,body{margin:0;padding:0;background:#2b2d33;overflow:hidden;height:100%;font-family:sans-serif;}
-  #stage{position:fixed;inset:0;overflow:hidden;cursor:grab;}
-  #stage.dragging{cursor:grabbing;}
-  #canvas{position:absolute;left:0;top:0;transform-origin:0 0;}
   #bg{position:absolute;z-index:0;}
   #bg.moves{left:0;top:0;width:1400px;height:1000px;}
   #bg-image{position:absolute;left:0;top:0;width:1400px;height:1000px;background-repeat:no-repeat;background-position:center;}
-  #canvas.animated{transition:none;}
   .ph{position:absolute;transition:opacity .2s;}
   .ph img{width:100%;display:block;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.5);}
   .ph.wordart img{border-radius:0;box-shadow:none;}
-  .ph.occluded{opacity:0;pointer-events:none;}
-  #hint{position:fixed;top:16px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(0,0,0,.55);
-    padding:6px 16px;border-radius:20px;font-size:.85rem;z-index:20;pointer-events:none;}
-  /* Bedienelemente (Zurück/Vorwärts) OHNE grauen Kasten/Rand - nur ein
-     kleiner Weichzeichner (blur) des Hintergrunds dahinter plus eine
-     kontrastreiche Symbolfarbe (weiß mit dunklem Schlagschatten) heben
-     sie hervor, egal was dahinter liegt. */
-  #progress{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;
-    display:flex;flex-direction:column;align-items:center;}
-  #progresshint{color:rgba(255,255,255,.55);font-size:.7rem;text-align:center;margin-bottom:4px;
-    text-shadow:0 1px 3px rgba(0,0,0,.7);pointer-events:none;}
-  #bottombar{display:flex;align-items:center;gap:14px;}
-  #counter{color:#fff;background:rgba(255,255,255,.08);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-    padding:6px 16px;border-radius:20px;font-size:.85rem;cursor:pointer;user-select:none;white-space:nowrap;
-    text-shadow:0 1px 3px rgba(0,0,0,.85),0 0 8px rgba(0,0,0,.5);transition:background .15s ease;}
-  #counter:hover{background:rgba(255,255,255,.18);}
-  .navbtn{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.08);
-    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;border:none;
-    text-shadow:0 1px 3px rgba(0,0,0,.85),0 0 8px rgba(0,0,0,.5);
-    font-size:1.3rem;cursor:pointer;flex:0 0 auto;transition:background .15s ease;}
-  .navbtn:hover{background:rgba(255,255,255,.18);}
-  /* Gestapelte Fortschrittsanzeige - standardmäßig unsichtbar, erscheint
-     erst bei Hover über die Zähler-Anzeige selbst - AUSDRÜCKLICH NICHT bei
-     Hover über die Zurück-/Vorwärts-Pfeile daneben. :has() statt Sibling-
-     Selektor, weil #stack im DOM VOR #counter liegt (der Hinweis-Pfeil
-     darüber hat pointer-events:none und kann selbst nie gehovert werden).
-     Zeigt dann ALLE Stationen (nicht nur kommende - auch Rücksprünge
-     möglich), die letzte Station ganz oben. Bereits gezeigte bleiben matt. */
-  #stack{display:flex;flex-direction:column;align-items:center;
-    opacity:0;max-height:0;overflow:hidden;pointer-events:none;transition:opacity .15s ease;}
-  #progress:has(#counter:hover) #stack{opacity:1;max-height:60vh;pointer-events:auto;margin-bottom:8px;}
-  .stackseg{width:130px;border-radius:2px;background:rgba(255,255,255,.32);pointer-events:auto;
-    cursor:pointer;transition:background .15s ease,transform .1s ease;}
-  .stackseg:hover{background:rgba(255,255,255,.85);transform:scaleX(1.04);}
-  .stackseg.stackplayed{background:rgba(255,255,255,.12);}
-  .stackseg.stackplayed:hover{background:rgba(255,255,255,.4);}
-  .stackseg.stackcurrent{background:#4f8cff;}
-  .stackseg.stacklast{box-shadow:0 0 0 1px rgba(255,255,255,.6) inset;}
-  /* Vorschau-Kachel beim Durchhovern - immer an derselben Bildschirm-
-     position, wie ein Daumenkino durchfahrbar. */
-  #stackpreview{position:fixed;left:50%;bottom:130px;transform:translateX(-50%);
-    width:220px;height:150px;border-radius:8px;z-index:21;
-    background:rgba(20,21,24,.85) center/cover no-repeat;
-    box-shadow:0 8px 28px rgba(0,0,0,.55);opacity:0;transition:opacity .1s ease;
-    pointer-events:none;display:flex;align-items:center;justify-content:center;
-    color:rgba(255,255,255,.7);font-size:.8rem;text-align:center;padding:8px;box-sizing:border-box;}
-  #stackpreview.visible{opacity:1;}
-  .navzone{position:fixed;top:0;bottom:0;width:16%;z-index:15;cursor:pointer;background:transparent;border:none;}
-  .navzone.prev{left:0;} .navzone.next{right:0;}
+  /* Wortfeld mit bekannter Kartengröße/viewBox: .ph ist exakt die Karte
+     (wie auf der Pinnwand, dreht sich auch um deren Mitte), das Bild
+     ragt so weit darüber hinaus, wie seine viewBox es vorgibt. */
+  .ph.wordfield-mapped img{position:absolute;max-width:none;}
 </style>
 </head>
 <body>
-<div id="stage">
-  <div id="canvas"></div>
-</div>
-<div id="stackpreview"></div>
-<div id="progress">
-  <div id="stack"></div>
-  <div id="progresshint">&#8963;</div>
-  <div id="bottombar">
-    <button class="navbtn" id="prevbtn" aria-label="Zur&uuml;ck">&#8249;</button>
-    <div id="counter"></div>
-    <button class="navbtn" id="nextbtn" aria-label="Weiter">&#8250;</button>
-  </div>
-</div>
-<div id="hint">&#8592; &#8594; oder Leertaste zum Navigieren, Klick au&szlig;erhalb zum Verschieben, Mausrad zum Zoomen</div>
-<button class="navzone prev" aria-label="Zur&uuml;ck"></button>
-<button class="navzone next" aria-label="Weiter"></button>
+<div id="player"></div>
 <script type="application/json" id="pinnwand-export-data">
 {$json}
 </script>
 <script>
+{$player}
+</script>
+<script>
 (function(){
   var data = JSON.parse(document.getElementById('pinnwand-export-data').textContent);
-  var stage = document.getElementById('stage');
-  var canvas = document.getElementById('canvas');
-  var counter = document.getElementById('counter');
-  var hint = document.getElementById('hint');
-  var stackEl = document.getElementById('stack');
-  var previewEl = document.getElementById('stackpreview');
-  var progressEl = document.getElementById('progress');
-  var prevBtn = document.getElementById('prevbtn');
-  var nextBtn = document.getElementById('nextbtn');
+  var BW = data.boardWidth || 1400, BH = data.boardHeight || 1000;
+  // Rand je Seite beim Heranzoomen an eine Station - identisch mit
+  // PRESENT_STEP_MARGIN in app.js (Live-Präsentation).
+  var STEP_MARGIN = 0.05;
+  var player = PinnwandPresentation.create(document.getElementById('player'), {});
+  var stage = player.stage;
+  var canvas = player.canvas;
 
-  // Hintergrund (Farbe/Bild) - bisher im Export komplett ignoriert (fest
-  // dunkelgrau). Dieselbe Logik wie applyBackground() im Plugin selbst:
-  // äußeres Element trägt die reine Farbe (auch als "Letterbox" um ein im
-  // "contain"-Modus eingepasstes Bild herum), inneres Element (exakt
-  // 1400x1000, dasselbe Koordinatensystem wie die Fotos) trägt das
+  // Hintergrund (Farbe/Bild) - dieselbe Logik wie applyBackground() im
+  // Plugin: äußeres Element trägt die reine Farbe (auch als "Letterbox" um
+  // ein im "contain"-Modus eingepasstes Bild herum), inneres Element
+  // (exakt 1400x1000, dasselbe Koordinatensystem wie die Fotos) trägt das
   // eigentliche Bild. "bgmoves" entscheidet, ob der Hintergrund Teil der
-  // gezoomten Leinwand ist (#canvas) oder bildschirmfüllend fest steht
-  // (#stage, Größe an window.innerWidth/Height gebunden).
+  // gezoomten Leinwand ist oder bildschirmfüllend fest steht.
   var bg = data.background || { type: 'color', color: '#2b2d33' };
-  // Die gewählte Hintergrundfarbe zusätzlich direkt auf body legen, damit
-  // sie in JEDEM Fall sichtbar bleibt - genau wie in der echten Präsentation
-  // (openPresentation() in app.js): bei bgmoves=true liegt #bg-image exakt
-  // deckungsgleich über #bg (beide 1400x1000), die Farbe von #bg selbst
-  // kommt dadurch NIE zur Geltung; bei "Füllen"/cover lässt das Bild ohnehin
-  // keinen Rand, in dem die Farbe sichtbar würde. Ohne diesen Fallback
-  // blieb stattdessen die feste dunkelgraue body-Farbe sichtbar, sobald
-  // Farbe UND Bild zusammen gewählt waren.
+  // Farbe zusätzlich direkt auf body, damit sie in JEDEM Fall sichtbar
+  // bleibt (auch wenn Farbe UND Bild zusammen gewählt sind).
   document.body.style.backgroundColor = bg.color || '#2b2d33';
   var bgEl = document.createElement('div');
   bgEl.id = 'bg';
@@ -393,12 +356,10 @@ function pinnwand_export_build_html($title, $json) {
   var bgImage = document.createElement('div');
   bgImage.id = 'bg-image';
   bgEl.appendChild(bgImage);
+  bgImage.style.backgroundColor = bg.color || '#2b2d33';
   if ((bg.type === 'image' || bg.type === 'url' || bg.type === 'upload') && bg.url) {
-    bgImage.style.backgroundColor = bg.color || '#2b2d33';
     bgImage.style.backgroundImage = "url('" + bg.url + "')";
     bgImage.style.backgroundSize = bg.fit === 'cover' ? 'cover' : 'contain';
-  } else {
-    bgImage.style.backgroundColor = bg.color || '#2b2d33';
   }
   var bgBrightness = (bg.brightness != null ? bg.brightness : 100);
   var bgSaturation = (bg.saturation != null ? bg.saturation : 100);
@@ -413,11 +374,10 @@ function pinnwand_export_build_html($title, $json) {
     stage.insertBefore(bgEl, canvas);
   }
 
-  // Alle Board-Fotos als feste Ebene aufbauen (Positionen exakt wie auf
-  // dem Board) - dieselbe Grundlage wie in der echten Präsentation, wo
-  // ALLE platzierten Fotos gezeigt werden, nicht nur die Stationen
-  // selbst.
+  // Alle Board-Objekte als feste Ebene (Positionen exakt wie auf dem
+  // Board) - nicht nur die Stationen selbst.
   var photoRecs = {};
+  var occludables = [];
   (data.boardPhotos || []).forEach(function (p) {
     if (!p) { return; }
     var pel = document.createElement('div');
@@ -429,240 +389,79 @@ function pinnwand_export_build_html($title, $json) {
     pel.style.zIndex = p.canvasz || 0;
     var img = document.createElement('img');
     img.src = p.url; img.alt = '';
+    var rec = { el: pel, z: p.canvasz || 0, img: img, photo: p, box: null };
+    if (p.tfw && p.tfh && p.vb) {
+      // Karte (tf.w x tf.h) liegt exakt auf canvasx/canvasy/canvasw - wie
+      // auf der Pinnwand; das SVG wird gemäß seiner viewBox darum herum
+      // platziert, statt auf Kartenbreite zusammengestaucht zu werden.
+      var k = p.canvasw / p.tfw;
+      pel.classList.add('wordfield-mapped');
+      pel.style.height = (p.tfh * k) + 'px';
+      img.style.left = (p.vb[0] * k) + 'px';
+      img.style.top = (p.vb[1] * k) + 'px';
+      img.style.width = (p.vb[2] * k) + 'px';
+      // Zoom-Ziel: bei WordArt der ganze sichtbare Bereich (viewBox), bei
+      // normalen Zetteln die Karte selbst.
+      rec.box = p.wordartframe
+        ? { x: p.canvasx + p.vb[0] * k, y: p.canvasy + p.vb[1] * k, w: p.vb[2] * k, h: p.vb[3] * k }
+        : { x: p.canvasx, y: p.canvasy, w: p.canvasw, h: p.tfh * k };
+    }
     pel.appendChild(img);
     canvas.appendChild(pel);
-    photoRecs[p.id] = { el: pel, z: p.canvasz || 0, wordart: !!p.iswordart };
+    photoRecs[p.id] = rec;
+    occludables.push(rec);
   });
 
-  // Stationen (Fotos, Rahmen als reine Zoom-Ziele, Überblick) genau wie
-  // im Original aufbauen - dieselbe Datenstruktur (buildStep in
-  // openPresentation()).
+  function overviewStep() {
+    return { cx: BW / 2, cy: BH / 2, w: BW, h: BH, rot: 0, overview: true };
+  }
+
+  // Stationen (Fotos, Wortfelder, Rahmen als reine Zoom-Ziele, Überblick)
+  // genau wie in der Live-Präsentation (buildStep in openPresentation()).
   var items = (data.thread && data.thread.items) || [];
   var steps = items.map(function (it) {
-    if (it.itemtype === 'overview') {
-      return { cx: (data.boardWidth || 1400) / 2, cy: (data.boardHeight || 1000) / 2, w: data.boardWidth || 1400, h: data.boardHeight || 1000, rot: 0, overview: true };
-    }
+    if (it.itemtype === 'overview') { return overviewStep(); }
     if (it.itemtype === 'frame') {
       return {
         cx: it.framex + it.framew / 2, cy: it.framey + it.frameh / 2,
-        w: it.framew, h: it.frameh, rot: -(it.framerot || 0), z: 0, frame: true
+        w: it.framew, h: it.frameh, rot: -(it.framerot || 0), z: it.framez || 0, frame: true
       };
     }
-    if (it.photo) {
-      var rec = photoRecs[it.photo.id];
-      var natW = it.photo.canvasw;
-      var img2 = rec ? rec.el.querySelector('img') : null;
-      var natH = (img2 && img2.naturalWidth) ? natW * (img2.naturalHeight / img2.naturalWidth) : natW * 0.75;
-      // Wortfeld/WordArt-Stationen bekommen etwas Puffer NUR am oberen
-      // Rand, damit die Schrift beim Heranzoomen nicht direkt am
-      // Bildschirmrand klebt - der untere Rand bleibt unverändert eng
-      // (Höhe wächst nur nach oben, Mittelpunkt verschiebt sich passend
-      // nach oben, siehe Herleitung: neue Kante oben = alte Kante oben -
-      // topPad, neue Kante unten = alte Kante unten).
-      var topPad = (rec && rec.wordart) ? natH * 0.12 : 0;
+    if (!it.photo) { return null; }
+    var rec = photoRecs[it.photo.id];
+    if (!rec) { return null; }
+    var p = rec.photo;
+    if (rec.box) {
       return {
-        cx: it.photo.canvasx + natW / 2, cy: it.photo.canvasy + natH / 2 - topPad / 2,
-        w: natW, h: natH + topPad, rot: 0, z: it.photo.canvasz || 0,
-        url: img2 ? img2.src : null
+        el: rec.el, cx: rec.box.x + rec.box.w / 2, cy: rec.box.y + rec.box.h / 2,
+        w: rec.box.w * (1 + 2 * STEP_MARGIN), h: rec.box.h * (1 + 2 * STEP_MARGIN),
+        rot: 0, z: p.canvasz || 0, previewUrl: p.url
       };
     }
-    return null;
+    var natW = p.canvasw;
+    var img2 = rec.img;
+    var natH = img2.naturalWidth ? natW * (img2.naturalHeight / img2.naturalWidth) : natW * 0.75;
+    var s = {
+      el: rec.el, cx: p.canvasx + natW / 2, cy: p.canvasy + natH / 2,
+      w: natW, h: natH, rot: 0, z: p.canvasz || 0, previewUrl: p.url
+    };
+    if (!img2.naturalWidth) {
+      // Eingebettete Bilder werden asynchron dekodiert - das echte
+      // Seitenverhältnis steht erst nach "load" fest.
+      img2.addEventListener('load', function () {
+        var h = natW * (img2.naturalHeight / img2.naturalWidth);
+        s.h = h;
+        s.cy = p.canvasy + h / 2;
+        player.refreshStep(s);
+      });
+    }
+    return s;
   }).filter(Boolean);
 
   // Präsentation startet immer mit einem Überblick über die ganze
-  // Pinnwand (falls der Rote Faden nicht selbst schon mit einer
-  // Überblick-Station beginnt) - erst danach folgen die eigentlichen
-  // Stationen. Manuelles Verschieben/Zoomen (siehe weiter unten) ist von
-  // dieser Überblick-Station aus bereits möglich, bevor man mit den
-  // Pfeiltasten/Klicks weiter zur ersten echten Station geht.
-  if (steps.length && !steps[0].overview) {
-    steps.unshift({ cx: (data.boardWidth || 1400) / 2, cy: (data.boardHeight || 1000) / 2, w: data.boardWidth || 1400, h: data.boardHeight || 1000, rot: 0, overview: true });
-  }
-
-  function targetFor(s) {
-    return { scale: Math.min(window.innerWidth / s.w, window.innerHeight / s.h), cx: s.cx, cy: s.cy, rot: s.rot || 0 };
-  }
-
-  // Dieselbe Kamera-Transformation wie im Original: translate(tx,ty)
-  // rotate(rot) scale(scale) mit transform-origin 0 0 - cx/cy müssen VOR
-  // der Verschiebungsberechnung um "rot" gedreht werden, sonst landet der
-  // Zielpunkt bei gedrehten Rahmen nicht in der Bildschirmmitte.
-  function applyTransform(scale, cx, cy, rot) {
-    var rad = (rot || 0) * Math.PI / 180;
-    var rx = cx * Math.cos(rad) - cy * Math.sin(rad);
-    var ry = cx * Math.sin(rad) + cy * Math.cos(rad);
-    var tx = window.innerWidth / 2 - scale * rx;
-    var ty = window.innerHeight / 2 - scale * ry;
-    canvas.style.transform = 'translate(' + tx + 'px,' + ty + 'px) rotate(' + (rot || 0) + 'deg) scale(' + scale + ')';
-  }
-
-  function easeInOutCubic(x) { return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
-
-  var cameraFrame = null;
-  // Dieselbe "Bogen"-Animation wie im Original: bei weiten Wegen kurz
-  // stärker herauszoomen (Überblick über die Strecke), bevor zur
-  // Zielstation gelandet wird.
-  function animateCamera(from, to, onDone) {
-    if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
-    var dist = Math.sqrt(Math.pow(to.cx - from.cx, 2) + Math.pow(to.cy - from.cy, 2));
-    var duration = Math.min(2400, Math.max(500, 550 + dist * 0.55));
-    var hopFactor = Math.min(0.55, Math.max(0, (dist - 120) / 1800));
-    var hopAmount = Math.min(from.scale, to.scale) * hopFactor;
-    var rotDelta = (to.rot - from.rot + 540) % 360 - 180;
-    var start = null;
-    function frame(now) {
-      if (start === null) { start = now; }
-      var raw = Math.min(1, (now - start) / duration);
-      var te = easeInOutCubic(raw);
-      var arc = Math.sin(te * Math.PI) * hopAmount;
-      var scale = from.scale + (to.scale - from.scale) * te - arc;
-      var cx = from.cx + (to.cx - from.cx) * te;
-      var cy = from.cy + (to.cy - from.cy) * te;
-      var rot = from.rot + rotDelta * te;
-      applyTransform(scale, cx, cy, rot);
-      if (raw < 1) { cameraFrame = requestAnimationFrame(frame); }
-      else { cameraFrame = null; if (onDone) { onDone(); } }
-    }
-    cameraFrame = requestAnimationFrame(frame);
-  }
-
-  // Verdeckung: nur Objekte mit höherer Z-Ebene als die aktive Station
-  // werden ausgeblendet - dieselbe Regel wie im Original (updateOcclusion).
-  function updateOcclusion() {
-    var active = steps[idx];
-    if (!active || active.overview) {
-      Object.keys(photoRecs).forEach(function (pid) { photoRecs[pid].el.classList.remove('occluded'); });
-      return;
-    }
-    var activeZ = active.z || 0;
-    Object.keys(photoRecs).forEach(function (pid) {
-      var rec = photoRecs[pid];
-      rec.el.classList.toggle('occluded', rec.z > activeZ);
-    });
-  }
-
-  // Vorschau-Kachel beim Durchhovern des Stapels - immer an derselben
-  // Bildschirmposition, unabhängig davon, welche Karte gerade gehovert
-  // wird (Daumenkino-Effekt).
-  function showPreview(s) {
-    if (s.url) {
-      previewEl.style.backgroundImage = "url('" + s.url + "')";
-      previewEl.textContent = '';
-    } else {
-      previewEl.style.backgroundImage = 'none';
-      previewEl.textContent = s.overview ? 'Übersicht' : (s.frame ? 'Rahmen' : '');
-    }
-    previewEl.classList.add('visible');
-  }
-  function hidePreview() { previewEl.classList.remove('visible'); }
-  progressEl.addEventListener('mouseleave', hidePreview);
-
-  // Gestapelte Fortschrittsanzeige, standardmäßig unsichtbar (siehe
-  // #progress:hover in <style>) - bei Hover über den Bedienbereich
-  // erscheint sie vollständig mit ALLEN Stationen (nicht nur kommenden -
-  // auch Rücksprünge sind so möglich), die LETZTE Station ganz oben.
-  // Bereits gezeigte Stationen bleiben matt, die aktuelle ist
-  // hervorgehoben. Hover über eine Karte zeigt deren Vorschau, Klick
-  // springt direkt dorthin - siehe .ic-present-stack im Plugin selbst
-  // (dieselbe Darstellung).
-  function renderStack() {
-    stackEl.innerHTML = '';
-    var segH = Math.max(2, Math.min(6, Math.floor(320 / Math.max(1, steps.length))));
-    var gap = segH >= 4 ? 2 : 1;
-    for (var si = steps.length - 1; si >= 0; si--) {
-      (function (si) {
-        var cls = 'stackseg';
-        if (si === steps.length - 1) { cls += ' stacklast'; }
-        if (si === idx) { cls += ' stackcurrent'; }
-        else if (si < idx) { cls += ' stackplayed'; }
-        var seg = document.createElement('div');
-        seg.className = cls;
-        seg.style.height = segH + 'px';
-        seg.style.marginBottom = gap + 'px';
-        seg.addEventListener('click', function () { goToStep(si); });
-        seg.addEventListener('mouseenter', function () { showPreview(steps[si]); });
-        seg.addEventListener('mouseleave', hidePreview);
-        stackEl.appendChild(seg);
-      })(si);
-    }
-  }
-
-  var idx = 0;
-  var currentTransform = null;
-  // Übersicht-Station (falls vorhanden) merken - ein Klick auf den Zähler
-  // selbst springt direkt dorthin, unabhängig von der aktuellen Position.
-  var overviewIdx = 0;
-  for (var oi = 0; oi < steps.length; oi++) { if (steps[oi].overview) { overviewIdx = oi; break; } }
-  function goToStep(newIdx, skipTransition) {
-    var fromIdx = idx;
-    idx = Math.max(0, Math.min(steps.length - 1, newIdx));
-    var s = steps[idx];
-    if (!s) { return; }
-    var target = targetFor(s);
-    updateOcclusion();
-    counter.textContent = (idx + 1) + ' / ' + steps.length;
-    renderStack();
-    if (skipTransition || fromIdx === idx || !currentTransform) {
-      if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
-      applyTransform(target.scale, target.cx, target.cy, target.rot);
-      currentTransform = target;
-      return;
-    }
-    animateCamera(currentTransform, target, function () { currentTransform = target; });
-    currentTransform = target;
-  }
-  window.pinnwandStep = function (dir) { goToStep(idx + dir); };
-
-  document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'ArrowRight' || ev.key === ' ') { pinnwandStep(1); ev.preventDefault(); }
-    else if (ev.key === 'ArrowLeft') { pinnwandStep(-1); }
-  });
-  document.querySelector('.navzone.prev').addEventListener('click', function () { pinnwandStep(-1); });
-  document.querySelector('.navzone.next').addEventListener('click', function () { pinnwandStep(1); });
-  prevBtn.addEventListener('click', function () { pinnwandStep(-1); });
-  nextBtn.addEventListener('click', function () { pinnwandStep(1); });
-  counter.addEventListener('click', function () { goToStep(overviewIdx); });
-
-  // Manuelles Verschieben/Zoomen zwischen den Stationen - wie im Original,
-  // damit man sich die Umgebung auch selbst ansehen kann.
-  var dragging = false, dragStartX = 0, dragStartY = 0, dragStartCx = 0, dragStartCy = 0;
-  stage.addEventListener('pointerdown', function (ev) {
-    if (ev.target.closest('.navzone') || !currentTransform) { return; }
-    dragging = true; stage.classList.add('dragging');
-    dragStartX = ev.clientX; dragStartY = ev.clientY;
-    dragStartCx = currentTransform.cx; dragStartCy = currentTransform.cy;
-  });
-  window.addEventListener('pointermove', function (ev) {
-    if (!dragging || !currentTransform) { return; }
-    var rad = (currentTransform.rot || 0) * Math.PI / 180;
-    var cos = Math.cos(rad), sin = Math.sin(rad);
-    var dx = ev.clientX - dragStartX, dy = ev.clientY - dragStartY;
-    currentTransform.cx = dragStartCx - (dx * cos + dy * sin) / currentTransform.scale;
-    currentTransform.cy = dragStartCy - (-dx * sin + dy * cos) / currentTransform.scale;
-    applyTransform(currentTransform.scale, currentTransform.cx, currentTransform.cy, currentTransform.rot);
-  });
-  window.addEventListener('pointerup', function () { dragging = false; stage.classList.remove('dragging'); });
-  stage.addEventListener('wheel', function (ev) {
-    if (!currentTransform) { return; }
-    ev.preventDefault();
-    var newScale = Math.max(0.05, Math.min(8, currentTransform.scale * (ev.deltaY < 0 ? 1.1 : 0.9)));
-    var rad = (currentTransform.rot || 0) * Math.PI / 180;
-    var cos = Math.cos(rad), sin = Math.sin(rad);
-    var dx = ev.clientX - window.innerWidth / 2, dy = ev.clientY - window.innerHeight / 2;
-    var wx = currentTransform.cx + (dx * cos + dy * sin) / currentTransform.scale;
-    var wy = currentTransform.cy + (-dx * sin + dy * cos) / currentTransform.scale;
-    currentTransform.scale = newScale;
-    currentTransform.cx = wx - (dx * cos + dy * sin) / newScale;
-    currentTransform.cy = wy - (-dx * sin + dy * cos) / newScale;
-    applyTransform(currentTransform.scale, currentTransform.cx, currentTransform.cy, currentTransform.rot);
-  }, { passive: false });
-
-  if (steps.length) {
-    goToStep(0, true);
-    setTimeout(function () { hint.style.opacity = '0'; hint.style.transition = 'opacity 1s'; }, 4000);
-  } else {
-    hint.textContent = 'Kein Roter Faden mit Stationen vorhanden.';
-  }
+  // Pinnwand (falls der Rote Faden nicht selbst schon damit beginnt).
+  if (steps.length && !steps[0].overview) { steps.unshift(overviewStep()); }
+  player.start(steps, occludables, 0);
 })();
 </script>
 </body>

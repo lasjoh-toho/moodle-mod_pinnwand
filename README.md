@@ -1580,6 +1580,35 @@ Details und Scoping-Entscheidungen. In Kurzform:
   vorher ging das nur auf dem Handy, jetzt unabhängig von der
   Bildschirmgröße, für mehr Platz auf der Arbeitsfläche.
 
+### Einhundertneununddreißigste Überarbeitung — Präsentations-Navigation wie im Export, WordArt überall wie auf der Pinnwand
+
+- Die Präsentation innerhalb von Moodle bedient sich jetzt exakt wie die
+  exportierte HTML-Datei: beide nutzen dieselbe Datei
+  `js/presentation-player.js` (der Export bettet sie wörtlich ein). Neu in
+  Moodle dadurch u.a. die unsichtbaren Klickzonen am linken/rechten
+  Bildschirmrand (zurück/weiter) und der Bedienhinweis beim Start; Escape
+  und der Schließen-Knopf bleiben Moodle-spezifisch. Der letzte Schritt
+  bleibt - wie im Export - stehen, statt die Präsentation automatisch zu
+  schließen. Der Stationen-Stapel über dem Zähler bleibt jetzt geöffnet,
+  solange die Maus im Bedienbereich ist, damit die Karten auch
+  anklickbar sind.
+- WordArt/Wortfelder sehen in "Meine Dateien", der Klassenübersicht und
+  der Präsentation jetzt genauso aus wie im Editor und auf der Pinnwand:
+  überall dieselbe Live-Darstellung, als Ganzes in die Vorschau
+  eingepasst statt beschnitten (Klassenübersicht) bzw. über die Vorschau
+  hinausquellend mit dunklem Schatten-"Rahmen" (Meine Dateien). Beim
+  Heranzoomen in der Präsentation wird der tatsächlich sichtbare Bereich
+  der WordArt (inkl. Schrägstellung/Extrusion) angeflogen, statt sie am
+  Bildschirmrand abzuschneiden.
+- Das beim Speichern erzeugte Bild eines WordArt-Rahmens ist jetzt exakt
+  die Pinnwand-Darstellung (gleiche Zeilenumbrüche/Positionen), und der
+  Export platziert Wortfelder so, dass die Karte genau auf ihrer
+  Pinnwand-Position liegt. Bereits gespeicherte WordArt wird im Export
+  erst nach erneutem Speichern im Editor 1:1 dargestellt; in Moodle selbst
+  gilt die neue Darstellung sofort.
+- Bogentext wird in der Pinnwand-Darstellung jetzt im richtigen
+  Größenverhältnis zur Karte gezeigt (vorher feste Pixelbreite).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

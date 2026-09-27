@@ -3922,3 +3922,62 @@ viewBox aus Phase 128 (die WordArt jetzt vollständig zeigt) bleibt in
 jedem Fall unangetastet, das war eine explizite Vorgabe.
 
 Shipped als Version `2026083136` / `0.138.0`.
+
+## Phase 132
+
+Nutzer-Wunsch: (1) die für die Exportdatei programmierte Navigation soll
+genau so in der Präsentation innerhalb von Moodle gelten; (2) WordArt in
+"Meine Dateien", Klassenübersicht und Präsentation soll aussehen wie im
+Editor/auf der Pinnwand und nicht mehr durch Rahmen abgeschnitten werden.
+
+**(1) Gemeinsamer Player**: neue Datei `js/presentation-player.js`
+(`window.PinnwandPresentation.create(root, opts)`), enthält Kamera,
+Schritte, Verdeckung, Stapel/Vorschau, Tastatur, Klickzonen, Ziehen,
+Mausrad, Pinch sowie das zugehörige CSS (`.pwp-*`). `view.php` lädt sie
+vor `app.js`, `export_presentation.php` bettet dieselbe Datei per
+`file_get_contents()` wörtlich in die HTML-Datei ein - keine zwei
+auseinanderlaufenden Kopien mehr. `openPresentation()` in app.js enthält
+nur noch Moodle-Spezifisches (Schließen/Escape, Stylus-Ebene, Objekt per
+Klick an den Faden anhängen). Übernommene Export-Eigenschaften:
+Klickzonen links/rechts (16 %), Bedienhinweis 4 s, kein Einflug-Zoom,
+letzter Schritt bleibt stehen, Mausrad-Faktor 1.1/0.9. Zusätzlich
+behoben: `startIndex` (Doppelklick-Vorschau) traf wegen des vorn
+eingefügten Überblicks die vorherige Station; Export übergab `framez`
+nicht (Rahmen-Stationen blendeten dadurch alle Objekte mit z>0 aus);
+Export ermittelte Bild-Seitenverhältnisse vor dem Dekodieren (jetzt
+Nachführung per `load` + `refreshStep`); Stapel war nach Verlassen des
+Zählers nicht mehr erreichbar (jetzt Klasse `pwp-open` bis Mausaustritt).
+
+**(2) WordArt überall = Pinnwand**:
+- `buildTextFrameLiveDom(tf, {noGuide})`: alle Maße relativ zu tf.w
+  (Bogentext-Breite vorher feste px, Innenabstand jetzt cqw), explizites
+  `box-sizing` (Präsentations-Overlay liegt außerhalb `.pinnwand-app`),
+  gestrichelte Hilfslinie optional.
+- `measureWordfieldBounds(tf)`: misst die Live-Darstellung unsichtbar aus
+  (getBoundingClientRect erfasst die WordArt-Transforms) + Rand für
+  text-shadow-Effekte; gecacht, Cache wird bei `fonts.loadingdone`
+  verworfen. Ersetzt für WordArt die measureText-Schätzung (einzeilig,
+  kannte keinen Umbruch).
+- `buildWordfieldFit(tf)`: Vorschau als Ganzes eingepasst
+  (container-type:size) - in "Meine Dateien" (ohne Box-Schatten) und
+  in der Klassenübersicht (`get_all_photos` liefert dafür jetzt
+  `wordfielddata`).
+- Präsentation in Moodle: Wortfelder als Live-DOM statt `<img>`,
+  Zoom-Ziel = gemessener Bereich + 5 % Rand (`PRESENT_STEP_MARGIN`).
+- Gespeichertes SVG von WordArt-Rahmen (`buildTextFrameLiveSvg`):
+  serialisierte Live-Darstellung (XMLSerializer) in einem foreignObject,
+  viewBox = gemessener Bereich. Der alte WordArt-Zweig in
+  `buildTextFrameSVG` (primärer Text immer mittig, andere Umbruchbreite)
+  wird für WordArt nicht mehr benutzt; normale Zettel unverändert.
+- Export: liefert je Wortfeld Kartengröße (`tfw/tfh`) und die viewBox des
+  SVGs; das Bild wird so platziert, dass die Karte exakt auf
+  canvasx/canvasy/canvasw liegt (vorher wurde das größere SVG auf
+  Kartenbreite gestaucht). Zoom-Ziel: WordArt = viewBox, Zettel = Karte.
+
+Mit Headless-Chromium verifiziert (Test-Harness mit gemockter Moodle-API
+und den echten PHP-Exportfunktionen mit gestubbter DB/File-API): Pinnwand,
+Meine Dateien, Klassenübersicht, Moodle-Präsentation und Export zeigen
+dieselben Zeilenumbrüche/Positionen; Klickzonen, Leertaste/Pfeile,
+Stapel+Vorschau, Zähler→Überblick, Escape, keine Listener-Lecks.
+
+Shipped als Version `2026083137` / `0.139.0`.
