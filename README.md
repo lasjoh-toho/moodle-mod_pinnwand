@@ -1609,6 +1609,33 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Bogentext wird in der Pinnwand-Darstellung jetzt im richtigen
   Größenverhältnis zur Karte gezeigt (vorher feste Pixelbreite).
 
+### Einhundertvierzigste Überarbeitung — Editor kompakter, Sterne und Sprechblasen, Formen hinter/um WordArt
+
+- Fehler behoben: Speichern im Editor brach mit "BASIC_SHAPES is not
+  defined" ab, sobald ein Zettel/eine WordArt eine Form enthielt.
+- Formen liegen jetzt überall gleich: gleiche Größe in Editor und auf der
+  Pinnwand (vorher war die Form auf der Pinnwand bei Querformat größer),
+  spätere Formen vor früheren, "hinter dem Text" wirklich hinter dem Text
+  (auch auf Papier-Zetteln). Formen lassen sich in Breite und Höhe
+  unabhängig ziehen (mit Umschalttaste proportional).
+- WordArt: neue Formen legen sich automatisch hinter und um den Text;
+  "Um Text" legt eine ausgewählte Form nachträglich passend um den Text.
+- Neue, einstellbare Vektorformen: Stern (Zackenzahl, Innenradius),
+  Explosion, Sprechblase rund/eckig und Gedankenblase (Richtung und Länge
+  der Spitze).
+- Formen-Wähler wie der Vorlagen-Wähler: ein Knopf, das Raster öffnet sich
+  als Pop-up. Zur ausgewählten Form: Lage zum Text, "Um Text", Parameter,
+  Löschen.
+- Schriften kompakter: Schrift, Fett/Kursiv/Unterstrichen/Durchgestrichen,
+  Ausrichtung und Hoch-/Tiefstellung als Aufklapp-Menüs in einer Zeile;
+  Größe, Laufweite, Stärke und Zeilenabstand in einer zweiten Zeile (Werte
+  direkt eintippbar). Farbwähler und Überschrift "Zeichen" entfernt.
+- 3D-Regler mit kleinem Bild und Kurzbeschriftung (Y-Drehung, Tiefe mit
+  Farbe, Drehung, Neigung, Höhe, Leuchten) statt unbeschrifteter Zahlen.
+- Zettel: Text im Editor nicht mehr von der Kartenfläche verdeckt und wie
+  auf der Pinnwand senkrecht mittig; auf der Pinnwand bricht der Haupttext
+  jetzt wie im Editor über die ganze Kartenbreite um.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

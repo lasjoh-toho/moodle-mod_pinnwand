@@ -3981,3 +3981,43 @@ dieselben Zeilenumbrüche/Positionen; Klickzonen, Leertaste/Pfeile,
 Stapel+Vorschau, Zähler→Überblick, Escape, keine Listener-Lecks.
 
 Shipped als Version `2026083137` / `0.139.0`.
+
+## Phase 133
+
+Nutzer-Feedback: Speichern meldet "BASIC_SHAPES nicht definiert"; Formen
+sollen bei WordArt um/hinter der WordArt liegen; konfigurierbare
+Vektor-Sterne und Sprechblasen; Editor-Elemente kleiner/zweckmäßiger
+(3D-Regler erkennbar, Ausrichtung und Hoch/Tief als Dropdown, Farbwähler
+und "Zeichen" in Schriften weg, Formen-Wähler wie Vorlagen-Wähler, alle
+Maße in eine Zeile mit Zeilenabstand am Ende).
+
+- **BASIC_SHAPES**: war lokal in renderTextFrame(), wird seit Phase 132
+  aber von buildTextFrameLiveDom() (Speichern) gebraucht -> global.
+- **Gemeinsame Formgeometrie**: `shapeDefFor(s)` (Pfad inkl. Polygon und
+  parametrischer Formen) und `shapeBox(tf, s)` (Höhe = size x kürzere
+  Kartenseite, Breite = Höhe x `aspect`) für Editor, Live-DOM, altes
+  SVG und Umfluss-Hindernisse. Vorher: Live-DOM rechnete size x Breite.
+  Datenuri mit `preserveAspectRatio="none"` +
+  `vector-effect:non-scaling-stroke`.
+- **Parametrische Formen** (`PARAM_SHAPES`): star/star8/starburst
+  (`points`, `inner`), bubble/bubblerect/thought (`bubble`, `tailAngle`,
+  `tailLen`); Sprechblase als EIN Umriss (Superellipse + Spitze).
+- **Um den Text legen**: `measureTextObjectBounds()` misst das Textobjekt
+  in der Live-Darstellung (das Editier-Feld bricht anders um), Rand je
+  Formtyp; im WordArt-Modus automatisch für neue Formen.
+- **Stapelung**: Live-DOM Karte z0 -> Formen -> Text z1 -> "vor dem
+  Text" z2; Editor ebenso (Formen vor dem ersten Textobjekt eingefügt,
+  Text z-index 1 - vorher verdeckte `.ic-textframe-inner` den Text auf
+  Papier-Zetteln).
+- **Zettel-Haupttext** im Live-DOM füllt die Karte (inset 0, Innenabstand
+  12, flex-mittig) wie im Editor; im Editor flex statt table-cell.
+- **UI**: `iconDropdown()`, `numberStepper()` mit direkt eintippbarem
+  Wert; Format-Zeile + Maß-Zeile; 3D-Raster mit Inline-SVG-Icons;
+  Formen-Wähler-Knopf + Pop-up, Form-Einstellungen (Lage, Um Text,
+  Parameter, Löschen); kompaktes CSS am Ende von styles.css.
+
+Mit Headless-Chromium verifiziert (Editor/Pinnwand/Live-Vorschau/SVG
+deckungsgleich, Speichern ohne Fehler, Dropdowns wirken auf die Auswahl,
+Regression Präsentation/Export/Navigation).
+
+Shipped als Version `2026083138` / `0.140.0`.

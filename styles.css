@@ -605,7 +605,7 @@
 .ic-textframe-shape-btn { flex: 1 1 0; }
 .ic-textframe-shapeobj {
   position: absolute; transform: translate(-50%, -50%); background-repeat: no-repeat; background-position: center;
-  background-size: contain; cursor: pointer; z-index: 0; border-radius: 4px;
+  background-size: 100% 100%; cursor: pointer; z-index: 0; border-radius: 4px;
 }
 .ic-textframe-shapeobj.active { outline: 2px dashed #4f8cff; outline-offset: 4px; }
 .ic-textframe-shape-resize {
@@ -1233,3 +1233,80 @@
 }
 .ic-caption { font-size: .78rem; color: var(--ic-muted); text-align: center; padding: 6px 16px 0; }
 
+
+/* ------------------------------------------------------------------
+   Kompakter Editor (Zettel/WordArt): kleinere, zweckmäßigere
+   Bedienelemente - eine Zeile Format, eine Zeile Maße, Formen-Wähler als
+   einzelner Knopf mit Pop-up, 3D-Regler mit Bild + Kurzbeschriftung.
+   Bewusst am Dateiende, damit diese Regeln die älteren, größeren
+   Standardmaße für den Editor überschreiben.
+   ------------------------------------------------------------------ */
+.ic-textframe-block { padding: 8px 10px; }
+.ic-textframe-block-content { font-size: .85rem; }
+.ic-textframe-label { font-size: .72rem; margin-top: 6px; }
+.ic-compact-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
+.ic-mini-btn {
+  flex: 0 0 auto; min-width: 30px; height: 30px; padding: 0 6px; border-radius: 7px; font-size: .8rem;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+}
+.ic-mini-btn .ic-icon svg { width: 16px; height: 16px; }
+.ic-mini-btn.active { background: var(--ic-accent); color: #fff; }
+.ic-mini-btn-text { padding: 0 8px; white-space: nowrap; }
+.ic-fmt-row .ic-typo-font-btn { width: auto; max-width: 150px; overflow: hidden; text-overflow: ellipsis; font-size: .85rem; }
+.ic-dropdown { position: relative; display: inline-flex; }
+.ic-dropdown-caret { font-size: .65rem; opacity: .7; }
+.ic-dropdown-text { font-weight: 700; }
+.ic-dropdown-menu {
+  position: fixed; z-index: 12000; background: var(--ic-panel, #1f2126); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px; padding: 4px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+}
+.ic-dropdown-item {
+  display: flex; align-items: center; gap: 8px; padding: 5px 10px; border: none; border-radius: 6px; background: transparent;
+  color: var(--ic-text, #f2f3f5); font-size: .8rem; cursor: pointer; text-align: left; white-space: nowrap;
+}
+.ic-dropdown-item .ic-icon svg { width: 16px; height: 16px; }
+.ic-dropdown-item:hover { background: rgba(255,255,255,.1); }
+.ic-dropdown-item.active { background: rgba(79,140,255,.3); }
+.ic-measure-row { gap: 6px 10px; }
+.ic-measure { display: inline-flex; align-items: center; gap: 3px; }
+.ic-measure-symbol { color: var(--ic-muted); font-size: .85rem; min-width: 12px; text-align: center; font-weight: 700; }
+.ic-stepper { gap: 2px; }
+input.ic-stepper-value {
+  width: 3.4em; min-width: 0; padding: 3px 2px; font-size: .8rem; text-align: center; color: inherit;
+  background: #16171b; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; font-variant-numeric: tabular-nums;
+}
+.ic-stepper-btn { width: 16px; height: 12px; font-size: .5rem; }
+.ic-mini-select {
+  height: 30px; padding: 0 6px; border-radius: 7px; border: 1px solid rgba(255,255,255,.12);
+  background: #16171b; color: inherit; font-size: .8rem;
+}
+.ic-preset-swatch { width: 28px; height: 28px; font-size: .8rem; }
+.ic-textframe-presets { margin: 4px 0 6px; justify-content: flex-start; }
+.ic-cf-shapes-col { max-height: none; }
+.ic-shape-picker-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.12); background: #16171b; color: inherit; font-size: .8rem; cursor: pointer;
+}
+.ic-shape-picker-btn:hover { border-color: var(--ic-accent); }
+.ic-shape-picker-preview { width: 26px; height: 26px; background: no-repeat center/contain; flex: 0 0 auto; }
+.ic-shape-settings { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.08); }
+.ic-draggable-modal-content .ic-shape-grid { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 5px; }
+.ic-w3d-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 4px 0 6px; }
+.ic-w3d-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px;
+  background: rgba(255,255,255,.04); border-radius: 7px;
+}
+.ic-w3d-head { display: flex; align-items: center; gap: 4px; }
+.ic-w3d-icon svg { width: 20px; height: 20px; display: block; color: var(--ic-text, #f2f3f5); }
+.ic-w3d-caption { font-size: .68rem; color: var(--ic-muted); white-space: nowrap; }
+.ic-w3d-swatch { width: 16px; height: 16px; margin-left: 2px; border-radius: 4px; border-width: 1px; }
+.ic-wordart-arc-row { gap: 4px; margin: 4px 0; }
+.ic-wordart-arc-tile { padding: 3px; aspect-ratio: 2/1; }
+/* Textobjekte im Editor liegen über der Kartenfläche (.ic-textframe-inner,
+   z-index 1) - ohne eigenen z-index verschwand der Text auf Zetteln mit
+   farbigem Hintergrund (z.B. "Papier") hinter der Karte. */
+.ic-textframe-obj { z-index: 1; }
+/* Primärer Zettel-Text im Editor senkrecht mittig wie auf der Pinnwand -
+   display:table-cell greift bei position:absolute nicht (wird zu block),
+   der Text klebte dadurch oben. */
+.ic-textframe-obj.primary { display: flex; flex-direction: column; justify-content: center; }

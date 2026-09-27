@@ -1610,6 +1610,117 @@
       { id: 'arrowdown', label: 'Pfeil unten', d: 'M35 5 L35 60 L15 60 L50 95 L85 60 L65 60 L65 5 Z' }
     ]
   };
+  // Grundformen (Rechteck/Kreis/...) - global statt nur im Editor, weil
+  // auch die Live-Darstellung (Pinnwand, Vorschau, gespeichertes SVG) sie
+  // auflösen muss (vorher "BASIC_SHAPES is not defined" beim Speichern).
+  var BASIC_SHAPES = [
+    { id: 'rect', label: S.tf_shape_rect, d: 'M5 5 L95 5 L95 95 L5 95 Z' },
+    { id: 'rounded', label: S.tf_shape_rounded, d: 'M25 5 L75 5 A20 20 0 0 1 95 25 L95 75 A20 20 0 0 1 75 95 L25 95 A20 20 0 0 1 5 75 L5 25 A20 20 0 0 1 25 5 Z' },
+    { id: 'circle', label: S.tf_shape_circle, d: 'M50 5 A45 45 0 1 1 49.9 5 Z' },
+    { id: 'ellipse', label: S.tf_shape_ellipse, d: 'M50 20 A45 30 0 1 1 49.9 20 Z' }
+  ];
+  // Parametrische Vektorformen: Stern (Zackenzahl, Innenradius) und
+  // Sprechblase (Rund/Eckig/Gedanke, Richtung und Länge der Spitze) - der
+  // Pfad wird aus den Parametern der jeweiligen Form berechnet, bleibt also
+  // bei jeder Größe scharf und nachträglich einstellbar.
+  var PARAM_SHAPES = [
+    { id: 'star', label: 'Stern', defaults: { points: 5, inner: 0.45 } },
+    { id: 'star8', base: 'star', label: 'Stern (8 Zacken)', defaults: { points: 8, inner: 0.6 } },
+    { id: 'starburst', base: 'star', label: 'Explosion', defaults: { points: 14, inner: 0.72 } },
+    { id: 'bubble', label: 'Sprechblase', defaults: { bubble: 'round', tailAngle: 125, tailLen: 0.35 } },
+    { id: 'bubblerect', base: 'bubble', label: 'Sprechblase eckig', defaults: { bubble: 'rect', tailAngle: 125, tailLen: 0.35 } },
+    { id: 'thought', base: 'bubble', label: 'Gedankenblase', defaults: { bubble: 'thought', tailAngle: 125, tailLen: 0.4 } }
+  ];
+  function r2(v) { return Math.round(v * 100) / 100; }
+  function starPathD(points, inner) {
+    points = Math.max(3, Math.min(24, Math.round(points || 5)));
+    inner = Math.max(0.1, Math.min(0.95, inner != null ? inner : 0.45));
+    var d = '', n = points * 2;
+    for (var i = 0; i < n; i++) {
+      var a = -Math.PI / 2 + i * Math.PI / points;
+      var r = i % 2 ? 45 * inner : 45;
+      d += (i ? ' L' : 'M') + r2(50 + r * Math.cos(a)) + ' ' + r2(50 + r * Math.sin(a));
+    }
+    return d + ' Z';
+  }
+  // Sprechblase als EIN geschlossener Umriss (Körper + Spitze), damit eine
+  // Kontur sauber außen herum läuft statt quer über den Ansatz der Spitze.
+  // Körper: Superellipse (n=2 Ellipse, n=5 fast Rechteck mit runden Ecken),
+  // die Spitze ersetzt einen kleinen Bogenabschnitt in Richtung tailAngle.
+  function bubblePathD(style, tailAngle, tailLen) {
+    var cx = 50, cy = 50, a = 44, b = 30;
+    var ta = ((tailAngle != null ? tailAngle : 125) % 360) * Math.PI / 180;
+    var len = Math.max(0, Math.min(1, tailLen != null ? tailLen : 0.35));
+    function body(phi, n) {
+      var c = Math.cos(phi), sn = Math.sin(phi);
+      return [cx + a * (c < 0 ? -1 : 1) * Math.pow(Math.abs(c), 2 / n), cy + b * (sn < 0 ? -1 : 1) * Math.pow(Math.abs(sn), 2 / n)];
+    }
+    function tipPoint() {
+      var edge = body(ta, style === 'rect' ? 5 : 2);
+      var dx = edge[0] - cx, dy = edge[1] - cy, dl = Math.sqrt(dx * dx + dy * dy) || 1;
+      var ext = 6 + len * 40;
+      return [Math.max(1, Math.min(99, edge[0] + dx / dl * ext)), Math.max(1, Math.min(99, edge[1] + dy / dl * ext))];
+    }
+    if (style === 'thought') {
+      // Wolkiger Körper (Bögen auf einer Ellipse) plus zwei kleine Kreise
+      // in Richtung der Spitze.
+      var bumps = 11, d = '';
+      for (var i = 0; i <= bumps; i++) {
+        var p = body(i / bumps * Math.PI * 2, 2);
+        p = [cx + (p[0] - cx) * 0.86, cy + (p[1] - cy) * 0.82];
+        d += (i ? ' A9 9 0 0 1 ' : 'M') + r2(p[0]) + ' ' + r2(p[1]);
+      }
+      d += ' Z';
+      var tip = tipPoint(), e = body(ta, 2);
+      [[0.45, 5.5], [0.85, 3.5]].forEach(function (c) {
+        var x = e[0] + (tip[0] - e[0]) * c[0], y = e[1] + (tip[1] - e[1]) * c[0], r = c[1];
+        d += ' M' + r2(x - r) + ' ' + r2(y) + ' A' + r + ' ' + r + ' 0 1 0 ' + r2(x + r) + ' ' + r2(y) +
+          ' A' + r + ' ' + r + ' 0 1 0 ' + r2(x - r) + ' ' + r2(y) + ' Z';
+      });
+      return d;
+    }
+    var n = style === 'rect' ? 5 : 2, steps = 96, half = 0.2, out = '', started = false;
+    for (var k = 0; k <= steps; k++) {
+      var phi = ta + half + (k / steps) * (Math.PI * 2 - 2 * half);
+      var q = body(phi, n);
+      out += (started ? ' L' : 'M') + r2(q[0]) + ' ' + r2(q[1]);
+      started = true;
+    }
+    var t2 = tipPoint();
+    out += ' L' + r2(t2[0]) + ' ' + r2(t2[1]);
+    return out + ' Z';
+  }
+  function paramShapeInfo(type) {
+    var def = PARAM_SHAPES.filter(function (p) { return p.id === type; })[0];
+    return def ? { base: def.base || def.id, def: def } : null;
+  }
+  // EINE Stelle, die für eine Form (tf.shapes-Eintrag) ihren Pfad liefert -
+  // gemeinsam für Editor, Pinnwand/Vorschau und gespeichertes SVG.
+  function shapeDefFor(s) {
+    if (!s || !s.type || s.type === 'none') { return null; }
+    if (s.type === 'custom' && s.customPoints) {
+      return { d: s.customPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' };
+    }
+    var pinfo = paramShapeInfo(s.type);
+    if (pinfo) {
+      var dfl = pinfo.def.defaults;
+      if (pinfo.base === 'star') {
+        return { d: starPathD(s.points != null ? s.points : dfl.points, s.inner != null ? s.inner : dfl.inner) };
+      }
+      return { d: bubblePathD(s.bubble || dfl.bubble, s.tailAngle != null ? s.tailAngle : dfl.tailAngle, s.tailLen != null ? s.tailLen : dfl.tailLen) };
+    }
+    return [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; }))
+      .concat(BASIC_SHAPES).filter(function (d) { return d.id === s.type; })[0] || null;
+  }
+  // Maße einer Form in tf-Koordinaten: Höhe = Anteil an der kürzeren
+  // Kartenseite (wie im Editor), Breite = Höhe x Seitenverhältnis (aspect,
+  // Standard 1) - dadurch lässt sich eine Form auch breit um einen Text
+  // herum legen (z.B. Sprechblase/Banner um ein Wort).
+  function shapeBox(tf, s) {
+    var h = Math.min(tf.w, tf.h) * (s.size || 0.4);
+    return { w: h * (s.aspect || 1), h: h };
+  }
+
   var FG_SHAPE_CATEGORY_LABELS = { grundformen: 'Grundformen', symbolformen: 'Symbolformen', blockpfeile: 'Blockpfeile' };
   var fgShapeGradientCounter = 0;
   // Rechnet einen Verlauf-Winkel (gleiche Konvention wie der drehbare
@@ -1675,8 +1786,8 @@
     var strokeAttr = style.outlineWidth ? ' stroke="' + (style.outlineColor || '#000') + '" stroke-width="' + style.outlineWidth + '"' : '';
     var attrs = fillAttr + strokeAttr + filterAttr + (shape.fillRule ? ' fill-rule="' + shape.fillRule + '"' : '');
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' + (defs ? '<defs>' + defs + '</defs>' : '') +
-      '<path d="' + shape.d + '" ' + attrs + '/></svg>'
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">' + (defs ? '<defs>' + defs + '</defs>' : '') +
+      '<path d="' + shape.d + '" ' + attrs + (strokeAttr ? ' vector-effect="non-scaling-stroke"' : '') + '/></svg>'
     );
   }
 
@@ -2097,8 +2208,8 @@
     if (!wrapShapes.length) { return; }
     loadPretext().then(function (pretext) {
       var obstaclesAll = wrapShapes.map(function (s) {
-        var size = Math.min(tf.w, tf.h) * (s.size || 0.4);
-        return { x: s.x * tf.w - size / 2, y: s.y * tf.h - size / 2, width: size, height: size };
+        var sb = shapeBox(tf, s);
+        return { x: s.x * tf.w - sb.w / 2, y: s.y * tf.h - sb.h / 2, width: sb.w, height: sb.h };
       });
       tf.texts.forEach(function (t, idx) {
         var plainText = (t.text || '').replace(/<[^>]+>/g, '');
@@ -2161,23 +2272,22 @@
       : (cardStyle.fillColor ? 'background:' + cardStyle.fillColor + ';' : (preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;'));
     var cardBorder = cardStyle.outlineWidth ? 'box-shadow:inset 0 0 0 ' + cardStyle.outlineWidth + 'px ' + (cardStyle.outlineColor || '#000') + ';' : '';
     var inner = el('div', {
-      class: 'ic-tf-live-inner', style: 'position:relative;box-sizing:border-box;width:100%;height:100%;overflow:hidden;border-radius:16px;z-index:1;' + cardBg + cardBorder
+      class: 'ic-tf-live-inner', style: 'position:relative;box-sizing:border-box;width:100%;height:100%;overflow:hidden;border-radius:16px;z-index:0;' + cardBg + cardBorder
     });
     outer.appendChild(inner);
     (tf.shapes || []).forEach(function (s) {
-      var shapeDef = s.type === 'custom' && s.customPoints
-        ? { d: s.customPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
-        : (s.type && s.type !== 'none'
-          ? [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; })).concat(BASIC_SHAPES)
-            .filter(function (d) { return d.id === s.type; })[0]
-          : null);
+      var shapeDef = shapeDefFor(s);
       if (!shapeDef) { return; }
+      // Größe wie im Editor: relativ zur kürzeren Kartenseite (shapeBox),
+      // vorher relativ zur Breite - bei Querformat-WordArt lag die Form
+      // auf der Pinnwand dadurch größer als im Editor.
+      var box = shapeBox(tf, s);
       var shapeEl = el('div', {
         class: 'ic-tf-live-shape',
-        style: 'position:absolute;left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + (s.size * 100) + '%;' +
-          'padding-bottom:' + (s.size * 100) + '%;height:0;transform:translate(-50%,-50%) rotate(' + (s.rotation || 0) + 'deg);' +
+        style: 'position:absolute;left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + (box.w / tf.w * 100) + '%;' +
+          'height:' + (box.h / tf.h * 100) + '%;transform:translate(-50%,-50%) rotate(' + (s.rotation || 0) + 'deg);' +
           'background-image:url(' + fgShapeSvgDataUri(shapeDef, s) + ');background-repeat:no-repeat;' +
-          'background-position:center;background-size:contain;' + (s.wrapMode === 'front' ? 'z-index:2;' : 'z-index:0;')
+          'background-position:center;background-size:100% 100%;' + (s.wrapMode === 'front' ? 'z-index:2;' : 'z-index:0;')
       });
       outer.appendChild(shapeEl);
     });
@@ -2206,10 +2316,18 @@
         textEl2.innerHTML = wordartSvg.svg;
       } else {
         var html = t.html || (t.text ? escapeXml(t.text) : '');
+        // Haupttext eines normalen Zettels füllt wie im Editor die ganze
+        // Karte (Innenabstand 12, senkrecht mittig) - vorher frei
+        // positioniert bei left:50%, wodurch der Browser ihm nur die halbe
+        // Kartenbreite zum Umbrechen ließ (viel mehr Zeilen als im Editor).
+        var fillCard = idx === 0 && !hasWordart && !tf.isWordArt;
         textEl2 = el('div', {
           class: 'ic-tf-live-text', html: html,
-          style: 'position:absolute;box-sizing:border-box;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
-            'padding:' + (4 / tf.w * 100) + 'cqw ' + (8 / tf.w * 100) + 'cqw;white-space:pre-wrap;text-align:center;max-width:94%;z-index:1;' +
+          style: (fillCard
+            ? 'position:absolute;box-sizing:border-box;inset:0;padding:' + (12 / tf.w * 100) + 'cqw;' +
+              'display:flex;flex-direction:column;justify-content:center;overflow:hidden;'
+            : 'position:absolute;box-sizing:border-box;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
+              'padding:' + (4 / tf.w * 100) + 'cqw ' + (8 / tf.w * 100) + 'cqw;max-width:94%;') + 'white-space:pre-wrap;text-align:center;z-index:1;' +
             'font-family:' + fontCss + ';font-size:' + (t.size / tf.w * 100) + 'cqw;font-weight:' + (t.fontWeight || 700) +
             ';line-height:' + (t.lineHeight || 1.2) + ';letter-spacing:' + ((t.letterSpacing || 0) / tf.w * 100) + 'cqw;' +
             (wordartCssFor(t, preset.text, false, 100 / tf.w) || computeStyle1Css(t, preset.text))
@@ -2316,6 +2434,31 @@
     b.x1 -= pad; b.y1 -= pad; b.x2 += pad; b.y2 += pad;
     wordfieldBoundsCache[key] = b;
     return { x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2 };
+  }
+
+  // Sichtbarer Bereich EINES Textobjekts in tf-Koordinaten, gemessen an
+  // der Live-Darstellung (wie Pinnwand/gespeichertes Bild) - Grundlage für
+  // "Form um den Text legen". Das Eingabefeld im Editor bricht Text anders
+  // um als die fertige WordArt und taugt deshalb nicht als Maß.
+  function measureTextObjectBounds(tf, idx) {
+    var host = el('div', { style: 'position:fixed;left:-100000px;top:0;width:' + tf.w + 'px;visibility:hidden;pointer-events:none;' });
+    var result = null;
+    try {
+      var live = buildTextFrameLiveDom(tf, { noGuide: true });
+      host.appendChild(live);
+      document.body.appendChild(host);
+      var base = live.getBoundingClientRect();
+      var textEls = live.querySelectorAll('.ic-tf-live-text');
+      var tEl = textEls[idx];
+      if (tEl && base.width > 0) {
+        var ink = tEl.querySelector('svg g') || tEl.querySelector('svg text') || tEl;
+        var r = ink.getBoundingClientRect();
+        var k = tf.w / base.width;
+        result = { x1: (r.left - base.left) * k, y1: (r.top - base.top) * k, x2: (r.right - base.left) * k, y2: (r.bottom - base.top) * k };
+      }
+    } catch (e) { result = null; }
+    if (host.parentNode) { host.parentNode.removeChild(host); }
+    return result;
   }
 
   // Wortfeld als Vorschaubild (Meine Dateien, Klassenübersicht): dieselbe
@@ -2456,15 +2599,10 @@
     // (tf.shapes), Reihenfolge richtet sich nach dem Umfluss-Modus:
     // "vor dem Text" liegt sichtbar über dem Text, sonst darunter.
     function renderShapeSvg(s) {
-      var shapeDef = s.type === 'custom' && s.customPoints
-        ? { d: s.customPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
-        : (s.type && s.type !== 'none'
-          ? [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; })).concat(BASIC_SHAPES)
-            .filter(function (d) { return d.id === s.type; })[0]
-          : null);
+      var shapeDef = shapeDefFor(s);
       if (!shapeDef) { return ''; }
-      var size = Math.min(tf.w, tf.h) * (s.size || 0.4);
-      var tx = s.x * tf.w - size / 2, ty = s.y * tf.h - size / 2, scale = size / 100;
+      var sbox = shapeBox(tf, s);
+      var tx = s.x * tf.w - sbox.w / 2, ty = s.y * tf.h - sbox.h / 2;
       var shapeDefs = '', fillAttr = 'fill="' + escapeXml(s.fillColor || '#e0503f') + '"';
       if (s.fillGradient && s.fillGradient.length >= 2) {
         var gid = 'shapegrad' + s.id;
@@ -2496,7 +2634,7 @@
       }
       var strokeAttr = s.outlineWidth ? ' stroke="' + escapeXml(s.outlineColor || '#000') + '" stroke-width="' + s.outlineWidth + '"' : '';
       return (shapeDefs ? '<defs>' + shapeDefs + '</defs>' : '') +
-        '<g transform="translate(' + tx + ',' + ty + ') scale(' + scale + ') rotate(' + (s.rotation || 0) + ',50,50)">' +
+        '<g transform="translate(' + (tx + sbox.w / 2) + ',' + (ty + sbox.h / 2) + ') rotate(' + (s.rotation || 0) + ') translate(' + (-sbox.w / 2) + ',' + (-sbox.h / 2) + ') scale(' + (sbox.w / 100) + ',' + (sbox.h / 100) + ')">' +
         '<path d="' + shapeDef.d + '" ' + fillAttr + strokeAttr + filterAttr +
         (shapeDef.fillRule ? ' fill-rule="' + shapeDef.fillRule + '"' : '') + '/></g>';
     }
@@ -3033,6 +3171,7 @@
     var activeId = null;
     function selectText(id) {
       activeId = id;
+      if (id != null) { state.tfLastTextId = id; }
       frame.querySelectorAll('.ic-textframe-obj').forEach(function (o) {
         o.classList.toggle('active', o.dataset.textid === String(id));
       });
@@ -3121,7 +3260,7 @@
         // bleibt einfacher Text - siehe Klick unten, der wieder zurück auf
         // den normalen editierbaren Zustand wechselt).
         var arcWrap = el('div', {
-          class: 'ic-textframe-obj ic-textframe-arc-obj',
+          class: 'ic-textframe-obj ic-textframe-arc-obj', 'data-previewid': String(t.id),
           style: 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + Math.max(120, t.size * 6) + 'px;'
         });
         arcWrap.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text)) || '';
@@ -3138,7 +3277,7 @@
         // Pinnwand/im Export, solange NICHT gerade bearbeitet wird - beim
         // Fokussieren erscheint wieder die normale editierbare Ansicht.
         var waWrap = el('div', {
-          class: 'ic-textframe-obj' + (useFillCentering ? ' primary' : ''),
+          class: 'ic-textframe-obj' + (useFillCentering ? ' primary' : ''), 'data-previewid': String(t.id),
           style: useFillCentering ? 'display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:text;' :
             ('left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + (wordartSvgPreview.w) + 'px;cursor:text;')
         });
@@ -3257,12 +3396,6 @@
       frame.addEventListener('dblclick', finish);
       document.addEventListener('keydown', onKey);
     }
-    var BASIC_SHAPES = [
-      { id: 'rect', label: S.tf_shape_rect, d: 'M5 5 L95 5 L95 95 L5 95 Z' },
-      { id: 'rounded', label: S.tf_shape_rounded, d: 'M25 5 L75 5 A20 20 0 0 1 95 25 L95 75 A20 20 0 0 1 75 95 L25 95 A20 20 0 0 1 5 75 L5 25 A20 20 0 0 1 25 5 Z' },
-      { id: 'circle', label: S.tf_shape_circle, d: 'M50 5 A45 45 0 1 1 49.9 5 Z' },
-      { id: 'ellipse', label: S.tf_shape_ellipse, d: 'M50 20 A45 30 0 1 1 49.9 20 Z' }
-    ];
     // Eine gemeinsame Funktion für BEIDE Formen-Buttons (Hintergrund und
     // Vordergrund) - ein einziges, scrollbares Raster mit Icons statt
     // Text, Grundformen zuerst, keine unterschiedliche Gestaltung
@@ -3273,7 +3406,8 @@
         noneBtn.addEventListener('click', function () { onPick('none'); });
         content.appendChild(noneBtn);
       }
-      var allCats = Object.assign({ grundformen_basic: BASIC_SHAPES }, FG_SHAPE_CATEGORIES);
+      var paramCells = PARAM_SHAPES.map(function (p) { return { id: p.id, label: p.label, d: shapeDefFor({ type: p.id }).d }; });
+      var allCats = Object.assign({ grundformen_basic: BASIC_SHAPES, sterne_blasen: paramCells }, FG_SHAPE_CATEGORIES);
       Object.keys(allCats).forEach(function (cat) {
         var grid = el('div', { class: 'ic-shape-grid' });
         allCats[cat].forEach(function (s) {
@@ -3328,32 +3462,151 @@
     var shapesCol = el('div', { class: 'ic-cf-shapes-col' });
     shapesCol.appendChild(presetRow);
     columnsWrap.appendChild(shapesCol);
+
+    // Legt eine Form passend UM ein Textobjekt herum (hinter den Text):
+    // Mittelpunkt = Textmitte, Breite/Höhe aus dem tatsächlich sichtbaren
+    // Text (inkl. WordArt-Verzerrung), je nach Formtyp mit dem Rand, den
+    // der Körper der Form braucht (Sprechblase: Spitze, Stern: Innenkreis).
+    function fitShapeAroundText(shape, t) {
+      var w, h, cx, cy;
+      var mb = measureTextObjectBounds(tf, Math.max(0, tf.texts.indexOf(t)));
+      if (mb) {
+        w = mb.x2 - mb.x1; h = mb.y2 - mb.y1; cx = (mb.x1 + mb.x2) / 2; cy = (mb.y1 + mb.y2) / 2;
+      } else {
+        w = tf.w * 0.6; h = tf.h * 0.4; cx = t.x * tf.w; cy = t.y * tf.h;
+      }
+      w = Math.max(w, 30); h = Math.max(h, 24);
+      var pinfo = paramShapeInfo(shape.type);
+      var base = pinfo ? pinfo.base : shape.type;
+      var fx = 1.25, fy = 1.35;
+      if (base === 'bubble') { fx = 1.2 / 0.88; fy = 1.25 / 0.6; }
+      else if (base === 'star') {
+        var inner = shape.inner != null ? shape.inner : pinfo.def.defaults.inner;
+        fx = fy = 1.05 / (0.9 * inner);
+      } else if (base === 'circle' || base === 'ellipse' || base === 'heart' || base === 'cloud') { fx = 1.5; fy = 1.6; }
+      var sw = w * fx, sh = h * fy;
+      var minSide = Math.min(tf.w, tf.h);
+      shape.x = cx / tf.w; shape.y = cy / tf.h;
+      shape.size = Math.max(0.05, sh / minSide);
+      shape.aspect = Math.max(0.1, Math.min(10, sw / sh));
+      shape.rotation = 0;
+      shape.wrapMode = 'behind';
+    }
+    // Zuletzt bearbeitetes Textobjekt (der Fokus ist beim Klick auf einen
+    // Knopf im Bedienfeld schon weg).
+    function activeTextObj() {
+      return tf.texts.filter(function (t) { return t.id === state.tfLastTextId; })[0] || tf.texts[0];
+    }
     function pickShapeType(id) {
       if (id === '__custom__') { startCustomShapeDraw(null); return; }
       var nextId = (Math.max.apply(null, tf.shapes.map(function (s) { return s.id; }).concat([0])) || 0) + 1;
-      tf.shapes.push({ id: nextId, type: id, x: 0.5, y: 0.5, size: 0.4, fillColor: '#e0503f' });
+      var shape = { id: nextId, type: id, x: 0.5, y: 0.5, size: 0.4, fillColor: '#e0503f' };
+      var pinfo = paramShapeInfo(id);
+      if (pinfo) { Object.keys(pinfo.def.defaults).forEach(function (k) { shape[k] = pinfo.def.defaults[k]; }); }
+      if (pinfo && pinfo.base === 'bubble') { shape.fillColor = '#ffffff'; shape.outlineWidth = 2; shape.outlineColor = '#111111'; }
+      // WordArt: neue Formen legen sich direkt HINTER und UM den Text
+      // (Hintergrund-Deko), statt als kleines Quadrat irgendwo auf dem Text.
+      if (state.wordArtMode && tf.texts.length) { fitShapeAroundText(shape, activeTextObj()); }
+      tf.shapes.push(shape);
+      state.lastShapeType = id;
       state.activeShapeId = nextId;
       render();
     }
-    buildShapeGrid(shapesCol, null, pickShapeType, false);
+
+    // Formen-Wähler wie der WordArt-Vorlagen-Wähler: ein kompakter Knopf
+    // mit der zuletzt gewählten Form, Klick öffnet das Raster als
+    // verschiebbares Pop-up (statt das ganze Raster dauerhaft anzuzeigen).
+    var shapePickerBtn = el('button', { class: 'ic-shape-picker-btn', title: S.tf_add_shape || 'Form hinzufügen' });
+    var lastShapeDef = shapeDefFor({ type: state.lastShapeType || 'star' });
+    if (lastShapeDef) {
+      shapePickerBtn.appendChild(el('span', {
+        class: 'ic-shape-picker-preview', style: 'background-image:url(' + fgShapeSvgDataUri(lastShapeDef, '#cfd2d8') + ')'
+      }));
+    }
+    shapePickerBtn.appendChild(el('span', {}, ['+ ' + (S.tf_add_shape || 'Form')]));
+    shapePickerBtn.addEventListener('click', function () {
+      openDraggableModal(S.tf_add_shape || 'Form hinzufügen', shapePickerBtn, function (content) {
+        buildShapeGrid(content, null, function (id) { closeDraggableModal(); pickShapeType(id); }, false);
+      });
+    });
+    shapesCol.appendChild(shapePickerBtn);
+
+    // Einstellungen der gerade ausgewählten Form: Lage zum Text, um den
+    // Text legen, Parameter von Stern/Sprechblase, löschen.
+    var selShape = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
+    if (selShape) {
+      var shapeSettings = el('div', { class: 'ic-shape-settings' });
+      var shapeRow1 = el('div', { class: 'ic-compact-row' });
+      [
+        ['behind', 'wrapbehind', S.tf_wrap_behind], ['front', 'wrapfront', S.tf_wrap_front],
+        ['wrap', 'wraparound', S.tf_wrap_around]
+      ].forEach(function (w) {
+        var wb = el('button', {
+          class: 'ic-btn ic-btn-ghost ic-mini-btn' + ((selShape.wrapMode || 'behind') === w[0] ? ' active' : ''), title: w[2]
+        }, [icon(w[1])]);
+        wb.addEventListener('click', function () { selShape.wrapMode = w[0]; render(); });
+        shapeRow1.appendChild(wb);
+      });
+      var fitBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-mini-btn-text', title: S.tf_shape_fit_text || 'Um den Text legen' },
+        ['⬚ ' + (S.tf_shape_fit_text_short || 'Um Text')]);
+      fitBtn.addEventListener('click', function () { fitShapeAroundText(selShape, activeTextObj()); render(); });
+      shapeRow1.appendChild(fitBtn);
+      var delShapeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', title: S.tf_shape_delete || 'Form löschen' }, [icon('trash')]);
+      delShapeBtn.addEventListener('click', function () {
+        tf.shapes = tf.shapes.filter(function (s2) { return s2 !== selShape; });
+        state.activeShapeId = null;
+        render();
+      });
+      shapeRow1.appendChild(delShapeBtn);
+      shapeSettings.appendChild(shapeRow1);
+
+      var selInfo = paramShapeInfo(selShape.type);
+      if (selInfo) {
+        var dfl = selInfo.def.defaults;
+        var paramRow = el('div', { class: 'ic-compact-row ic-measure-row' });
+        function paramStepper(symbol, label, key, min, max, step, decimals) {
+          var cell = el('label', { class: 'ic-measure', title: label }, [el('span', { class: 'ic-measure-symbol' }, [symbol])]);
+          cell.appendChild(numberStepper(selShape[key] != null ? selShape[key] : dfl[key], min, max, step, decimals, function (v) {
+            selShape[key] = v; render();
+          }));
+          paramRow.appendChild(cell);
+        }
+        if (selInfo.base === 'star') {
+          paramStepper('✶', S.tf_star_points || 'Zacken', 'points', 3, 24, 1, 0);
+          paramStepper('◎', S.tf_star_inner || 'Innenradius', 'inner', 0.1, 0.95, 0.05, 2);
+        } else {
+          var styleSel = el('select', { class: 'ic-mini-select', title: S.tf_bubble_style || 'Blasenform' });
+          [['round', S.tf_bubble_round || 'Rund'], ['rect', S.tf_bubble_rect || 'Eckig'], ['thought', S.tf_bubble_thought || 'Gedanke']].forEach(function (o) {
+            var opt = el('option', { value: o[0] }, [o[1]]);
+            if ((selShape.bubble || dfl.bubble) === o[0]) { opt.selected = true; }
+            styleSel.appendChild(opt);
+          });
+          styleSel.addEventListener('change', function () { selShape.bubble = styleSel.value; render(); });
+          paramRow.appendChild(styleSel);
+          paramStepper('↗', S.tf_bubble_tail_angle || 'Richtung der Spitze (Grad)', 'tailAngle', 0, 345, 15, 0);
+          paramStepper('↕', S.tf_bubble_tail_len || 'Länge der Spitze', 'tailLen', 0, 1, 0.05, 2);
+        }
+        shapeSettings.appendChild(paramRow);
+      }
+      shapesCol.appendChild(shapeSettings);
+    }
 
     // Formen als echte Objekte auf dem Zettel - anklickbar zum Auswählen,
     // frei verschiebbar und über den Eck-Griff skalierbar (auch über
     // andere Formen hinweg).
+    // Reihenfolge wie auf der Pinnwand: spätere Formen liegen VOR früheren,
+    // alle "hinter dem Text"-Formen hinter dem Text.
+    // Reihenfolge im Editor: Kartenfläche -> Formen (hinter dem Text) -> Text.
+    var behindAnchor = frame.querySelector('.ic-textframe-obj') || null;
     tf.shapes.forEach(function (s) {
-      var shapeDef = s.type === 'custom' && s.customPoints
-        ? { d: s.customPoints.map(function (p, i) { return (i === 0 ? 'M' : 'L') + (p[0] * 100) + ' ' + (p[1] * 100); }).join(' ') + ' Z' }
-        : (s.type && s.type !== 'none'
-          ? [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; })).concat(BASIC_SHAPES)
-            .filter(function (d) { return d.id === s.type; })[0]
-          : null);
+      var shapeDef = shapeDefFor(s);
       if (!shapeDef) { return; }
-      var pxSize = Math.min(tf.w, tf.h) * s.size;
+      var sBox = shapeBox(tf, s);
       var shapeEl = el('div', {
         class: 'ic-textframe-shapeobj' + (state.activeShapeId === s.id ? ' active' : ''),
-        style: 'left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + pxSize + 'px;height:' + pxSize + 'px;' +
+        style: 'left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + sBox.w + 'px;height:' + sBox.h + 'px;' +
           'transform:translate(-50%,-50%) rotate(' + (s.rotation || 0) + 'deg);' +
-          (shapeDef ? 'background-image:url(' + fgShapeSvgDataUri(shapeDef, s) + ')' : '')
+          'background-image:url(' + fgShapeSvgDataUri(shapeDef, s) + ')'
       });
       var shapeSizeHandle = el('div', { class: 'ic-resize ic-textframe-shape-resize' });
       var shapeRotateHandle = el('div', { class: 'ic-textframe-shape-rotate' });
@@ -3373,8 +3626,8 @@
         shapeEl.style.zIndex = '2';
         frame.appendChild(shapeEl);
       } else {
-        shapeEl.style.zIndex = '0';
-        frame.insertBefore(shapeEl, frame.firstChild);
+        shapeEl.style.zIndex = '1';
+        frame.insertBefore(shapeEl, behindAnchor);
       }
     });
 
@@ -3735,83 +3988,27 @@
       }
       }
 
-      // Zeichen-Werkzeuge (wirken auf die aktuelle Zeichen-Auswahl, siehe
-      // applyStyleToSelectionOrWhole): Fett/Kursiv/Unterstrichen zuerst.
-        fontsBox.appendChild(el('div', { class: 'ic-textframe-label' }, [S.tf_group_char]));
-        var charRow = el('div', { class: 'ic-textframe-formatgrid' });
-        var highlightBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_highlight }, [icon('highlighticon')]);
-        highlightBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-        highlightBtn.addEventListener('click', function () {
-          var savedSel = window.getSelection();
-          var savedRange = savedSel.rangeCount ? savedSel.getRangeAt(0).cloneRange() : null;
-          openDraggableModal(S.format_highlight, highlightBtn, function (content) {
-            function applyHighlight(color) {
-              var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-              if (!objEl) { return; }
-              if (savedRange) {
-                var sel = window.getSelection();
-                sel.removeAllRanges(); sel.addRange(savedRange);
-              }
-              applyStyleToSelectionOrWhole(objEl, 'background-color:' + color + ';', function () {}, active);
-              noteRecentColor(color);
-            }
-            if (state.colorTab === 'wheel') { buildColorWheel(content, null, applyHighlight); }
-            else { buildBigColorPalette(content, null, null, applyHighlight, null); }
-          });
-        });
-        charRow.appendChild(highlightBtn);
-        [
-          ['bold', 'boldicon', S.format_bold], ['italic', 'italicicon', S.format_italic],
-          ['underline', 'underlineicon', S.format_underline], ['strikeThrough', 'strikeicon', S.format_strike],
-          ['superscript', 'supicon', S.format_superscript], ['subscript', 'subicon', S.format_subscript]
-        ].forEach(function (cmd) {
-          var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
-          fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-          fb.addEventListener('click', function () {
-            document.execCommand(cmd[0], false, null);
-            // t.html/t.text explizit synchronisieren statt sich allein auf
-            // das 'input'-Event zu verlassen (feuert nicht in jedem Fall
-            // zuverlässig nach execCommand) - sonst können veraltete Daten
-            // bei einem späteren Neu-Rendern die gerade vorgenommene
-            // Formatierung wieder rückgängig machen ("Sprung").
-            var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-            if (objEl) { active.html = objEl.innerHTML; active.text = objEl.textContent; }
-          });
-          charRow.appendChild(fb);
-        });
-        fontsBox.appendChild(charRow);
-      // Schriftart, Schriftdicke und Laufweite gemeinsam in einer Zeile,
-      // jeweils mit Beschriftung. Schriftgröße bleibt als eigene Zeile
-      // (A-/A+ -Buttons brauchen mehr Platz). Wirken auf die aktuelle
-      // Zeichen-Auswahl, falls vorhanden, sonst auf das ganze Textobjekt.
-      // Zeichen-Auswahl, falls vorhanden, sonst auf das ganze Textobjekt.
-      var typoColumns = el('div', { class: 'ic-typo-columns' });
-      var typoMainCol = el('div', { class: 'ic-typo-main-col' });
-      var typoParaCol = el('div', { class: 'ic-typo-para-col' });
-      typoColumns.appendChild(typoMainCol);
-      typoColumns.appendChild(typoParaCol);
-      fontsBox.appendChild(typoColumns);
-
-      // WordArt: eigener "Fonts"-Button öffnet die kuratierte, nach
-      // Kategorien geordnete Schriftbibliothek (siehe WORDART_FONT_CATEGORIES) -
-      // getrennt von der schlichten Basis-Auswahl oben, da "wilde"
-      // Formatierung hier im Vordergrund steht.
-      if (state.wordArtMode) {
-        var fontsBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('fonts'), el('span', {}, [S.wordart_fonts])]);
-        fontsBtn.addEventListener('click', function () { openWordartFontBrowser(active, frame); });
-        typoMainCol.appendChild(fontsBtn);
+      // Zeile 1: Schrift + Zeichenformat (Fett/Kursiv/Unterstrichen/
+      // Durchgestrichen) + Ausrichtung und Hoch-/Tiefstellung als kompakte
+      // Aufklapp-Menüs. Alle Knöpfe verhindern per mousedown den
+      // Fokuswechsel, damit die Zeichen-Auswahl im Text erhalten bleibt.
+      var fmtRow = el('div', { class: 'ic-compact-row ic-fmt-row' });
+      fontsBox.appendChild(fmtRow);
+      function syncActiveHtml() {
+        // t.html/t.text explizit synchronisieren statt sich allein auf das
+        // 'input'-Event zu verlassen (feuert nach execCommand nicht immer).
+        var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (objEl) { active.html = objEl.innerHTML; active.text = objEl.textContent; }
       }
-
-      // Schrift-Button: zeigt die aktuell gewählte Schrift in sich selbst
-      // dargestellt, Klick öffnet ein Pop-up mit allen Schriften (dort
-      // ebenfalls jeweils in sich selbst dargestellt statt als reiner Text).
-      // Nur für normale Textfelder - WordArt hat die eigene, größere
-      // Schriftbibliothek weiter oben (fontsBtn).
-      if (!state.wordArtMode) {
-        function currentFontCss() {
-          return (TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]).css;
-        }
-        function applyFontChoice(fontId) {
+      // WordArt: kuratierte Schriftbibliothek; Zettel: einfache Auswahl -
+      // jeweils ein Knopf, der die aktuelle Schrift in sich selbst zeigt.
+      if (state.wordArtMode) {
+        var fontsBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-mini-btn-text', title: S.wordart_fonts }, [icon('fonts'), el('span', {}, [S.wordart_fonts])]);
+        fontsBtn.addEventListener('click', function () { openWordartFontBrowser(active, frame); });
+        fmtRow.appendChild(fontsBtn);
+      } else {
+        var currentFontDef = function () { return TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]; };
+        var applyFontChoice = function (fontId) {
           var css = (TEXTFRAME_FONTS.filter(function (f) { return f.id === fontId; })[0] || TEXTFRAME_FONTS[0]).css;
           var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
           if (!objEl) { return; }
@@ -3819,11 +4016,11 @@
             active.font = fontId;
             objEl.style.fontFamily = css;
           }, active);
-        }
+        };
         var fontBtn = el('button', {
-          class: 'ic-btn ic-btn-ghost ic-typo-font-btn',
-          style: 'font-family:' + currentFontCss() + ';'
-        }, [(TEXTFRAME_FONTS.filter(function (f) { return f.id === active.font; })[0] || TEXTFRAME_FONTS[0]).label]);
+          class: 'ic-btn ic-btn-ghost ic-mini-btn ic-mini-btn-text ic-typo-font-btn', title: S.tf_choose_font,
+          style: 'font-family:' + currentFontDef().css + ';'
+        }, [currentFontDef().label]);
         fontBtn.addEventListener('click', function () {
           openDraggableModal(S.tf_choose_font, fontBtn, function (content) {
             var grid = el('div', { class: 'ic-typo-font-grid' });
@@ -3842,109 +4039,91 @@
             content.appendChild(grid);
           });
         });
-        typoMainCol.appendChild(fontBtn);
+        fmtRow.appendChild(fontBtn);
+      }
+      [
+        ['bold', 'boldicon', S.format_bold], ['italic', 'italicicon', S.format_italic],
+        ['underline', 'underlineicon', S.format_underline], ['strikeThrough', 'strikeicon', S.format_strike]
+      ].forEach(function (cmd) {
+        var fb = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
+        fb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        fb.addEventListener('click', function () { document.execCommand(cmd[0], false, null); syncActiveHtml(); });
+        fmtRow.appendChild(fb);
+      });
+      var alignItems = [
+        { value: 'justifyLeft', icon: 'alignleft', label: S.align_left },
+        { value: 'justifyCenter', icon: 'aligncenter', label: S.align_center },
+        { value: 'justifyRight', icon: 'alignright', label: S.align_right },
+        { value: 'justifyFull', icon: 'alignjustify', label: S.align_justify }
+      ];
+      fmtRow.appendChild(iconDropdown(alignItems, state.tfLastAlign || 'justifyCenter', S.align_center, function (v) {
+        document.execCommand(v, false, null);
+        state.tfLastAlign = v;
+        syncActiveHtml();
+      }));
+      var posItems = [
+        { value: 'normal', text: 'x', label: S.format_normal || 'Normal' },
+        { value: 'superscript', icon: 'supicon', label: S.format_superscript },
+        { value: 'subscript', icon: 'subicon', label: S.format_subscript }
+      ];
+      fmtRow.appendChild(iconDropdown(posItems, 'normal', S.format_superscript + ' / ' + S.format_subscript, function (v) {
+        var isSup = document.queryCommandState('superscript'), isSub = document.queryCommandState('subscript');
+        if (v === 'normal') {
+          if (isSup) { document.execCommand('superscript', false, null); }
+          if (isSub) { document.execCommand('subscript', false, null); }
+        } else if (!document.queryCommandState(v)) {
+          document.execCommand(v, false, null);
+        }
+        syncActiveHtml();
+      }));
+      // Aufzählung - nur im Zettel-Modus.
+      if (!state.wordArtMode) {
+        var bulletBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-textframe-fmt-btn', title: S.format_bullets }, [icon('bulleticon')]);
+        bulletBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        bulletBtn.addEventListener('click', function () { document.execCommand('insertUnorderedList', false, null); syncActiveHtml(); });
+        fmtRow.appendChild(bulletBtn);
       }
 
-      // Größe: nur a-/a+ mit direkt editierbarer Dezimalzahl dazwischen,
-      // kein separates Textlabel mehr nötig.
-      var sizeRow2 = el('div', { class: 'ic-typo-compact-row' });
-      var sizeInput = el('input', { type: 'number', step: '0.5', min: '6', max: '400', class: 'ic-typo-num-input', value: String(active.size) });
-      function commitSize(newSize) {
-        newSize = Math.max(6, Math.min(400, newSize));
-        sizeInput.value = String(newSize);
+      // Zeile 2: alle Maße in EINER Zeile - Größe, Laufweite, Stärke und
+      // Zeilenabstand am Ende. Größe/Laufweite/Stärke wirken auf die
+      // Zeichen-Auswahl (falls vorhanden), sonst aufs ganze Textobjekt.
+      var measureRow = el('div', { class: 'ic-compact-row ic-measure-row' });
+      fontsBox.appendChild(measureRow);
+      function measureCell(symbol, title, control) {
+        var cell = el('div', { class: 'ic-measure', title: title }, [el('span', { class: 'ic-measure-symbol' }, [symbol])]);
+        cell.appendChild(control);
+        measureRow.appendChild(cell);
+      }
+      measureCell('A', S.fontsize, numberStepper(active.size, 6, 400, 1, 0, function (v) {
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (!objEl) { return; }
-        applyStyleToSelectionOrWhole(objEl, 'font-size:' + newSize + 'px;', function () {
-          active.size = newSize;
-          objEl.style.fontSize = newSize + 'px';
+        if (!objEl) { active.size = v; render(); return; }
+        applyStyleToSelectionOrWhole(objEl, 'font-size:' + v + 'px;', function () {
+          active.size = v;
+          objEl.style.fontSize = v + 'px';
         }, active);
-      }
-      var sizeDown2 = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['a\u2212']);
-      var sizeUp2 = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon' }, ['a+']);
-      sizeDown2.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-      sizeUp2.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-      sizeDown2.addEventListener('click', function () { commitSize((parseFloat(sizeInput.value) || active.size) - 1); });
-      sizeUp2.addEventListener('click', function () { commitSize((parseFloat(sizeInput.value) || active.size) + 1); });
-      sizeInput.addEventListener('change', function () { commitSize(parseFloat(sizeInput.value) || active.size); });
-      sizeRow2.appendChild(sizeDown2); sizeRow2.appendChild(sizeInput); sizeRow2.appendChild(sizeUp2);
-      typoMainCol.appendChild(sizeRow2);
-
-      // Laufweite (\u2194) und Gewicht (\u2696) mit Symbol statt Textlabel,
-      // in einer gemeinsamen Zeile.
-      var spaceWeightRow = el('div', { class: 'ic-typo-compact-row' });
-      var spaceIcon = el('span', { class: 'ic-typo-symbol', title: S.letterspacing }, ['\u2194']);
-      spaceWeightRow.appendChild(spaceIcon);
-      spaceWeightRow.appendChild(numberStepper(active.letterSpacing || 0, -2, 20, 0.5, 1, function (v) {
+      }));
+      measureCell('↔', S.letterspacing, numberStepper(active.letterSpacing || 0, -2, 20, 0.5, 1, function (v) {
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (!objEl) { return; }
+        if (!objEl) { active.letterSpacing = v; render(); return; }
         applyStyleToSelectionOrWhole(objEl, 'letter-spacing:' + v + 'px;', function () {
           active.letterSpacing = v;
           objEl.style.letterSpacing = v + 'px';
         }, active);
       }));
-      var weightIcon = el('span', { class: 'ic-typo-symbol', title: S.fontweight }, ['\u2696']);
-      spaceWeightRow.appendChild(weightIcon);
-      spaceWeightRow.appendChild(numberStepper(active.fontWeight || 700, 300, 900, 100, 0, function (v) {
+      measureCell('⚖', S.fontweight, numberStepper(active.fontWeight || 700, 300, 900, 100, 0, function (v) {
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (!objEl) { return; }
+        if (!objEl) { active.fontWeight = v; render(); return; }
         applyStyleToSelectionOrWhole(objEl, 'font-weight:' + v + ';', function () {
           active.fontWeight = v;
           objEl.style.fontWeight = v;
         }, active);
       }));
-      typoMainCol.appendChild(spaceWeightRow);
-
-
-      // Schmale Absatz-Spalte: senkrecht gestapelt, Ausrichtung + Zeilen-
-      // abstand (\u21A8), wirken auf die markierten Zeilen bzw. das ganze
-      // Textobjekt, nicht auf einzelne Zeichen.
-      [
-        ['justifyLeft', 'alignleft', S.align_left], ['justifyRight', 'alignright', S.align_right],
-        ['justifyCenter', 'aligncenter', S.align_center], ['justifyFull', 'alignjustify', S.align_justify]
-      ].forEach(function (cmd) {
-        var ab = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: cmd[2] }, [icon(cmd[1])]);
-        ab.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-        ab.addEventListener('click', function () { document.execCommand(cmd[0], false, null); });
-        typoParaCol.appendChild(ab);
-      });
-      var lineHeightRow = el('div', { class: 'ic-typo-compact-row' });
-      lineHeightRow.appendChild(el('span', { class: 'ic-typo-symbol', title: S.lineheight }, ['\u21A8']));
-      lineHeightRow.appendChild(numberStepper(active.lineHeight || 1.2, 0.9, 2.2, 0.1, 1, function (v) {
+      measureCell('↨', S.lineheight, numberStepper(active.lineHeight || 1.2, 0.9, 2.2, 0.1, 1, function (v) {
         active.lineHeight = v;
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { objEl.style.lineHeight = v; }
+        if (objEl) { objEl.style.lineHeight = v; } else { render(); }
       }));
-      typoParaCol.appendChild(lineHeightRow);
 
-      // Aufzählung gehört inhaltlich ebenfalls zum Absatz - nur im
-      // Zettel-Modus (WordArt nutzt die WordArt-Stile weiter unten).
-      if (!state.wordArtMode) {
-        var bulletBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_bullets }, [icon('bulleticon')]);
-        bulletBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-        bulletBtn.addEventListener('click', function () { document.execCommand('insertUnorderedList', false, null); });
-        typoParaCol.appendChild(bulletBtn);
-      }
-
-      // Textumfluss der gerade ausgewählten Form: vor dem Text (liegt
-      // sichtbar über dem Text), hinter dem Text (Standard), Umfluss
-      // (Text fließt um die Form herum, siehe applyShapeWrapMode).
-      var activeShapeForWrap = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
-      if (activeShapeForWrap) {
-        var wrapRow = el('div', { class: 'ic-textframe-formatgrid' });
-        [
-          ['front', 'wrapfront', S.tf_wrap_front], ['behind', 'wrapbehind', S.tf_wrap_behind],
-          ['wrap', 'wraparound', S.tf_wrap_around]
-        ].forEach(function (w) {
-          var wb = el('button', {
-            class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn' + ((activeShapeForWrap.wrapMode || 'behind') === w[0] ? ' ic-btn-primary' : ''),
-            title: w[2]
-          }, [icon(w[1])]);
-          wb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-          wb.addEventListener('click', function () { activeShapeForWrap.wrapMode = w[0]; render(); });
-          wrapRow.appendChild(wb);
-        });
-        fontsBox.appendChild(wrapRow);
-      }
 
       // Wendet Farbe UND (falls gesetzt) den WordArt-Stil gemeinsam neu auf
       // das Live-Element an - ein WordArt-Stil kann "color" durch eine
@@ -4067,30 +4246,48 @@
         if (active.wordartStyle && active.wordartStyle !== 'none') {
           var activeWStyle = WORDART_STYLES.filter(function (w) { return w.id === active.wordartStyle; })[0] || {};
           formBox.appendChild(el('div', { class: 'ic-textframe-label' }, [S.wordart_3d_title]));
-          var wSliderRow = el('div', { class: 'ic-textframe-edit ic-effect-sliders-row' });
-          formBox.appendChild(wSliderRow);
-          function wSlider(label, key, min, max, step, def) {
+          // Jeder Regler mit einem kleinen Bild, das zeigt, WAS gedreht/
+          // verändert wird, plus Kurzbeschriftung - vorher standen dort nur
+          // unbeschriftete Zahlen.
+          var W3D_ICONS = {
+            rotY: '<svg viewBox="0 0 24 24"><path d="M7 5 L17 7 L17 17 L7 19 Z" fill="currentColor" opacity=".35"/><path d="M12 2 V22" stroke="currentColor" stroke-dasharray="2 2"/><path d="M4 12 C4 8 20 8 20 12" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M18 9.5 L20.5 12 L17.5 13" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+            extrudeSteps: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" fill="currentColor" opacity=".3"/><rect x="6.5" y="6.5" width="11" height="11" fill="currentColor" opacity=".5"/><rect x="5" y="5" width="11" height="11" fill="currentColor"/></svg>',
+            rotate: '<svg viewBox="0 0 24 24"><rect x="7" y="9" width="10" height="6" transform="rotate(-20 12 12)" fill="currentColor" opacity=".45"/><path d="M5 12 A7 7 0 1 1 8 17.7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 15.5 L8 17.7 L9.5 14.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+            skewY: '<svg viewBox="0 0 24 24"><path d="M5 9 L19 5 L19 15 L5 19 Z" fill="currentColor" opacity=".55"/><path d="M5 12 H19" stroke="currentColor" stroke-dasharray="2 2"/></svg>',
+            scaleY: '<svg viewBox="0 0 24 24"><rect x="8" y="6" width="8" height="12" fill="currentColor" opacity=".45"/><path d="M12 1.5 V22.5 M9.5 4 L12 1.5 L14.5 4 M9.5 20 L12 22.5 L14.5 20" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+            wordartGlow: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="1.6"/></svg>'
+          };
+          var w3dGrid = el('div', { class: 'ic-w3d-grid' });
+          formBox.appendChild(w3dGrid);
+          function wSlider(label, shortLabel, key, min, max, step, def) {
+            var cell = el('div', { class: 'ic-w3d-cell', title: label });
+            var head = el('div', { class: 'ic-w3d-head' });
+            head.appendChild(el('span', { class: 'ic-w3d-icon', html: W3D_ICONS[key] || '' }));
+            head.appendChild(el('span', { class: 'ic-w3d-caption' }, [shortLabel]));
+            cell.appendChild(head);
             var stepper = numberStepper(active[key] != null ? active[key] : (activeWStyle[key] != null ? activeWStyle[key] : def), min, max, step, step < 1 ? 2 : 0, function (v) {
               active[key] = v; reapplyTextStyle();
             });
-            stepper.title = label;
-            wSliderRow.appendChild(stepper);
+            cell.appendChild(stepper);
+            w3dGrid.appendChild(cell);
+            return cell;
           }
-          wSlider(S.wordart_roty, 'rotY', -90, 90, 5, 0);
-          wSlider(S.wordart_extrude, 'extrudeSteps', 0, 20, 1, 0);
-          wSlider(S.wordart_rotate, 'rotate', -45, 45, 1, 0);
-          wSlider(S.wordart_skew, 'skewY', -30, 30, 1, 0);
-          wSlider(S.wordart_scaley, 'scaleY', 0.5, 2, 0.05, 1);
-          wSlider(S.wordart_glow, 'wordartGlow', 0, 30, 1, 0);
-          var extrudeColorRow = el('div', { class: 'ic-textframe-edit' });
-          var extrudeColorSwatch = el('button', { class: 'ic-effect-swatch', style: 'background:' + (active.extrudeColor || activeWStyle.extrudeColor || '#000') });
+          wSlider(S.wordart_roty, S.wordart_roty_short || 'Y-Drehung', 'rotY', -90, 90, 5, 0);
+          var depthCell = wSlider(S.wordart_extrude, S.wordart_extrude_short || 'Tiefe', 'extrudeSteps', 0, 20, 1, 0);
+          wSlider(S.wordart_rotate, S.wordart_rotate_short || 'Drehung', 'rotate', -45, 45, 1, 0);
+          wSlider(S.wordart_skew, S.wordart_skew_short || 'Neigung', 'skewY', -30, 30, 1, 0);
+          wSlider(S.wordart_scaley, S.wordart_scaley_short || 'Höhe', 'scaleY', 0.5, 2, 0.05, 1);
+          wSlider(S.wordart_glow, S.wordart_glow_short || 'Leuchten', 'wordartGlow', 0, 30, 1, 0);
+          // Farbe der Extrusion direkt beim Tiefe-Regler.
+          var extrudeColorSwatch = el('button', {
+            class: 'ic-effect-swatch ic-w3d-swatch', title: S.wordart_extrude_color,
+            style: 'background:' + (active.extrudeColor || activeWStyle.extrudeColor || '#000')
+          });
           extrudeColorSwatch.addEventListener('click', function () {
             state.effectsPickerKey = state.effectsPickerKey === 'extrudeColor' ? null : 'extrudeColor';
             refreshControls();
           });
-          extrudeColorRow.appendChild(el('span', { class: 'ic-textframe-label' }, [S.wordart_extrude_color]));
-          extrudeColorRow.appendChild(extrudeColorSwatch);
-          formBox.appendChild(extrudeColorRow);
+          depthCell.querySelector('.ic-w3d-head').appendChild(extrudeColorSwatch);
           if (state.effectsPickerKey === 'extrudeColor') {
             var extrudeColorContainer = el('div', {});
             formBox.appendChild(extrudeColorContainer);
@@ -4269,17 +4466,26 @@
     window.addEventListener('mouseup', up);
     window.addEventListener('touchend', up);
 
-    var sDragging = false, sStartX = 0, sStartSize = s.size;
+    // Größen-Griff: Breite und Höhe unabhängig (Form lässt sich z.B. breit
+    // um ein Wort legen), mit gedrückter Umschalttaste proportional.
+    var sDragging = false, sStartX = 0, sStartY = 0, sStartW = 0, sStartH = 0;
     function sDown(ev) {
-      sDragging = true; sStartX = point(ev).x; sStartSize = s.size;
+      sDragging = true;
+      var p0 = point(ev); sStartX = p0.x; sStartY = p0.y;
+      sStartW = el2.offsetWidth; sStartH = el2.offsetHeight;
       ev.stopPropagation(); ev.preventDefault();
     }
     function sMove(ev) {
       if (!sDragging) { return; }
-      var dx = point(ev).x - sStartX;
-      s.size = Math.max(0.05, Math.min(2, sStartSize + dx / Math.min(el2.parentNode.offsetWidth || 300, 300)));
-      var pxSize = Math.min(frame.offsetWidth, frame.offsetHeight) * s.size;
-      el2.style.width = pxSize + 'px'; el2.style.height = pxSize + 'px';
+      var p1 = point(ev);
+      var k = frame.offsetWidth ? frame.getBoundingClientRect().width / frame.offsetWidth : 1;
+      var dx = (p1.x - sStartX) / k * 2, dy = (p1.y - sStartY) / k * 2;
+      var w = Math.max(12, sStartW + dx), h = Math.max(12, sStartH + dy);
+      if (ev.shiftKey) { var f = Math.max(w / sStartW, h / sStartH); w = sStartW * f; h = sStartH * f; }
+      var minSide = Math.min(frame.offsetWidth, frame.offsetHeight) || 1;
+      s.size = Math.max(0.05, Math.min(3, h / minSide));
+      s.aspect = Math.max(0.1, Math.min(10, w / h));
+      el2.style.width = w + 'px'; el2.style.height = h + 'px';
       ev.preventDefault();
     }
     function sUp() { if (sDragging) { sDragging = false; render(); } }
@@ -4541,15 +4747,26 @@
     return false;
   }
 
+  // Kompakter Zahlenregler: Wert direkt eintippbar (Enter/Verlassen
+  // übernimmt), daneben kleine Pfeile für Schritte.
   function numberStepper(value, min, max, step, decimals, onChange) {
     var wrap = el('div', { class: 'ic-stepper' });
-    var display = el('span', { class: 'ic-stepper-value' }, [decimals ? value.toFixed(decimals) : String(value)]);
+    function fmt(v) { return decimals ? v.toFixed(decimals) : String(Math.round(v)); }
+    var display = el('input', { class: 'ic-stepper-value', type: 'text', inputmode: 'decimal', value: fmt(value) });
     function update(v) {
+      if (isNaN(v)) { display.value = fmt(value); return; }
       v = Math.max(min, Math.min(max, v));
+      v = parseFloat(v.toFixed(decimals || 0));
       value = v;
-      display.textContent = decimals ? v.toFixed(decimals) : String(v);
+      display.value = fmt(v);
       onChange(v);
     }
+    display.addEventListener('change', function () { update(parseFloat(String(display.value).replace(',', '.'))); });
+    display.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); display.blur(); }
+      else if (ev.key === 'ArrowUp') { ev.preventDefault(); update(value + step); }
+      else if (ev.key === 'ArrowDown') { ev.preventDefault(); update(value - step); }
+    });
     var upBtn = el('button', { class: 'ic-stepper-btn', type: 'button' }, ['\u25B2']);
     var downBtn = el('button', { class: 'ic-stepper-btn', type: 'button' }, ['\u25BC']);
     upBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
@@ -4558,6 +4775,44 @@
     downBtn.addEventListener('click', function () { update(value - step); });
     wrap.appendChild(display);
     wrap.appendChild(el('div', { class: 'ic-stepper-arrows' }, [upBtn, downBtn]));
+    return wrap;
+  }
+
+  // Kleines Aufklapp-Menü mit Symbolen (z.B. Ausrichtung, Hoch-/
+  // Tiefstellen): der Knopf zeigt die aktuelle Wahl, das Menü die Optionen
+  // mit Symbol + Beschriftung. mousedown verhindert überall den
+  // Fokuswechsel, damit eine Zeichen-Auswahl im Text erhalten bleibt.
+  function iconDropdown(items, currentValue, title, onPick) {
+    var wrap = el('div', { class: 'ic-dropdown' });
+    function face(it) { return it.icon ? icon(it.icon) : el('span', { class: 'ic-dropdown-text' }, [it.text || it.label]); }
+    var cur = items.filter(function (it) { return it.value === currentValue; })[0] || items[0];
+    var btn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-dropdown-btn', type: 'button', title: title }, [face(cur), el('span', { class: 'ic-dropdown-caret' }, ['\u25BE'])]);
+    var menu = null;
+    function close() {
+      if (menu) { menu.remove(); menu = null; }
+      document.removeEventListener('mousedown', outside, true);
+    }
+    function outside(ev) { if (menu && !menu.contains(ev.target) && !btn.contains(ev.target)) { close(); } }
+    btn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+    btn.addEventListener('click', function () {
+      if (menu) { close(); return; }
+      var r = btn.getBoundingClientRect();
+      menu = el('div', { class: 'ic-dropdown-menu', style: 'left:' + r.left + 'px;top:' + (r.bottom + 4) + 'px;' });
+      items.forEach(function (it) {
+        var mi = el('button', { class: 'ic-dropdown-item' + (it === cur ? ' active' : ''), type: 'button' }, [face(it), el('span', {}, [it.label])]);
+        mi.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        mi.addEventListener('click', function () {
+          cur = it;
+          btn.replaceChild(face(it), btn.firstChild);
+          close();
+          onPick(it.value);
+        });
+        menu.appendChild(mi);
+      });
+      document.body.appendChild(menu);
+      document.addEventListener('mousedown', outside, true);
+    });
+    wrap.appendChild(btn);
     return wrap;
   }
 
