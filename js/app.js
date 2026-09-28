@@ -4840,30 +4840,9 @@
   // width/height des Canvas bestimmen die Auflösung; Punkte sind 0..1-normalisiert,
   // die Strichbreite ist relativ zur Canvas-Höhe gespeichert (wie in present.ts).
   function redrawInk(canvas, ctx, strokes) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    var w = canvas.width, h = canvas.height;
-    strokes.forEach(function (s) {
-      if (s.type === 'text') {
-        if (!s.text) { return; }
-        var fontPx = Math.max(10, (s.size || 20) * (h / 900) * 1.6);
-        ctx.font = fontPx + 'px sans-serif';
-        ctx.textBaseline = 'top';
-        ctx.fillStyle = s.color;
-        ctx.fillText(s.text, s.x * w, s.y * h);
-        return;
-      }
-      if (!s.points || s.points.length < 1) { return; }
-      ctx.globalCompositeOperation = s.erase ? 'destination-out' : 'source-over';
-      ctx.strokeStyle = s.color;
-      ctx.lineWidth = Math.max(1, s.width * h);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      ctx.moveTo(s.points[0].x * w, s.points[0].y * h);
-      for (var i = 1; i < s.points.length; i++) { ctx.lineTo(s.points[i].x * w, s.points[i].y * h); }
-      ctx.stroke();
-    });
-    ctx.globalCompositeOperation = 'source-over';
+    // Gemeinsame Umsetzung in js/presentation-player.js (auch vom Export
+    // genutzt), damit Notizen/Annotationen überall gleich aussehen.
+    window.PinnwandPresentation.drawInk(canvas, ctx, strokes);
   }
 
   // Findet den obersten Strich bzw. Text, der einen Punkt (0..1-normalisiert)
@@ -5166,32 +5145,46 @@
       goExportWithBoards(ownBoards);
     }).catch(function () { goExportWithBoards(ownBoards); });
   }
+  // Export-Dialog: Board wählen (falls mehrere) und per Checkbox festlegen,
+  // ob die Annotationen auf den Objekten und die Notizen des Stylus-
+  // Werkzeugs mit exportiert werden (in der Datei dann ein-/ausblendbar).
   function goExportWithBoards(ownBoards) {
-    if (ownBoards.length <= 1) {
-      var onlyBoardId = ownBoards.length ? ownBoards[0].boardid : (state.currentBoard || 0);
-      window.location.href = cfg.exportpresentationurl + '&boardid=' + onlyBoardId;
-      return;
-    }
-    openExportBoardPicker(ownBoards);
-  }
-  function openExportBoardPicker(ownBoards) {
     var overlay = el('div', { class: 'ic-modal-overlay' });
     overlay.addEventListener('click', function (ev) { if (ev.target === overlay) { overlay.remove(); } });
-    var panel = el('div', { class: 'ic-add-modal' });
-    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.export_presentation_pickboard]));
-    var list = el('div', {});
-    panel.appendChild(list);
-    ownBoards.slice().sort(function (a, b) { return a.boardid - b.boardid; }).forEach(function (b) {
-      var row = el('div', { class: 'ic-thread-item' });
-      var label = el('span', { class: 'ic-thread-item-label', style: 'cursor:pointer;' }, [b.name || boardDisplayName(b.boardid)]);
-      label.addEventListener('click', function () {
-        overlay.remove();
-        window.location.href = cfg.exportpresentationurl + '&boardid=' + b.boardid;
+    var panel = el('div', { class: 'ic-add-modal ic-export-modal' });
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.export_presentation]));
+    var boards = ownBoards.slice().sort(function (a, b) { return a.boardid - b.boardid; });
+    var chosenBoard = boards.some(function (b) { return b.boardid === (state.currentBoard || 0); })
+      ? (state.currentBoard || 0) : (boards.length ? boards[0].boardid : (state.currentBoard || 0));
+    if (boards.length > 1) {
+      panel.appendChild(el('div', { class: 'ic-textframe-label' }, [S.export_presentation_pickboard]));
+      var list = el('div', { class: 'ic-export-boards' });
+      boards.forEach(function (b) {
+        var radio = el('input', { type: 'radio', name: 'ic-export-board', value: String(b.boardid) });
+        radio.checked = b.boardid === chosenBoard;
+        radio.addEventListener('change', function () { if (radio.checked) { chosenBoard = b.boardid; } });
+        list.appendChild(el('label', { class: 'ic-export-option' }, [radio, el('span', {}, [b.name || boardDisplayName(b.boardid)])]));
       });
-      row.appendChild(label);
-      list.appendChild(row);
+      panel.appendChild(list);
+    }
+    if (state.exportAnnot === undefined) { state.exportAnnot = true; }
+    if (state.exportInk === undefined) { state.exportInk = true; }
+    var annotCb = el('input', { type: 'checkbox' });
+    annotCb.checked = !!state.exportAnnot;
+    annotCb.addEventListener('change', function () { state.exportAnnot = annotCb.checked; });
+    var inkCb = el('input', { type: 'checkbox' });
+    inkCb.checked = !!state.exportInk;
+    inkCb.addEventListener('change', function () { state.exportInk = inkCb.checked; });
+    panel.appendChild(el('label', { class: 'ic-export-option' }, [annotCb, el('span', {}, [S.export_include_annot])]));
+    panel.appendChild(el('label', { class: 'ic-export-option' }, [inkCb, el('span', {}, [S.export_include_ink])]));
+    var goBtn = el('button', { class: 'ic-btn ic-btn-primary ic-export-go' }, [icon('download'), el('span', {}, [S.export_start])]);
+    goBtn.addEventListener('click', function () {
+      overlay.remove();
+      window.location.href = cfg.exportpresentationurl + '&boardid=' + chosenBoard +
+        '&annot=' + (annotCb.checked ? 1 : 0) + '&ink=' + (inkCb.checked ? 1 : 0);
     });
-    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel }, ['✕']);
+    panel.appendChild(goBtn);
+    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel }, ['\u2715']);
     closeBtn.addEventListener('click', function () { overlay.remove(); });
     panel.appendChild(closeBtn);
     overlay.appendChild(panel);
@@ -7193,6 +7186,7 @@
     });
     var photoRecs = {};
     var occludables = [];
+    var hasPresentAnnot = false;
     var inThreadIds = {};
     thread.items.forEach(function (it) { if (it.itemtype === 'photo') { inThreadIds[it.photoid] = true; } });
     boardPhotos.forEach(function (p) {
@@ -7230,22 +7224,27 @@
         });
       }
       canvasEl.appendChild(pEl);
+      // Annotationen auf dem Objekt - wie auf der Pinnwand nur, wenn dort
+      // eingeblendet (annotationonboard).
+      if (p.annotationonboard !== false) {
+        var annot = parseStrokes(p);
+        if (annot.length) { window.PinnwandPresentation.attachInk(pEl, annot, 'annot'); hasPresentAnnot = true; }
+      }
       photoRecs[p.id] = { el: pEl, z: p.canvasz || 0, photo: p, tf: tf };
       occludables.push(photoRecs[p.id]);
     });
 
-    // Stylus-Anmerkungen des Boards - über den Fotos, damit Linien auch
-    // über Objekte hinweg gemalt sichtbar bleiben (nicht von der Verdeckung
-    // betroffen).
-    var presentInkCanvas = el('canvas', {
-      class: 'ic-board-ink-layer', width: String(BOARD_W), height: String(BOARD_H), style: 'z-index:600'
-    });
-    canvasEl.appendChild(presentInkCanvas);
+    // Notizen des Stylus-Werkzeugs auf dem Board - über den Fotos (nicht von
+    // der Verdeckung betroffen), per Schalter oben links ausblendbar wie im
+    // Modul. Dieselbe Darstellung wie in der exportierten Datei.
     callAjax('mod_pinnwand_get_board_ink', { cmid: cfg.cmid, boardid: firstBoardId }).then(function (res) {
       var strokes = [];
       try { strokes = JSON.parse(res.strokedata || '[]'); } catch (e) { strokes = []; }
-      redrawInk(presentInkCanvas, presentInkCanvas.getContext('2d'), strokes);
+      if (!strokes.length) { return; }
+      canvasEl.appendChild(window.PinnwandPresentation.inkLayer(strokes, BOARD_W, BOARD_H, 'ink', 600));
+      player.addToggle('ink', S.present_toggle_ink);
     });
+    if (hasPresentAnnot) { player.addToggle('annot', S.present_toggle_annot); }
 
     function overviewStep() {
       return { el: null, cx: BOARD_W / 2, cy: BOARD_H / 2, w: BOARD_W, h: BOARD_H, rot: 0, overview: true };

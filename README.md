@@ -1636,6 +1636,22 @@ Details und Scoping-Entscheidungen. In Kurzform:
   auf der Pinnwand senkrecht mittig; auf der Pinnwand bricht der Haupttext
   jetzt wie im Editor über die ganze Kartenbreite um.
 
+### Einhunderteinundvierzigste Überarbeitung — Annotationen und Notizen im Export, ein-/ausblendbar
+
+- Der Export öffnet jetzt immer einen kleinen Dialog: Board wählen (falls
+  mehrere) und per Checkbox festlegen, ob die Annotationen auf den
+  Objekten und die Notizen des Stylus-Werkzeugs auf der Pinnwand mit
+  exportiert werden. Übernommen werden jeweils die eigenen, auf der
+  Pinnwand sichtbaren Inhalte (Objekt-Annotationen nur, wenn sie dort
+  eingeblendet sind).
+- In der exportierten Datei - und genauso in der Präsentation im Modul -
+  lassen sich beide Ebenen oben links per Augen-Schalter ein- und
+  ausblenden. Die Schalter erscheinen nur, wenn es etwas auszublenden gibt.
+- Notizen und Annotationen werden überall mit derselben Zeichenfunktion
+  dargestellt (Pinnwand, Präsentation, Export) und beim Heranzoomen mit
+  doppelter Auflösung gezeichnet. In der Präsentation im Modul erscheinen
+  Objekt-Annotationen jetzt ebenfalls (vorher fehlten sie dort).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

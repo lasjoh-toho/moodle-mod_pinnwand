@@ -1310,3 +1310,10 @@ input.ic-stepper-value {
    display:table-cell greift bei position:absolute nicht (wird zu block),
    der Text klebte dadurch oben. */
 .ic-textframe-obj.primary { display: flex; flex-direction: column; justify-content: center; }
+
+/* Export-Dialog: Board-Auswahl + Checkboxen (Annotationen/Notizen). */
+.ic-export-modal { display: flex; flex-direction: column; gap: 8px; }
+.ic-export-boards { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.ic-export-option { display: flex; align-items: center; gap: 10px; padding: 6px 4px; cursor: pointer; font-size: .9rem; }
+.ic-export-option input { width: 18px; height: 18px; flex: 0 0 auto; margin: 0; }
+.ic-export-go { display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; flex: 0 0 auto; }

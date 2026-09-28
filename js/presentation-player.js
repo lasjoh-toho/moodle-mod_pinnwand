@@ -80,8 +80,90 @@
        zurück/weiter (wie ein Präsentations-Klicker). */
     '.pwp-navzone{position:fixed;top:0;bottom:0;width:16%;z-index:15;cursor:pointer;background:transparent;',
     'border:none;margin:0;padding:0;box-shadow:none;outline:none;}',
-    '.pwp-navzone.pwp-prev{left:0;}.pwp-navzone.pwp-next{right:0;}'
+    '.pwp-navzone.pwp-prev{left:0;}.pwp-navzone.pwp-next{right:0;}',
+    /* Ein-/Ausblenden von Ebenen (Notizen auf der Pinnwand, Annotationen auf
+       Objekten) - wie der Augen-Knopf im Modul; oben links. */
+    '.pwp-toggles{position:fixed;top:16px;left:16px;z-index:20;display:flex;gap:8px;}',
+    '.pwp-toggle{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:17px;border:none;margin:0;',
+    'background:rgba(255,255,255,.08);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;font:inherit;font-size:.8rem;',
+    'text-shadow:0 1px 3px rgba(0,0,0,.85),0 0 8px rgba(0,0,0,.5);cursor:pointer;transition:background .15s ease,opacity .15s ease;}',
+    '.pwp-toggle:hover{background:rgba(255,255,255,.18);}',
+    '.pwp-toggle svg{width:16px;height:16px;display:block;}',
+    '.pwp-toggle.pwp-off{opacity:.55;}',
+    '.pwp-layer-overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;}'
   ].join('');
+
+  var EYE_ON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><path d="M3 3l18 18"/></svg>';
+
+  // Zeichnet Stylus-Striche/-Texte (0..1-normalisierte Koordinaten,
+  // Strichbreite relativ zur Höhe) auf einen Canvas - EINE Umsetzung für
+  // Pinnwand, Moodle-Präsentation und exportierte Datei (app.js ruft sie
+  // über redrawInk() auf).
+  function drawInk(canvas, ctx, strokes) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    var w = canvas.width, h = canvas.height;
+    (strokes || []).forEach(function (s) {
+      if (s.type === 'text') {
+        if (!s.text) { return; }
+        var fontPx = Math.max(10, (s.size || 20) * (h / 900) * 1.6);
+        ctx.font = fontPx + 'px sans-serif';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = s.color;
+        ctx.fillText(s.text, s.x * w, s.y * h);
+        return;
+      }
+      if (!s.points || s.points.length < 1) { return; }
+      ctx.globalCompositeOperation = s.erase ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = Math.max(1, s.width * h);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(s.points[0].x * w, s.points[0].y * h);
+      for (var i = 1; i < s.points.length; i++) { ctx.lineTo(s.points[i].x * w, s.points[i].y * h); }
+      ctx.stroke();
+    });
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // Anmerkungs-Ebene als Canvas über einem Element (Board-Fläche oder
+  // einzelnes Objekt). Doppelte Auflösung, damit Schrift/Striche beim
+  // Heranzoomen scharf bleiben. layerKey ('ink'/'annot') ordnet die Ebene
+  // einem Ein-/Ausblenden-Schalter zu (siehe opts.toggles).
+  function inkLayer(strokes, cssW, cssH, layerKey, zIndex) {
+    var c = document.createElement('canvas');
+    c.className = 'pwp-layer-overlay pwp-layer-' + layerKey;
+    if (cssW && cssH) {
+      c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
+      c.width = Math.round(cssW * 2); c.height = Math.round(cssH * 2);
+      drawInk(c, c.getContext('2d'), strokes);
+    }
+    if (zIndex != null) { c.style.zIndex = zIndex; }
+    return c;
+  }
+  // Wie inkLayer, aber passt sich der (evtl. erst nach dem Laden eines
+  // Bildes bekannten) Größe des umgebenden Elements an.
+  function attachInk(container, strokes, layerKey) {
+    if (!strokes || !strokes.length) { return null; }
+    var c = inkLayer(strokes, 0, 0, layerKey);
+    c.style.width = '100%'; c.style.height = '100%';
+    container.appendChild(c);
+    function draw() {
+      var w = container.offsetWidth, h = container.offsetHeight;
+      if (!w || !h) { return; }
+      c.width = Math.round(w * 2); c.height = Math.round(h * 2);
+      drawInk(c, c.getContext('2d'), strokes);
+    }
+    // Zeichnen, sobald das Element eine Größe hat (Bild geladen / im DOM) -
+    // und erneut bei Größenänderung.
+    var img = container.querySelector('img');
+    if (img && !img.complete) { img.addEventListener('load', draw); }
+    draw();
+    setTimeout(draw, 0);
+    if (window.ResizeObserver) { new ResizeObserver(draw).observe(container); }
+    return c;
+  }
 
   function injectCss(doc) {
     if (doc.getElementById('pwp-style')) { return; }
@@ -143,6 +225,32 @@
     root.appendChild(hint);
     root.appendChild(zonePrev);
     root.appendChild(zoneNext);
+
+    // Ein-/Ausblenden-Schalter (z.B. Notizen/Annotationen) - wirken auf alle
+    // Elemente mit der Klasse pwp-layer-<key>, auch wenn diese erst später
+    // (nach start()) eingefügt werden.
+    var hidden = {};
+    function applyToggle(key) {
+      var els = root.querySelectorAll('.pwp-layer-' + key);
+      for (var i = 0; i < els.length; i++) { els[i].style.display = hidden[key] ? 'none' : ''; }
+    }
+    var toggleBar = null;
+    function addToggle(key, label) {
+      if (!toggleBar) { toggleBar = div('pwp-toggles'); root.appendChild(toggleBar); }
+      if (toggleBar.querySelector('[data-key="' + key + '"]')) { return; }
+      var tb = button('pwp-toggle', '', label);
+      tb.setAttribute('data-key', key);
+      tb.title = label;
+      function paint() {
+        tb.innerHTML = (hidden[key] ? EYE_OFF : EYE_ON) + '<span></span>';
+        tb.lastChild.textContent = label;
+        tb.classList.toggle('pwp-off', !!hidden[key]);
+      }
+      tb.addEventListener('click', function () { hidden[key] = !hidden[key]; paint(); applyToggle(key); });
+      paint();
+      toggleBar.appendChild(tb);
+    }
+    (opts.toggles || []).forEach(function (t) { addToggle(t.key, t.label); });
 
     var steps = [];
     var occludables = [];
@@ -387,10 +495,11 @@
       step: step,
       addStep: addStep,
       refreshStep: refreshStep,
+      addToggle: addToggle,
       destroy: destroy,
       currentIndex: function () { return idx; }
     };
   }
 
-  global.PinnwandPresentation = { create: create };
+  global.PinnwandPresentation = { create: create, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk };
 })(window);

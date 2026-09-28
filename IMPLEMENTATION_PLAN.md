@@ -4021,3 +4021,30 @@ deckungsgleich, Speichern ohne Fehler, Dropdowns wirken auf die Auswahl,
 Regression Präsentation/Export/Navigation).
 
 Shipped als Version `2026083138` / `0.140.0`.
+
+## Phase 134
+
+Nutzer-Wunsch: per Checkbox die Annotationen (auf Objekten) und die
+Notizen (Stylus-Werkzeug direkt auf der Pinnwand: Schrift + getippter
+Text) in den Export übernehmen, dort wie im Modul ausblendbar.
+
+- **Export-Dialog** (`goExportWithBoards`, ersetzt den reinen
+  Board-Picker): Board-Auswahl als Radio (nur bei mehreren Boards), zwei
+  Checkboxen (Zustand in `state.exportAnnot/exportInk`, Standard an),
+  Parameter `annot`/`ink` an export_presentation.php.
+- **export_presentation.php**: `optional_param('annot'|'ink', 0)` (alte
+  Links unverändert ohne). Objekt-Annotationen (`annotationdata`) nur bei
+  `annotationonboard`; Board-Notizen aus `pinnwand_board_ink` (eigene,
+  dieses Board). Neue Datenfelder `annotation`, `boardInk`, `labels`.
+- **presentation-player.js**: `drawInk()` (von app.js `redrawInk()`
+  mitgenutzt), `inkLayer()` (Board-Ebene 1400x1000, doppelte Auflösung),
+  `attachInk()` (Ebene über einem Objekt, passt sich per ResizeObserver
+  an), `addToggle(key, label)` - Augen-Schalter oben links, blendet alle
+  `.pwp-layer-<key>` aus. Moodle-Präsentation nutzt dasselbe (Objekt-
+  Annotationen dort neu).
+
+Mit Headless-Chromium verifiziert: Pinnwand, Moodle-Präsentation und
+Export zeigen Notizen/Annotationen deckungsgleich, Schalter blenden aus,
+Dialog erzeugt die richtige URL (`&annot=1&ink=0`), Navigation unverändert.
+
+Shipped als Version `2026083139` / `0.141.0`.

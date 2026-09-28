@@ -15,6 +15,13 @@ $id = required_param('id', PARAM_INT); // course_module id
 // exportierten Pinnwand" bzw. "Dateien, die nicht auf der Pinnwand
 // sind"). Jetzt wird immer genau EIN Board exportiert.
 $boardid = optional_param('boardid', 0, PARAM_INT);
+// Optional (Checkboxen im Export-Dialog): Annotationen auf den einzelnen
+// Objekten bzw. die Notizen des Stylus-Werkzeugs direkt auf der Pinnwand
+// mit exportieren. In der exportierten Datei lassen sie sich dann - wie im
+// Modul - ein- und ausblenden. Ohne Angabe (alte Export-Links) wie bisher
+// nicht enthalten.
+$includeannot = optional_param('annot', 0, PARAM_BOOL);
+$includeink = optional_param('ink', 0, PARAM_BOOL);
 
 $cm = get_coursemodule_from_id('pinnwand', $id, 0, false, MUST_EXIST);
 $course = get_course($cm->course);
@@ -46,7 +53,7 @@ $fs = get_file_storage();
 // die außerhalb Moodles nicht erreichbar wären.
 // -----------------------------------------------------------------
 $photocache = [];
-function pinnwand_export_photo_data($photoid, $context, $fs, &$photocache) {
+function pinnwand_export_photo_data($photoid, $context, $fs, &$photocache, $includeannot = false) {
     if ($photoid <= 0) {
         return null;
     }
@@ -76,6 +83,14 @@ function pinnwand_export_photo_data($photoid, $context, $fs, &$photocache) {
         'canvasz' => (int) $photo->canvasz,
         'iswordart' => !empty($photo->wordfielddata),
     ];
+    // Annotationen des Objekts nur, wenn gewünscht UND auf der Pinnwand
+    // sichtbar geschaltet (annotationonboard) - genau das, was man dort sieht.
+    if (!empty($includeannot) && !empty($photo->annotationonboard) && !empty($photo->annotationdata)) {
+        $strokes = json_decode($photo->annotationdata, true);
+        if (is_array($strokes) && count($strokes)) {
+            $result['annotation'] = $strokes;
+        }
+    }
     // Wortfelder (Zettel/WordArt): auf der Pinnwand entspricht canvasw der
     // Breite der KARTE (tf.w), das gespeicherte SVG ist aber größer (viewBox
     // umfasst zusätzlich über die Karte hinausragende WordArt, x/y meist
@@ -119,7 +134,7 @@ foreach ($items as $it) {
         'framelabel' => (string) ($it->framelabel ?? ''),
     ];
     if ($it->itemtype === 'photo' && $it->photoid) {
-        $entry['photo'] = pinnwand_export_photo_data((int) $it->photoid, $context, $fs, $photocache);
+        $entry['photo'] = pinnwand_export_photo_data((int) $it->photoid, $context, $fs, $photocache, $includeannot);
     }
     $exportitems[] = $entry;
 }
@@ -148,7 +163,7 @@ $records = $DB->get_records('pinnwand_photos', [
     'boardplaced' => 1, 'hiddenfromboard' => 0, 'status' => 'active',
 ]);
 foreach ($records as $r) {
-    $data = pinnwand_export_photo_data((int) $r->id, $context, $fs, $photocache);
+    $data = pinnwand_export_photo_data((int) $r->id, $context, $fs, $photocache, $includeannot);
     if ($data) {
         $boardphotos[] = $data;
         $seenphotoids[$r->id] = true;
@@ -174,7 +189,7 @@ foreach ($placements as $pl) {
         // Heimat-Platzierung vertreten - keine zweite Kachel.
         continue;
     }
-    $photodata = pinnwand_export_photo_data((int) $pl->photoid, $context, $fs, $photocache);
+    $photodata = pinnwand_export_photo_data((int) $pl->photoid, $context, $fs, $photocache, $includeannot);
     if (!$photodata) {
         continue;
     }
@@ -249,6 +264,21 @@ $background = pinnwand_export_background_data($instance, $context, $fs);
 // wäre: klare formatVersion, vollständige Positions-/Rotationsdaten,
 // eingebettete Bilddaten statt bloßer Referenzen.
 // -----------------------------------------------------------------
+// Notizen des Stylus-Werkzeugs auf diesem Board (eigene, wie in der
+// Präsentation im Modul).
+$boardink = [];
+if ($includeink) {
+    $inkrow = $DB->get_record('pinnwand_board_ink', [
+        'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $boardid,
+    ]);
+    if ($inkrow && !empty($inkrow->strokedata)) {
+        $decodedink = json_decode($inkrow->strokedata, true);
+        if (is_array($decodedink)) {
+            $boardink = $decodedink;
+        }
+    }
+}
+
 $exportdata = [
     'formatVersion' => 1,
     'exportedAt' => time(),
@@ -264,6 +294,11 @@ $exportdata = [
         'items' => $exportitems,
     ],
     'boardPhotos' => $boardphotos,
+    'boardInk' => $boardink,
+    'labels' => [
+        'ink' => get_string('present_toggle_ink', 'pinnwand'),
+        'annot' => get_string('present_toggle_annot', 'pinnwand'),
+    ],
 ];
 
 // JSON_UNESCAPED_SLASHES bewusst NICHT gesetzt: Base64-eingebettete
@@ -378,6 +413,7 @@ function pinnwand_export_build_html($title, $json) {
   // Board) - nicht nur die Stationen selbst.
   var photoRecs = {};
   var occludables = [];
+  var hasAnnot = false;
   (data.boardPhotos || []).forEach(function (p) {
     if (!p) { return; }
     var pel = document.createElement('div');
@@ -408,9 +444,22 @@ function pinnwand_export_build_html($title, $json) {
     }
     pel.appendChild(img);
     canvas.appendChild(pel);
+    // Annotationen auf dem Objekt (nur falls beim Export gewählt).
+    if (p.annotation && p.annotation.length) {
+      PinnwandPresentation.attachInk(pel, p.annotation, 'annot');
+      hasAnnot = true;
+    }
     photoRecs[p.id] = rec;
     occludables.push(rec);
   });
+
+  // Notizen des Stylus-Werkzeugs auf der Pinnwand - über allen Objekten,
+  // wie in der Präsentation im Modul.
+  if (hasAnnot) { player.addToggle('annot', (data.labels && data.labels.annot) || 'Annotationen'); }
+  if (data.boardInk && data.boardInk.length) {
+    canvas.appendChild(PinnwandPresentation.inkLayer(data.boardInk, BW, BH, 'ink', 600));
+    player.addToggle('ink', (data.labels && data.labels.ink) || 'Notizen');
+  }
 
   function overviewStep() {
     return { cx: BW / 2, cy: BH / 2, w: BW, h: BH, rot: 0, overview: true };
