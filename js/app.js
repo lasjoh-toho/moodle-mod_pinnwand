@@ -1750,6 +1750,23 @@
     var dx = Math.cos(rad) * 0.5, dy = Math.sin(rad) * 0.5;
     return { x1: 0.5 - dx, y1: 0.5 - dy, x2: 0.5 + dx, y2: 0.5 + dy };
   }
+  // Verlauf (linear oder radial, fillGradientType) als CSS bzw. SVG - EINE
+  // Stelle für Text, Karte und Formen in Editor, Pinnwand und SVG.
+  function cssGradientFor(o) {
+    var stops = gradientCssStops(o.fillGradient);
+    if (o.fillGradientType === 'radial') { return 'radial-gradient(circle at 50% 50%,' + stops + ')'; }
+    return 'linear-gradient(' + ((o.fillGradientAngle != null ? o.fillGradientAngle : 135) + 90) + 'deg,' + stops + ')';
+  }
+  function svgGradientTag(id, o, esc) {
+    var stopsXml = normalizeGradientStops(o.fillGradient).map(function (st) {
+      return '<stop offset="' + st.pos + '" stop-color="' + (esc ? escapeXml(st.color) : st.color) + '"/>';
+    }).join('');
+    if (o.fillGradientType === 'radial') {
+      return '<radialGradient id="' + id + '" cx="0.5" cy="0.5" r="0.5">' + stopsXml + '</radialGradient>';
+    }
+    var gv = gradientSvgVector(o.fillGradientAngle);
+    return '<linearGradient id="' + id + '" x1="' + gv.x1 + '" y1="' + gv.y1 + '" x2="' + gv.x2 + '" y2="' + gv.y2 + '">' + stopsXml + '</linearGradient>';
+  }
   function fgShapeSvgDataUri(shape, style) {
     // Rückwärtskompatibel: reiner Farb-String (z.B. für Rastervorschauen)
     // wird als einfache Fläche ohne Kontur/Effekte behandelt.
@@ -1757,11 +1774,7 @@
     var defs = '', fillAttr = 'fill="' + (style.fillColor || '#e0503f') + '"';
     if (style.fillGradient && style.fillGradient.length >= 2) {
       var gid = 'fgshapegrad' + (fgShapeGradientCounter++);
-      var gv = gradientSvgVector(style.fillGradientAngle);
-      var stopsXml = normalizeGradientStops(style.fillGradient).map(function (s) {
-        return '<stop offset="' + s.pos + '" stop-color="' + s.color + '"/>';
-      }).join('');
-      defs += '<linearGradient id="' + gid + '" x1="' + gv.x1 + '" y1="' + gv.y1 + '" x2="' + gv.x2 + '" y2="' + gv.y2 + '">' + stopsXml + '</linearGradient>';
+      defs += svgGradientTag(gid, style, false);
       fillAttr = 'fill="url(#' + gid + ')"';
     }
     var filterAttr = '';
@@ -1785,10 +1798,13 @@
     }
     var strokeAttr = style.outlineWidth ? ' stroke="' + (style.outlineColor || '#000') + '" stroke-width="' + style.outlineWidth + '"' : '';
     var attrs = fillAttr + strokeAttr + filterAttr + (shape.fillRule ? ' fill-rule="' + shape.fillRule + '"' : '');
+    // Klammern/Apostrophe zusätzlich kodieren: encodeURIComponent lässt sie
+    // stehen, das "url(#verlauf)" im SVG beendete sonst das umgebende CSS
+    // url(...) vorzeitig - Formen mit Verlauf blieben dadurch unsichtbar.
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">' + (defs ? '<defs>' + defs + '</defs>' : '') +
       '<path d="' + shape.d + '" ' + attrs + (strokeAttr ? ' vector-effect="non-scaling-stroke"' : '') + '/></svg>'
-    );
+    ).replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/'/g, '%27');
   }
 
   function openWordartFontBrowser(active, frame) {
@@ -2144,7 +2160,7 @@
   function computeStyle1Css(t, fallbackColor) {
     var css = '';
     if (t.fillGradient && t.fillGradient.length >= 2) {
-      css += 'background-image:linear-gradient(' + ((t.fillGradientAngle != null ? t.fillGradientAngle : 135) + 90) + 'deg,' + gradientCssStops(t.fillGradient) + ');' +
+      css += 'background-image:' + cssGradientFor(t) + ';' +
         '-webkit-background-clip:text;background-clip:text;color:transparent;';
     } else {
       css += 'color:' + (t.fillColor || fallbackColor) + ';';
@@ -2208,8 +2224,8 @@
     if (!wrapShapes.length) { return; }
     loadPretext().then(function (pretext) {
       var obstaclesAll = wrapShapes.map(function (s) {
-        var sb = shapeBox(tf, s);
-        return { x: s.x * tf.w - sb.w / 2, y: s.y * tf.h - sb.h / 2, width: sb.w, height: sb.h };
+        var g = resolveShapeGeom(tf, s);
+        return { x: g.x - g.w / 2, y: g.y - g.h / 2, width: g.w, height: g.h };
       });
       tf.texts.forEach(function (t, idx) {
         var plainText = (t.text || '').replace(/<[^>]+>/g, '');
@@ -2260,32 +2276,35 @@
     // wie im Editor. Sonst könnte normaler Text unvorhersehbar über den
     // Rahmen hinausgehen.
     var hasWordart = wordfieldHasWordart(tf);
+    // Zettel mit Hauptform: die Form IST die Karte - kein rechteckiger
+    // Kartenhintergrund/-schatten, der Schatten sitzt auf der Form selbst.
+    var cardShape = !opts.noShapes && !wordfieldIsWordart(tf) ? mainShapeOf(tf) : null;
     var outer = el('div', {
       class: 'ic-tf-live', style: 'position:relative;box-sizing:border-box;width:100%;aspect-ratio:' + tf.w + '/' + tf.h + ';container-type:inline-size;' +
-        (hasWordart ? '' : 'overflow:hidden;border-radius:16px;') +
-        (preset.shadow ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') +
-        (preset.bg || opts.noGuide ? '' : 'border:2px dashed rgba(255,255,255,.3);')
+        (hasWordart || cardShape ? '' : 'overflow:hidden;border-radius:16px;') +
+        (preset.shadow && !cardShape ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') +
+        (preset.bg || opts.noGuide || cardShape ? '' : 'border:2px dashed rgba(255,255,255,.3);')
     });
     var cardStyle = tf.cardStyle || {};
-    var cardBg = cardStyle.fillGradient
-      ? 'background-image:linear-gradient(' + ((cardStyle.fillGradientAngle != null ? cardStyle.fillGradientAngle : 135) + 90) + 'deg,' + gradientCssStops(cardStyle.fillGradient) + ');'
+    var cardBg = cardShape ? 'background:transparent;' : cardStyle.fillGradient
+      ? 'background-image:' + cssGradientFor(cardStyle) + ';'
       : (cardStyle.fillColor ? 'background:' + cardStyle.fillColor + ';' : (preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;'));
-    var cardBorder = cardStyle.outlineWidth ? 'box-shadow:inset 0 0 0 ' + cardStyle.outlineWidth + 'px ' + (cardStyle.outlineColor || '#000') + ';' : '';
+    var cardBorder = !cardShape && cardStyle.outlineWidth ? 'box-shadow:inset 0 0 0 ' + cardStyle.outlineWidth + 'px ' + (cardStyle.outlineColor || '#000') + ';' : '';
     var inner = el('div', {
       class: 'ic-tf-live-inner', style: 'position:relative;box-sizing:border-box;width:100%;height:100%;overflow:hidden;border-radius:16px;z-index:0;' + cardBg + cardBorder
     });
     outer.appendChild(inner);
-    (tf.shapes || []).forEach(function (s) {
+    (opts.noShapes ? [] : (tf.shapes || [])).forEach(function (s) {
       var shapeDef = shapeDefFor(s);
       if (!shapeDef) { return; }
-      // Größe wie im Editor: relativ zur kürzeren Kartenseite (shapeBox),
-      // vorher relativ zur Breite - bei Querformat-WordArt lag die Form
-      // auf der Pinnwand dadurch größer als im Editor.
-      var box = shapeBox(tf, s);
+      // Lage wie im Editor (resolveShapeGeom: Hauptform = Karte bzw. an den
+      // Text gebunden, sonst frei; Höhe relativ zur kürzeren Kartenseite).
+      var g = resolveShapeGeom(tf, s);
       var shapeEl = el('div', {
         class: 'ic-tf-live-shape',
-        style: 'position:absolute;left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + (box.w / tf.w * 100) + '%;' +
-          'height:' + (box.h / tf.h * 100) + '%;transform:translate(-50%,-50%) rotate(' + (s.rotation || 0) + 'deg);' +
+        style: 'position:absolute;left:' + (g.x / tf.w * 100) + '%;top:' + (g.y / tf.h * 100) + '%;width:' + (g.w / tf.w * 100) + '%;' +
+          'height:' + (g.h / tf.h * 100) + '%;transform:translate(-50%,-50%) rotate(' + (s.main ? 0 : (s.rotation || 0)) + 'deg);' +
+          (s === cardShape && preset.shadow ? 'filter:drop-shadow(0 6px 10px rgba(0,0,0,.35));' : '') +
           'background-image:url(' + fgShapeSvgDataUri(shapeDef, s) + ');background-repeat:no-repeat;' +
           'background-position:center;background-size:100% 100%;' + (s.wrapMode === 'front' ? 'z-index:2;' : 'z-index:0;')
       });
@@ -2321,14 +2340,19 @@
         // positioniert bei left:50%, wodurch der Browser ihm nur die halbe
         // Kartenbreite zum Umbrechen ließ (viel mehr Zeilen als im Editor).
         var fillCard = idx === 0 && !hasWordart && !tf.isWordArt;
+        // Haupttext passt sich in den Textbereich ein (Karte bzw. Innenbereich
+        // der Hauptform) und schrumpft, falls er sonst überlaufen würde.
+        var tbox = fillCard ? primaryTextBox(tf) : null;
+        var fitSize = fillCard ? fitTextSize(t, tbox, fontCss) : t.size;
         textEl2 = el('div', {
           class: 'ic-tf-live-text', html: html,
           style: (fillCard
-            ? 'position:absolute;box-sizing:border-box;inset:0;padding:' + (12 / tf.w * 100) + 'cqw;' +
+            ? 'position:absolute;box-sizing:border-box;left:' + (tbox.x / tf.w * 100) + '%;top:' + (tbox.y / tf.h * 100) + '%;' +
+              'width:' + (tbox.w / tf.w * 100) + '%;height:' + (tbox.h / tf.h * 100) + '%;padding:' + (tbox.pad / tf.w * 100) + 'cqw;' +
               'display:flex;flex-direction:column;justify-content:center;overflow:hidden;'
             : 'position:absolute;box-sizing:border-box;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
               'padding:' + (4 / tf.w * 100) + 'cqw ' + (8 / tf.w * 100) + 'cqw;max-width:94%;') + 'white-space:pre-wrap;text-align:center;z-index:1;' +
-            'font-family:' + fontCss + ';font-size:' + (t.size / tf.w * 100) + 'cqw;font-weight:' + (t.fontWeight || 700) +
+            'font-family:' + fontCss + ';font-size:' + (fitSize / tf.w * 100) + 'cqw;font-weight:' + (t.fontWeight || 700) +
             ';line-height:' + (t.lineHeight || 1.2) + ';letter-spacing:' + ((t.letterSpacing || 0) / tf.w * 100) + 'cqw;' +
             (wordartCssFor(t, preset.text, false, 100 / tf.w) || computeStyle1Css(t, preset.text))
         });
@@ -2381,7 +2405,7 @@
   if (document.fonts && document.fonts.addEventListener) {
     // Später nachgeladene Schriften ändern die Textbreite - Messungen
     // danach neu durchführen statt veraltete Werte weiterzuverwenden.
-    document.fonts.addEventListener('loadingdone', function () { wordfieldBoundsCache = {}; });
+    document.fonts.addEventListener('loadingdone', function () { wordfieldBoundsCache = {}; textBoundsCache = {}; textFitCache = {}; });
   }
   function measureWordfieldBounds(tf) {
     var key = JSON.stringify(tf);
@@ -2440,11 +2464,14 @@
   // der Live-Darstellung (wie Pinnwand/gespeichertes Bild) - Grundlage für
   // "Form um den Text legen". Das Eingabefeld im Editor bricht Text anders
   // um als die fertige WordArt und taugt deshalb nicht als Maß.
+  var textBoundsCache = {};
   function measureTextObjectBounds(tf, idx) {
+    var ckey = JSON.stringify({ w: tf.w, h: tf.h, t: tf.texts, p: tf.preset, i: idx });
+    if (textBoundsCache[ckey]) { return textBoundsCache[ckey]; }
     var host = el('div', { style: 'position:fixed;left:-100000px;top:0;width:' + tf.w + 'px;visibility:hidden;pointer-events:none;' });
     var result = null;
     try {
-      var live = buildTextFrameLiveDom(tf, { noGuide: true });
+      var live = buildTextFrameLiveDom(tf, { noGuide: true, noShapes: true });
       host.appendChild(live);
       document.body.appendChild(host);
       var base = live.getBoundingClientRect();
@@ -2458,6 +2485,103 @@
       }
     } catch (e) { result = null; }
     if (host.parentNode) { host.parentNode.removeChild(host); }
+    if (result) { textBoundsCache[ckey] = result; }
+    return result;
+  }
+
+  // ------------------------------------------------------------------
+  // Hauptform: die erste Form eines Wortfelds (s.main). Auf einem Zettel ist
+  // sie die Karte selbst (füllt den Rahmen, der Text passt sich in ihren
+  // Innenbereich ein), bei WordArt ist sie an den Text gebunden (liegt
+  // immer passend hinter und um ihn herum, auch nach Textänderungen) -
+  // statt einer lose platzierten Form, die man mühsam mit dem Text in
+  // Deckung bringen muss. Weitere Formen bleiben freie Dekoration.
+  // ------------------------------------------------------------------
+  // Innenbereich je Form (Anteile der Formbox, cx/cy = Mittelpunkt), in
+  // den Text passt, ohne über den Umriss zu ragen.
+  var SHAPE_SAFE = {
+    rect: { w: 0.9, h: 0.9 }, rounded: { w: 0.86, h: 0.86 }, circle: { w: 0.66, h: 0.66 }, ellipse: { w: 0.68, h: 0.44 },
+    bubble: { w: 0.64, h: 0.44 }, bubblerect: { w: 0.74, h: 0.46 }, thought: { w: 0.58, h: 0.4 },
+    heart: { w: 0.56, h: 0.4, cy: 0.42 }, cloud: { w: 0.56, h: 0.34, cy: 0.54 }, triangle: { w: 0.42, h: 0.34, cy: 0.66 },
+    righttriangle: { w: 0.4, h: 0.4, cx: 0.34, cy: 0.64 }, trapezoid: { w: 0.66, h: 0.56 }, diamond: { w: 0.46, h: 0.46 },
+    parallelogram: { w: 0.56, h: 0.6 }, pentagon: { w: 0.6, h: 0.5, cy: 0.56 }, hexagon: { w: 0.7, h: 0.78 },
+    octagon: { w: 0.74, h: 0.74 }, cross: { w: 0.28, h: 0.28 }, arch: { w: 0.7, h: 0.5, cy: 0.66 },
+    arrowright: { w: 0.5, h: 0.28, cx: 0.4 }, arrowleft: { w: 0.5, h: 0.28, cx: 0.6 },
+    arrowup: { w: 0.28, h: 0.5, cy: 0.6 }, arrowdown: { w: 0.28, h: 0.5, cy: 0.4 }
+  };
+  function shapeSafeBox(s) {
+    var pinfo = paramShapeInfo(s.type);
+    var sb;
+    if (pinfo && pinfo.base === 'star') {
+      var inner = s.inner != null ? s.inner : pinfo.def.defaults.inner;
+      var f = Math.max(0.2, Math.min(0.8, 0.9 * inner * 1.25));
+      sb = { w: f, h: f };
+    } else if (pinfo && pinfo.base === 'bubble') {
+      var st = s.bubble || pinfo.def.defaults.bubble;
+      sb = SHAPE_SAFE[st === 'rect' ? 'bubblerect' : (st === 'thought' ? 'thought' : 'bubble')];
+    } else {
+      sb = SHAPE_SAFE[s.type] || { w: 0.6, h: 0.6 };
+    }
+    return { w: sb.w, h: sb.h, cx: sb.cx != null ? sb.cx : 0.5, cy: sb.cy != null ? sb.cy : 0.5 };
+  }
+  function mainShapeOf(tf) {
+    return (tf.shapes || []).filter(function (s) { return s.main && shapeDefFor(s); })[0] || null;
+  }
+  // Tatsächliche Lage einer Form in tf-Koordinaten (Mittelpunkt x/y,
+  // Breite/Höhe) - für Editor, Pinnwand und SVG gleichermaßen.
+  function resolveShapeGeom(tf, s) {
+    if (s.main && !wordfieldIsWordart(tf)) {
+      return { x: tf.w / 2, y: tf.h / 2, w: tf.w, h: tf.h };
+    }
+    if (s.main) {
+      var ti = 0;
+      tf.texts.forEach(function (t, i) { if (t.id === s.bindText) { ti = i; } });
+      var b = measureTextObjectBounds(tf, ti);
+      if (b && b.x2 > b.x1) {
+        var sb = shapeSafeBox(s), sc = s.fitScale || 1;
+        var w = (b.x2 - b.x1) / sb.w * 1.08 * sc, h = (b.y2 - b.y1) / sb.h * 1.08 * sc;
+        return { x: (b.x1 + b.x2) / 2 - (sb.cx - 0.5) * w, y: (b.y1 + b.y2) / 2 - (sb.cy - 0.5) * h, w: w, h: h };
+      }
+    }
+    var box = shapeBox(tf, s);
+    return { x: s.x * tf.w, y: s.y * tf.h, w: box.w, h: box.h };
+  }
+  // Textbereich des Haupttexts eines Zettels (tf-Koordinaten): ohne Hauptform
+  // die Karte mit Innenabstand 12 wie bisher, mit Hauptform deren Innenbereich.
+  function primaryTextBox(tf) {
+    var ms = mainShapeOf(tf);
+    if (ms && !wordfieldIsWordart(tf)) {
+      var sb = shapeSafeBox(ms);
+      return { x: tf.w * (sb.cx - sb.w / 2), y: tf.h * (sb.cy - sb.h / 2), w: tf.w * sb.w, h: tf.h * sb.h, pad: 0 };
+    }
+    return { x: 0, y: 0, w: tf.w, h: tf.h, pad: 12 };
+  }
+  // Größte Schriftgröße <= t.size, bei der der Text (mit Umbruch) komplett
+  // in box passt - unsichtbar ausgemessen, gecacht. Gilt dank relativer
+  // Einheiten für jede Anzeigegröße, verhindert "Text sprengt den Zettel".
+  var textFitCache = {};
+  function fitTextSize(t, box, fontCss) {
+    var html = t.html || (t.text ? escapeXml(t.text) : '');
+    if (!html) { return t.size; }
+    var key = [html, t.size, fontCss, t.fontWeight, t.lineHeight, t.letterSpacing, box.w, box.h, box.pad].join('|');
+    if (textFitCache[key]) { return textFitCache[key]; }
+    var probe = el('div', { html: html, style: 'position:fixed;left:-100000px;top:0;visibility:hidden;box-sizing:border-box;' +
+      'width:' + box.w + 'px;height:' + box.h + 'px;padding:' + (box.pad || 0) + 'px;overflow:hidden;white-space:pre-wrap;word-wrap:break-word;' +
+      'text-align:center;font-family:' + fontCss + ';font-weight:' + (t.fontWeight || 700) + ';line-height:' + (t.lineHeight || 1.2) + ';' +
+      'letter-spacing:' + (t.letterSpacing || 0) + 'px;' });
+    document.body.appendChild(probe);
+    function fits(size) {
+      probe.style.fontSize = size + 'px';
+      return probe.scrollHeight <= probe.clientHeight + 1 && probe.scrollWidth <= probe.clientWidth + 1;
+    }
+    var result = t.size;
+    if (!fits(t.size)) {
+      var lo = 4, hi = t.size;
+      for (var i = 0; i < 10; i++) { var mid = (lo + hi) / 2; if (fits(mid)) { lo = mid; } else { hi = mid; } }
+      result = Math.floor(lo * 10) / 10;
+    }
+    probe.remove();
+    textFitCache[key] = result;
     return result;
   }
 
@@ -2570,12 +2694,18 @@
   }
 
   function buildTextFrameSVG(tf) {
-    if (wordfieldIsWordart(tf)) { return buildTextFrameLiveSvg(tf); }
+    // Gespeichertes Bild = exakt die Pinnwand-Darstellung (serialisiertes
+    // Live-DOM) - für WordArt UND Zettel (Hauptform als Karte, eingepasster
+    // Text). Nur Zettel mit Textumfluss um Formen nutzen weiterhin den alten
+    // Weg, weil der Umfluss erst asynchron berechnet wird.
+    var usesWrap = (tf.shapes || []).some(function (sh) { return sh.wrapMode === 'wrap'; });
+    if (wordfieldIsWordart(tf) || !usesWrap) { return buildTextFrameLiveSvg(tf); }
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0] || TEXTFRAME_PRESETS[0];
     var cardStyle = tf.cardStyle || {};
     var defs = '';
     var bgRect = '';
-    var hasCardBg = cardStyle.fillColor || cardStyle.fillGradient || preset.bg;
+    var svgCardShape = mainShapeOf(tf);
+    var hasCardBg = !svgCardShape && (cardStyle.fillColor || cardStyle.fillGradient || preset.bg);
     if (hasCardBg) {
       if (preset.shadow) {
         defs = '<defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">' +
@@ -2584,11 +2714,7 @@
       var cardFillAttr = 'fill="' + escapeXml(cardStyle.fillColor || preset.bg || '#fff') + '"';
       if (cardStyle.fillGradient && cardStyle.fillGradient.length >= 2) {
         var cardGid = 'cardgrad';
-        var cardGv = gradientSvgVector(cardStyle.fillGradientAngle);
-        var cardStopsXml = normalizeGradientStops(cardStyle.fillGradient).map(function (st) {
-          return '<stop offset="' + st.pos + '" stop-color="' + escapeXml(st.color) + '"/>';
-        }).join('');
-        defs += '<defs><linearGradient id="' + cardGid + '" x1="' + cardGv.x1 + '" y1="' + cardGv.y1 + '" x2="' + cardGv.x2 + '" y2="' + cardGv.y2 + '">' + cardStopsXml + '</linearGradient></defs>';
+        defs += '<defs>' + svgGradientTag(cardGid, cardStyle, true) + '</defs>';
         cardFillAttr = 'fill="url(#' + cardGid + ')"';
       }
       var cardStrokeAttr = cardStyle.outlineWidth ? ' stroke="' + escapeXml(cardStyle.outlineColor || '#000') + '" stroke-width="' + cardStyle.outlineWidth + '"' : '';
@@ -2601,16 +2727,13 @@
     function renderShapeSvg(s) {
       var shapeDef = shapeDefFor(s);
       if (!shapeDef) { return ''; }
-      var sbox = shapeBox(tf, s);
-      var tx = s.x * tf.w - sbox.w / 2, ty = s.y * tf.h - sbox.h / 2;
+      var sg = resolveShapeGeom(tf, s);
+      var sbox = { w: sg.w, h: sg.h };
+      var tx = sg.x - sbox.w / 2, ty = sg.y - sbox.h / 2;
       var shapeDefs = '', fillAttr = 'fill="' + escapeXml(s.fillColor || '#e0503f') + '"';
       if (s.fillGradient && s.fillGradient.length >= 2) {
         var gid = 'shapegrad' + s.id;
-        var gv2 = gradientSvgVector(s.fillGradientAngle);
-        var stopsXml2 = normalizeGradientStops(s.fillGradient).map(function (st) {
-          return '<stop offset="' + st.pos + '" stop-color="' + escapeXml(st.color) + '"/>';
-        }).join('');
-        shapeDefs += '<linearGradient id="' + gid + '" x1="' + gv2.x1 + '" y1="' + gv2.y1 + '" x2="' + gv2.x2 + '" y2="' + gv2.y2 + '">' + stopsXml2 + '</linearGradient>';
+        shapeDefs += svgGradientTag(gid, s, true);
         fillAttr = 'fill="url(#' + gid + ')"';
       }
       var filterAttr = '';
@@ -2634,7 +2757,7 @@
       }
       var strokeAttr = s.outlineWidth ? ' stroke="' + escapeXml(s.outlineColor || '#000') + '" stroke-width="' + s.outlineWidth + '"' : '';
       return (shapeDefs ? '<defs>' + shapeDefs + '</defs>' : '') +
-        '<g transform="translate(' + (tx + sbox.w / 2) + ',' + (ty + sbox.h / 2) + ') rotate(' + (s.rotation || 0) + ') translate(' + (-sbox.w / 2) + ',' + (-sbox.h / 2) + ') scale(' + (sbox.w / 100) + ',' + (sbox.h / 100) + ')">' +
+        '<g transform="translate(' + (tx + sbox.w / 2) + ',' + (ty + sbox.h / 2) + ') rotate(' + (s.main ? 0 : (s.rotation || 0)) + ') translate(' + (-sbox.w / 2) + ',' + (-sbox.h / 2) + ') scale(' + (sbox.w / 100) + ',' + (sbox.h / 100) + ')">' +
         '<path d="' + shapeDef.d + '" ' + fillAttr + strokeAttr + filterAttr +
         (shapeDef.fillRule ? ' fill-rule="' + shapeDef.fillRule + '"' : '') + '/></g>';
     }
@@ -2981,11 +3104,15 @@
       }
     }
     var preset = TEXTFRAME_PRESETS.filter(function (p) { return p.id === tf.preset; })[0];
+    tf.shapes = tf.shapes || [];
+    // Zettel mit Hauptform: die Form ist die Karte (kein rechteckiger
+    // Hintergrund/Schatten mehr, nur eine dünne Hilfslinie für den Rahmen).
+    var editorCardShape = !state.wordArtMode ? mainShapeOf(tf) : null;
     var frame = el('div', {
       class: 'ic-textframe-preview',
       style: 'width:' + tf.w + 'px;height:' + tf.h + 'px;' +
-        (preset.shadow ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') +
-        (preset.bg ? '' : 'border:2px dashed rgba(255,255,255,.3);')
+        (preset.shadow && !editorCardShape ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') +
+        (preset.bg && !editorCardShape ? '' : 'border:2px dashed rgba(255,255,255,.3);')
     });
     if (typeof neighborsLayer !== 'undefined' && neighborsLayer) { frame.appendChild(neighborsLayer); }
     // Innerer Container trägt Hintergrundfarbe UND die Formbeschneidung
@@ -2993,10 +3120,10 @@
     // auf frame selbst, sonst würde der leicht außerhalb liegende
     // Größenänderungs-Griff (siehe unten) unsichtbar/unklickbar.
     var cardStyle = tf.cardStyle || {};
-    var cardBg = cardStyle.fillGradient
-      ? 'background-image:linear-gradient(' + ((cardStyle.fillGradientAngle != null ? cardStyle.fillGradientAngle : 135) + 90) + 'deg,' + gradientCssStops(cardStyle.fillGradient) + ');'
+    var cardBg = editorCardShape ? 'background:transparent;' : cardStyle.fillGradient
+      ? 'background-image:' + cssGradientFor(cardStyle) + ';'
       : (cardStyle.fillColor ? 'background:' + cardStyle.fillColor + ';' : (preset.bg ? 'background:' + preset.bg + ';' : 'background:transparent;'));
-    var cardBorder = cardStyle.outlineWidth ? 'box-shadow:inset 0 0 0 ' + cardStyle.outlineWidth + 'px ' + (cardStyle.outlineColor || '#000') + ';' : '';
+    var cardBorder = !editorCardShape && cardStyle.outlineWidth ? 'box-shadow:inset 0 0 0 ' + cardStyle.outlineWidth + 'px ' + (cardStyle.outlineColor || '#000') + ';' : '';
     var frameInner = el('div', {
       class: 'ic-textframe-inner',
       style: cardBg + cardBorder
@@ -3013,7 +3140,8 @@
     });
     cardFrameHit.addEventListener('click', function (ev) {
       ev.stopPropagation();
-      state.activeShapeId = '__card__';
+      // Mit Hauptform ist die Form die Karte - Rand-Klick wählt sie.
+      state.activeShapeId = editorCardShape ? editorCardShape.id : '__card__';
       state.styleTargetMode = 'shape';
       render();
     });
@@ -3171,7 +3299,7 @@
     var activeId = null;
     function selectText(id) {
       activeId = id;
-      if (id != null) { state.tfLastTextId = id; }
+      if (id != null) { state.tfLastTextId = id; state.styleTargetMode = 'text'; }
       frame.querySelectorAll('.ic-textframe-obj').forEach(function (o) {
         o.classList.toggle('active', o.dataset.textid === String(id));
       });
@@ -3193,8 +3321,15 @@
       t.letterSpacing = t.letterSpacing || 0;
       t.fontWeight = t.fontWeight || 700;
       var fontCss = resolveFontCss(t.font);
-      var elStyle = (useFillCentering ? '' : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;max-width:94%;') +
-        'font-family:' + fontCss + ';font-size:' + t.size + 'px;font-weight:' + t.fontWeight +
+      // Zettel-Haupttext: im Textbereich (Karte bzw. Innenbereich der
+      // Hauptform), Schrift ggf. verkleinert, damit nichts überläuft -
+      // dieselbe Berechnung wie auf der Pinnwand.
+      var edBox = useFillCentering ? primaryTextBox(tf) : null;
+      var edSize = useFillCentering ? fitTextSize(t, edBox, fontCss) : t.size;
+      var elStyle = (useFillCentering
+        ? (edBox.pad ? '' : 'inset:auto;left:' + edBox.x + 'px;top:' + edBox.y + 'px;width:' + edBox.w + 'px;height:' + edBox.h + 'px;padding:0;')
+        : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;max-width:94%;') +
+        'font-family:' + fontCss + ';font-size:' + edSize + 'px;font-weight:' + t.fontWeight +
         ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px;' +
         (wordartCssFor(t, preset.text, useFillCentering) || computeStyle1Css(t, preset.text));
       var el2 = el('div', {
@@ -3243,7 +3378,7 @@
         // positionierten einzeiligen Labels.
         el2.addEventListener('input', function () {
           t.html = el2.innerHTML; t.text = el2.textContent;
-          autoFitPrimaryText(el2, t, tf.h);
+          autoFitPrimaryText(el2, t, edBox.h);
         });
       } else {
         el2.addEventListener('input', function () { t.html = el2.innerHTML; t.text = el2.textContent; });
@@ -3497,50 +3632,97 @@
     function activeTextObj() {
       return tf.texts.filter(function (t) { return t.id === state.tfLastTextId; })[0] || tf.texts[0];
     }
-    function pickShapeType(id) {
-      if (id === '__custom__') { startCustomShapeDraw(null); return; }
+    // Neue Form anlegen. Die erste wird die Hauptform (Zettel: Kartenform,
+    // WordArt: an den Text gebunden), jede weitere ist freie Dekoration.
+    function newShapeOf(id, asMain) {
       var nextId = (Math.max.apply(null, tf.shapes.map(function (s) { return s.id; }).concat([0])) || 0) + 1;
       var shape = { id: nextId, type: id, x: 0.5, y: 0.5, size: 0.4, fillColor: '#e0503f' };
       var pinfo = paramShapeInfo(id);
       if (pinfo) { Object.keys(pinfo.def.defaults).forEach(function (k) { shape[k] = pinfo.def.defaults[k]; }); }
       if (pinfo && pinfo.base === 'bubble') { shape.fillColor = '#ffffff'; shape.outlineWidth = 2; shape.outlineColor = '#111111'; }
-      // WordArt: neue Formen legen sich direkt HINTER und UM den Text
-      // (Hintergrund-Deko), statt als kleines Quadrat irgendwo auf dem Text.
-      if (state.wordArtMode && tf.texts.length) { fitShapeAroundText(shape, activeTextObj()); }
-      tf.shapes.push(shape);
+      if (asMain) {
+        shape.main = true;
+        if (!state.wordArtMode) {
+          // Kartenform übernimmt die bisherige Kartenfarbe.
+          var cs = tf.cardStyle || {};
+          shape.fillColor = cs.fillColor || preset.bg || '#ffffff';
+          if (cs.fillGradient) { shape.fillGradient = cs.fillGradient; shape.fillGradientAngle = cs.fillGradientAngle; shape.fillGradientType = cs.fillGradientType; }
+          if (!(pinfo && pinfo.base === 'bubble')) { shape.outlineWidth = 0; }
+        } else {
+          shape.bindText = activeTextObj().id;
+        }
+      } else if (state.wordArtMode && tf.texts.length) {
+        fitShapeAroundText(shape, activeTextObj());
+      }
+      return shape;
+    }
+    // Zielform des Hauptknopfs: die ausgewählte Form, sonst die Hauptform.
+    var targetShape = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0] || mainShapeOf(tf);
+    function pickShapeType(id, addExtra) {
+      if (id === '__custom__') { startCustomShapeDraw(addExtra ? null : targetShape); return; }
       state.lastShapeType = id;
-      state.activeShapeId = nextId;
+      state.styleTargetMode = 'shape';
+      if (id === 'none') {
+        if (targetShape) { tf.shapes = tf.shapes.filter(function (s2) { return s2 !== targetShape; }); }
+        state.activeShapeId = null;
+        render();
+        return;
+      }
+      if (targetShape && !addExtra) {
+        // Form ÄNDERN: Typ wechseln, Farben/Kontur/Lage bleiben erhalten.
+        var pinfo = paramShapeInfo(id);
+        targetShape.type = id;
+        delete targetShape.customPoints;
+        if (pinfo) { Object.keys(pinfo.def.defaults).forEach(function (k) { if (targetShape[k] == null) { targetShape[k] = pinfo.def.defaults[k]; } }); }
+        state.activeShapeId = targetShape.id;
+        render();
+        return;
+      }
+      var shape = newShapeOf(id, !mainShapeOf(tf));
+      tf.shapes.push(shape);
+      state.activeShapeId = shape.id;
       render();
     }
 
-    // Formen-Wähler wie der WordArt-Vorlagen-Wähler: ein kompakter Knopf
-    // mit der zuletzt gewählten Form, Klick öffnet das Raster als
-    // verschiebbares Pop-up (statt das ganze Raster dauerhaft anzuzeigen).
-    var shapePickerBtn = el('button', { class: 'ic-shape-picker-btn', title: S.tf_add_shape || 'Form hinzufügen' });
-    var lastShapeDef = shapeDefFor({ type: state.lastShapeType || 'star' });
-    if (lastShapeDef) {
+    // Hauptknopf wie der WordArt-Vorlagen-Wähler: zeigt die aktuelle Form;
+    // ohne Form "Form wählen", sonst "Form ändern" (meist braucht man nur
+    // eine). Der kleine "+"-Knopf daneben fügt eine weitere Form hinzu.
+    var pickerRow = el('div', { class: 'ic-compact-row ic-shape-picker-row' });
+    var shapePickerBtn = el('button', { class: 'ic-shape-picker-btn', title: targetShape ? S.tf_change_shape : S.tf_pick_shape });
+    var shownDef = targetShape ? shapeDefFor(targetShape) : shapeDefFor({ type: state.lastShapeType || 'rounded' });
+    if (shownDef) {
       shapePickerBtn.appendChild(el('span', {
-        class: 'ic-shape-picker-preview', style: 'background-image:url(' + fgShapeSvgDataUri(lastShapeDef, '#cfd2d8') + ')'
+        class: 'ic-shape-picker-preview', style: 'background-image:url(' + fgShapeSvgDataUri(shownDef, targetShape ? targetShape : '#cfd2d8') + ')'
       }));
     }
-    shapePickerBtn.appendChild(el('span', {}, ['+ ' + (S.tf_add_shape || 'Form')]));
+    shapePickerBtn.appendChild(el('span', {}, [targetShape ? S.tf_change_shape : S.tf_pick_shape]));
     shapePickerBtn.addEventListener('click', function () {
-      openDraggableModal(S.tf_add_shape || 'Form hinzufügen', shapePickerBtn, function (content) {
-        buildShapeGrid(content, null, function (id) { closeDraggableModal(); pickShapeType(id); }, false);
+      openDraggableModal(targetShape ? S.tf_change_shape : S.tf_pick_shape, shapePickerBtn, function (content) {
+        buildShapeGrid(content, targetShape ? targetShape.type : null, function (id) { closeDraggableModal(); pickShapeType(id, false); }, !!targetShape);
       });
     });
-    shapesCol.appendChild(shapePickerBtn);
+    pickerRow.appendChild(shapePickerBtn);
+    if (targetShape) {
+      var addShapeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', title: S.tf_add_shape }, ['+']);
+      addShapeBtn.addEventListener('click', function () {
+        openDraggableModal(S.tf_add_shape, addShapeBtn, function (content) {
+          buildShapeGrid(content, null, function (id) { closeDraggableModal(); pickShapeType(id, true); }, false);
+        });
+      });
+      pickerRow.appendChild(addShapeBtn);
+    }
+    shapesCol.appendChild(pickerRow);
 
     // Einstellungen der gerade ausgewählten Form: Lage zum Text, um den
     // Text legen, Parameter von Stern/Sprechblase, löschen.
-    var selShape = tf.shapes.filter(function (s) { return s.id === state.activeShapeId; })[0];
+    var selShape = targetShape;
     if (selShape) {
       var shapeSettings = el('div', { class: 'ic-shape-settings' });
       var shapeRow1 = el('div', { class: 'ic-compact-row' });
-      [
+      (selShape.main ? [] : [
         ['behind', 'wrapbehind', S.tf_wrap_behind], ['front', 'wrapfront', S.tf_wrap_front],
         ['wrap', 'wraparound', S.tf_wrap_around]
-      ].forEach(function (w) {
+      ]).forEach(function (w) {
         var wb = el('button', {
           class: 'ic-btn ic-btn-ghost ic-mini-btn' + ((selShape.wrapMode || 'behind') === w[0] ? ' active' : ''), title: w[2]
         }, [icon(w[1])]);
@@ -3550,7 +3732,13 @@
       var fitBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-mini-btn-text', title: S.tf_shape_fit_text || 'Um den Text legen' },
         ['⬚ ' + (S.tf_shape_fit_text_short || 'Um Text')]);
       fitBtn.addEventListener('click', function () { fitShapeAroundText(selShape, activeTextObj()); render(); });
-      shapeRow1.appendChild(fitBtn);
+      if (!selShape.main) { shapeRow1.appendChild(fitBtn); }
+      if (selShape.main && state.wordArtMode) {
+        // An den Text gebunden: nur der Abstand zum Text ist einstellbar.
+        var gapCell = el('div', { class: 'ic-measure', title: S.tf_shape_padding }, [el('span', { class: 'ic-measure-symbol' }, ['\u2B1A'])]);
+        gapCell.appendChild(numberStepper(selShape.fitScale || 1, 0.6, 3, 0.05, 2, function (v) { selShape.fitScale = v; render(); }));
+        shapeRow1.appendChild(gapCell);
+      }
       var delShapeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', title: S.tf_shape_delete || 'Form löschen' }, [icon('trash')]);
       delShapeBtn.addEventListener('click', function () {
         tf.shapes = tf.shapes.filter(function (s2) { return s2 !== selShape; });
@@ -3601,18 +3789,22 @@
     tf.shapes.forEach(function (s) {
       var shapeDef = shapeDefFor(s);
       if (!shapeDef) { return; }
-      var sBox = shapeBox(tf, s);
+      // Lage wie auf der Pinnwand (resolveShapeGeom). Die Hauptform liegt
+      // fest: auf dem Zettel = Karte, bei WordArt am Text ausgerichtet (der
+      // Griff ändert dort nur den Abstand zum Text).
+      var sG = resolveShapeGeom(tf, s);
       var shapeEl = el('div', {
-        class: 'ic-textframe-shapeobj' + (state.activeShapeId === s.id ? ' active' : ''),
-        style: 'left:' + (s.x * 100) + '%;top:' + (s.y * 100) + '%;width:' + sBox.w + 'px;height:' + sBox.h + 'px;' +
-          'transform:translate(-50%,-50%) rotate(' + (s.rotation || 0) + 'deg);' +
+        class: 'ic-textframe-shapeobj' + (state.activeShapeId === s.id ? ' active' : '') + (s.main ? ' ic-shape-main' : ''),
+        style: 'left:' + sG.x + 'px;top:' + sG.y + 'px;width:' + sG.w + 'px;height:' + sG.h + 'px;' +
+          'transform:translate(-50%,-50%) rotate(' + (s.main ? 0 : (s.rotation || 0)) + 'deg);' +
+          (s === editorCardShape && preset.shadow ? 'filter:drop-shadow(0 6px 10px rgba(0,0,0,.35));' : '') +
           'background-image:url(' + fgShapeSvgDataUri(shapeDef, s) + ')'
       });
       var shapeSizeHandle = el('div', { class: 'ic-resize ic-textframe-shape-resize' });
       var shapeRotateHandle = el('div', { class: 'ic-textframe-shape-rotate' });
-      shapeEl.appendChild(shapeSizeHandle);
-      shapeEl.appendChild(shapeRotateHandle);
-      makeShapeMovable(shapeEl, frame, s, shapeSizeHandle, shapeRotateHandle);
+      if (!(s.main && !state.wordArtMode)) { shapeEl.appendChild(shapeSizeHandle); }
+      if (!s.main) { shapeEl.appendChild(shapeRotateHandle); }
+      makeShapeMovable(shapeEl, frame, s, shapeSizeHandle, shapeRotateHandle, { fixed: !!s.main, scaleOnly: !!s.main && state.wordArtMode });
       if (s.wrapMode === 'wrap') {
         // Textumfluss: Form "schwimmt" zur nächstgelegenen Seite, Text
         // soll ihr per shape-outside ausweichen. Wirkt nur bei Text im
@@ -3641,7 +3833,18 @@
     var textTargetBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (state.styleTargetMode === 'text' ? ' active' : ''), title: S.tf_target_text }, [icon('texttargeticon')]);
     var shapeTargetBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (state.styleTargetMode === 'shape' ? ' active' : ''), title: S.tf_target_shape }, [icon('frameicon')]);
     textTargetBtn.addEventListener('click', function () { state.styleTargetMode = 'text'; render(); });
-    shapeTargetBtn.addEventListener('click', function () { state.styleTargetMode = 'shape'; render(); });
+    shapeTargetBtn.addEventListener('click', function () {
+      state.styleTargetMode = 'shape';
+      // Noch keine Form ausgewählt: automatisch die Hauptform (bzw. die
+      // einzige Form, sonst die Karte) - damit die Form im Farbenwähler
+      // direkt wählbar ist, auch wenn sie hinter dem Text liegt.
+      var hasSel = state.activeShapeId === '__card__' || tf.shapes.some(function (s2) { return s2.id === state.activeShapeId; });
+      if (!hasSel) {
+        var ms = mainShapeOf(tf) || tf.shapes[0];
+        state.activeShapeId = ms ? ms.id : '__card__';
+      }
+      render();
+    });
     targetGroup.appendChild(textTargetBtn); targetGroup.appendChild(shapeTargetBtn);
     combinedRow.appendChild(targetGroup);
 
@@ -3928,7 +4131,7 @@
             applyShapeOrTextChange();
           });
           gradientBarRow.appendChild(band);
-          var angleKnob = el('div', { class: 'ic-gradient-angle', style: '--angle:' + angle + 'deg', title: S.tf_gradient_angle });
+          var angleKnob = el('div', { class: 'ic-gradient-angle', style: '--angle:' + angle + 'deg;' + (styleTarget.fillGradientType === 'radial' ? 'display:none;' : ''), title: S.tf_gradient_angle });
           var angleDragging = false;
           function angleFromEvent(ev) {
             var rect = angleKnob.getBoundingClientRect();
@@ -3951,6 +4154,16 @@
           window.addEventListener('mouseup', function () { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } });
           window.addEventListener('touchend', function () { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } });
           gradientBarRow.appendChild(angleKnob);
+          // Kleiner Umschalter linear <-> radial (Verlauf von der Mitte aus).
+          var radialBtn = el('button', {
+            class: 'ic-gradient-radial-btn' + (styleTarget.fillGradientType === 'radial' ? ' active' : ''),
+            title: S.tf_gradient_radial, type: 'button'
+          });
+          radialBtn.addEventListener('click', function () {
+            styleTarget.fillGradientType = styleTarget.fillGradientType === 'radial' ? null : 'radial';
+            if (isShapeTarget) { render(); } else { applyStyle1(); refreshControls(); }
+          });
+          gradientBarRow.appendChild(radialBtn);
 
           var stopSel = stops.filter(function (s2) { return s2.sid === state.gradientStopSid; })[0] || stops[0];
           if (stopSel) {
@@ -4430,7 +4643,8 @@
   // bei jeder Ziehbewegung ein komplettes Neu-Rendern auslöste) - die
   // Auswahl entscheidet sich jetzt selbst anhand der Bewegungsdistanz
   // im selben Handler.
-  function makeShapeMovable(el2, frame, s, sizeHandle, rotateHandle) {
+  function makeShapeMovable(el2, frame, s, sizeHandle, rotateHandle, mopts) {
+    mopts = mopts || {};
     var dragging = false, startX = 0, startY = 0, totalDelta = 0;
     function point(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
     function down(ev) {
@@ -4443,7 +4657,7 @@
       if (!dragging) { return; }
       var p = point(ev);
       totalDelta += Math.abs(p.x - startX) + Math.abs(p.y - startY);
-      if (totalDelta < 6) { return; }
+      if (totalDelta < 6 || mopts.fixed) { return; }
       var rect = frame.getBoundingClientRect();
       s.x = Math.max(0.02, Math.min(0.98, (p.x - rect.left) / rect.width));
       s.y = Math.max(0.02, Math.min(0.98, (p.y - rect.top) / rect.height));
@@ -4453,9 +4667,11 @@
     function up(ev) {
       if (!dragging) { return; }
       dragging = false;
-      if (totalDelta < 6) {
-        // Kaum/keine Bewegung: als Auswahl-Klick werten statt als Zug.
+      if (totalDelta < 6 || mopts.fixed) {
+        // Kaum/keine Bewegung: als Auswahl-Klick werten statt als Zug -
+        // Farben/Kontur wirken dann direkt auf diese Form.
         state.activeShapeId = s.id;
+        state.styleTargetMode = 'shape';
       }
       render();
     }
@@ -4468,9 +4684,10 @@
 
     // Größen-Griff: Breite und Höhe unabhängig (Form lässt sich z.B. breit
     // um ein Wort legen), mit gedrückter Umschalttaste proportional.
-    var sDragging = false, sStartX = 0, sStartY = 0, sStartW = 0, sStartH = 0;
+    var sDragging = false, sStartX = 0, sStartY = 0, sStartW = 0, sStartH = 0, sStartScale = 1;
     function sDown(ev) {
       sDragging = true;
+      sStartScale = s.fitScale || 1;
       var p0 = point(ev); sStartX = p0.x; sStartY = p0.y;
       sStartW = el2.offsetWidth; sStartH = el2.offsetHeight;
       ev.stopPropagation(); ev.preventDefault();
@@ -4481,7 +4698,14 @@
       var k = frame.offsetWidth ? frame.getBoundingClientRect().width / frame.offsetWidth : 1;
       var dx = (p1.x - sStartX) / k * 2, dy = (p1.y - sStartY) / k * 2;
       var w = Math.max(12, sStartW + dx), h = Math.max(12, sStartH + dy);
-      if (ev.shiftKey) { var f = Math.max(w / sStartW, h / sStartH); w = sStartW * f; h = sStartH * f; }
+      if (ev.shiftKey || mopts.scaleOnly) { var f = Math.max(w / sStartW, h / sStartH); w = sStartW * f; h = sStartH * f; }
+      if (mopts.scaleOnly) {
+        // An den Text gebundene Hauptform: nur der Abstand zum Text ändert sich.
+        s.fitScale = Math.max(0.6, Math.min(3, sStartScale * (w / sStartW)));
+        el2.style.width = w + 'px'; el2.style.height = h + 'px';
+        ev.preventDefault();
+        return;
+      }
       var minSide = Math.min(frame.offsetWidth, frame.offsetHeight) || 1;
       s.size = Math.max(0.05, Math.min(3, h / minSide));
       s.aspect = Math.max(0.1, Math.min(10, w / h));

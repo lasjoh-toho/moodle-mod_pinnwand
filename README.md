@@ -1670,6 +1670,33 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Schließen verlässt es wieder. Nach einer Größenänderung (Vollbild
   an/aus) wird die aktuelle Station neu eingepasst.
 
+### Einhundertdreiundvierzigste Überarbeitung — Text passt immer auf den Zettel, Hauptform, radialer Verlauf
+
+- Zettel-Text sprengt den Rahmen nicht mehr: ist er zu lang, wird die
+  Schrift automatisch so weit verkleinert, dass er vollständig
+  draufpasst - auf der Pinnwand, in "Meine Dateien", in der
+  Klassenübersicht, in der Präsentation, im Editor und im gespeicherten
+  Bild gleich.
+- Hauptform: Die erste Form eines Zettels ist jetzt die Form der Karte
+  selbst (z.B. Sprechblase, Stern, Kreis) und übernimmt deren Farbe; der
+  Text nutzt ihren Innenbereich und passt sich hinein - statt einer Form,
+  die hinter dem Text im rechteckigen Rahmen liegt. Bei WordArt ist die
+  Hauptform an den Text gebunden: sie liegt immer passend hinter und um
+  ihn herum, auch wenn der Text geändert wird; einstellbar ist nur der
+  Abstand. Das mühsame Ausrichten entfällt.
+- Der Formen-Knopf heißt "Form wählen" und, sobald eine Form da bzw.
+  ausgewählt ist, "Form ändern" (Typ wechseln, Farben bleiben; "Keine
+  Form" entfernt sie). Der kleine "+"-Knopf daneben fügt bei Bedarf eine
+  weitere, frei platzierbare Form hinzu.
+- Farben: Ein Klick auf eine Form (oder den Form-Ziel-Knopf) schaltet den
+  Farbwähler auf diese Form um - vorher ließ sich die Form dort nicht
+  wählen. Formen mit Farbverlauf waren außerdem unsichtbar (Fehler beim
+  Zusammensetzen des Bildes) - behoben.
+- Neuer kleiner Knopf neben dem Verlauf: radialer Verlauf (von der Mitte
+  nach außen) für Text, Karte und Formen.
+- Zettel werden jetzt wie WordArt als exakte Pinnwand-Darstellung
+  gespeichert (gleiche Zeilenumbrüche im gespeicherten Bild).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

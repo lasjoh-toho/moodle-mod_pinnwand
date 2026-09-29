@@ -1317,3 +1317,14 @@ input.ic-stepper-value {
 .ic-export-option { display: flex; align-items: center; gap: 10px; padding: 6px 4px; cursor: pointer; font-size: .9rem; }
 .ic-export-option input { width: 18px; height: 18px; flex: 0 0 auto; margin: 0; }
 .ic-export-go { display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; flex: 0 0 auto; }
+
+/* Umschalter linearer/radialer Verlauf neben dem Richtungsknopf. */
+.ic-gradient-radial-btn {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 2px solid rgba(255,255,255,.25);
+  background: radial-gradient(circle at 50% 50%, #fff 0%, #9aa3b5 45%, #2b2d33 100%);
+}
+.ic-gradient-radial-btn.active { border-color: var(--ic-accent); box-shadow: 0 0 0 2px rgba(79,140,255,.35); }
+.ic-shape-picker-row { flex-wrap: nowrap; }
+.ic-shape-picker-row .ic-shape-picker-btn { flex: 1 1 auto; width: auto; }
+.ic-shape-picker-row .ic-mini-btn { font-size: 1.1rem; font-weight: 700; }

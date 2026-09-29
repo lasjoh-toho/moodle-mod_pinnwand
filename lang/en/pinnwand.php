@@ -390,3 +390,7 @@ $string['present_pen_size'] = 'Stroke width';
 $string['present_pen_clear'] = 'Clear what was written during the presentation';
 $string['present_show'] = 'Show';
 $string['present_hide'] = 'Hide';
+$string['tf_change_shape'] = 'Change shape';
+$string['tf_pick_shape'] = 'Choose shape';
+$string['tf_shape_padding'] = 'Distance between shape and text';
+$string['tf_gradient_radial'] = 'Radial gradient (from the centre outwards)';

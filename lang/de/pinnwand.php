@@ -390,3 +390,7 @@ $string['present_pen_size'] = 'Strichstärke';
 $string['present_pen_clear'] = 'In der Präsentation Geschriebenes löschen';
 $string['present_show'] = 'Einblenden';
 $string['present_hide'] = 'Ausblenden';
+$string['tf_change_shape'] = 'Form ändern';
+$string['tf_pick_shape'] = 'Form wählen';
+$string['tf_shape_padding'] = 'Abstand der Form zum Text';
+$string['tf_gradient_radial'] = 'Radialer Verlauf (von der Mitte nach außen)';

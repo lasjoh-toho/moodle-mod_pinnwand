@@ -4072,3 +4072,34 @@ pinnwand_photos.annotationdata, Zeichnung auf einem Objekt, wandert mit).
   `labels`.
 
 Shipped als Version `2026083140` / `0.142.0`.
+
+## Phase 136
+
+Nutzer-Feedback: Zettel-Text sprengt manchmal den Rahmen (auch in Meine
+Dateien) -> schrumpfen; Formen auf Zetteln liegen dysfunktional hinter dem
+Text, der Text sollte die Form als Rahmen nutzen; bei WordArt Text und
+Form schwer in Deckung zu bringen; meist nur eine Form -> Hauptknopf wird
+"Form ändern"; Form im Farbwähler nicht wählbar; radialer Verlauf.
+
+- `fitTextSize(t, box, fontCss)`: unsichtbare Messung (scrollHeight/
+  Width), Binärsuche <= t.size, gecacht - Live-DOM (Zettel-Haupttext),
+  Editor-Anzeige.
+- Hauptform `s.main` (erste Form): `resolveShapeGeom()` - Zettel: volle
+  Karte; WordArt: aus `measureTextObjectBounds()` (Live-DOM ohne Formen,
+  gecacht) / Innenbereich x `fitScale`. `SHAPE_SAFE`/`shapeSafeBox()`
+  Innenbereiche je Form, `primaryTextBox()` Textbereich des Zettels.
+  Zettel mit Hauptform: kein rechteckiger Kartenhintergrund/-schatten,
+  Schatten als drop-shadow auf der Form. Editor: Hauptform nicht
+  verschiebbar, bei WordArt skaliert der Griff `fitScale`.
+- Picker: "Form wählen"/"Form ändern" (Ziel = ausgewählte Form bzw.
+  Hauptform, "Keine" entfernt), "+" für zusätzliche freie Formen.
+- Farbziel: Formklick/`selectText` schalten `styleTargetMode` um,
+  Form-Ziel-Knopf wählt automatisch Hauptform/erste Form.
+- `cssGradientFor()`/`svgGradientTag()` (linear|radial via
+  `fillGradientType`) an allen sechs Verlaufsstellen; Radial-Knopf.
+- Fix: `fgShapeSvgDataUri` kodiert ( ) ' - `url(#grad)` beendete vorher
+  das CSS-url() (Verlaufsformen unsichtbar).
+- `buildTextFrameSVG`: auch Zettel über das serialisierte Live-DOM
+  (außer Textumfluss).
+
+Shipped als Version `2026083141` / `0.143.0`.
