@@ -1652,6 +1652,24 @@ Details und Scoping-Entscheidungen. In Kurzform:
   doppelter Auflösung gezeichnet. In der Präsentation im Modul erscheinen
   Objekt-Annotationen jetzt ebenfalls (vorher fehlten sie dort).
 
+### Einhundertzweiundvierzigste Überarbeitung — Stift in der Präsentation, Vollbild beim Start
+
+- Statt der Augen-Schalter oben links sitzt in der Präsentation (im Modul
+  und in der exportierten Datei) unten links ein Stift - an derselben
+  Stelle wie auf der Pinnwand. Im Ruhezustand ist er kaum sichtbar und
+  ohne Weichzeichner, bei Hover bzw. wenn aktiv deutlich.
+- Der Stift öffnet ein kleines Werkzeugfeld: zeichnen, Text schreiben
+  (Klick auf die Stelle, Enter), radieren, sechs Farben, Strichstärke,
+  alles Geschriebene löschen. Das Geschriebene zoomt mit der Pinnwand mit,
+  wird aber nicht gespeichert (flüchtige Präsentationsebene). Während der
+  Stift aktiv ist, sind die Klickzonen am Rand aus; Pfeiltasten und Knöpfe
+  navigieren weiter.
+- Im selben Feld lassen sich "Notizen" (Stift-Werkzeug der Pinnwand) und
+  "Annotationen" (Zeichnungen auf einzelnen Objekten) ein- und ausblenden.
+- Der Play-Knopf startet die Präsentation gleichzeitig im Vollbild;
+  Schließen verlässt es wieder. Nach einer Größenänderung (Vollbild
+  an/aus) wird die aktuelle Station neu eingepasst.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

@@ -81,20 +81,40 @@
     '.pwp-navzone{position:fixed;top:0;bottom:0;width:16%;z-index:15;cursor:pointer;background:transparent;',
     'border:none;margin:0;padding:0;box-shadow:none;outline:none;}',
     '.pwp-navzone.pwp-prev{left:0;}.pwp-navzone.pwp-next{right:0;}',
-    /* Ein-/Ausblenden von Ebenen (Notizen auf der Pinnwand, Annotationen auf
-       Objekten) - wie der Augen-Knopf im Modul; oben links. */
-    '.pwp-toggles{position:fixed;top:16px;left:16px;z-index:20;display:flex;gap:8px;}',
-    '.pwp-toggle{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:17px;border:none;margin:0;',
-    'background:rgba(255,255,255,.08);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;font:inherit;font-size:.8rem;',
-    'text-shadow:0 1px 3px rgba(0,0,0,.85),0 0 8px rgba(0,0,0,.5);cursor:pointer;transition:background .15s ease,opacity .15s ease;}',
-    '.pwp-toggle:hover{background:rgba(255,255,255,.18);}',
-    '.pwp-toggle svg{width:16px;height:16px;display:block;}',
-    '.pwp-toggle.pwp-off{opacity:.55;}',
+    /* Stift unten links: im Ruhezustand sehr transparent und ohne
+       Weichzeichner, bei Hover/aktiv deutlich. */
+    '.pwp-pen{position:fixed;left:18px;bottom:18px;z-index:22;width:46px;height:46px;border-radius:50%;border:none;margin:0;padding:0;',
+    'display:flex;align-items:center;justify-content:center;background:transparent;color:#fff;opacity:.2;cursor:pointer;',
+    'filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));transition:opacity .15s ease,background .15s ease;}',
+    '.pwp-pen:hover,.pwp-pen.pwp-on{opacity:1;background:rgba(20,21,24,.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}',
+    '.pwp-pen.pwp-on{box-shadow:0 0 0 2px #4f8cff;}',
+    '.pwp-pen svg{width:22px;height:22px;display:block;}',
+    '.pwp-pen-panel{position:fixed;left:18px;bottom:74px;z-index:22;display:none;flex-direction:column;gap:6px;padding:8px;border-radius:12px;',
+    'background:rgba(20,21,24,.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 6px 20px rgba(0,0,0,.45);}',
+    '.pwp-pen-panel.pwp-visible{display:flex;}',
+    '.pwp-pen-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;max-width:260px;}',
+    '.pwp-pen-tool{width:32px;height:32px;border-radius:8px;border:none;margin:0;padding:0;background:rgba(255,255,255,.08);color:#fff;',
+    'display:flex;align-items:center;justify-content:center;cursor:pointer;}',
+    '.pwp-pen-tool svg{width:18px;height:18px;display:block;}',
+    '.pwp-pen-tool:hover{background:rgba(255,255,255,.18);}',
+    '.pwp-pen-tool.pwp-on{background:#4f8cff;}',
+    '.pwp-pen-size{width:80px;margin:0 2px;}',
+    '.pwp-pen-color{width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,.3);margin:0;padding:0;cursor:pointer;}',
+    '.pwp-pen-color.pwp-on{border-color:#fff;box-shadow:0 0 0 2px #4f8cff;}',
+    '.pwp-pen-chip{height:28px;padding:0 10px;border-radius:14px;border:none;margin:0;font:inherit;font-size:.78rem;cursor:pointer;',
+    'background:rgba(255,255,255,.08);color:rgba(255,255,255,.55);}',
+    '.pwp-pen-chip.pwp-on{background:rgba(79,140,255,.35);color:#fff;}',
+    '.pwp-pen-input{position:fixed;z-index:23;transform:translateY(-2px);min-width:120px;background:rgba(0,0,0,.25);border:1px dashed rgba(255,255,255,.6);',
+    'border-radius:4px;padding:0 4px;outline:none;font-family:sans-serif;}',
+    '.pwp-drawing .pwp-navzone{display:none;}',
+    '.pwp-drawing .pwp-stage{cursor:crosshair;}',
     '.pwp-layer-overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;}'
   ].join('');
 
-  var EYE_ON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-  var EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><path d="M3 3l18 18"/></svg>';
+  var SVG_PEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
+  var SVG_TEXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5h14M12 5v14M9 19h6"/></svg>';
+  var SVG_ERASER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H9L3.5 14.5a2 2 0 0 1 0-2.8l8.2-8.2a2 2 0 0 1 2.8 0l5.5 5.5a2 2 0 0 1 0 2.8L13 19"/><path d="M8 10l6 6"/></svg>';
+  var SVG_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>';
 
   // Zeichnet Stylus-Striche/-Texte (0..1-normalisierte Koordinaten,
   // Strichbreite relativ zur Höhe) auf einen Canvas - EINE Umsetzung für
@@ -197,7 +217,15 @@
       hint: labels.hint || '← → oder Leertaste zum Navigieren, Klick außerhalb zum Verschieben, Mausrad zum Zoomen',
       empty: labels.empty || 'Kein Roter Faden mit Stationen vorhanden.',
       prev: labels.prev || 'Zurück',
-      next: labels.next || 'Weiter'
+      next: labels.next || 'Weiter',
+      pen: labels.pen || 'Stift',
+      penDraw: labels.penDraw || 'Zeichnen',
+      penText: labels.penText || 'Text schreiben',
+      penErase: labels.penErase || 'Radieren',
+      penSize: labels.penSize || 'Strichstärke',
+      penClear: labels.penClear || 'Eigene Zeichnungen löschen',
+      show: labels.show || 'Einblenden',
+      hide: labels.hide || 'Ausblenden'
     };
     injectCss(document);
     root.classList.add('pwp-root');
@@ -226,29 +254,163 @@
     root.appendChild(zonePrev);
     root.appendChild(zoneNext);
 
-    // Ein-/Ausblenden-Schalter (z.B. Notizen/Annotationen) - wirken auf alle
-    // Elemente mit der Klasse pwp-layer-<key>, auch wenn diese erst später
-    // (nach start()) eingefügt werden.
+    // ---------------------------------------------------------------
+    // Stift unten links (dieselbe Stelle wie das Stift-Werkzeug auf der
+    // Pinnwand): im Ruhezustand kaum sichtbar, bei Hover/aktiv deutlich.
+    // Öffnet ein kleines Werkzeugfeld zum Schreiben/Zeichnen während der
+    // Präsentation (Stift, Text, Radierer, Farben, Stärke, alles löschen)
+    // sowie Schalter zum Ein-/Ausblenden der Notizen (Stift-Werkzeug der
+    // Pinnwand) und Annotationen (Zeichnungen auf einzelnen Objekten).
+    // Das hier Geschriebene ist eine flüchtige Präsentationsebene - es wird
+    // nicht gespeichert.
+    // ---------------------------------------------------------------
+    var BW = opts.boardW || 1400, BH = opts.boardH || 1000;
+    var PEN_COLORS = ['#ef4444', '#111111', '#2563eb', '#22c55e', '#facc15', '#ffffff'];
     var hidden = {};
+    var layers = [];
     function applyToggle(key) {
       var els = root.querySelectorAll('.pwp-layer-' + key);
       for (var i = 0; i < els.length; i++) { els[i].style.display = hidden[key] ? 'none' : ''; }
     }
-    var toggleBar = null;
-    function addToggle(key, label) {
-      if (!toggleBar) { toggleBar = div('pwp-toggles'); root.appendChild(toggleBar); }
-      if (toggleBar.querySelector('[data-key="' + key + '"]')) { return; }
-      var tb = button('pwp-toggle', '', label);
-      tb.setAttribute('data-key', key);
-      tb.title = label;
-      function paint() {
-        tb.innerHTML = (hidden[key] ? EYE_OFF : EYE_ON) + '<span></span>';
-        tb.lastChild.textContent = label;
-        tb.classList.toggle('pwp-off', !!hidden[key]);
+    var pen = { on: false, tool: 'pen', color: PEN_COLORS[0], px: 4, strokes: [] };
+    var drawCanvas = null;
+    function ensureDrawCanvas() {
+      if (!drawCanvas) { drawCanvas = inkLayer([], BW, BH, 'draw', 700); canvas.appendChild(drawCanvas); }
+    }
+    function redrawPen() { ensureDrawCanvas(); drawInk(drawCanvas, drawCanvas.getContext('2d'), pen.strokes); }
+
+    var penBtn = button('pwp-pen', '', L.pen);
+    penBtn.title = L.pen;
+    penBtn.innerHTML = SVG_PEN;
+    var penPanel = div('pwp-pen-panel');
+    function toolBtn(tool, svg, title) {
+      var b = button('pwp-pen-tool' + (pen.tool === tool ? ' pwp-on' : ''), '', title);
+      b.title = title;
+      b.innerHTML = svg;
+      b.addEventListener('click', function () { pen.tool = pen.tool === tool ? null : tool; renderPenPanel(); });
+      return b;
+    }
+    function renderPenPanel() {
+      penPanel.innerHTML = '';
+      var row1 = div('pwp-pen-row');
+      row1.appendChild(toolBtn('pen', SVG_PEN, L.penDraw));
+      row1.appendChild(toolBtn('text', SVG_TEXT, L.penText));
+      row1.appendChild(toolBtn('eraser', SVG_ERASER, L.penErase));
+      var size = document.createElement('input');
+      size.type = 'range'; size.min = '2'; size.max = '16'; size.step = '1'; size.value = String(pen.px);
+      size.className = 'pwp-pen-size'; size.title = L.penSize;
+      size.addEventListener('input', function () { pen.px = parseInt(size.value, 10) || 4; });
+      row1.appendChild(size);
+      var clr = button('pwp-pen-tool', '', L.penClear);
+      clr.title = L.penClear;
+      clr.innerHTML = SVG_TRASH;
+      clr.addEventListener('click', function () { pen.strokes = []; redrawPen(); });
+      row1.appendChild(clr);
+      penPanel.appendChild(row1);
+      var row2 = div('pwp-pen-row');
+      PEN_COLORS.forEach(function (c) {
+        var sw = button('pwp-pen-color' + (pen.color === c ? ' pwp-on' : ''), '', c);
+        sw.style.background = c;
+        sw.addEventListener('click', function () {
+          pen.color = c;
+          if (pen.tool !== 'pen' && pen.tool !== 'text') { pen.tool = 'pen'; }
+          renderPenPanel();
+        });
+        row2.appendChild(sw);
+      });
+      penPanel.appendChild(row2);
+      if (layers.length) {
+        var row3 = div('pwp-pen-row');
+        layers.forEach(function (ly) {
+          var chip = button('pwp-pen-chip' + (hidden[ly.key] ? '' : ' pwp-on'), '', ly.label);
+          chip.textContent = (hidden[ly.key] ? '○ ' : '● ') + ly.label;
+          chip.title = hidden[ly.key] ? L.show + ': ' + ly.label : L.hide + ': ' + ly.label;
+          chip.addEventListener('click', function () { hidden[ly.key] = !hidden[ly.key]; applyToggle(ly.key); renderPenPanel(); });
+          row3.appendChild(chip);
+        });
+        penPanel.appendChild(row3);
       }
-      tb.addEventListener('click', function () { hidden[key] = !hidden[key]; paint(); applyToggle(key); });
-      paint();
-      toggleBar.appendChild(tb);
+    }
+    function setPenOn(on) {
+      pen.on = on;
+      if (on && !pen.tool) { pen.tool = 'pen'; }
+      penBtn.classList.toggle('pwp-on', on);
+      penPanel.classList.toggle('pwp-visible', on);
+      root.classList.toggle('pwp-drawing', on);
+      renderPenPanel();
+    }
+    penBtn.addEventListener('click', function () { setPenOn(!pen.on); });
+    root.appendChild(penPanel);
+    root.appendChild(penBtn);
+    renderPenPanel();
+    function drawingActive() { return pen.on && !!pen.tool; }
+
+    // Bildschirm- -> Board-Koordinaten (Umkehrung der Kamera, siehe applyTransform).
+    function toBoard(clientX, clientY) {
+      var t = currentTransform;
+      var rad = (t.rot || 0) * Math.PI / 180, cos = Math.cos(rad), sin = Math.sin(rad);
+      var dx = clientX - window.innerWidth / 2, dy = clientY - window.innerHeight / 2;
+      return { x: t.cx + (dx * cos + dy * sin) / t.scale, y: t.cy + (-dx * sin + dy * cos) / t.scale };
+    }
+    var penStroke = null;
+    stage.addEventListener('pointerdown', function (ev) {
+      if (!drawingActive() || !currentTransform) { return; }
+      ev.preventDefault();
+      if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
+      var b = toBoard(ev.clientX, ev.clientY);
+      if (pen.tool === 'text') { openTextInput(ev.clientX, ev.clientY, b); return; }
+      var widthBoard = (pen.tool === 'eraser' ? pen.px * 4 : pen.px) / currentTransform.scale;
+      penStroke = { points: [{ x: b.x / BW, y: b.y / BH }], color: pen.color, width: widthBoard / BH, erase: pen.tool === 'eraser' };
+      pen.strokes.push(penStroke);
+      redrawPen();
+    });
+    function onPenMove(ev) {
+      if (!penStroke) { return; }
+      var b = toBoard(ev.clientX, ev.clientY);
+      penStroke.points.push({ x: b.x / BW, y: b.y / BH });
+      redrawPen();
+    }
+    function onPenUp() { penStroke = null; }
+    window.addEventListener('pointermove', onPenMove);
+    window.addEventListener('pointerup', onPenUp);
+    function openTextInput(clientX, clientY, b) {
+      var fontScreen = 12 + pen.px * 2;
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'pwp-pen-input';
+      inp.style.left = clientX + 'px';
+      inp.style.top = clientY + 'px';
+      inp.style.fontSize = fontScreen + 'px';
+      inp.style.color = pen.color;
+      root.appendChild(inp);
+      setTimeout(function () { inp.focus(); }, 0);
+      var done = false;
+      function commit() {
+        if (done) { return; }
+        done = true;
+        var text = inp.value;
+        inp.remove();
+        if (!text) { return; }
+        // Gleiches Textformat wie die Notizen der Pinnwand (drawInk).
+        var boardFont = fontScreen / currentTransform.scale;
+        pen.strokes.push({ type: 'text', text: text, x: b.x / BW, y: b.y / BH, color: pen.color, size: boardFont / (BH / 900 * 1.6) });
+        redrawPen();
+      }
+      inp.addEventListener('keydown', function (ev) {
+        ev.stopPropagation();
+        if (ev.key === 'Enter') { commit(); }
+        else if (ev.key === 'Escape') { done = true; inp.remove(); }
+      });
+      inp.addEventListener('blur', commit);
+    }
+
+    // Ebene (z.B. Notizen/Annotationen) zum Ein-/Ausblenden im Stift-Feld
+    // anmelden - nur, wenn es davon tatsächlich etwas gibt.
+    function addToggle(key, label) {
+      if (layers.some(function (l) { return l.key === key; })) { return; }
+      layers.push({ key: key, label: label });
+      layers.sort(function (a, b) { return a.key < b.key ? -1 : 1; });
+      renderPenPanel();
     }
     (opts.toggles || []).forEach(function (t) { addToggle(t.key, t.label); });
 
@@ -406,7 +568,7 @@
     }
     var dragging = false, dragStartX = 0, dragStartY = 0, dragStartCx = 0, dragStartCy = 0;
     stage.addEventListener('pointerdown', function (ev) {
-      if (!currentTransform) { return; }
+      if (!currentTransform || drawingActive()) { return; }
       if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
       dragging = true; stage.classList.add('pwp-dragging');
       dragStartX = ev.clientX; dragStartY = ev.clientY;
@@ -450,6 +612,15 @@
       zoomAt(pinchScale * ((touchDist(ev.touches) || 1) / pinchDist), pinchMidX, pinchMidY);
     }, { passive: false });
 
+    // Fenstergröße geändert (z.B. Vollbild an/aus): aktuelle Station neu
+    // einpassen, sonst läge sie außermittig bzw. im falschen Maßstab.
+    var resizeTimer = null;
+    function onResize() {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () { if (steps.length) { goToStep(idx, true); } }, 60);
+    }
+    window.addEventListener('resize', onResize);
+
     function start(newSteps, newOccludables, startIndex) {
       steps = newSteps || [];
       occludables = newOccludables || [];
@@ -483,6 +654,9 @@
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointermove', onPenMove);
+      window.removeEventListener('pointerup', onPenUp);
+      window.removeEventListener('resize', onResize);
       if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
       if (hintTimer) { clearTimeout(hintTimer); }
     }

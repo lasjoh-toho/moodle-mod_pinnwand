@@ -7135,6 +7135,17 @@
   function openPresentation(thread, startIndex) {
     if (window.innerWidth < 900) { alert(S.present_smallscreen); return false; }
     if (!window.PinnwandPresentation) { return false; }
+    // Start über den Play-Knopf (ganze Präsentation, kein Direkt-Sprung zu
+    // einem Objekt): gleichzeitig in den Vollbildmodus - muss noch im
+    // selben Klick passieren, sonst verweigert der Browser das Vollbild.
+    var enteredFullscreen = false;
+    if (typeof startIndex !== 'number' && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+      try {
+        var fsPromise = document.documentElement.requestFullscreen();
+        enteredFullscreen = true;
+        if (fsPromise && fsPromise.catch) { fsPromise.catch(function () { enteredFullscreen = false; }); }
+      } catch (fsErr) { enteredFullscreen = false; }
+    }
     var overlay = el('div', { class: 'ic-present-overlay' });
     // Die gewählte Hintergrundfarbe zusätzlich aufs Overlay selbst legen,
     // damit sie in jedem Fall sichtbar bleibt (z.B. wenn "Füllen" einen
@@ -7145,7 +7156,10 @@
     var player = window.PinnwandPresentation.create(overlay, {
       labels: {
         overview: S.present_overview, frame: S.present_frame, hint: S.present_hint,
-        empty: S.present_empty, prev: S.present_prev, next: S.present_next
+        empty: S.present_empty, prev: S.present_prev, next: S.present_next,
+        pen: S.present_pen, penDraw: S.present_pen_draw, penText: S.present_pen_text,
+        penErase: S.present_pen_erase, penSize: S.present_pen_size, penClear: S.present_pen_clear,
+        show: S.present_show, hide: S.present_hide
       },
       onEscape: function () { closeBtn.click(); }
     });
@@ -7162,9 +7176,11 @@
     if (thread.bgmoves) {
       canvasEl.appendChild(bgLayer);
     } else {
+      // Bildschirmfüllend relativ zur Bühne (nicht in festen Pixeln), damit
+      // der Hintergrund auch nach dem Wechsel in den Vollbildmodus passt.
       bgLayer.style.left = '0'; bgLayer.style.top = '0';
-      bgLayer.style.width = window.innerWidth + 'px';
-      bgLayer.style.height = window.innerHeight + 'px';
+      bgLayer.style.width = '100%';
+      bgLayer.style.height = '100%';
       stageEl.insertBefore(bgLayer, canvasEl);
     }
 
@@ -7209,7 +7225,8 @@
         pEl.classList.add('ic-present-addable');
         pEl.title = S.stream_pin_hint;
         pEl.addEventListener('click', function () {
-          if (inThreadIds[p.id]) { return; }
+          // Während mit dem Stift geschrieben wird, kein Anhängen an den Faden.
+          if (inThreadIds[p.id] || overlay.classList.contains('pwp-drawing')) { return; }
           callAjax('mod_pinnwand_add_thread_item', {
             cmid: cfg.cmid, itemtype: 'photo', photoid: p.id, boardid: firstBoardId
           }).then(function (res) {
@@ -7310,6 +7327,9 @@
     closeBtn.addEventListener('click', function () {
       player.destroy();
       overlay.remove();
+      if (enteredFullscreen && document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(function () { /* bereits verlassen */ });
+      }
     });
     overlay.appendChild(closeBtn);
     document.body.appendChild(overlay);

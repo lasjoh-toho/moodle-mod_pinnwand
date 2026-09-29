@@ -4048,3 +4048,27 @@ Export zeigen Notizen/Annotationen deckungsgleich, Schalter blenden aus,
 Dialog erzeugt die richtige URL (`&annot=1&ink=0`), Navigation unverändert.
 
 Shipped als Version `2026083139` / `0.141.0`.
+
+## Phase 135
+
+Nutzer-Feedback: statt Augen-Symbol ein Stift unten links (wie auf der
+Pinnwand), im Ruhezustand sehr transparent ohne Blur, bei Hover/aktiv
+deutlich; damit auch in der Präsentation schreiben können; Play-Knopf
+startet im Vollbild. Frage "Unterschied Notizen/Annotationen" beantwortet
+(Notizen = pinnwand_board_ink, Stift direkt auf dem Board; Annotationen =
+pinnwand_photos.annotationdata, Zeichnung auf einem Objekt, wandert mit).
+
+- presentation-player.js: Toggle-Leiste entfernt, stattdessen
+  `.pwp-pen` + `.pwp-pen-panel` (Werkzeuge pen/text/eraser, Farben,
+  Stärke in Bildschirm-Pixeln -> Board-Einheiten über den aktuellen
+  Kamera-Maßstab, Löschen, Ebenen-Chips aus `addToggle`). Zeichnungen in
+  einer eigenen Board-Ebene `pwp-layer-draw` (z 700) im Ink-Format
+  (drawInk), nicht persistiert. `pwp-drawing` am Root schaltet Klickzonen
+  aus, Pan pausiert. Resize-Handler passt die aktuelle Station neu ein.
+- app.js openPresentation: Vollbild bei Start ohne startIndex (Play),
+  Verlassen beim Schließen; Hintergrund-Ebene 100 % statt fester px;
+  kein Anhängen an den Faden per Klick, solange gezeichnet wird.
+- Export: Hintergrund 100 %, alle Beschriftungen per get_string in
+  `labels`.
+
+Shipped als Version `2026083140` / `0.142.0`.

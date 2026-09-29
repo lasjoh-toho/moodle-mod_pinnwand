@@ -298,6 +298,20 @@ $exportdata = [
     'labels' => [
         'ink' => get_string('present_toggle_ink', 'pinnwand'),
         'annot' => get_string('present_toggle_annot', 'pinnwand'),
+        'pen' => get_string('present_pen', 'pinnwand'),
+        'penDraw' => get_string('present_pen_draw', 'pinnwand'),
+        'penText' => get_string('present_pen_text', 'pinnwand'),
+        'penErase' => get_string('present_pen_erase', 'pinnwand'),
+        'penSize' => get_string('present_pen_size', 'pinnwand'),
+        'penClear' => get_string('present_pen_clear', 'pinnwand'),
+        'show' => get_string('present_show', 'pinnwand'),
+        'hide' => get_string('present_hide', 'pinnwand'),
+        'hint' => get_string('present_hint', 'pinnwand'),
+        'prev' => get_string('present_prev', 'pinnwand'),
+        'next' => get_string('present_next', 'pinnwand'),
+        'overview' => get_string('present_overview', 'pinnwand'),
+        'frame' => get_string('present_frame', 'pinnwand'),
+        'empty' => get_string('present_empty', 'pinnwand'),
     ],
 ];
 
@@ -371,7 +385,7 @@ function pinnwand_export_build_html($title, $json) {
   // Rand je Seite beim Heranzoomen an eine Station - identisch mit
   // PRESENT_STEP_MARGIN in app.js (Live-Präsentation).
   var STEP_MARGIN = 0.05;
-  var player = PinnwandPresentation.create(document.getElementById('player'), {});
+  var player = PinnwandPresentation.create(document.getElementById('player'), { labels: data.labels || {} });
   var stage = player.stage;
   var canvas = player.canvas;
 
@@ -404,8 +418,8 @@ function pinnwand_export_build_html($title, $json) {
     canvas.appendChild(bgEl);
   } else {
     bgEl.style.left = '0'; bgEl.style.top = '0';
-    bgEl.style.width = window.innerWidth + 'px';
-    bgEl.style.height = window.innerHeight + 'px';
+    bgEl.style.width = '100%';
+    bgEl.style.height = '100%';
     stage.insertBefore(bgEl, canvas);
   }
 
