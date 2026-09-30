@@ -406,7 +406,10 @@
 .ic-board-ink-layer {
   position: absolute; left: 0; top: 0; width: 1400px; height: 1000px; z-index: 500; pointer-events: none;
 }
-.ic-board-ink-layer.active { pointer-events: auto; touch-action: none; cursor: crosshair; }
+/* Zeichenmodus: Erfassungsfläche über dem ganzen sichtbaren Bereich (auch
+   neben der Leinwand), unterhalb der Bedienknöpfe (z-index 15/30). */
+.ic-board-ink-capture { position: absolute; inset: 0; z-index: 10; touch-action: none; cursor: crosshair; }
+svg.ic-board-ink-layer { overflow: visible; }
 .ic-hidden { display: none !important; }
 .ic-board-ink-layer.ic-hidden { display: none; }
 .ic-board-full-hint {

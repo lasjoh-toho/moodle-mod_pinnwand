@@ -1697,6 +1697,22 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Zettel werden jetzt wie WordArt als exakte Pinnwand-Darstellung
   gespeichert (gleiche Zeilenumbrüche im gespeicherten Bild).
 
+### Einhundertvierundvierzigste Überarbeitung — Notizen auch außerhalb der Leinwand, Stiftstärke passt sich dem Zoom an
+
+- Das Stift-Werkzeug der Pinnwand ist nicht mehr auf die 1400x1000-
+  Leinwand beschränkt: im Zeichenmodus nimmt der ganze sichtbare Bereich
+  Striche an, auch daneben. Die Notizen werden dafür als SVG statt auf
+  einem festen Canvas gezeichnet - sie dürfen über die Leinwand
+  hinausragen und bleiben beim Heranzoomen scharf.
+- Die Stiftstärke richtet sich nach dem Zoom: der Regler stellt die Dicke
+  auf dem Bildschirm ein, herangezoomt zeichnet der Stift dadurch feiner
+  (für Details), herausgezoomt kräftiger. Der Radierer ist dreimal so
+  breit wie der Stift.
+- Präsentation (Modul und Export): Notizen außerhalb der Leinwand werden
+  angezeigt, der Überblick vergrößert sich so weit, dass sie mit drauf
+  sind. Auch das Schreiben mit dem Stift in der Präsentation ist nicht
+  mehr auf die Leinwand begrenzt.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

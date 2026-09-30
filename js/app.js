@@ -118,7 +118,7 @@
     boardInkStrokes: [],   // Stylus: eigene Striche direkt auf dem Hintergrund des aktuellen Boards
     boardInkBoard: null,   // zu welchem Board boardInkStrokes gerade gehört (löst Neuladen bei Board-Wechsel aus)
     boardDrawColor: null,  // wird beim ersten Öffnen des Stylus-Panels auf INK_COLORS[0] gesetzt
-    boardDrawWidth: 0.01,
+    boardDrawPx: 6,        // Stift-Stärke auf der Pinnwand in Bildschirm-Pixeln (zoomunabhängig)
     boardDrawErase: false,
     boardInkHidden: false, // eigene Stylus-Anmerkungen ausgeblendet (rein visuell, nicht gelöscht)
     threadObjectFilter: 'all',
@@ -5495,37 +5495,52 @@
         render();
       });
     }
-    var inkCanvas = el('canvas', {
-      class: 'ic-board-ink-layer' + (state.boardInkHidden ? ' ic-hidden' : ''), width: String(BOARD_W), height: String(BOARD_H)
-    });
-    canvas.appendChild(inkCanvas);
-    var inkCtx = inkCanvas.getContext('2d');
-    redrawInk(inkCanvas, inkCtx, state.boardInkStrokes || []);
+    // Notizen (Stift-Werkzeug) als SVG-Ebene in Board-Koordinaten: scharf bei
+    // jedem Zoom und nicht auf die 1400x1000-Leinwand begrenzt - Striche
+    // dürfen darüber hinausgehen (normalisierte Koordinaten < 0 bzw. > 1).
+    var inkLayerEl = window.PinnwandPresentation.inkLayer(state.boardInkStrokes || [], BOARD_W, BOARD_H, 'boardink', 500);
+    inkLayerEl.classList.add('ic-board-ink-layer');
+    if (state.boardInkHidden) { inkLayerEl.classList.add('ic-hidden'); }
+    canvas.appendChild(inkLayerEl);
     if (state.boardDrawMode) {
-      inkCanvas.classList.add('active');
+      // Erfassungsfläche über dem GANZEN sichtbaren Bereich (nicht nur der
+      // Leinwand), damit auch daneben geschrieben werden kann. Mausrad-Zoom
+      // funktioniert weiterhin (Ereignis läuft zur Pinnwand durch).
+      var inkCapture = el('div', { class: 'ic-board-ink-capture' });
+      wrap.appendChild(inkCapture);
       var curStroke = null;
       function inkPoint(ev) {
-        var t = ev.touches ? ev.touches[0] : ev;
-        var r = inkCanvas.getBoundingClientRect();
-        return { x: (t.clientX - r.left) / r.width, y: (t.clientY - r.top) / r.height };
+        var r = canvas.getBoundingClientRect();
+        return { x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height };
       }
-      function inkDown(ev) {
+      // Strichstärke in Bildschirm-Pixeln, umgerechnet über den aktuellen
+      // Zoom - dadurch zeichnet der Stift bei jeder Zoomstufe gleich dick
+      // (herangezoomt feiner, herausgezoomt kräftiger im Board-Maßstab).
+      function inkWidthNorm() {
+        var zoom = canvas.getBoundingClientRect().width / BOARD_W || 1;
+        var px = (state.boardDrawPx || 6) * (state.boardDrawErase ? 3 : 1);
+        return px / zoom / BOARD_H;
+      }
+      inkCapture.addEventListener('pointerdown', function (ev) {
+        if (ev.button !== undefined && ev.button !== 0) { return; }
         ev.preventDefault();
+        try { inkCapture.setPointerCapture(ev.pointerId); } catch (e) { /* ältere Browser */ }
         curStroke = {
           id: 's' + Date.now() + Math.random().toString(36).slice(2, 7),
           points: [inkPoint(ev)],
           color: state.boardDrawColor || INK_COLORS[0],
-          width: state.boardDrawWidth || 0.01,
+          width: inkWidthNorm(),
           erase: !!state.boardDrawErase
         };
         state.boardInkStrokes.push(curStroke);
-      }
-      function inkMove(ev) {
+        inkLayerEl.setStrokes(state.boardInkStrokes);
+      });
+      inkCapture.addEventListener('pointermove', function (ev) {
         if (!curStroke) { return; }
         ev.preventDefault();
         curStroke.points.push(inkPoint(ev));
-        redrawInk(inkCanvas, inkCtx, state.boardInkStrokes);
-      }
+        inkLayerEl.setStrokes(state.boardInkStrokes);
+      });
       function inkUp() {
         if (!curStroke) { return; }
         curStroke = null;
@@ -5533,12 +5548,8 @@
           cmid: cfg.cmid, boardid: state.currentBoard, strokes: JSON.stringify(state.boardInkStrokes)
         });
       }
-      inkCanvas.addEventListener('mousedown', inkDown);
-      inkCanvas.addEventListener('touchstart', inkDown, { passive: false });
-      inkCanvas.addEventListener('mousemove', inkMove);
-      inkCanvas.addEventListener('touchmove', inkMove, { passive: false });
-      window.addEventListener('mouseup', inkUp);
-      window.addEventListener('touchend', inkUp);
+      inkCapture.addEventListener('pointerup', inkUp);
+      inkCapture.addEventListener('pointercancel', inkUp);
     }
 
     function applyBoardTransform() {
@@ -6016,7 +6027,7 @@
     }
 
     function isEmptyAreaTarget(target) {
-      return !target.closest('.ic-arrange-item, .ic-thread-frame-onboard, button, input, a, .ic-board-ink-layer.active');
+      return !target.closest('.ic-arrange-item, .ic-thread-frame-onboard, button, input, a, .ic-board-ink-capture');
     }
 
     var longPressTimer = null, longPressStartX = 0, longPressStartY = 0;
@@ -6364,10 +6375,11 @@
       var eraseBtn = el('button', { class: 'ic-icon-btn' + (state.boardDrawErase ? ' active' : ''), title: S.erase }, [icon('eraser')]);
       eraseBtn.addEventListener('click', function () { state.boardDrawErase = !state.boardDrawErase; render(); });
       stylusActionRow.appendChild(eraseBtn);
+      // Stärke in Bildschirm-Pixeln (bei jeder Zoomstufe gleich dick).
       var sizeSlider = el('input', {
-        type: 'range', min: '0.004', max: '0.03', step: '0.002', value: String(state.boardDrawWidth || 0.01), class: 'ic-stylus-size'
+        type: 'range', min: '2', max: '30', step: '1', value: String(state.boardDrawPx || 6), class: 'ic-stylus-size'
       });
-      sizeSlider.addEventListener('input', function () { state.boardDrawWidth = parseFloat(sizeSlider.value); });
+      sizeSlider.addEventListener('input', function () { state.boardDrawPx = parseInt(sizeSlider.value, 10) || 6; });
       stylusActionRow.appendChild(sizeSlider);
       // Ausblenden: blendet die eigenen Anmerkungen aus, ohne sie zu
       // löschen (rein visuell, clientseitig) - ein erneuter Klick blendet
@@ -7484,6 +7496,8 @@
       if (!strokes.length) { return; }
       canvasEl.appendChild(window.PinnwandPresentation.inkLayer(strokes, BOARD_W, BOARD_H, 'ink', 600));
       player.addToggle('ink', S.present_toggle_ink);
+      // Notizen außerhalb der Leinwand: Überblick entsprechend vergrößern.
+      player.includeInOverview(window.PinnwandPresentation.inkBounds(strokes, BOARD_W, BOARD_H));
     });
     if (hasPresentAnnot) { player.addToggle('annot', S.present_toggle_annot); }
 

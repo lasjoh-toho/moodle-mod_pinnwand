@@ -4103,3 +4103,27 @@ Form schwer in Deckung zu bringen; meist nur eine Form -> Hauptknopf wird
   (außer Textumfluss).
 
 Shipped als Version `2026083141` / `0.143.0`.
+
+## Phase 137
+
+Nutzer-Frage: Annotation (Stift-Werkzeug der Pinnwand) nur innerhalb der
+als Leinwand definierten Fläche möglich - Trick zum Erweitern (SVG)?
+Pinselgröße am Zoom orientieren.
+
+- presentation-player.js: `inkLayer()` liefert jetzt ein SVG in
+  Board-Größe mit `overflow:visible` und `setStrokes()` (statt eines
+  Canvas) - Koordinaten < 0 / > 1 bleiben sichtbar, scharf bei jedem
+  Zoom. Radierer als SVG-Maske (wirkt nur auf vorher Gezeichnetes, wie
+  destination-out). `inkBounds()` + `player.includeInOverview()` für den
+  Überblick. `attachInk()` (Objekt-Annotationen) behält ein eigenes Canvas.
+- app.js renderArrange: Board-Notizen über `inkLayer`, im Zeichenmodus
+  `.ic-board-ink-capture` (ganzer sichtbarer Bereich, z-index 10 unter den
+  Bedienknöpfen, Pointer-Events + Capture), Punkte relativ zur Leinwand
+  (dürfen außerhalb liegen). Strichstärke `state.boardDrawPx` in
+  Bildschirm-Pixeln / aktueller Zoom (Radierer x3).
+
+Mit Headless-Chromium verifiziert: Striche außerhalb der Leinwand auf der
+Pinnwand und in der Präsentation sichtbar, Überblick vergrößert sich,
+Stärke bei Zoom 0.6 vs 1.8 im Board-Maßstab exakt 3:1.
+
+Shipped als Version `2026083142` / `0.144.0`.

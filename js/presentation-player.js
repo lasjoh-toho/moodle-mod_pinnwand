@@ -147,26 +147,83 @@
     ctx.globalCompositeOperation = 'source-over';
   }
 
-  // Anmerkungs-Ebene als Canvas über einem Element (Board-Fläche oder
-  // einzelnes Objekt). Doppelte Auflösung, damit Schrift/Striche beim
-  // Heranzoomen scharf bleiben. layerKey ('ink'/'annot') ordnet die Ebene
-  // einem Ein-/Ausblenden-Schalter zu (siehe opts.toggles).
-  function inkLayer(strokes, cssW, cssH, layerKey, zIndex) {
-    var c = document.createElement('canvas');
-    c.className = 'pwp-layer-overlay pwp-layer-' + layerKey;
-    if (cssW && cssH) {
-      c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
-      c.width = Math.round(cssW * 2); c.height = Math.round(cssH * 2);
-      drawInk(c, c.getContext('2d'), strokes);
-    }
-    if (zIndex != null) { c.style.zIndex = zIndex; }
-    return c;
+  // Notizen-Ebene als SVG statt Canvas: auflösungsunabhängig (beim
+  // Heranzoomen scharf) und NICHT auf die Pinnwand-Fläche begrenzt -
+  // Striche außerhalb (Koordinaten < 0 oder > 1) bleiben sichtbar
+  // (overflow:visible). Radierer-Striche werden per SVG-Maske umgesetzt
+  // (wirken wie beim Canvas nur auf das, was VOR ihnen gezeichnet wurde).
+  var inkSvgUid = 0;
+  function inkEsc(v) { return String(v).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function inkSvgMarkup(strokes, W, H, uid) {
+    var defs = '', body = '', m = 0;
+    (strokes || []).forEach(function (s) {
+      if (s.type === 'text') {
+        if (!s.text) { return; }
+        var fs = Math.max(10, (s.size || 20) * (H / 900) * 1.6);
+        body += '<text x="' + (s.x * W) + '" y="' + (s.y * H) + '" font-size="' + fs + '" font-family="sans-serif" fill="' + inkEsc(s.color) +
+          '" dominant-baseline="text-before-edge">' + inkEsc(s.text) + '</text>';
+        return;
+      }
+      if (!s.points || !s.points.length) { return; }
+      var d = '';
+      s.points.forEach(function (pt, i) { d += (i ? ' L' : 'M') + (Math.round(pt.x * W * 10) / 10) + ' ' + (Math.round(pt.y * H * 10) / 10); });
+      if (s.points.length === 1) { d += ' L' + (s.points[0].x * W + 0.01) + ' ' + (s.points[0].y * H); }
+      var sw = Math.max(0.5, s.width * H);
+      if (s.erase) {
+        var id = 'inkm' + uid + '_' + (m++);
+        defs += '<mask id="' + id + '" maskUnits="userSpaceOnUse" x="' + (-50 * W) + '" y="' + (-50 * H) + '" width="' + (101 * W) + '" height="' + (101 * H) + '">' +
+          '<rect x="' + (-50 * W) + '" y="' + (-50 * H) + '" width="' + (101 * W) + '" height="' + (101 * H) + '" fill="#fff"/>' +
+          '<path d="' + d + '" fill="none" stroke="#000" stroke-width="' + sw + '" stroke-linecap="round" stroke-linejoin="round"/></mask>';
+        body = '<g mask="url(#' + id + ')">' + body + '</g>';
+      } else {
+        body += '<path d="' + d + '" fill="none" stroke="' + inkEsc(s.color) + '" stroke-width="' + sw + '" stroke-linecap="round" stroke-linejoin="round"/>';
+      }
+    });
+    return (defs ? '<defs>' + defs + '</defs>' : '') + body;
   }
-  // Wie inkLayer, aber passt sich der (evtl. erst nach dem Laden eines
-  // Bildes bekannten) Größe des umgebenden Elements an.
+  // Liefert ein <svg> in Board-Größe (W x H), das per setStrokes(strokes)
+  // neu gezeichnet werden kann.
+  function inkLayer(strokes, cssW, cssH, layerKey, zIndex) {
+    var uid = ++inkSvgUid;
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'pwp-ink-svg pwp-layer-' + layerKey);
+    svg.setAttribute('viewBox', '0 0 ' + cssW + ' ' + cssH);
+    svg.setAttribute('width', cssW);
+    svg.setAttribute('height', cssH);
+    svg.style.cssText = 'position:absolute;left:0;top:0;width:' + cssW + 'px;height:' + cssH + 'px;overflow:visible;pointer-events:none;' +
+      (zIndex != null ? 'z-index:' + zIndex + ';' : '');
+    svg.setStrokes = function (list) { svg.innerHTML = inkSvgMarkup(list, cssW, cssH, uid); };
+    svg.setStrokes(strokes);
+    return svg;
+  }
+  // Ausdehnung von Notizen in Board-Koordinaten (für den Überblick, falls
+  // Notizen über die Leinwand hinausragen).
+  function inkBounds(strokes, W, H) {
+    var b = null;
+    (strokes || []).forEach(function (st) {
+      var pts = st.type === 'text' ? [{ x: st.x, y: st.y }] : (st.erase ? [] : (st.points || []));
+      var pad = st.type === 'text' ? 0 : (st.width || 0) * H;
+      pts.forEach(function (pt) {
+        var x = pt.x * W, y = pt.y * H;
+        if (!b) { b = { x1: x - pad, y1: y - pad, x2: x + pad, y2: y + pad }; return; }
+        b.x1 = Math.min(b.x1, x - pad); b.y1 = Math.min(b.y1, y - pad);
+        b.x2 = Math.max(b.x2, x + pad); b.y2 = Math.max(b.y2, y + pad);
+      });
+      if (st.type === 'text' && b) {
+        var fs = Math.max(10, (st.size || 20) * (H / 900) * 1.6);
+        b.x2 = Math.max(b.x2, st.x * W + (st.text || '').length * fs * 0.6);
+        b.y2 = Math.max(b.y2, st.y * H + fs * 1.2);
+      }
+    });
+    return b;
+  }
+  // Annotationen auf einem einzelnen Objekt: Canvas über dem Element, passt
+  // sich dessen (evtl. erst nach dem Laden eines Bildes bekannten) Größe an.
+  // layerKey ordnet die Ebene einem Ein-/Ausblenden-Schalter zu.
   function attachInk(container, strokes, layerKey) {
     if (!strokes || !strokes.length) { return null; }
-    var c = inkLayer(strokes, 0, 0, layerKey);
+    var c = document.createElement('canvas');
+    c.className = 'pwp-layer-overlay pwp-layer-' + layerKey;
     c.style.width = '100%'; c.style.height = '100%';
     container.appendChild(c);
     function draw() {
@@ -277,7 +334,7 @@
     function ensureDrawCanvas() {
       if (!drawCanvas) { drawCanvas = inkLayer([], BW, BH, 'draw', 700); canvas.appendChild(drawCanvas); }
     }
-    function redrawPen() { ensureDrawCanvas(); drawInk(drawCanvas, drawCanvas.getContext('2d'), pen.strokes); }
+    function redrawPen() { ensureDrawCanvas(); drawCanvas.setStrokes(pen.strokes); }
 
     var penBtn = button('pwp-pen', '', L.pen);
     penBtn.title = L.pen;
@@ -648,6 +705,18 @@
       if (steps[idx] === s && !cameraFrame) { goToStep(idx, true); }
     }
 
+    // Überblick-Stationen so erweitern, dass zusätzlich der Bereich b
+    // (Board-Koordinaten) sichtbar ist - z.B. Notizen außerhalb der Leinwand.
+    function includeInOverview(b) {
+      if (!b) { return; }
+      steps.forEach(function (st) {
+        if (!st.overview) { return; }
+        var x1 = Math.min(0, b.x1), y1 = Math.min(0, b.y1), x2 = Math.max(BW, b.x2), y2 = Math.max(BH, b.y2);
+        st.cx = (x1 + x2) / 2; st.cy = (y1 + y2) / 2; st.w = (x2 - x1) * 1.04; st.h = (y2 - y1) * 1.04;
+        refreshStep(st);
+      });
+    }
+
     function destroy() {
       if (destroyed) { return; }
       destroyed = true;
@@ -670,10 +739,11 @@
       addStep: addStep,
       refreshStep: refreshStep,
       addToggle: addToggle,
+      includeInOverview: includeInOverview,
       destroy: destroy,
       currentIndex: function () { return idx; }
     };
   }
 
-  global.PinnwandPresentation = { create: create, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk };
+  global.PinnwandPresentation = { create: create, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk, inkBounds: inkBounds };
 })(window);

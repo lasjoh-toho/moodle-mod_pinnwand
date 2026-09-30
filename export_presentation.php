@@ -428,6 +428,7 @@ function pinnwand_export_build_html($title, $json) {
   var photoRecs = {};
   var occludables = [];
   var hasAnnot = false;
+  var inkForOverview = null;
   (data.boardPhotos || []).forEach(function (p) {
     if (!p) { return; }
     var pel = document.createElement('div');
@@ -473,6 +474,7 @@ function pinnwand_export_build_html($title, $json) {
   if (data.boardInk && data.boardInk.length) {
     canvas.appendChild(PinnwandPresentation.inkLayer(data.boardInk, BW, BH, 'ink', 600));
     player.addToggle('ink', (data.labels && data.labels.ink) || 'Notizen');
+    inkForOverview = PinnwandPresentation.inkBounds(data.boardInk, BW, BH);
   }
 
   function overviewStep() {
@@ -525,6 +527,8 @@ function pinnwand_export_build_html($title, $json) {
   // Pinnwand (falls der Rote Faden nicht selbst schon damit beginnt).
   if (steps.length && !steps[0].overview) { steps.unshift(overviewStep()); }
   player.start(steps, occludables, 0);
+  // Notizen außerhalb der Leinwand: Überblick entsprechend vergrößern.
+  if (inkForOverview) { player.includeInOverview(inkForOverview); }
 })();
 </script>
 </body>
