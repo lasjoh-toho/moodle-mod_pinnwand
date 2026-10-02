@@ -1904,6 +1904,18 @@
     t.size = best;
   }
 
+  // Teilformatierungen speichern Schriftgröße/Laufweite als feste Pixel
+  // (<span style="font-size:40px">). Auf der Pinnwand wird die Karte aber
+  // verkleinert/vergrößert dargestellt und der Haupttext ggf. eingepasst -
+  // feste Pixel machten beides nicht mit, der Text ragte über die Karte.
+  // Deshalb relativ zur Grundschrift des Textobjekts (em) umrechnen.
+  function relativizeTextHtml(html, baseSize) {
+    if (!html || !baseSize) { return html; }
+    return String(html).replace(/(font-size|letter-spacing)\s*:\s*(-?[\d.]+)px/gi, function (m, prop, num) {
+      return prop + ': ' + (Math.round(parseFloat(num) / baseSize * 1000) / 1000) + 'em';
+    });
+  }
+
   function escapeXml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c];
@@ -2334,7 +2346,7 @@
         });
         textEl2.innerHTML = wordartSvg.svg;
       } else {
-        var html = t.html || (t.text ? escapeXml(t.text) : '');
+        var html = t.html ? relativizeTextHtml(t.html, t.size) : (t.text ? escapeXml(t.text) : '');
         // Haupttext eines normalen Zettels füllt wie im Editor die ganze
         // Karte (Innenabstand 12, senkrecht mittig) - vorher frei
         // positioniert bei left:50%, wodurch der Browser ihm nur die halbe
@@ -2402,10 +2414,20 @@
   // Präsentations-Zoom und das gespeicherte SVG, damit alle drei denselben
   // Ausschnitt zeigen.
   var wordfieldBoundsCache = {};
+  var fontRerenderTimer = null;
   if (document.fonts && document.fonts.addEventListener) {
     // Später nachgeladene Schriften ändern die Textbreite - Messungen
     // danach neu durchführen statt veraltete Werte weiterzuverwenden.
-    document.fonts.addEventListener('loadingdone', function () { wordfieldBoundsCache = {}; textBoundsCache = {}; textFitCache = {}; });
+    document.fonts.addEventListener('loadingdone', function () {
+      wordfieldBoundsCache = {}; textBoundsCache = {}; textFitCache = {};
+      // Schrift kam erst nach dem ersten Darstellen: Ansichten mit Zetteln
+      // neu aufbauen, damit Einpassung und Größen zur echten Schrift passen
+      // (nicht im Editor - dort würde ein Neuaufbau den Cursor verlieren).
+      clearTimeout(fontRerenderTimer);
+      fontRerenderTimer = setTimeout(function () {
+        if (state.step === 'arrange' || state.step === 'home' || state.step === 'moderate') { render(); }
+      }, 120);
+    });
   }
   function measureWordfieldBounds(tf) {
     var key = JSON.stringify(tf);
@@ -2561,7 +2583,7 @@
   // Einheiten für jede Anzeigegröße, verhindert "Text sprengt den Zettel".
   var textFitCache = {};
   function fitTextSize(t, box, fontCss) {
-    var html = t.html || (t.text ? escapeXml(t.text) : '');
+    var html = t.html ? relativizeTextHtml(t.html, t.size) : (t.text ? escapeXml(t.text) : '');
     if (!html) { return t.size; }
     var key = [html, t.size, fontCss, t.fontWeight, t.lineHeight, t.letterSpacing, box.w, box.h, box.pad].join('|');
     if (textFitCache[key]) { return textFitCache[key]; }
@@ -2789,7 +2811,7 @@
         var wx = idx === 0 ? tf.w / 2 : t.x * tf.w, wy = idx === 0 ? tf.h / 2 : t.y * tf.h;
         return '<g transform="translate(' + (wx - wordartParts.w / 2) + ',' + (wy - wordartParts.h / 2) + ')">' + wordartParts.inner + '</g>';
       }
-      var html = t.html || (t.text ? escapeXml(t.text) : '');
+      var html = t.html ? relativizeTextHtml(t.html, t.size) : (t.text ? escapeXml(t.text) : '');
       if (!html) { return ''; }
       var baseStyle = 'box-sizing:border-box;font-family:' + escapeXml(fontCss) + ';font-size:' + t.size +
         'px;font-weight:' + (t.fontWeight || 700) + ';line-height:' + (t.lineHeight || 1.2) +
@@ -3343,7 +3365,7 @@
       // Zwischenspeichern erhalten statt auf reinen Text reduziert zu werden.
       // Abwärtskompatibel: ältere gespeicherte Wortfelder haben nur t.text
       // (kein t.html) - dann als Klartext übernehmen statt leer zu bleiben.
-      if (t.html) { el2.innerHTML = t.html; } else if (t.text) { el2.textContent = t.text; }
+      if (t.html) { el2.innerHTML = relativizeTextHtml(t.html, t.size); } else if (t.text) { el2.textContent = t.text; }
       if (!t.html && !t.text) { el2.setAttribute('data-placeholder', S.textframe_placeholder); }
       // Wichtig: hier KEIN render() aufrufen - das würde das gerade fokussierte
       // contenteditable-Element sofort zerstören und den Cursor verlieren,
@@ -5609,10 +5631,30 @@
         // Bei einem Rückseiten-Foto (backPhoto) oder falls die
         // gespeicherten Daten unlesbar sind, auf das eingefrorene Bild
         // zurückfallen.
+        var itemBounds = null;
         try {
           var liveTf = JSON.parse(p.wordfielddata);
-          item.appendChild(buildTextFrameLiveDom(liveTf));
+          var liveIsWordart = wordfieldIsWordart(liveTf);
+          var liveEl = buildTextFrameLiveDom(liveTf, { noGuide: liveIsWordart });
+          item.appendChild(liveEl);
+          if (liveIsWordart) {
+            // Rahmen mit Griffen am TATSÄCHLICH sichtbaren Objekt (WordArt inkl.
+            // Schrägstellung/Extrusion bzw. gebundener Form) statt an der
+            // inneren Kartenbox - vorher hatte der Skalierrahmen oft wenig mit
+            // dem sichtbaren Objekt zu tun. Bei Karten stimmen beide überein.
+            var vb = measureWordfieldBounds(liveTf);
+            itemBounds = el('div', {
+              class: 'ic-obj-bounds ic-obj-bounds-guide',
+              style: 'left:' + (vb.x1 / liveTf.w * 100) + '%;top:' + (vb.y1 / liveTf.h * 100) + '%;' +
+                'width:' + ((vb.x2 - vb.x1) / liveTf.w * 100) + '%;height:' + ((vb.y2 - vb.y1) / liveTf.h * 100) + '%;'
+            });
+            liveEl.appendChild(itemBounds);
+            // Griff sitzt an der sichtbaren Ecke: Mausweg auf die Kartenbreite
+            // umrechnen, damit die Ecke dem Zeiger folgt.
+            item._icResizeRatio = liveTf.w / Math.max(1, vb.x2 - vb.x1);
+          }
         } catch (e) {
+          itemBounds = null;
           item.appendChild(el('img', { src: p.url, alt: '' }));
         }
       } else {
@@ -5670,9 +5712,10 @@
       }
 
       var resize = el('div', { class: 'ic-resize' });
-      item.appendChild(resize);
       var rotateHandle = el('div', { class: 'ic-rotate-handle' });
-      item.appendChild(rotateHandle);
+      var handleHost = (typeof itemBounds !== 'undefined' && itemBounds && p.wordfielddata && !p.showingback) ? itemBounds : item;
+      handleHost.appendChild(resize);
+      handleHost.appendChild(rotateHandle);
       canvas.appendChild(item);
       // Item erst jetzt (im DOM) - erst danach hat es eine reale Größe,
       // die die Zeichenebene und Bildunterschrift zum Messen brauchen.
@@ -8164,7 +8207,7 @@
     function move(ev) {
       if (!dragging) { return; }
       var dx = (point(ev).x - startX) / (state.boardZoom || 1);
-      var w = Math.max(60, startW + dx);
+      var w = Math.max(60, startW + dx * (item._icResizeRatio || 1));
       item.style.width = w + 'px';
       onResize(w);
       ev.preventDefault();

@@ -1713,6 +1713,14 @@ Details und Scoping-Entscheidungen. In Kurzform:
   sind. Auch das Schreiben mit dem Stift in der Präsentation ist nicht
   mehr auf die Leinwand begrenzt.
 
+### Einhundertfünfundvierzigste Überarbeitung — Kartentext passt, Skalierrahmen am Objekt
+
+- Kartentext ragt auf der Pinnwand nicht mehr oben/unten über die Karte:
+  einzeln formatierte Textstellen (andere Schriftgröße) skalieren jetzt
+  mit der Karte und mit der automatischen Einpassung.
+- Der Rahmen mit Größen- und Drehgriff sitzt bei WordArt jetzt am
+  tatsächlich sichtbaren Objekt statt an einer unsichtbaren inneren Box.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

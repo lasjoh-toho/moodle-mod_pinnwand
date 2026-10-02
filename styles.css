@@ -1331,3 +1331,10 @@ input.ic-stepper-value {
 .ic-shape-picker-row { flex-wrap: nowrap; }
 .ic-shape-picker-row .ic-shape-picker-btn { flex: 1 1 auto; width: auto; }
 .ic-shape-picker-row .ic-mini-btn { font-size: 1.1rem; font-weight: 700; }
+
+/* Rahmen mit Größen-/Drehgriff am tatsächlich sichtbaren Objekt (WordArt
+   inkl. Effekte, Zettel = Karte), siehe renderArrange. */
+.ic-obj-bounds { position: absolute; box-sizing: border-box; pointer-events: none; z-index: 5; }
+.ic-obj-bounds-guide { border: 2px dashed rgba(255,255,255,.3); }
+.ic-obj-bounds .ic-resize, .ic-obj-bounds .ic-rotate-handle { pointer-events: auto; }
+.ic-arrange-item.selected .ic-obj-bounds { outline: 2px solid var(--ic-accent); outline-offset: 2px; }

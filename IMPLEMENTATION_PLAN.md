@@ -4127,3 +4127,20 @@ Pinnwand und in der Präsentation sichtbar, Überblick vergrößert sich,
 Stärke bei Zoom 0.6 vs 1.8 im Board-Maßstab exakt 3:1.
 
 Shipped als Version `2026083142` / `0.144.0`.
+
+## Phase 138
+
+- Karten-Text ragte auf der Pinnwand trotz Einpassung oben/unten über die
+  Karte: Teilformatierungen speichern `font-size`/`letter-spacing` als
+  feste px in `t.html` - die skalierten weder mit der verkleinerten Karte
+  noch mit `fitTextSize()`. `relativizeTextHtml()` rechnet sie in `em`
+  relativ zu `t.size` um (Live-DOM, SVG-Pfad, Editor). Zusätzlich nach
+  `document.fonts` `loadingdone` Neuaufbau von Pinnwand/Meine Dateien/
+  Klassenübersicht (Einpassung mit der echten Schrift).
+- Skalierrahmen auf der Pinnwand: bei WordArt-Objekten sitzen Rahmen,
+  Größen- und Drehgriff jetzt am sichtbaren Bereich
+  (`measureWordfieldBounds`, `.ic-obj-bounds`), der Mausweg wird über
+  `item._icResizeRatio` auf die Kartenbreite umgerechnet. Karten
+  unverändert (Box = Karte).
+
+Shipped als Version `2026083143` / `0.145.0`.
