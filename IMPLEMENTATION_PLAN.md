@@ -4144,3 +4144,19 @@ Shipped als Version `2026083142` / `0.144.0`.
   unverändert (Box = Karte).
 
 Shipped als Version `2026083143` / `0.145.0`.
+
+## Phase 139
+
+Stift-Werkzeug (Notizen) der Pinnwand:
+- Werkzeugleiste als EINE Spalte am linken Rand (Stift, Text, Radierer,
+  Auswählen | Farben | Ausblenden, Löschen). Regler für Stärke (Stift) und
+  Schriftgröße (Text) klappen per Hover nach rechts aus
+  (`.ic-stylus-flyout`), Werte in Bildschirm-Pixeln (zoomunabhängig).
+- Neues Text-Werkzeug (Klick setzt ein Eingabefeld, Enter übernimmt;
+  Textnotiz im bisherigen Format `type:'text'`).
+- Auswählen: Kasten aufziehen oder Notiz anklicken (Umschalt = zur Auswahl
+  hinzufügen); Auswahl verschieben (Ziehen im Auswahlrahmen), umfärben
+  (Farbfeld), löschen (Papierkorb bzw. Entf/Rücktaste). Notizen erhalten
+  dafür stets eine ID (`state.inkSelection`).
+
+Shipped als Version `2026083144` / `0.146.0`.

@@ -38,6 +38,16 @@
     syncUndoRedoButtons();
     render();
   }
+  // Entf/Rücktaste löscht ausgewählte Notizen (Stift-Werkzeug, Auswahl).
+  var inkSelectionDelete = null;
+  document.addEventListener('keydown', function (ev) {
+    if ((ev.key === 'Delete' || ev.key === 'Backspace') && state.boardDrawMode && (state.inkSelection || []).length && inkSelectionDelete) {
+      var tgt = ev.target;
+      if (tgt && (tgt.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName))) { return; }
+      ev.preventDefault();
+      inkSelectionDelete();
+    }
+  });
   document.addEventListener('keydown', function (ev) {
     if (!(ev.ctrlKey || ev.metaKey)) { return; }
     if (ev.key === 'z' || ev.key === 'Z') { ev.preventDefault(); performUndo(); }
@@ -5517,6 +5527,65 @@
         render();
       });
     }
+    // Jede Notiz bekommt eine feste ID (ältere hatten teils keine) - nötig
+    // für Auswahl/Verschieben/Löschen einzelner Notizen.
+    (state.boardInkStrokes || []).forEach(function (st) {
+      if (!st.id) { st.id = 's' + Date.now() + Math.random().toString(36).slice(2, 9); }
+    });
+    state.inkSelection = (state.inkSelection || []).filter(function (id) {
+      return (state.boardInkStrokes || []).some(function (st) { return st.id === id; });
+    });
+    function saveBoardInk() {
+      callAjax('mod_pinnwand_save_board_ink', {
+        cmid: cfg.cmid, boardid: state.currentBoard, strokes: JSON.stringify(state.boardInkStrokes)
+      });
+    }
+    // Ausdehnung einer Notiz in normalisierten Board-Koordinaten.
+    function strokeBox(st) {
+      if (st.type === 'text') {
+        var fsN = Math.max(10, (st.size || 20) * (BOARD_H / 900) * 1.6) / BOARD_H;
+        return { x1: st.x, y1: st.y, x2: st.x + (st.text || '').length * fsN * 0.6 * BOARD_H / BOARD_W, y2: st.y + fsN * 1.2 };
+      }
+      var b = null, pad = (st.width || 0) / 2 * BOARD_H / BOARD_W;
+      (st.points || []).forEach(function (pt) {
+        if (!b) { b = { x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y }; return; }
+        b.x1 = Math.min(b.x1, pt.x); b.y1 = Math.min(b.y1, pt.y); b.x2 = Math.max(b.x2, pt.x); b.y2 = Math.max(b.y2, pt.y);
+      });
+      if (!b) { return null; }
+      var padY = (st.width || 0) / 2;
+      return { x1: b.x1 - pad, y1: b.y1 - padY, x2: b.x2 + pad, y2: b.y2 + padY };
+    }
+    function selectedStrokes() {
+      return (state.boardInkStrokes || []).filter(function (st) { return (state.inkSelection || []).indexOf(st.id) !== -1; });
+    }
+    function selectionBox() {
+      var b = null;
+      selectedStrokes().forEach(function (st) {
+        var sb = strokeBox(st);
+        if (!sb) { return; }
+        if (!b) { b = { x1: sb.x1, y1: sb.y1, x2: sb.x2, y2: sb.y2 }; return; }
+        b.x1 = Math.min(b.x1, sb.x1); b.y1 = Math.min(b.y1, sb.y1); b.x2 = Math.max(b.x2, sb.x2); b.y2 = Math.max(b.y2, sb.y2);
+      });
+      return b;
+    }
+    function recolorInkSelection(color) {
+      var sel = selectedStrokes().filter(function (st) { return !st.erase; });
+      if (!sel.length || !state.boardDrawMode) { return false; }
+      sel.forEach(function (st) { st.color = color; });
+      saveBoardInk();
+      render();
+      return true;
+    }
+    function deleteInkSelection() {
+      var ids = state.inkSelection || [];
+      if (!ids.length) { return; }
+      state.boardInkStrokes = state.boardInkStrokes.filter(function (st) { return ids.indexOf(st.id) === -1; });
+      state.inkSelection = [];
+      saveBoardInk();
+      render();
+    }
+    inkSelectionDelete = deleteInkSelection;
+
     // Notizen (Stift-Werkzeug) als SVG-Ebene in Board-Koordinaten: scharf bei
     // jedem Zoom und nicht auf die 1400x1000-Leinwand begrenzt - Striche
     // dürfen darüber hinausgehen (normalisierte Koordinaten < 0 bzw. > 1).
@@ -5524,51 +5593,136 @@
     inkLayerEl.classList.add('ic-board-ink-layer');
     if (state.boardInkHidden) { inkLayerEl.classList.add('ic-hidden'); }
     canvas.appendChild(inkLayerEl);
+    // Markierung der ausgewählten Notizen (gestrichelter Rahmen).
+    var inkSelEl = el('div', { class: 'ic-ink-selection' });
+    canvas.appendChild(inkSelEl);
+    function updateInkSelection() {
+      var b = state.boardDrawMode ? selectionBox() : null;
+      if (!b) { inkSelEl.style.display = 'none'; return; }
+      inkSelEl.style.display = 'block';
+      inkSelEl.style.left = (b.x1 * BOARD_W) + 'px'; inkSelEl.style.top = (b.y1 * BOARD_H) + 'px';
+      inkSelEl.style.width = ((b.x2 - b.x1) * BOARD_W) + 'px'; inkSelEl.style.height = ((b.y2 - b.y1) * BOARD_H) + 'px';
+    }
+    updateInkSelection();
     if (state.boardDrawMode) {
       // Erfassungsfläche über dem GANZEN sichtbaren Bereich (nicht nur der
       // Leinwand), damit auch daneben geschrieben werden kann. Mausrad-Zoom
       // funktioniert weiterhin (Ereignis läuft zur Pinnwand durch).
-      var inkCapture = el('div', { class: 'ic-board-ink-capture' });
+      var drawTool = state.boardDrawTool || (state.boardDrawErase ? 'eraser' : 'pen');
+      var inkCapture = el('div', { class: 'ic-board-ink-capture ic-ink-tool-' + drawTool });
       wrap.appendChild(inkCapture);
-      var curStroke = null;
+      var curStroke = null, moveStart = null, moveOrig = null, bandStart = null, bandEl = null;
       function inkPoint(ev) {
         var r = canvas.getBoundingClientRect();
         return { x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height };
       }
+      function boardZoomNow() { return canvas.getBoundingClientRect().width / BOARD_W || 1; }
       // Strichstärke in Bildschirm-Pixeln, umgerechnet über den aktuellen
-      // Zoom - dadurch zeichnet der Stift bei jeder Zoomstufe gleich dick
-      // (herangezoomt feiner, herausgezoomt kräftiger im Board-Maßstab).
+      // Zoom - dadurch zeichnet der Stift bei jeder Zoomstufe gleich dick.
       function inkWidthNorm() {
-        var zoom = canvas.getBoundingClientRect().width / BOARD_W || 1;
-        var px = (state.boardDrawPx || 6) * (state.boardDrawErase ? 3 : 1);
-        return px / zoom / BOARD_H;
+        var px = (state.boardDrawPx || 6) * (drawTool === 'eraser' ? 3 : 1);
+        return px / boardZoomNow() / BOARD_H;
+      }
+      function openInkText(ev, pt) {
+        var screenPx = state.boardTextPx || 24;
+        var inp = el('input', { type: 'text', class: 'ic-ink-text-input' });
+        inp.style.left = ev.clientX + 'px'; inp.style.top = ev.clientY + 'px';
+        inp.style.fontSize = screenPx + 'px'; inp.style.color = state.boardDrawColor || INK_COLORS[0];
+        document.body.appendChild(inp);
+        setTimeout(function () { inp.focus(); }, 0);
+        var done = false;
+        function commit() {
+          if (done) { return; }
+          done = true;
+          var text = inp.value; inp.remove();
+          if (!text) { return; }
+          var boardFont = screenPx / boardZoomNow();
+          state.boardInkStrokes.push({
+            id: 's' + Date.now() + Math.random().toString(36).slice(2, 7), type: 'text', text: text,
+            x: pt.x, y: pt.y, color: state.boardDrawColor || INK_COLORS[0], size: boardFont / (BOARD_H / 900 * 1.6)
+          });
+          inkLayerEl.setStrokes(state.boardInkStrokes);
+          saveBoardInk();
+        }
+        inp.addEventListener('keydown', function (e2) {
+          e2.stopPropagation();
+          if (e2.key === 'Enter') { commit(); } else if (e2.key === 'Escape') { done = true; inp.remove(); }
+        });
+        inp.addEventListener('blur', commit);
       }
       inkCapture.addEventListener('pointerdown', function (ev) {
         if (ev.button !== undefined && ev.button !== 0) { return; }
         ev.preventDefault();
+        var pt = inkPoint(ev);
+        if (drawTool === 'text') { openInkText(ev, pt); return; }
         try { inkCapture.setPointerCapture(ev.pointerId); } catch (e) { /* ältere Browser */ }
+        if (drawTool === 'select') {
+          var sb = selectionBox();
+          if (sb && pt.x >= sb.x1 && pt.x <= sb.x2 && pt.y >= sb.y1 && pt.y <= sb.y2) {
+            // Ausgewählte Notizen verschieben.
+            moveStart = pt;
+            moveOrig = selectedStrokes().map(function (st) { return JSON.parse(JSON.stringify(st)); });
+            return;
+          }
+          // Auswahlrahmen aufziehen.
+          bandStart = { pt: pt, x: ev.clientX, y: ev.clientY };
+          bandEl = el('div', { class: 'ic-ink-band' });
+          document.body.appendChild(bandEl);
+          return;
+        }
         curStroke = {
           id: 's' + Date.now() + Math.random().toString(36).slice(2, 7),
-          points: [inkPoint(ev)],
+          points: [pt],
           color: state.boardDrawColor || INK_COLORS[0],
           width: inkWidthNorm(),
-          erase: !!state.boardDrawErase
+          erase: drawTool === 'eraser'
         };
         state.boardInkStrokes.push(curStroke);
         inkLayerEl.setStrokes(state.boardInkStrokes);
       });
       inkCapture.addEventListener('pointermove', function (ev) {
-        if (!curStroke) { return; }
-        ev.preventDefault();
-        curStroke.points.push(inkPoint(ev));
-        inkLayerEl.setStrokes(state.boardInkStrokes);
+        if (curStroke) {
+          ev.preventDefault();
+          curStroke.points.push(inkPoint(ev));
+          inkLayerEl.setStrokes(state.boardInkStrokes);
+        } else if (moveStart) {
+          var p2 = inkPoint(ev), dx = p2.x - moveStart.x, dy = p2.y - moveStart.y;
+          selectedStrokes().forEach(function (st, i) {
+            var o = moveOrig[i];
+            if (st.type === 'text') { st.x = o.x + dx; st.y = o.y + dy; return; }
+            st.points = o.points.map(function (q) { return { x: q.x + dx, y: q.y + dy }; });
+          });
+          inkLayerEl.setStrokes(state.boardInkStrokes);
+          updateInkSelection();
+        } else if (bandStart) {
+          var x1 = Math.min(bandStart.x, ev.clientX), y1 = Math.min(bandStart.y, ev.clientY);
+          bandEl.style.left = x1 + 'px'; bandEl.style.top = y1 + 'px';
+          bandEl.style.width = Math.abs(ev.clientX - bandStart.x) + 'px'; bandEl.style.height = Math.abs(ev.clientY - bandStart.y) + 'px';
+        }
       });
-      function inkUp() {
-        if (!curStroke) { return; }
-        curStroke = null;
-        callAjax('mod_pinnwand_save_board_ink', {
-          cmid: cfg.cmid, boardid: state.currentBoard, strokes: JSON.stringify(state.boardInkStrokes)
-        });
+      function inkUp(ev) {
+        if (curStroke) { curStroke = null; saveBoardInk(); return; }
+        if (moveStart) { moveStart = null; moveOrig = null; saveBoardInk(); return; }
+        if (bandStart) {
+          var p1 = bandStart.pt, p2 = ev && ev.clientX != null ? inkPoint(ev) : p1;
+          var r = { x1: Math.min(p1.x, p2.x), y1: Math.min(p1.y, p2.y), x2: Math.max(p1.x, p2.x), y2: Math.max(p1.y, p2.y) };
+          var tiny = (r.x2 - r.x1) * BOARD_W * boardZoomNow() < 4 && (r.y2 - r.y1) * BOARD_H * boardZoomNow() < 4;
+          var hits = [];
+          for (var i = state.boardInkStrokes.length - 1; i >= 0; i--) {
+            var st = state.boardInkStrokes[i];
+            if (st.erase) { continue; }
+            var sb = strokeBox(st);
+            if (!sb) { continue; }
+            var hit = tiny
+              ? (p1.x >= sb.x1 && p1.x <= sb.x2 && p1.y >= sb.y1 && p1.y <= sb.y2)
+              : !(sb.x2 < r.x1 || sb.x1 > r.x2 || sb.y2 < r.y1 || sb.y1 > r.y2);
+            if (hit) { hits.push(st.id); if (tiny) { break; } }
+          }
+          state.inkSelection = (ev && ev.shiftKey) ? (state.inkSelection || []).concat(hits) : hits;
+          bandStart = null;
+          if (bandEl) { bandEl.remove(); bandEl = null; }
+          render();
+        }
       }
       inkCapture.addEventListener('pointerup', inkUp);
       inkCapture.addEventListener('pointercancel', inkUp);
@@ -6389,60 +6543,90 @@
     // verknüpft - zeichnet direkt auf den Hintergrund (genau auf dessen
     // 1400x1000-Koordinatenfläche gemappt, siehe Zeichen-Ebene weiter unten),
     // nicht an ein einzelnes Foto gebunden.
+    // Stift-Werkzeug (Notizen auf der Pinnwand): alle Knöpfe in EINER Spalte
+    // am linken Rand. Stärke (Stift) und Schriftgröße (Text) klappen beim
+    // Überfahren des jeweiligen Werkzeugs als Regler nach rechts aus.
     var stylusBar = el('div', { class: 'ic-stylus-bar' });
     var stylusBtn = el('button', { class: 'ic-fab' + (state.boardDrawMode ? ' active' : ''), title: S.drawonboard }, [icon('pen')]);
-    stylusBtn.addEventListener('click', function () { state.boardDrawMode = !state.boardDrawMode; render(); });
+    stylusBtn.addEventListener('click', function () {
+      state.boardDrawMode = !state.boardDrawMode;
+      state.inkSelection = [];
+      render();
+    });
     stylusBar.appendChild(stylusBtn);
     if (state.boardDrawMode) {
+      var tool = state.boardDrawTool || 'pen';
       var stylusTools = el('div', { class: 'ic-stylus-tools' });
-      var stylusColorRow = el('div', { class: 'ic-stylus-tools-row' });
+      function setTool(t) { state.boardDrawTool = t; state.boardDrawErase = t === 'eraser'; if (t !== 'select') { state.inkSelection = []; } render(); }
+      function toolButton(t, iconEl, title, flyout) {
+        var wrapT = el('div', { class: 'ic-stylus-tool' });
+        var b = el('button', { class: 'ic-icon-btn' + (tool === t ? ' active' : ''), title: title }, [iconEl]);
+        b.addEventListener('click', function () { setTool(t); });
+        wrapT.appendChild(b);
+        if (flyout) { wrapT.appendChild(flyout); }
+        stylusTools.appendChild(wrapT);
+      }
+      function sliderFlyout(label, min, max, value, onInput) {
+        var fly = el('div', { class: 'ic-stylus-flyout' });
+        var val = el('span', { class: 'ic-stylus-flyout-val' }, [String(value)]);
+        var range = el('input', { type: 'range', min: String(min), max: String(max), step: '1', value: String(value), class: 'ic-stylus-size', title: label });
+        range.addEventListener('input', function () { val.textContent = range.value; onInput(parseInt(range.value, 10)); });
+        fly.appendChild(el('span', { class: 'ic-stylus-flyout-label' }, [label]));
+        fly.appendChild(range);
+        fly.appendChild(val);
+        return fly;
+      }
+      // Stärke/Schriftgröße in Bildschirm-Pixeln (bei jeder Zoomstufe gleich).
+      toolButton('pen', icon('pen'), S.ink_tool_pen, sliderFlyout(S.ink_width, 2, 30, state.boardDrawPx || 6, function (v) { state.boardDrawPx = v; }));
+      var textIcon = el('span', { class: 'ic-stylus-text-icon' }, ['T']);
+      toolButton('text', textIcon, S.ink_tool_text, sliderFlyout(S.ink_fontsize, 10, 72, state.boardTextPx || 24, function (v) { state.boardTextPx = v; }));
+      toolButton('eraser', icon('eraser'), S.erase, null);
+      toolButton('select', icon('boxselect'), S.ink_tool_select, null);
+      stylusTools.appendChild(el('div', { class: 'ic-stylus-sep' }));
+      // Farben untereinander; wirken auch auf ausgewählte Notizen.
       INK_COLORS.forEach(function (c) {
         var sw = el('button', {
-          class: 'ic-color-swatch' + (state.boardDrawColor === c && !state.boardDrawErase ? ' active' : ''), style: 'background:' + c
+          class: 'ic-color-swatch' + (state.boardDrawColor === c && tool !== 'eraser' ? ' active' : ''), style: 'background:' + c
         });
-        sw.addEventListener('click', function () { state.boardDrawColor = c; state.boardDrawErase = false; render(); });
-        stylusColorRow.appendChild(sw);
+        sw.addEventListener('click', function () {
+          state.boardDrawColor = c;
+          if (recolorInkSelection(c)) { return; }
+          if (tool === 'eraser' || tool === 'select') { state.boardDrawTool = 'pen'; state.boardDrawErase = false; }
+          render();
+        });
+        stylusTools.appendChild(sw);
       });
-      // Palettenbutton: freie Farbwahl über den nativen Farbwähler, für
-      // mehr Auswahl als die feste Farbliste.
+      // Palettenbutton: freie Farbwahl über den nativen Farbwähler.
       var stylusCustomColor = el('input', {
         type: 'color', value: state.boardDrawColor || INK_COLORS[0], class: 'ic-textframe-custom-color'
       });
       stylusCustomColor.addEventListener('change', function () {
-        state.boardDrawColor = stylusCustomColor.value; state.boardDrawErase = false; render();
+        state.boardDrawColor = stylusCustomColor.value;
+        if (recolorInkSelection(stylusCustomColor.value)) { return; }
+        if (tool === 'eraser' || tool === 'select') { state.boardDrawTool = 'pen'; state.boardDrawErase = false; }
+        render();
       });
-      stylusColorRow.appendChild(stylusCustomColor);
-      stylusTools.appendChild(stylusColorRow);
-
-      var stylusActionRow = el('div', { class: 'ic-stylus-tools-row' });
-      var eraseBtn = el('button', { class: 'ic-icon-btn' + (state.boardDrawErase ? ' active' : ''), title: S.erase }, [icon('eraser')]);
-      eraseBtn.addEventListener('click', function () { state.boardDrawErase = !state.boardDrawErase; render(); });
-      stylusActionRow.appendChild(eraseBtn);
-      // Stärke in Bildschirm-Pixeln (bei jeder Zoomstufe gleich dick).
-      var sizeSlider = el('input', {
-        type: 'range', min: '2', max: '30', step: '1', value: String(state.boardDrawPx || 6), class: 'ic-stylus-size'
-      });
-      sizeSlider.addEventListener('input', function () { state.boardDrawPx = parseInt(sizeSlider.value, 10) || 6; });
-      stylusActionRow.appendChild(sizeSlider);
-      // Ausblenden: blendet die eigenen Anmerkungen aus, ohne sie zu
-      // löschen (rein visuell, clientseitig) - ein erneuter Klick blendet
-      // sie wieder ein.
+      stylusTools.appendChild(stylusCustomColor);
+      stylusTools.appendChild(el('div', { class: 'ic-stylus-sep' }));
+      // Ausblenden: blendet die eigenen Notizen aus, ohne sie zu löschen.
       var hideInkBtn = el('button', {
         class: 'ic-icon-btn' + (state.boardInkHidden ? ' active' : ''), title: state.boardInkHidden ? S.showannotations : S.hideannotations
       }, [icon('eye')]);
       hideInkBtn.addEventListener('click', function () { state.boardInkHidden = !state.boardInkHidden; render(); });
-      stylusActionRow.appendChild(hideInkBtn);
-      // Komplett löschen: entfernt alle eigenen Striche auf diesem Board
-      // endgültig (mit Rückfrage, da nicht rückgängig machbar).
-      var clearInkBtn = el('button', { class: 'ic-icon-btn', title: S.clearannotations }, [icon('trash')]);
+      stylusTools.appendChild(hideInkBtn);
+      // Löschen: mit Auswahl nur die ausgewählten Notizen, sonst (mit
+      // Rückfrage) alle eigenen Notizen dieses Boards.
+      var hasSel = (state.inkSelection || []).length > 0;
+      var clearInkBtn = el('button', { class: 'ic-icon-btn' + (hasSel ? ' ic-danger' : ''), title: hasSel ? S.ink_delete_selection : S.clearannotations }, [icon('trash')]);
       clearInkBtn.addEventListener('click', function () {
+        if (hasSel) { deleteInkSelection(); return; }
         if (!confirm(S.clearannotations_confirm)) { return; }
         state.boardInkStrokes = [];
+        state.inkSelection = [];
         callAjax('mod_pinnwand_save_board_ink', { cmid: cfg.cmid, boardid: state.currentBoard, strokes: '[]' });
         render();
       });
-      stylusActionRow.appendChild(clearInkBtn);
-      stylusTools.appendChild(stylusActionRow);
+      stylusTools.appendChild(clearInkBtn);
       stylusBar.appendChild(stylusTools);
     }
     body.appendChild(stylusBar);

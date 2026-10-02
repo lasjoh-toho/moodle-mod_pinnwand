@@ -1721,6 +1721,16 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Der Rahmen mit Größen- und Drehgriff sitzt bei WordArt jetzt am
   tatsächlich sichtbaren Objekt statt an einer unsichtbaren inneren Box.
 
+### Einhundertsechsundvierzigste Überarbeitung — Stift-Werkzeug: Spalte, Text, Auswählen
+
+- Alle Knöpfe des Stift-Werkzeugs stehen in einer Spalte am linken Rand.
+  Die Regler für Stärke und Schriftgröße klappen beim Überfahren von Stift
+  bzw. Text nach rechts aus.
+- Neu: Text schreiben (auf die Stelle klicken, tippen, Enter).
+- Neu: Auswählen - Kasten aufziehen oder eine Notiz anklicken (Umschalt
+  fügt hinzu); die Auswahl lässt sich verschieben, per Farbfeld umfärben
+  und mit dem Papierkorb oder der Entf-Taste löschen.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
