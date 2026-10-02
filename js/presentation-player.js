@@ -494,6 +494,30 @@
       var tx = window.innerWidth / 2 - scale * rx;
       var ty = window.innerHeight / 2 - scale * ry;
       canvas.style.transform = 'translate(' + tx + 'px,' + ty + 'px) rotate(' + (rot || 0) + 'deg) scale(' + scale + ')';
+      // Feststehende Bildschirmebene (z. B. nicht mitzoomender Hintergrund):
+      // liegt IN der gezoomten Leinwand - nur so können Objekte per
+      // mix-blend-mode mit ihr mischen - und hebt die Transformation exakt
+      // wieder auf (inverse Matrix: S^-1 R^-1 T^-1).
+      if (screenLayer) {
+        screenLayer.style.width = window.innerWidth + 'px';
+        screenLayer.style.height = window.innerHeight + 'px';
+        screenLayer.style.transform = 'scale(' + (1 / scale) + ') rotate(' + (-(rot || 0)) + 'deg) translate(' + (-tx) + 'px,' + (-ty) + 'px)';
+      }
+    }
+
+    var screenLayer = null;
+    function setScreenLayer(elm) {
+      screenLayer = elm;
+      elm.style.position = 'absolute';
+      elm.style.left = '0';
+      elm.style.top = '0';
+      elm.style.transformOrigin = '0 0';
+      elm.style.pointerEvents = 'none';
+      elm.style.zIndex = '-1000000';
+      canvas.insertBefore(elm, canvas.firstChild);
+      if (currentTransform) {
+        applyTransform(currentTransform.scale, currentTransform.cx, currentTransform.cy, currentTransform.rot);
+      }
     }
 
     function easeInOutCubic(x) { return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
@@ -740,6 +764,7 @@
       refreshStep: refreshStep,
       addToggle: addToggle,
       includeInOverview: includeInOverview,
+      setScreenLayer: setScreenLayer,
       destroy: destroy,
       currentIndex: function () { return idx; }
     };

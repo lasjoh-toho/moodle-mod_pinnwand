@@ -201,6 +201,7 @@
       case 'perspective': renderPerspective(body); break;
       case 'crop': renderCrop(body); break;
       case 'color': renderColor(body); break;
+      case 'cutout': renderCutout(body); break;
       case 'source': renderSource(body); break;
       case 'textframe': renderTextFrame(body); break;
       case 'arrange': renderArrange(body); break;
@@ -214,11 +215,11 @@
   var VIEW_LABELS = {
     home: S.mygallery, arrange: S.pinboard, moderate: S.moderate_mode,
     capture: S.step_capture, perspective: S.step_perspective, crop: S.step_crop,
-    color: S.step_color, source: S.step_source, textframe: S.textframe_title
+    color: S.step_color, cutout: S.step_cutout, source: S.step_source, textframe: S.textframe_title
   };
   // Diese Schritte gehören zum Hinzufügen-Assistenten - der "Hinzufügen"-
   // Navigationsbutton gilt hier ebenfalls als aktiv.
-  var ADD_WIZARD_STEPS = { capture: 1, perspective: 1, crop: 1, color: 1, source: 1, textframe: 1 };
+  var ADD_WIZARD_STEPS = { capture: 1, perspective: 1, crop: 1, color: 1, cutout: 1, source: 1, textframe: 1 };
 
   function goToView(step) {
     return function () {
@@ -299,7 +300,7 @@
   }
 
   function stepsBar(activeIdx) {
-    var labels = [S.step_capture, S.step_perspective, S.step_crop, S.step_color, S.step_source];
+    var labels = [S.step_capture, S.step_perspective, S.step_crop, S.step_color, S.step_cutout, S.step_source];
     var bar = el('div', { class: 'ic-steps' });
     labels.forEach(function (l, i) {
       bar.appendChild(el('span', { class: i <= activeIdx ? 'done' : '' }));
@@ -937,7 +938,7 @@
         var px = bilinearSample(srcData, s.x, s.y);
         var di = (y * outW + x) * 4;
         outData.data[di] = px[0]; outData.data[di + 1] = px[1];
-        outData.data[di + 2] = px[2]; outData.data[di + 3] = 255;
+        outData.data[di + 2] = px[2]; outData.data[di + 3] = px[3];
       }
     }
     octx.putImageData(outData, 0, 0);
@@ -956,11 +957,11 @@
     var d = imgData.data;
     function px(xx, yy) {
       var i = (yy * w + xx) * 4;
-      return [d[i], d[i + 1], d[i + 2]];
+      return [d[i], d[i + 1], d[i + 2], d[i + 3]];
     }
     var p00 = px(x0, y0), p10 = px(x1, y0), p01 = px(x0, y1), p11 = px(x1, y1);
-    var out = [0, 0, 0];
-    for (var c = 0; c < 3; c++) {
+    var out = [0, 0, 0, 255];
+    for (var c = 0; c < 4; c++) {
       var top = p00[c] * (1 - fx) + p10[c] * fx;
       var bot = p01[c] * (1 - fx) + p11[c] * fx;
       out[c] = Math.round(top * (1 - fy) + bot * fy);
@@ -1010,6 +1011,7 @@
       out.width = state.workCanvas.width; out.height = state.workCanvas.height;
       out.getContext('2d').drawImage(state.workCanvas, 0, 0);
       state.finalCanvas = out;
+      state.colorBase = out;
       state.colorSettings = { brightness: 0, contrast: 0, saturation: 0, grayscale: false };
       state.step = 'color';
       render();
@@ -1022,19 +1024,23 @@
   function renderColor(body) {
     body.appendChild(stepsBar(3));
     var stage = el('div', { class: 'ic-stage' });
-    var canvas = el('canvas', { class: 'ic-view' });
+    var canvas = el('canvas', { class: 'ic-view ic-checker-bg' });
     stage.appendChild(canvas);
     body.appendChild(stage);
 
     var baseData = null;
+    // Immer vom unbearbeiteten Zwischenstand ausgehen - sonst würden die
+    // Regler beim Zurückkehren (z. B. aus dem Freistellen) doppelt wirken.
+    if (!state.colorBase) { state.colorBase = state.finalCanvas; }
+    var colorBase = state.colorBase;
 
     function draw() {
       var f = state.colorSettings;
-      canvas.width = state.finalCanvas.width;
-      canvas.height = state.finalCanvas.height;
+      canvas.width = colorBase.width;
+      canvas.height = colorBase.height;
       var ctx = canvas.getContext('2d');
       if (!baseData) {
-        ctx.drawImage(state.finalCanvas, 0, 0);
+        ctx.drawImage(colorBase, 0, 0);
         baseData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       }
       var out = ctx.createImageData(canvas.width, canvas.height);
@@ -1076,13 +1082,246 @@
       state.step = 'crop';
       render();
     }, function () {
-      // Ergebnis fest in finalCanvas übernehmen.
+      // Ergebnis fest in finalCanvas übernehmen; das Freistellen beginnt
+      // von diesem Stand aus neu.
       state.finalCanvas = canvas;
+      state.cutoutCanvas = null;
+      state.cutoutUndo = null;
+      state.step = 'cutout';
+      render();
+    });
+  }
+
+  // PNG, sobald das Bild (z. B. nach dem Freistellen) durchsichtige Pixel
+  // hat - sonst JPEG (deutlich kleiner).
+  function canvasHasAlpha(c) {
+    var d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    for (var i = 3; i < d.length; i += 4) { if (d[i] < 255) { return true; } }
+    return false;
+  }
+  function canvasDataUrl(c, quality) {
+    return canvasHasAlpha(c) ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', quality || 0.88);
+  }
+
+  // ==================================================================
+  // FREISTELLEN: Motiv vom Hintergrund lösen - Radierer/Wiederherstellen
+  // (Pinsel) sowie Rechteck/Ellipse (innen behalten oder innen löschen).
+  // Durchsichtige Bereiche werden als PNG gespeichert.
+  // ==================================================================
+  function renderCutout(body) {
+    body.appendChild(stepsBar(4));
+    var base = state.finalCanvas;
+    if (!state.cutoutCanvas) {
+      var w0 = document.createElement('canvas');
+      w0.width = base.width; w0.height = base.height;
+      w0.getContext('2d').drawImage(base, 0, 0);
+      state.cutoutCanvas = w0;
+      state.cutoutUndo = [];
+    }
+    var work = state.cutoutCanvas;
+    var wctx = work.getContext('2d');
+    if (!state.cutoutTool) { state.cutoutTool = 'erase'; }
+    if (!state.cutoutSize) { state.cutoutSize = 30; }
+
+    var toolRow = el('div', { class: 'ic-crop-tools ic-cutout-tools' });
+    var tools = [
+      { key: 'erase', icon: 'eraser', label: S.cutout_erase },
+      { key: 'restore', icon: 'brush', label: S.cutout_restore },
+      { key: 'rect', icon: 'rectsel', label: S.cutout_rect },
+      { key: 'ellipse', icon: 'ellipsesel', label: S.cutout_ellipse }
+    ];
+    var toolBtns = {};
+    tools.forEach(function (t) {
+      var b = el('button', { class: 'ic-btn ic-btn-ghost' + (state.cutoutTool === t.key ? ' active' : ''), type: 'button', title: t.label },
+        [icon(t.icon), el('span', {}, [t.label])]);
+      b.addEventListener('click', function () {
+        state.cutoutTool = t.key;
+        Object.keys(toolBtns).forEach(function (k) { toolBtns[k].classList.toggle('active', k === t.key); });
+        syncOptions();
+      });
+      toolBtns[t.key] = b;
+      toolRow.appendChild(b);
+    });
+    var sizeWrap = el('label', { class: 'ic-cutout-size', title: S.cutout_size }, [S.cutout_size]);
+    var sizeInput = el('input', { type: 'range', min: 4, max: 120, value: state.cutoutSize });
+    sizeInput.addEventListener('input', function () { state.cutoutSize = parseInt(sizeInput.value, 10); });
+    sizeWrap.appendChild(sizeInput);
+    toolRow.appendChild(sizeWrap);
+    var modeSel = el('select', { class: 'ic-cutout-mode', title: S.cutout_shape_mode });
+    [['keep', S.cutout_keep], ['remove', S.cutout_remove]].forEach(function (o) {
+      var opt = el('option', { value: o[0] }, [o[1]]);
+      if ((state.cutoutShapeMode || 'keep') === o[0]) { opt.selected = true; }
+      modeSel.appendChild(opt);
+    });
+    modeSel.addEventListener('change', function () { state.cutoutShapeMode = modeSel.value; });
+    toolRow.appendChild(modeSel);
+    function syncOptions() {
+      var brush = state.cutoutTool === 'erase' || state.cutoutTool === 'restore';
+      sizeWrap.style.display = brush ? '' : 'none';
+      modeSel.style.display = brush ? 'none' : '';
+    }
+    var undoBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', title: S.cutout_undo }, [icon('undo')]);
+    var resetBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', title: S.cutout_reset }, [icon('rotate')]);
+    toolRow.appendChild(undoBtn);
+    toolRow.appendChild(resetBtn);
+    body.appendChild(toolRow);
+    syncOptions();
+
+    var stage = el('div', { class: 'ic-stage' });
+    var view = el('canvas', { class: 'ic-view ic-cutout-view ic-checker-bg' });
+    view.width = work.width; view.height = work.height;
+    stage.appendChild(view);
+    body.appendChild(stage);
+    body.appendChild(el('p', { class: 'ic-hint ic-cutout-hint' }, [S.cutout_hint]));
+    // Anzeigegröße wie in den anderen Schritten, Pixelraster bleibt aber das
+    // des Bildes (keine Qualitätsverluste beim Radieren).
+    var probe = document.createElement('canvas');
+    var dispScale = fitImageToStage(probe, stage, work.width, work.height);
+    view.style.width = probe.style.width;
+    view.style.height = probe.style.height;
+    var vctx = view.getContext('2d');
+
+    var preview = null;
+    function redraw() {
+      vctx.clearRect(0, 0, view.width, view.height);
+      vctx.drawImage(work, 0, 0);
+      if (preview) {
+        vctx.save();
+        vctx.lineWidth = 2 / dispScale;
+        vctx.setLineDash([8 / dispScale, 6 / dispScale]);
+        vctx.strokeStyle = '#fff';
+        shapePath(vctx, preview);
+        vctx.stroke();
+        vctx.strokeStyle = '#000';
+        vctx.lineDashOffset = 7 / dispScale;
+        vctx.stroke();
+        vctx.restore();
+      }
+    }
+    function shapePath(ctx, r) {
+      var x = Math.min(r.x1, r.x2), y = Math.min(r.y1, r.y2);
+      var w = Math.abs(r.x2 - r.x1), h = Math.abs(r.y2 - r.y1);
+      ctx.beginPath();
+      if (r.kind === 'ellipse') {
+        ctx.ellipse(x + w / 2, y + h / 2, Math.max(0.5, w / 2), Math.max(0.5, h / 2), 0, 0, Math.PI * 2);
+      } else {
+        ctx.rect(x, y, w, h);
+      }
+    }
+    function pushUndo() {
+      var c = document.createElement('canvas');
+      c.width = work.width; c.height = work.height;
+      c.getContext('2d').drawImage(work, 0, 0);
+      state.cutoutUndo.push(c);
+      if (state.cutoutUndo.length > 20) { state.cutoutUndo.shift(); }
+    }
+    function stamp(x, y, r, restore) {
+      wctx.save();
+      wctx.beginPath();
+      wctx.arc(x, y, r, 0, Math.PI * 2);
+      if (restore) {
+        wctx.clip();
+        wctx.clearRect(x - r - 1, y - r - 1, 2 * r + 2, 2 * r + 2);
+        wctx.drawImage(base, 0, 0);
+      } else {
+        wctx.globalCompositeOperation = 'destination-out';
+        wctx.fill();
+      }
+      wctx.restore();
+    }
+    function toImg(ev) {
+      var rc = view.getBoundingClientRect();
+      return { x: (ev.clientX - rc.left) / rc.width * work.width, y: (ev.clientY - rc.top) / rc.height * work.height };
+    }
+    var drag = null;
+    view.addEventListener('pointerdown', function (ev) {
+      ev.preventDefault();
+      try { view.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+      var pt = toImg(ev);
+      pushUndo();
+      var tool = state.cutoutTool;
+      if (tool === 'erase' || tool === 'restore') {
+        var r = state.cutoutSize / 2 / dispScale;
+        drag = { brush: true, restore: tool === 'restore', last: pt, r: r };
+        stamp(pt.x, pt.y, r, drag.restore);
+      } else {
+        drag = { brush: false };
+        preview = { kind: tool, x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y };
+      }
+      redraw();
+    });
+    view.addEventListener('pointermove', function (ev) {
+      if (!drag) { return; }
+      var pt = toImg(ev);
+      if (drag.brush) {
+        var dx = pt.x - drag.last.x, dy = pt.y - drag.last.y;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        var stepLen = Math.max(1, drag.r / 3);
+        var n = Math.ceil(dist / stepLen);
+        for (var i = 1; i <= n; i++) {
+          stamp(drag.last.x + dx * i / n, drag.last.y + dy * i / n, drag.r, drag.restore);
+        }
+        drag.last = pt;
+      } else {
+        preview.x2 = pt.x; preview.y2 = pt.y;
+        if (ev.shiftKey) {
+          var side = Math.max(Math.abs(pt.x - preview.x1), Math.abs(pt.y - preview.y1));
+          preview.x2 = preview.x1 + (pt.x < preview.x1 ? -side : side);
+          preview.y2 = preview.y1 + (pt.y < preview.y1 ? -side : side);
+        }
+      }
+      redraw();
+    });
+    function endDrag() {
+      if (!drag) { return; }
+      if (!drag.brush && preview) {
+        if (Math.abs(preview.x2 - preview.x1) > 3 && Math.abs(preview.y2 - preview.y1) > 3) {
+          wctx.save();
+          wctx.globalCompositeOperation = (state.cutoutShapeMode || 'keep') === 'keep' ? 'destination-in' : 'destination-out';
+          shapePath(wctx, preview);
+          wctx.fill();
+          wctx.restore();
+        } else {
+          state.cutoutUndo.pop();
+        }
+        preview = null;
+      }
+      drag = null;
+      redraw();
+    }
+    view.addEventListener('pointerup', endDrag);
+    view.addEventListener('pointercancel', endDrag);
+    undoBtn.addEventListener('click', function () {
+      var prev = state.cutoutUndo.pop();
+      if (!prev) { return; }
+      wctx.save();
+      wctx.globalCompositeOperation = 'copy';
+      wctx.drawImage(prev, 0, 0);
+      wctx.restore();
+      redraw();
+    });
+    resetBtn.addEventListener('click', function () {
+      pushUndo();
+      wctx.save();
+      wctx.globalCompositeOperation = 'copy';
+      wctx.drawImage(base, 0, 0);
+      wctx.restore();
+      redraw();
+    });
+    redraw();
+
+    var isEditingExisting = !!state.editingPhotoId;
+    var arrows = stageNavArrows(stage, function () {
+      state.step = 'color';
+      render();
+    }, function () {
+      var out = document.createElement('canvas');
+      out.width = work.width; out.height = work.height;
+      out.getContext('2d').drawImage(work, 0, 0);
       if (isEditingExisting) {
         arrows.nextBtn.disabled = true;
         var photoId = state.editingPhotoId;
-        var dataUrl = state.finalCanvas.toDataURL('image/jpeg', 0.88);
-        callAjax('mod_pinnwand_update_photo', { cmid: cfg.cmid, photoid: photoId, imagedata: dataUrl }).then(function (res) {
+        callAjax('mod_pinnwand_update_photo', { cmid: cfg.cmid, photoid: photoId, imagedata: canvasDataUrl(out, 0.88) }).then(function (res) {
           var existing = state.photos.filter(function (p) { return p.id === photoId; })[0];
           if (existing) { existing.url = res.url; }
           resetCaptureState();
@@ -1094,6 +1333,9 @@
         });
         return;
       }
+      // finalCanvas bleibt der Stand VOR dem Freistellen (Zurück aus
+      // "Angaben" setzt so das Freistellen fort); gespeichert wird out.
+      state.sourceCanvasOut = out;
       state.step = 'source';
       render();
     }, isEditingExisting ? 'check' : 'arrowright', isEditingExisting ? S.savephoto : S.next);
@@ -1121,7 +1363,7 @@
         var gg = 0.299 * r + 0.587 * g + 0.114 * b;
         r = g = b = gg;
       }
-      o[i] = clamp255(r); o[i + 1] = clamp255(g); o[i + 2] = clamp255(b); o[i + 3] = 255;
+      o[i] = clamp255(r); o[i + 1] = clamp255(g); o[i + 2] = clamp255(b); o[i + 3] = d[i + 3];
     }
   }
   function clamp255(v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
@@ -1132,10 +1374,10 @@
   // Galerieansicht (Lightbox) pro Foto definiert (siehe openLightbox()).
   // ==================================================================
   function renderSource(body) {
-    body.appendChild(stepsBar(4));
+    body.appendChild(stepsBar(5));
 
     var preview = el('div', { class: 'ic-stage', style: 'flex:0 0 40%' });
-    var img = el('img', { src: state.finalCanvas.toDataURL('image/jpeg', 0.7), style: 'max-width:100%;max-height:100%' });
+    var img = el('img', { class: 'ic-checker-bg', src: canvasDataUrl(state.sourceCanvasOut || state.finalCanvas, 0.7), style: 'max-width:100%;max-height:100%' });
     preview.appendChild(img);
     body.appendChild(preview);
 
@@ -1204,7 +1446,7 @@
       saveBtn.disabled = true;
       // Das Raster wird hier bewusst noch NICHT festgelegt - das passiert
       // erst später pro Foto in der Galerieansicht (Lightbox).
-      var dataUrl = state.finalCanvas.toDataURL('image/jpeg', 0.88);
+      var dataUrl = canvasDataUrl(state.sourceCanvasOut || state.finalCanvas, 0.88);
       callAjax('mod_pinnwand_save_photo', {
         cmid: cfg.cmid,
         imagedata: dataUrl,
@@ -1240,6 +1482,10 @@
     state.workCanvas = null;
     state.cropRect = null;
     state.finalCanvas = null;
+    state.colorBase = null;
+    state.cutoutCanvas = null;
+    state.cutoutUndo = null;
+    state.sourceCanvasOut = null;
     state.editingPhotoId = null;
     state.textFrame = null;
     state.captureMode = null;
@@ -4933,6 +5179,9 @@
     mirror: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><path d="M16 8l4 4-4 4"/><path d="M8 8l-4 4 4 4"/></svg>',
     person: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
     courseback: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>',
+    imageedit: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 17l-4.5-4.5L7 21"/><path d="M18.4 2.6a1.9 1.9 0 0 1 2.7 2.7L15 11.4l-3.6.9.9-3.6z"/></svg>',
+    rectsel: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"><rect x="4" y="5" width="16" height="14" rx="1"/></svg>',
+    ellipsesel: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"><ellipse cx="12" cy="12" rx="9" ry="7"/></svg>',
     scissors: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="8.5" y1="8" x2="20" y2="19"/><line x1="8.5" y1="16" x2="20" y2="5"/></svg>',
     calendar: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>',
     upload: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><polyline points="7 9 12 4 17 9"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>',
@@ -5038,6 +5287,15 @@
   // Tiefstellen): der Knopf zeigt die aktuelle Wahl, das Menü die Optionen
   // mit Symbol + Beschriftung. mousedown verhindert überall den
   // Fokuswechsel, damit eine Zeichen-Auswahl im Text erhalten bleibt.
+  function BLEND_MODES() {
+    return [
+      { value: '', text: '\u25A0', label: S.blend_normal },
+      { value: 'multiply', text: '\u00D7', label: S.blend_multiply },
+      { value: 'difference', text: '\u25D1', label: S.blend_difference },
+      { value: 'color-burn', text: '\u2600', label: S.blend_burn }
+    ];
+  }
+
   function iconDropdown(items, currentValue, title, onPick) {
     var wrap = el('div', { class: 'ic-dropdown' });
     function face(it) { return it.icon ? icon(it.icon) : el('span', { class: 'ic-dropdown-text' }, [it.text || it.label]); }
@@ -5778,6 +6036,7 @@
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
       item.style.zIndex = p.canvasz || 0;
+      if (p.blendmode) { item.style.mixBlendMode = p.blendmode; }
       if (layerPeekHides(p.canvasz || 0)) { item.classList.add('ic-layer-peek-hidden'); }
       var backPhoto = p.backphotoid ? state.photos.filter(function (o) { return o.id === p.backphotoid; })[0] : null;
       if (p.wordfielddata && !p.showingback) {
@@ -5843,6 +6102,20 @@
         item.appendChild(pinToggle);
       }
 
+      // Mischmodus mit dem Hintergrund (Überdecken/Multiplizieren/
+      // Invertieren/Farbig nachbelichten) - wirkt gleich auf der Pinnwand,
+      // in der Präsentation und im HTML-Export.
+      var blendWrap = el('div', { class: 'ic-blend-toggle' });
+      blendWrap.appendChild(iconDropdown(BLEND_MODES(), p.blendmode || '', S.blend_mode, function (mode) {
+        callAjax('mod_pinnwand_set_blendmode', { cmid: cfg.cmid, photoid: p.id, mode: mode }).then(function (res) {
+          p.blendmode = res.blendmode || '';
+          item.style.mixBlendMode = p.blendmode || '';
+        });
+      }));
+      blendWrap.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); });
+      blendWrap.addEventListener('click', function (ev) { ev.stopPropagation(); });
+      item.appendChild(blendWrap);
+
       // Zum Roten Faden hinzufügen - nur während das Faden-Panel offen ist,
       // um die Pinnwand im Normalfall nicht zusätzlich zu überladen.
       if (state.threadPanelOpen && state.canusethreads) {
@@ -5884,7 +6157,7 @@
       // Handles (Größe/Rotation) nur bei Hover (Maus) bzw. nach Antippen
       // (Touch) einblenden - siehe .ic-arrange-item.show-handles in CSS.
       item.addEventListener('click', function (ev) {
-        if (ev.target.closest && ev.target.closest('.ic-pin-toggle, .ic-thread-add-toggle')) { return; }
+        if (ev.target.closest && ev.target.closest('.ic-pin-toggle, .ic-thread-add-toggle, .ic-blend-toggle')) { return; }
         item.classList.toggle('show-handles');
       });
 
@@ -7664,10 +7937,9 @@
     } else {
       // Bildschirmfüllend relativ zur Bühne (nicht in festen Pixeln), damit
       // der Hintergrund auch nach dem Wechsel in den Vollbildmodus passt.
-      bgLayer.style.left = '0'; bgLayer.style.top = '0';
-      bgLayer.style.width = '100%';
-      bgLayer.style.height = '100%';
-      stageEl.insertBefore(bgLayer, canvasEl);
+      // Als feststehende Ebene IN der Leinwand (gegenläufig transformiert),
+      // damit Objekte mit Mischmodus mit dem Hintergrund mischen können.
+      player.setScreenLayer(bgLayer);
     }
 
     // Alle Stationen müssen vom selben Board stammen. Beim eigenen Faden ist
@@ -7702,6 +7974,7 @@
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
       pEl.style.zIndex = p.canvasz || 0;
+      if (p.blendmode) { pEl.style.mixBlendMode = p.blendmode; }
       var live = null;
       if (tf) {
         try { live = buildTextFrameLiveDom(tf, { noGuide: true }); } catch (e2) { live = null; tf = null; }
@@ -8369,7 +8642,7 @@
     function point(ev) { var t = ev.touches ? ev.touches[0] : ev; return { x: t.clientX, y: t.clientY }; }
     function down(ev) {
       if (ev.target.classList.contains('ic-resize')) { return; }
-      if (ev.target.closest && ev.target.closest('.ic-pin-toggle, .ic-thread-add-toggle')) { return; }
+      if (ev.target.closest && ev.target.closest('.ic-pin-toggle, .ic-thread-add-toggle, .ic-blend-toggle')) { return; }
       if (state.boardDrawMode) { return; }
       dragging = true; totalDelta = 0;
       var p = point(ev);
@@ -8497,7 +8770,7 @@
     gridBtn.addEventListener('click', function () { closeAllPanels('grid'); toggleGridPanel(); });
     var dataBtn = el('button', { class: 'ic-fab', title: S.databtn }, [icon('info')]);
     dataBtn.addEventListener('click', function () { closeAllPanels('data'); toggleDataPanel(); });
-    var editBtn = el('button', { class: 'ic-fab', title: S.editphoto }, [icon('scissors')]);
+    var editBtn = el('button', { class: 'ic-fab', title: S.editphoto }, [icon('imageedit')]);
     editBtn.addEventListener('click', function () {
       var p = state.photos[state.lightboxIndex];
       exitDrawing(true);
@@ -8808,7 +9081,7 @@
       // .ic-lb-focus) - ruft die dortige, bereits vorhandene Logik per
       // click() auf, statt sie zu duplizieren.
       var annotTopRow = el('div', { class: 'ic-ink-dock-row' });
-      var annotEditBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.editphoto }, [icon('scissors')]);
+      var annotEditBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.editphoto }, [icon('imageedit')]);
       annotEditBtn.addEventListener('click', function () { editBtn.click(); });
       var annotInfoBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.databtn }, [icon('info')]);
       annotInfoBtn.addEventListener('click', function () { dataBtn.click(); });

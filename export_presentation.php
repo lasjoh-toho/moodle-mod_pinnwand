@@ -82,6 +82,7 @@ function pinnwand_export_photo_data($photoid, $context, $fs, &$photocache, $incl
         'canvasrot' => (float) $photo->canvasrot,
         'canvasz' => (int) $photo->canvasz,
         'iswordart' => !empty($photo->wordfielddata),
+        'blendmode' => (string) ($photo->blendmode ?? ''),
     ];
     // Annotationen des Objekts nur, wenn gewünscht UND auf der Pinnwand
     // sichtbar geschaltet (annotationonboard) - genau das, was man dort sieht.
@@ -417,10 +418,7 @@ function pinnwand_export_build_html($title, $json) {
     bgEl.classList.add('moves');
     canvas.appendChild(bgEl);
   } else {
-    bgEl.style.left = '0'; bgEl.style.top = '0';
-    bgEl.style.width = '100%';
-    bgEl.style.height = '100%';
-    stage.insertBefore(bgEl, canvas);
+    player.setScreenLayer(bgEl);
   }
 
   // Alle Board-Objekte als feste Ebene (Positionen exakt wie auf dem
@@ -438,6 +436,7 @@ function pinnwand_export_build_html($title, $json) {
     pel.style.width = p.canvasw + 'px';
     pel.style.transform = 'rotate(' + (p.canvasrot || 0) + 'deg)';
     pel.style.zIndex = p.canvasz || 0;
+    if (p.blendmode) { pel.style.mixBlendMode = p.blendmode; }
     var img = document.createElement('img');
     img.src = p.url; img.alt = '';
     var rec = { el: pel, z: p.canvasz || 0, img: img, photo: p, box: null };

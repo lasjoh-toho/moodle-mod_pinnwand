@@ -928,7 +928,9 @@ svg.ic-board-ink-layer { overflow: visible; }
 .ic-bg-thumbs { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
 .ic-bg-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; flex: 0 0 auto; border: 2px solid transparent; }
 .ic-bg-thumb:active { border-color: var(--ic-accent); }
-.ic-arrange-canvas { position: relative; z-index: 1; width: 1400px; height: 1000px; max-width: none; }
+/* z-index:auto (kein eigener Stapelkontext): Objekte mit mix-blend-mode
+   mischen so direkt mit dem Pinnwand-Hintergrund (.ic-canvas-bg). */
+.ic-arrange-canvas { position: relative; z-index: auto; width: 1400px; height: 1000px; max-width: none; }
 .ic-arrange-item { position: absolute; touch-action: none; }
 .ic-arrange-item img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
 .ic-arrange-item.ic-wordfield-item img { border-radius: 0; box-shadow: none; }
@@ -1016,6 +1018,15 @@ svg.ic-board-ink-layer { overflow: visible; }
   border: 2px solid #fff; background: rgba(20,21,24,.85); color: #fff; padding: 0;
   display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s;
   z-index: 5;
+}
+.ic-blend-toggle {
+  position: absolute; left: -10px; bottom: -10px; z-index: 5; opacity: 0; transition: opacity .15s;
+}
+.ic-arrange-item:hover .ic-blend-toggle, .ic-arrange-item.show-handles .ic-blend-toggle,
+.ic-blend-toggle:focus-within { opacity: 1; }
+.ic-blend-toggle .ic-dropdown-btn {
+  height: 26px; min-width: 26px; padding: 0 6px; border-radius: 13px;
+  border: 2px solid #fff; background: rgba(20,21,24,.85); color: #fff; font-size: 12px;
 }
 .ic-arrange-item canvas.ic-annot-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
@@ -1377,3 +1388,18 @@ input.ic-stepper-value {
 .ic-layer-peek-btn.active { background: var(--ic-accent); color: #fff; }
 .ic-layer-peek-btn svg { width: 16px; height: 16px; }
 .ic-thread-item.ic-layer-row-hidden { opacity: .4; }
+
+/* Freistellen (Bildeditor): Schachbrett zeigt durchsichtige Bereiche. */
+.ic-checker-bg {
+  background-color: #fff;
+  background-image: linear-gradient(45deg, #d6d6d6 25%, transparent 25%), linear-gradient(-45deg, #d6d6d6 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #d6d6d6 75%), linear-gradient(-45deg, transparent 75%, #d6d6d6 75%);
+  background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+.ic-cutout-view { cursor: crosshair; touch-action: none; }
+.ic-cutout-tools { flex-wrap: wrap; align-items: center; }
+.ic-cutout-tools .ic-btn.active { background: rgba(79,140,255,.25); box-shadow: inset 0 0 0 1px #4f8cff; }
+.ic-cutout-size { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.ic-cutout-size input { width: 110px; }
+.ic-cutout-mode { padding: 4px 6px; border-radius: 6px; }
+.ic-cutout-hint { text-align: center; margin: 4px 0 0; }

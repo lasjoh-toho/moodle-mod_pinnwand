@@ -1737,6 +1737,21 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Jede Ebene hat einen Augen-Knopf, der alles darüberliegende ausblendet -
   so sieht man, was in der Präsentation bei dieser Ebene sichtbar ist.
 
+### Einhundertachtundvierzigste Überarbeitung — Freistellen und Mischmodi
+
+- **Neues Symbol "Bild bearbeiten"** (Bild mit Stift) ersetzt die Schere in
+  der Galerie und im Annotations-Panel.
+- **Freistellen** als eigener Schritt im Bildeditor (nach "Farbe"):
+  Radierer, Wiederherstellen-Pinsel, Rechteck und Kreis (innen behalten
+  oder innen löschen, Umschalt = Quadrat/Kreis), Rückgängig und
+  Zurücksetzen. Bilder mit durchsichtigen Stellen werden als PNG
+  gespeichert; Perspektive und Farbe erhalten die Transparenz.
+- **Mischmodi** für Bilder und Texte: Überdecken, Multiplizieren,
+  Invertieren, Farbig nachbelichten - kleiner Knopf unten links am Objekt
+  (beim Hover). Wirkt auf der Pinnwand, in der Präsentation und im
+  HTML-Export; der feststehende Präsentationshintergrund liegt dazu in der
+  gezoomten Ebene (gegenläufig transformiert).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

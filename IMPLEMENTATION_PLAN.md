@@ -4173,3 +4173,29 @@ Schichtung (Layer-Panel):
   wirkt nur, solange die Schichtung offen ist.
 
 Shipped als Version `2026083145` / `0.147.0`.
+
+## Phase 141
+
+Bildeditor:
+- Icon `imageedit` statt `scissors` für "Bild bearbeiten".
+- Neuer Schritt `cutout` (`renderCutout`) zwischen `color` und `source`;
+  `stepsBar` hat sechs Stufen. Arbeitsstand in `state.cutoutCanvas`
+  (Undo-Stapel `state.cutoutUndo`), Werkzeuge erase/restore (Pinsel-Stempel,
+  destination-out bzw. Clip + Original), rect/ellipse (destination-in bzw.
+  destination-out). Speichern bestehender Bilder passiert jetzt hier.
+- `canvasDataUrl(c)`: PNG bei Transparenz, sonst JPEG. Perspektive
+  (`bilinearSample` inkl. Alpha) und Farbe (`applyColorAdjust`) erhalten
+  den Alphakanal; Farbe rechnet immer vom `state.colorBase`.
+
+Mischmodi:
+- Feld `pinnwand_photos.blendmode` ('', multiply, difference, color-burn),
+  Webservice `mod_pinnwand_set_blendmode`, Ausgabe in `get_photos`, Backup
+  und Export.
+- Pinnwand: `.ic-arrange-canvas` ohne eigenen Stapelkontext (`z-index:
+  auto`), damit `mix-blend-mode` mit `.ic-canvas-bg` mischt; Auswahl über
+  `.ic-blend-toggle` (`iconDropdown`, `BLEND_MODES()`).
+- Player: `setScreenLayer(el)` legt eine bildschirmfeste Ebene in die
+  Leinwand und hebt deren Transformation in `applyTransform` exakt auf -
+  genutzt für den nicht mitzoomenden Hintergrund in Moodle und im Export.
+
+Shipped als Version `2026083146` / `0.148.0`.

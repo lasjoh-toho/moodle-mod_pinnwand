@@ -236,6 +236,7 @@ class mod_pinnwand_external extends external_api {
                 'showingback' => (bool) $r->showingback,
                 'boardplaced' => (bool) $r->boardplaced,
                 'wordfielddata' => (string) ($r->wordfielddata ?? ''),
+                'blendmode' => (string) ($r->blendmode ?? ''),
                 'otherboardcount' => $placementcounts[$r->id] ?? 0,
                 'userfullname' => fullname($USER),
             ];
@@ -357,6 +358,7 @@ class mod_pinnwand_external extends external_api {
                 'showingback' => new external_value(PARAM_BOOL, 'Rückseite zeigt gerade nach oben'),
                 'boardplaced' => new external_value(PARAM_BOOL, 'Hat reale Board-Koordinaten (ist auf der Leinwand platziert)'),
                 'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON) oder leer'),
+                'blendmode' => new external_value(PARAM_ALPHAEXT, 'Mischmodus mit dem Hintergrund', VALUE_DEFAULT, ''),
                 'otherboardcount' => new external_value(PARAM_INT, 'Anzahl zusätzlicher aktiver Platzierungen auf anderen Boards'),
                 'userfullname' => new external_value(PARAM_TEXT, 'Name der hochladenden Person (auf dem eigenen Board immer man selbst)'),
             ])),
@@ -1615,6 +1617,42 @@ class mod_pinnwand_external extends external_api {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'OK'),
             'annotationonboard' => new external_value(PARAM_BOOL, 'Neuer Zustand'),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // set_blendmode: Mischmodus eines eigenen Objekts mit dem Hintergrund
+    // (Überdecken, Multiplizieren, Invertieren, Farbig nachbelichten).
+    // ---------------------------------------------------------------
+    public static function set_blendmode_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+            'mode' => new external_value(PARAM_ALPHAEXT, 'leer, multiply, difference oder color-burn'),
+        ]);
+    }
+
+    public static function set_blendmode($cmid, $photoid, $mode) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_blendmode_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'mode' => $mode,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->pinnwandid != $instance->id
+                || ($photo->userid != $USER->id && !has_capability('mod/pinnwand:manage', $context))) {
+            throw new moodle_exception('nopermissions', 'error', '', 'set_blendmode');
+        }
+        $allowed = ['', 'multiply', 'difference', 'color-burn'];
+        $photo->blendmode = in_array($params['mode'], $allowed, true) ? $params['mode'] : '';
+        $DB->update_record('pinnwand_photos', $photo);
+        return ['success' => true, 'blendmode' => $photo->blendmode];
+    }
+
+    public static function set_blendmode_returns() {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'OK'),
+            'blendmode' => new external_value(PARAM_ALPHAEXT, 'Neuer Mischmodus'),
         ]);
     }
 

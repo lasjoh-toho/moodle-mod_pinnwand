@@ -178,6 +178,14 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:view',
     ],
+    'mod_pinnwand_set_blendmode' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'set_blendmode',
+        'description' => 'Setzt den Mischmodus eines Objekts mit dem Hintergrund',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:submit',
+    ],
     'mod_pinnwand_set_annotation_onboard' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'set_annotation_onboard',
