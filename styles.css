@@ -1366,3 +1366,14 @@ input.ic-stepper-value {
 .ic-board-ink-capture.ic-ink-tool-text { cursor: text; }
 .ic-ink-text-input { position: fixed; z-index: 400; min-width: 140px; transform: translateY(-2px); background: rgba(0,0,0,.25);
   border: 1px dashed rgba(255,255,255,.6); border-radius: 4px; padding: 0 4px; outline: none; font-family: sans-serif; }
+
+/* Schichtung: "alles darüber ausblenden" (Präsentations-Vorschau). */
+.ic-layer-peek-hidden { visibility: hidden !important; }
+.ic-layer-peek-btn {
+  flex: 0 0 auto; margin-left: auto; width: 28px; height: 28px; border-radius: 50%; border: none; padding: 0;
+  background: transparent; color: var(--ic-muted); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.ic-layer-peek-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+.ic-layer-peek-btn.active { background: var(--ic-accent); color: #fff; }
+.ic-layer-peek-btn svg { width: 16px; height: 16px; }
+.ic-thread-item.ic-layer-row-hidden { opacity: .4; }

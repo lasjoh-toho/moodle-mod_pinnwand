@@ -5778,6 +5778,7 @@
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
       item.style.zIndex = p.canvasz || 0;
+      if (layerPeekHides(p.canvasz || 0)) { item.classList.add('ic-layer-peek-hidden'); }
       var backPhoto = p.backphotoid ? state.photos.filter(function (o) { return o.id === p.backphotoid; })[0] : null;
       if (p.wordfielddata && !p.showingback) {
         // Textobjekt: live rendern (echtes DOM statt eingefrorenes Bild) -
@@ -5983,6 +5984,7 @@
               'transform:rotate(' + it.framerot + 'deg);border-color:' + lineColor + ';border-width:' + lineWidth + 'px'
           });
           frameEl.style.zIndex = it.framez || 0;
+          if (layerPeekHides(it.framez || 0)) { frameEl.classList.add('ic-layer-peek-hidden'); }
           var stepNum = boardItems.indexOf(it) + 1;
           frameEl.appendChild(el('span', { style: 'color:' + lineColor }, [it.framelabel || String(stepNum)]));
           canvas.appendChild(frameEl);
@@ -6074,7 +6076,9 @@
           return { x: photo.canvasx + photo.canvasw / 2, y: photo.canvasy + (photo.canvasw * 0.7) / 2 };
         }
         var pts = boardItems.map(centerOf).filter(Boolean);
-        if (pts.length >= 2) {
+        // Im Schichtung-Modus (ohne offenes Faden-Panel) nur die Rahmen,
+        // keine Fadenlinie - dort geht es um Ebenen, nicht um die Reihenfolge.
+        if (pts.length >= 2 && state.threadPanelOpen) {
           // Canvas2D statt SVG: canvas.width/height sind echte Pixel-
           // Dimensionen des Zeichenpuffers, ohne jede Mehrdeutigkeit
           // zwischen Element-Attribut und CSS-Größe (wie sie bei einem
@@ -7090,6 +7094,13 @@
     return panel;
   }
 
+  // Schichtung: "Ansicht ab dieser Ebene" blendet alles aus, was darüber
+  // liegt (höheres z) - genau wie die Präsentation, wenn diese Ebene die
+  // aktive Station ist. Gilt nur, solange das Schichtung-Panel offen ist.
+  function layerPeekHides(z) {
+    return state.layerPanelOpen && state.layerPeekZ != null && z > state.layerPeekZ;
+  }
+
   function renderLayerPanel() {
     var panel = el('div', { class: 'ic-thread-panel' });
     attachSidebarResize(panel);
@@ -7161,6 +7172,18 @@
         row.appendChild(frameLabelEl);
       }
 
+      var peekActive = state.layerPeekKey === key;
+      var peekBtn = el('button', {
+        class: 'ic-layer-peek-btn' + (peekActive ? ' active' : ''), title: peekActive ? S.layer_peek_off : S.layer_peek
+      }, [icon('eye')]);
+      peekBtn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (peekActive) { state.layerPeekKey = null; state.layerPeekZ = null; }
+        else { state.layerPeekKey = key; state.layerPeekZ = entry.z; }
+        render();
+      });
+      row.appendChild(peekBtn);
+      if (state.layerPeekZ != null && entry.z > state.layerPeekZ) { row.classList.add('ic-layer-row-hidden'); }
       row.addEventListener('dragstart', function () { dragFromIdx = idx; row.classList.add('dragging'); });
       row.addEventListener('dragend', function () { row.classList.remove('dragging'); });
       row.addEventListener('dragover', function (ev) { ev.preventDefault(); });

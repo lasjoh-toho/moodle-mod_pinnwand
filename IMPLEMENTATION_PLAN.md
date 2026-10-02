@@ -4160,3 +4160,16 @@ Stift-Werkzeug (Notizen) der Pinnwand:
   dafür stets eine ID (`state.inkSelection`).
 
 Shipped als Version `2026083144` / `0.146.0`.
+
+## Phase 140
+
+Schichtung (Layer-Panel):
+- Ist nur die Schichtung offen, zeigt die Pinnwand die Rahmen, aber keine
+  Fadenlinie mehr (Linie nur bei offenem Faden-Panel).
+- Je Ebene ein Augen-Knopf "alles darüber ausblenden"
+  (`state.layerPeekZ`/`layerPeekKey`, `layerPeekHides(z)`): Objekte und
+  Rahmen mit höherem z werden auf der Pinnwand ausgeblendet - genau die
+  Verdeckungsregel der Präsentation. Erneuter Klick zeigt wieder alles;
+  wirkt nur, solange die Schichtung offen ist.
+
+Shipped als Version `2026083145` / `0.147.0`.

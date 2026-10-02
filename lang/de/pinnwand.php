@@ -400,3 +400,5 @@ $string['ink_tool_select'] = 'Auswählen: Kasten aufziehen oder Notiz anklicken 
 $string['ink_width'] = 'Stärke';
 $string['ink_fontsize'] = 'Schriftgröße';
 $string['ink_delete_selection'] = 'Ausgewählte Notizen löschen (Entf)';
+$string['layer_peek'] = 'Alles darüber ausblenden (so sieht man, was in der Präsentation bei dieser Ebene sichtbar ist)';
+$string['layer_peek_off'] = 'Wieder alle Ebenen zeigen';

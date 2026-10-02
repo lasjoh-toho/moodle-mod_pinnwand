@@ -400,3 +400,5 @@ $string['ink_tool_select'] = 'Select: drag a box or click a note (Shift = add), 
 $string['ink_width'] = 'Width';
 $string['ink_fontsize'] = 'Font size';
 $string['ink_delete_selection'] = 'Delete selected notes (Del)';
+$string['layer_peek'] = 'Hide everything above (shows what is visible in the presentation at this layer)';
+$string['layer_peek_off'] = 'Show all layers again';

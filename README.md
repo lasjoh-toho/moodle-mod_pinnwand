@@ -1731,6 +1731,12 @@ Details und Scoping-Entscheidungen. In Kurzform:
   fügt hinzu); die Auswahl lässt sich verschieben, per Farbfeld umfärben
   und mit dem Papierkorb oder der Entf-Taste löschen.
 
+### Einhundertsiebenundvierzigste Überarbeitung — Schichtung als Präsentations-Vorschau
+
+- Bei geöffneter Schichtung sind die Rahmen sichtbar, die Fadenlinie nicht.
+- Jede Ebene hat einen Augen-Knopf, der alles darüberliegende ausblendet -
+  so sieht man, was in der Präsentation bei dieser Ebene sichtbar ist.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).
