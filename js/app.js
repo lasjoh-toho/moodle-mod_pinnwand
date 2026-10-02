@@ -611,14 +611,27 @@
     var gridText = el('div', { class: 'ic-add-modal-grid' });
     var textFrameBtn = el('button', { class: 'ic-choice-btn' }, [icon('text'), el('span', {}, [S.addtextframe])]);
     textFrameBtn.addEventListener('click', function () {
-      closeAndGo('textframe', function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = false; });
+      closeAndGo('textframe', function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = false; state.slidePlacement = null; });
     });
     var wordArtBtn = el('button', { class: 'ic-choice-btn' }, [icon('text'), el('span', {}, [S.addwordart])]);
     wordArtBtn.addEventListener('click', function () {
-      closeAndGo('textframe', function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = true; });
+      closeAndGo('textframe', function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = true; state.slidePlacement = null; });
+    });
+    // Folie: durchsichtiger Rahmen mit mehreren Textfeldern/Objekten über
+    // dem sichtbaren Pinnwand-Hintergrund, mit Animationsschritten für die
+    // Präsentation. Wird direkt an der gerade sichtbaren Stelle der
+    // Pinnwand angelegt, damit der Editor den passenden Hintergrund zeigt.
+    var slideBtn = el('button', { class: 'ic-choice-btn' }, [icon('frameicon'), el('span', {}, [S.addslide])]);
+    slideBtn.addEventListener('click', function () {
+      var placement = currentSlidePlacement();
+      closeAndGo('textframe', function () {
+        state.textFrame = newSlideFrame(); resetTfHistory(); state.wordArtMode = true;
+        state.slidePlacement = placement;
+      });
     });
     gridText.appendChild(textFrameBtn);
     gridText.appendChild(wordArtBtn);
+    gridText.appendChild(slideBtn);
     panel.appendChild(gridText);
 
     var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel, 'aria-label': S.cancel }, ['\u2715']);
@@ -1488,6 +1501,8 @@
     state.sourceCanvasOut = null;
     state.editingPhotoId = null;
     state.textFrame = null;
+    state.slidePlacement = null;
+    state.slideBlendPending = '';
     state.captureMode = null;
   }
 
@@ -2122,6 +2137,53 @@
     root.appendChild(overlay);
   }
 
+  function newSlideFrame() {
+    return {
+      w: 640, h: 360, preset: 'none', isWordArt: true, isSlide: true, anim: [],
+      texts: [
+        { id: 1, text: '', font: 'sans', size: 40, x: 0.5, y: 0.2 },
+        { id: 2, text: '', font: 'sans', size: 24, x: 0.5, y: 0.6, fontWeight: 400 }
+      ]
+    };
+  }
+
+  // Board-Position für eine neue Folie: Mitte des gerade sichtbaren
+  // Pinnwand-Ausschnitts, halb so breit wie dieser, ganz oben im Stapel.
+  function currentSlidePlacement() {
+    var wrapEl = root.querySelector('.ic-canvas-wrap');
+    if (!wrapEl || state.step !== 'arrange') { return null; }
+    var r = wrapEl.getBoundingClientRect();
+    var z = state.boardZoom || 1;
+    var cx = (r.width / 2 - (state.boardPanX || 0)) / z;
+    var cy = (r.height / 2 - (state.boardPanY || 0)) / z;
+    var w = Math.max(240, Math.min(900, r.width / z * 0.5));
+    var maxZ = 0;
+    state.photos.forEach(function (p) {
+      if (p.boardplaced && (p.boardid || 0) === (state.currentBoard || 0)) { maxZ = Math.max(maxZ, p.canvasz || 0); }
+    });
+    return {
+      canvasx: Math.round(cx - w / 2), canvasy: Math.round(cy - w * 9 / 32), canvasw: Math.round(w),
+      canvasrot: 0, canvasz: maxZ + 1, boardid: state.currentBoard || 0
+    };
+  }
+
+  // Animationsschritte einer Folie: tf.anim ist die Reihenfolge
+  // [{key:'t<id>'|'s<id>', withPrev}] - jedes Objekt erscheint in seinem
+  // Schritt (withPrev = zusammen mit dem vorherigen). Nicht aufgeführte
+  // Objekte sind von Anfang an sichtbar.
+  function slideAnimMap(tf) {
+    var exists = {};
+    (tf.texts || []).forEach(function (t) { exists['t' + t.id] = true; });
+    (tf.shapes || []).forEach(function (sh) { if (!sh.main) { exists['s' + sh.id] = true; } });
+    var map = {}, step = 0;
+    (tf.anim || []).forEach(function (a) {
+      if (!a || !exists[a.key] || map[a.key]) { return; }
+      if (!(a.withPrev && step > 0)) { step++; }
+      map[a.key] = step;
+    });
+    return { map: map, count: step };
+  }
+
   function newTextFrame(wordArtMode) {
     return {
       w: wordArtMode ? 320 : 220, h: wordArtMode ? 220 : 320, preset: wordArtMode ? 'none' : 'paper',
@@ -2547,9 +2609,10 @@
     // Zettel mit Hauptform: die Form IST die Karte - kein rechteckiger
     // Kartenhintergrund/-schatten, der Schatten sitzt auf der Form selbst.
     var cardShape = !opts.noShapes && !wordfieldIsWordart(tf) ? mainShapeOf(tf) : null;
+    var animMap = tf.isSlide ? slideAnimMap(tf).map : {};
     var outer = el('div', {
       class: 'ic-tf-live', style: 'position:relative;box-sizing:border-box;width:100%;aspect-ratio:' + tf.w + '/' + tf.h + ';container-type:inline-size;' +
-        (hasWordart || cardShape ? '' : 'overflow:hidden;border-radius:16px;') +
+        (hasWordart || cardShape ? '' : (tf.isSlide ? 'overflow:hidden;' : 'overflow:hidden;border-radius:16px;')) +
         (preset.shadow && !cardShape ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') +
         (preset.bg || opts.noGuide || cardShape ? '' : 'border:2px dashed rgba(255,255,255,.3);')
     });
@@ -2576,6 +2639,7 @@
           'background-image:url(' + fgShapeSvgDataUri(shapeDef, s) + ');background-repeat:no-repeat;' +
           'background-position:center;background-size:100% 100%;' + (s.wrapMode === 'front' ? 'z-index:2;' : 'z-index:0;')
       });
+      if (animMap['s' + s.id]) { shapeEl.setAttribute('data-pwp-build', String(animMap['s' + s.id])); }
       outer.appendChild(shapeEl);
     });
     var textElByIdx = [];
@@ -2625,6 +2689,7 @@
             (wordartCssFor(t, preset.text, false, 100 / tf.w) || computeStyle1Css(t, preset.text))
         });
       }
+      if (animMap['t' + t.id]) { textEl2.setAttribute('data-pwp-build', String(animMap['t' + t.id])); }
       outer.appendChild(textEl2);
       textElByIdx[idx] = textEl2;
     });
@@ -2686,6 +2751,8 @@
     });
   }
   function measureWordfieldBounds(tf) {
+    // Folie: der Rahmen selbst ist die Ausdehnung (Inhalt wird beschnitten).
+    if (tf.isSlide) { return { x1: 0, y1: 0, x2: tf.w, y2: tf.h }; }
     var key = JSON.stringify(tf);
     var cached = wordfieldBoundsCache[key];
     if (cached) { return { x1: cached.x1, y1: cached.y1, x2: cached.x2, y2: cached.y2 }; }
@@ -3252,7 +3319,27 @@
             render();
           });
         };
-        if (sendDirect && photoid) {
+        var slidePlace = !isEditingExisting && tf.isSlide ? state.slidePlacement : null;
+        if (slidePlace && photoid && !sendDirect) {
+          // Neue Folie: gleich an der geplanten Stelle auf die Pinnwand legen
+          // und danach dorthin zurückkehren.
+          // Erst sichtbar schalten (setzt boardplaced zurück), dann platzieren.
+          callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: photoid, hidden: false }).then(function () {
+            return callAjax('mod_pinnwand_update_layout', {
+              cmid: cfg.cmid, photoid: photoid, x: slidePlace.canvasx, y: slidePlace.canvasy, w: slidePlace.canvasw,
+              rot: 0, z: slidePlace.canvasz, boardid: slidePlace.boardid
+            });
+          }).then(function () {
+            if (!state.slideBlendPending) { return null; }
+            return callAjax('mod_pinnwand_set_blendmode', { cmid: cfg.cmid, photoid: photoid, mode: state.slideBlendPending });
+          }).catch(function () { return null; }).then(function () {
+            refreshPhotos().then(function () {
+              resetCaptureState();
+              state.step = 'arrange';
+              render();
+            });
+          });
+        } else if (sendDirect && photoid) {
           callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: photoid, hidden: false })
             .then(afterSave).catch(afterSave);
         } else {
@@ -3336,6 +3423,15 @@
     var tfShowBg = state.tfShowBoardBg !== false; // Standardmäßig aktiv, außer der Nutzer hat es explizit ausgeschaltet
     var stage = el('div', { class: 'ic-stage ic-tf-stage' + (tfShowBg ? ' ic-tf-stage-boardbg' : '') });
     var editingRec = state.editingPhotoId ? state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0] : null;
+    var isSlide = !!tf.isSlide;
+    // Neue Folie: geplante Board-Position (siehe currentSlidePlacement) -
+    // so zeigt auch der Editor einer noch nicht gespeicherten Folie den
+    // Hintergrund genau an der Stelle, an der sie auf der Pinnwand landet.
+    if (!editingRec && isSlide && state.slidePlacement) {
+      editingRec = { id: -1, canvasx: state.slidePlacement.canvasx, canvasy: state.slidePlacement.canvasy, canvasw: state.slidePlacement.canvasw,
+        canvasz: state.slidePlacement.canvasz, boardid: state.slidePlacement.boardid };
+    }
+    if (isSlide) { stage.classList.add('ic-tf-stage-slide'); }
     var hasBoardPos = editingRec && editingRec.canvasw;
     var bgScale = hasBoardPos ? (tf.w / editingRec.canvasw) : 1;
     if (tfShowBg) {
@@ -3354,9 +3450,14 @@
       // ein neues, noch nicht platziertes Objekt hat keine Board-Position.
       if (hasBoardPos) {
         var thisZ = editingRec.canvasz || 0;
+        // Folie: Hintergrund und Nachbarn auch RUND UM den Rahmen (ganze
+        // Pinnwand im selben Maßstab), damit die Folie im Zusammenhang
+        // gestaltet werden kann. Sonst nur innerhalb des Rahmens.
+        var nOffX = isSlide ? editingRec.canvasx * bgScale : 0, nOffY = isSlide ? editingRec.canvasy * bgScale : 0;
         var neighborsLayer = el('div', {
-          class: 'ic-tf-neighbors-layer',
-          style: ((bbg.type === 'image' || bbg.type === 'url' || bbg.type === 'upload') && bbg.url)
+          class: 'ic-tf-neighbors-layer' + (isSlide ? ' ic-tf-neighbors-wide' : ''),
+          style: (isSlide ? 'left:' + (-nOffX) + 'px;top:' + (-nOffY) + 'px;width:' + (BOARD_W * bgScale) + 'px;height:' + (BOARD_H * bgScale) + 'px;' : '') +
+            (((bbg.type === 'image' || bbg.type === 'url' || bbg.type === 'upload') && bbg.url)
             // Hintergrundbild an der TATSÄCHLICH richtigen Stelle: das Bild
             // wird so groß wie das ganze Board dargestellt (BOARD_W/H
             // skaliert), dann so verschoben, dass genau der Ausschnitt an
@@ -3364,20 +3465,27 @@
             // "cover/zentriert"-Notlösung ohne Bezug zur echten Position.
             ? ('background-image:url(' + bbg.url + ');background-repeat:no-repeat;' +
               'background-size:' + (BOARD_W * bgScale) + 'px ' + (BOARD_H * bgScale) + 'px;' +
-              'background-position:' + (-editingRec.canvasx * bgScale) + 'px ' + (-editingRec.canvasy * bgScale) + 'px;')
-            : ''
+              'background-position:' + (-editingRec.canvasx * bgScale + nOffX) + 'px ' + (-editingRec.canvasy * bgScale + nOffY) + 'px;')
+            : '')
         });
         state.photos.filter(function (p) {
           return p.id !== editingRec.id && !p.hiddenfromboard && p.boardplaced &&
             (p.boardid || 0) === (editingRec.boardid || 0) && (p.canvasz || 0) <= thisZ;
         }).forEach(function (p) {
-          var nx = (p.canvasx - editingRec.canvasx) * bgScale, ny = (p.canvasy - editingRec.canvasy) * bgScale;
+          var nx = (p.canvasx - editingRec.canvasx) * bgScale + nOffX, ny = (p.canvasy - editingRec.canvasy) * bgScale + nOffY;
           var nw = p.canvasw * bgScale;
-          neighborsLayer.appendChild(el('img', {
-            src: p.url, alt: '',
+          // Wortfelder live (wie auf der Pinnwand), Bilder als Bild; Folien
+          // zeigen die Nachbarn deckend und mit ihrem Mischmodus.
+          var nEl = null;
+          if (p.wordfielddata) {
+            try { nEl = buildTextFrameLiveDom(JSON.parse(p.wordfielddata), { noGuide: true }); } catch (eN) { nEl = null; }
+          }
+          var nWrap = el('div', {
             style: 'position:absolute;left:' + nx + 'px;top:' + ny + 'px;width:' + nw + 'px;' +
-              'transform:rotate(' + (p.canvasrot || 0) + 'deg);opacity:.85;pointer-events:none;'
-          }));
+              'transform:rotate(' + (p.canvasrot || 0) + 'deg);opacity:' + (isSlide ? 1 : 0.85) + ';pointer-events:none;' +
+              (isSlide && p.blendmode ? 'mix-blend-mode:' + p.blendmode + ';' : '')
+          }, [nEl || el('img', { src: p.url, alt: '', style: 'width:100%;display:block;' })]);
+          neighborsLayer.appendChild(nWrap);
         });
       }
     }
@@ -4073,6 +4181,7 @@
       var sG = resolveShapeGeom(tf, s);
       var shapeEl = el('div', {
         class: 'ic-textframe-shapeobj' + (state.activeShapeId === s.id ? ' active' : '') + (s.main ? ' ic-shape-main' : ''),
+        'data-shapeid': String(s.id),
         style: 'left:' + sG.x + 'px;top:' + sG.y + 'px;width:' + sG.w + 'px;height:' + sG.h + 'px;' +
           'transform:translate(-50%,-50%) rotate(' + (s.main ? 0 : (s.rotation || 0)) + 'deg);' +
           (s === editorCardShape && preset.shadow ? 'filter:drop-shadow(0 6px 10px rgba(0,0,0,.35));' : '') +
@@ -4834,6 +4943,114 @@
       }
     }
     refreshControls();
+
+    // Folie: Block "Folie & Animation" - weitere Textfelder anlegen und die
+    // Objekte in Animationsschritte sortieren (Reihenfolge, "mit
+    // vorherigem"). Die Schrittnummer erscheint als Marke am Objekt.
+    if (isSlide) {
+      tf.anim = tf.anim || [];
+      var blockAnim = makeAccordionBlock(S.tfblock_slide);
+      blockAnim.classList.add('ic-tf-expanded');
+      blocksWrap.insertBefore(blockAnim, blocksWrap.firstChild);
+      var addTextBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['+ ' + S.slide_addtext]);
+      addTextBtn.addEventListener('click', function () {
+        var nid = Math.max.apply(null, [0].concat(tf.texts.map(function (t) { return t.id; }))) + 1;
+        tf.texts.push({ id: nid, text: '', font: 'sans', size: 24, x: 0.5, y: Math.min(0.9, 0.3 + 0.12 * (tf.texts.length % 6)), fontWeight: 400 });
+        render();
+      });
+      var slideTopRow = el('div', { class: 'ic-anim-toprow' });
+      slideTopRow.appendChild(addTextBtn);
+      // Mischmodus der ganzen Folie mit dem Hintergrund - im Editor direkt
+      // als Vorschau über dem abgebildeten Pinnwand-Ausschnitt.
+      var slidePhoto = state.editingPhotoId ? state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0] : null;
+      var curBlend = slidePhoto ? (slidePhoto.blendmode || '') : (state.slideBlendPending || '');
+      var applyEditorBlend = function (mode) {
+        frame.querySelectorAll('.ic-textframe-obj, .ic-textframe-shapeobj').forEach(function (o) { o.style.mixBlendMode = mode || ''; });
+      };
+      slideTopRow.appendChild(el('span', { class: 'ic-anim-blend-label' }, [S.blend_mode]));
+      slideTopRow.appendChild(iconDropdown(BLEND_MODES(), curBlend, S.blend_mode, function (mode) {
+        applyEditorBlend(mode);
+        if (slidePhoto) {
+          callAjax('mod_pinnwand_set_blendmode', { cmid: cfg.cmid, photoid: slidePhoto.id, mode: mode }).then(function (res) {
+            slidePhoto.blendmode = res.blendmode || '';
+          });
+        } else {
+          state.slideBlendPending = mode;
+        }
+      }));
+      setTimeout(function () { applyEditorBlend(curBlend); }, 0);
+      blockAnim.content.appendChild(slideTopRow);
+      blockAnim.content.appendChild(el('p', { class: 'ic-hint ic-anim-hint' }, [S.slide_anim_hint]));
+      var animInfo = slideAnimMap(tf);
+      tf.anim = tf.anim.filter(function (a) { return animInfo.map[a.key]; });
+      var objLabel = function (key) {
+        var id = parseInt(key.slice(1), 10);
+        if (key.charAt(0) === 't') {
+          var tt = tf.texts.filter(function (t) { return t.id === id; })[0];
+          var txt = tt ? String(tt.text || '').replace(/\s+/g, ' ').trim() : '';
+          return txt ? (txt.length > 28 ? txt.slice(0, 27) + '\u2026' : txt) : S.slide_obj_text + ' ' + id;
+        }
+        var sh = (tf.shapes || []).filter(function (x) { return x.id === id; })[0];
+        return S.slide_obj_shape + ' ' + (sh ? (sh.type || '') : id);
+      };
+      var selectKey = function (key) {
+        var id = parseInt(key.slice(1), 10);
+        if (key.charAt(0) === 't') { state.activeShapeId = null; selectText(id); }
+        else { state.activeShapeId = id; state.styleTargetMode = 'shape'; render(); }
+      };
+      var animList = el('div', { class: 'ic-anim-list' });
+      tf.anim.forEach(function (a, i) {
+        var row = el('div', { class: 'ic-anim-row' });
+        row.appendChild(el('span', { class: 'ic-anim-num' + (a.withPrev && i > 0 ? ' ic-anim-num-with' : '') }, [String(animInfo.map[a.key])]));
+        var lab = el('button', { class: 'ic-anim-label', type: 'button' }, [objLabel(a.key)]);
+        lab.addEventListener('click', function () { selectKey(a.key); });
+        row.appendChild(lab);
+        var withBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn' + (a.withPrev ? ' active' : ''), type: 'button', title: S.slide_anim_withprev }, [icon('link')]);
+        withBtn.disabled = i === 0;
+        withBtn.addEventListener('click', function () { a.withPrev = !a.withPrev; render(); });
+        var upBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_anim_up }, [icon('chevronup')]);
+        upBtn.disabled = i === 0;
+        upBtn.addEventListener('click', function () { var x = tf.anim[i - 1]; tf.anim[i - 1] = a; tf.anim[i] = x; render(); });
+        var downBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_anim_down }, [icon('chevrondown')]);
+        downBtn.disabled = i === tf.anim.length - 1;
+        downBtn.addEventListener('click', function () { var x = tf.anim[i + 1]; tf.anim[i + 1] = a; tf.anim[i] = x; render(); });
+        var rmBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_anim_remove }, ['\u2715']);
+        rmBtn.addEventListener('click', function () { tf.anim.splice(i, 1); render(); });
+        row.appendChild(withBtn); row.appendChild(upBtn); row.appendChild(downBtn); row.appendChild(rmBtn);
+        animList.appendChild(row);
+      });
+      var staticKeys = tf.texts.map(function (t) { return 't' + t.id; })
+        .concat((tf.shapes || []).filter(function (x) { return !x.main; }).map(function (x) { return 's' + x.id; }))
+        .filter(function (k) { return !animInfo.map[k]; });
+      if (staticKeys.length) {
+        animList.appendChild(el('div', { class: 'ic-anim-sep' }, [S.slide_anim_static]));
+        staticKeys.forEach(function (key) {
+          var row = el('div', { class: 'ic-anim-row ic-anim-row-static' });
+          var lab = el('button', { class: 'ic-anim-label', type: 'button' }, [objLabel(key)]);
+          lab.addEventListener('click', function () { selectKey(key); });
+          var addBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_anim_add }, ['+ ' + S.slide_anim_step]);
+          addBtn.addEventListener('click', function () { tf.anim.push({ key: key, withPrev: false }); render(); });
+          row.appendChild(lab); row.appendChild(addBtn);
+          animList.appendChild(row);
+        });
+      }
+      blockAnim.content.appendChild(animList);
+      // Schrittmarken an den Objekten im Rahmen (nach dem Layout messen).
+      setTimeout(function () {
+        if (!frame.isConnected) { return; }
+        var fr = frame.getBoundingClientRect();
+        Object.keys(animInfo.map).forEach(function (key) {
+          var sel = key.charAt(0) === 't' ? '[data-textid="' + key.slice(1) + '"]' : '[data-shapeid="' + key.slice(1) + '"]';
+          var target = frame.querySelector(sel);
+          if (!target) { return; }
+          var r = target.getBoundingClientRect();
+          frame.appendChild(el('span', {
+            class: 'ic-anim-badge',
+            style: 'left:' + (r.left - fr.left) + 'px;top:' + (r.top - fr.top) + 'px;'
+          }, [String(animInfo.map[key])]));
+        });
+      }, 0);
+    }
 
     // Kein separater "Text hinzufügen"-Button mehr - ein Doppelklick auf
     // eine LEERE Stelle im Editorfeld (nicht auf ein bestehendes
@@ -6048,7 +6265,9 @@
         var itemBounds = null;
         try {
           var liveTf = JSON.parse(p.wordfielddata);
-          var liveIsWordart = wordfieldIsWordart(liveTf);
+          // Folien: Rahmen selbst ist das Objekt (gestrichelte Hilfslinie,
+          // Griffe an der Rahmenecke) - wie bei Karten.
+          var liveIsWordart = wordfieldIsWordart(liveTf) && !liveTf.isSlide;
           var liveEl = buildTextFrameLiveDom(liveTf, { noGuide: liveIsWordart });
           item.appendChild(liveEl);
           if (liveIsWordart) {
@@ -8051,7 +8270,14 @@
       var p = rec.photo;
       if (rec.tf) {
         var box = wordfieldStepBox(p, rec.tf);
-        return { el: rec.el, cx: box.cx, cy: box.cy, w: box.w, h: box.h, z: rec.z, rot: 0, previewUrl: p.url };
+        var wfStep = { el: rec.el, cx: box.cx, cy: box.cy, w: box.w, h: box.h, z: rec.z, rot: 0, previewUrl: p.url };
+        // Folie mit Animationsschritten: Kamera bleibt, Objekte erscheinen
+        // Schritt für Schritt (siehe expandBuildSteps im Player).
+        if (rec.tf.isSlide) {
+          var nBuild = slideAnimMap(rec.tf).count;
+          if (nBuild) { wfStep.buildEl = rec.el; wfStep.buildCount = nBuild; }
+        }
+        return wfStep;
       }
       var natW = p.canvasw || 200;
       var img = rec.el.querySelector('img');
@@ -8079,7 +8305,7 @@
     // automatische Überblick eingefügt wird.
     var boardItems = thread.items.filter(function (it) { return (it.boardid || 0) === firstBoardId; });
     var stepByItem = boardItems.map(buildStep);
-    var steps = stepByItem.filter(Boolean);
+    var steps = window.PinnwandPresentation.expandBuildSteps(stepByItem.filter(Boolean));
 
     // Präsentation startet immer mit einem Überblick über die ganze
     // Pinnwand (falls der Rote Faden nicht selbst schon damit beginnt).

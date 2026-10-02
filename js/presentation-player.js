@@ -32,6 +32,8 @@
     '.pwp-stage.pwp-dragging{cursor:grabbing;}',
     '.pwp-canvas{position:absolute;left:0;top:0;transform-origin:0 0;z-index:1;}',
     '.pwp-occluded{opacity:0 !important;pointer-events:none !important;}',
+    '[data-pwp-build]{transition:opacity .45s ease,transform .45s ease;}',
+    '.pwp-build-hidden{opacity:0 !important;pointer-events:none !important;}',
     '.pwp-hint{position:fixed;top:16px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(0,0,0,.55);',
     'padding:6px 16px;border-radius:20px;font-size:.85rem;z-index:20;pointer-events:none;transition:opacity 1s;',
     'white-space:nowrap;max-width:calc(100vw - 140px);overflow:hidden;text-overflow:ellipsis;}',
@@ -599,6 +601,31 @@
       return 0;
     }
 
+    // Animationsschritte (Folien): Kinder mit data-pwp-build="k" sind erst
+    // ab Stufe k sichtbar. Vor der Folie ist nichts davon zu sehen, danach
+    // (und im Überblick) alles.
+    function updateBuilds() {
+      var active = steps[idx];
+      var els = [];
+      steps.forEach(function (st) { if (st.buildEl && els.indexOf(st.buildEl) === -1) { els.push(st.buildEl); } });
+      els.forEach(function (bel) {
+        var level;
+        if (active && active.buildEl === bel) {
+          level = active.build || 0;
+        } else if (!active || active.overview) {
+          level = Infinity;
+        } else {
+          var last = -1;
+          steps.forEach(function (st, si) { if (st.buildEl === bel) { last = si; } });
+          level = idx > last ? Infinity : 0;
+        }
+        var kids = bel.querySelectorAll('[data-pwp-build]');
+        for (var ki = 0; ki < kids.length; ki++) {
+          kids[ki].classList.toggle('pwp-build-hidden', parseInt(kids[ki].getAttribute('data-pwp-build'), 10) > level);
+        }
+      });
+    }
+
     function goToStep(newIdx, skipTransition) {
       if (!steps.length) { return; }
       var fromIdx = idx;
@@ -606,6 +633,7 @@
       var s = steps[idx];
       var target = targetFor(s);
       updateOcclusion();
+      updateBuilds();
       counter.textContent = (idx + 1) + ' / ' + steps.length;
       renderStack();
       if (skipTransition || fromIdx === idx || !currentTransform) {
@@ -770,5 +798,24 @@
     };
   }
 
-  global.PinnwandPresentation = { create: create, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk, inkBounds: inkBounds };
+  // Station mit buildCount n wird zu n+1 Stationen mit derselben Kamera:
+  // Stufe 0 (nur die festen Objekte) bis Stufe n (alles sichtbar).
+  function expandBuildSteps(list) {
+    var out = [];
+    list.forEach(function (st) {
+      out.push(st);
+      if (!st || !st.buildEl || !st.buildCount) { return; }
+      st.build = 0;
+      for (var k = 1; k <= st.buildCount; k++) {
+        var c = {};
+        for (var key in st) { if (Object.prototype.hasOwnProperty.call(st, key)) { c[key] = st[key]; } }
+        c.build = k;
+        c.buildOf = st;
+        out.push(c);
+      }
+    });
+    return out;
+  }
+
+  global.PinnwandPresentation = { create: create, expandBuildSteps: expandBuildSteps, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk, inkBounds: inkBounds };
 })(window);

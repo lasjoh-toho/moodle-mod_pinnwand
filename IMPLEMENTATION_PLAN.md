@@ -4199,3 +4199,29 @@ Mischmodi:
   genutzt für den nicht mitzoomenden Hintergrund in Moodle und im Export.
 
 Shipped als Version `2026083146` / `0.148.0`.
+
+## Phase 142
+
+Folien (`tf.isSlide`, zugleich `isWordArt` für freie Positionierung):
+- `newSlideFrame()` (640x360, zwei Textfelder), `currentSlidePlacement()`
+  (Mitte des sichtbaren Board-Ausschnitts, oberste Ebene) in
+  `state.slidePlacement`. Nach dem Speichern: `set_photo_hidden(false)`,
+  `update_layout` mit der Platzierung, ggf. `set_blendmode`
+  (`state.slideBlendPending`), zurück zur Pinnwand.
+- `measureWordfieldBounds` liefert bei Folien den Rahmen (gespeichertes
+  SVG, Zoom-Ziel); Live-DOM ohne Eckenrundung.
+- Editor: Nachbarebene `.ic-tf-neighbors-wide` deckt die ganze Pinnwand im
+  Editor-Maßstab ab (Hintergrund und Nachbarn auch um den Rahmen herum,
+  Wortfelder live, mit Mischmodus). Block "Folie & Animation":
+  Textfeld hinzufügen, Mischmodus, Liste der Animationsschritte.
+- `tf.anim = [{key:'t<id>'|'s<id>', withPrev}]`, ausgewertet von
+  `slideAnimMap(tf)` (JS) bzw. gleichlautend in `export_presentation.php`
+  (`animsteps`). Live-DOM setzt `data-pwp-build="k"` an Texten/Formen.
+- Player: `PinnwandPresentation.expandBuildSteps(steps)` macht aus einer
+  Station mit `buildEl`/`buildCount` n+1 Stationen mit gleicher Kamera;
+  `updateBuilds()` blendet über `.pwp-build-hidden` ein (vor der Folie
+  verborgen, danach und im Überblick alles sichtbar).
+- Export: Folien mit Animation werden als Inline-SVG eingebettet, damit
+  einzelne Objekte schaltbar sind.
+
+Shipped als Version `2026083147` / `0.149.0`.

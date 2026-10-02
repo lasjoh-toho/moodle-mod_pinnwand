@@ -1752,6 +1752,24 @@ Details und Scoping-Entscheidungen. In Kurzform:
   HTML-Export; der feststehende Präsentationshintergrund liegt dazu in der
   gezoomten Ebene (gegenläufig transformiert).
 
+### Einhundertneunundvierzigste Überarbeitung — Folien mit Animationsschritten
+
+- **Dritter Texteditor "Folie"** (neben Textrahmen und WordArt, im
+  Hinzufügen-Dialog): ein durchsichtiger 16:9-Rahmen mit beliebig vielen
+  Textfeldern und Formen, der die Texte über dem sichtbaren Hintergrund zu
+  Folien ordnet. Eine neue Folie wird an der gerade sichtbaren Stelle der
+  Pinnwand angelegt. Der Editor zeigt Hintergrundbild und Nachbarobjekte
+  exakt an dieser Stelle, auch rund um den Rahmen.
+- **Mischmodus der Folie** direkt im Editor wählbar, mit Vorschau über dem
+  abgebildeten Hintergrund.
+- **Animationsschritte**: Im Block "Folie & Animation" werden Objekte als
+  Schritte hinzugefügt, sortiert (früher/später) und bei Bedarf mit dem
+  vorherigen Schritt zusammengefasst. Nummern-Marken zeigen die Schritte am
+  Objekt. In der Präsentation (Moodle und HTML-Export) bleibt die Kamera
+  auf der Folie, und die Objekte erscheinen Schritt für Schritt.
+- Auf der Pinnwand ist bei Folien der Rahmen selbst das Objekt: gestrichelte
+  Hilfslinie, Griffe an der Rahmenecke, Zoom-Ziel in der Präsentation.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

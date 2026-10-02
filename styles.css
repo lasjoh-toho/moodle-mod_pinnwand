@@ -1403,3 +1403,33 @@ input.ic-stepper-value {
 .ic-cutout-size input { width: 110px; }
 .ic-cutout-mode { padding: 4px 6px; border-radius: 6px; }
 .ic-cutout-hint { text-align: center; margin: 4px 0 0; }
+
+/* Folien-Editor: Pinnwand rund um den Rahmen, Animationsschritte. */
+.ic-tf-neighbors-layer.ic-tf-neighbors-wide { right: auto; bottom: auto; }
+.ic-tf-stage-slide { padding: 112px 80px 80px 80px; }
+.ic-tf-stage-slide > .ic-textframe-preview { outline: 2px solid rgba(255,255,255,.55); outline-offset: 0; }
+.ic-anim-hint { margin: 6px 0; font-size: 12px; }
+.ic-anim-list { display: flex; flex-direction: column; gap: 3px; }
+.ic-anim-row { display: flex; align-items: center; gap: 4px; }
+.ic-anim-row .ic-mini-btn { padding: 2px 5px; min-width: 0; }
+.ic-anim-row .ic-mini-btn.active { background: rgba(79,140,255,.3); }
+.ic-anim-num {
+  flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; background: #4f8cff; color: #fff;
+  font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.ic-anim-num.ic-anim-num-with { background: transparent; box-shadow: inset 0 0 0 2px #4f8cff; color: #4f8cff; }
+.ic-anim-label {
+  flex: 1 1 auto; min-width: 0; text-align: left; background: none; border: 0; color: inherit; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 4px; border-radius: 4px; font-size: 13px;
+}
+.ic-anim-label:hover { background: rgba(255,255,255,.08); }
+.ic-anim-sep { font-size: 11px; opacity: .7; margin-top: 6px; text-transform: uppercase; letter-spacing: .04em; }
+.ic-anim-badge {
+  position: absolute; z-index: 30; transform: translate(-60%, -60%); width: 20px; height: 20px; border-radius: 50%;
+  background: #4f8cff; color: #fff; font: 700 11px/20px sans-serif; text-align: center; pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+.ic-tf-stage-slide .ic-textframe-card-hit { background: transparent; }
+.ic-tf-stage-slide .ic-textframe-card-hit:hover, .ic-tf-stage-slide .ic-textframe-card-hit.active { background: rgba(255,255,255,.12); }
+.ic-anim-toprow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ic-anim-blend-label { font-size: 12px; opacity: .8; margin-left: auto; }

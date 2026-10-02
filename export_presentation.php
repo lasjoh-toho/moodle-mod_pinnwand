@@ -110,6 +110,34 @@ function pinnwand_export_photo_data($photoid, $context, $fs, &$photocache, $incl
                     $haswordart = true;
                 }
             }
+            // Folie: Zoom-Ziel ist der Rahmen selbst; Animationsschritte
+            // zählen wie slideAnimMap() in js/app.js.
+            if (!empty($tf['isSlide'])) {
+                $haswordart = false;
+                $result['slide'] = true;
+                $exists = [];
+                foreach (($tf['texts'] ?? []) as $t) {
+                    $exists['t' . ($t['id'] ?? '')] = true;
+                }
+                foreach (($tf['shapes'] ?? []) as $sh) {
+                    if (empty($sh['main'])) {
+                        $exists['s' . ($sh['id'] ?? '')] = true;
+                    }
+                }
+                $steps = 0;
+                $seen = [];
+                foreach (($tf['anim'] ?? []) as $a) {
+                    $key = is_array($a) ? ($a['key'] ?? '') : '';
+                    if ($key === '' || empty($exists[$key]) || isset($seen[$key])) {
+                        continue;
+                    }
+                    if (!(!empty($a['withPrev']) && $steps > 0)) {
+                        $steps++;
+                    }
+                    $seen[$key] = true;
+                }
+                $result['animsteps'] = $steps;
+            }
             $result['wordartframe'] = $haswordart;
             if (preg_match('/<svg\b[^>]*\sviewBox="([^"]+)"/i', $binary, $m)) {
                 $vb = array_map('floatval', preg_split('/[\s,]+/', trim($m[1])));
@@ -439,6 +467,18 @@ function pinnwand_export_build_html($title, $json) {
     if (p.blendmode) { pel.style.mixBlendMode = p.blendmode; }
     var img = document.createElement('img');
     img.src = p.url; img.alt = '';
+    // Folie mit Animationsschritten: SVG direkt einbetten statt als Bild,
+    // damit die Abspiel-Logik einzelne Objekte (data-pwp-build) ein- und
+    // ausblenden kann.
+    if (p.animsteps && p.url.indexOf('data:image/svg+xml;base64,') === 0) {
+      try {
+        var svgText = decodeURIComponent(escape(atob(p.url.slice(26))));
+        var holder = document.createElement('div');
+        holder.innerHTML = svgText;
+        var svgEl = holder.querySelector('svg');
+        if (svgEl) { img = svgEl; img.style.display = 'block'; }
+      } catch (e) { /* Bild bleibt */ }
+    }
     var rec = { el: pel, z: p.canvasz || 0, img: img, photo: p, box: null };
     if (p.tfw && p.tfh && p.vb) {
       // Karte (tf.w x tf.h) liegt exakt auf canvasx/canvasy/canvasw - wie
@@ -450,6 +490,10 @@ function pinnwand_export_build_html($title, $json) {
       img.style.left = (p.vb[0] * k) + 'px';
       img.style.top = (p.vb[1] * k) + 'px';
       img.style.width = (p.vb[2] * k) + 'px';
+      if (img.tagName.toLowerCase() === 'svg') {
+        img.style.position = 'absolute';
+        img.style.height = (p.vb[3] * k) + 'px';
+      }
       // Zoom-Ziel: bei WordArt der ganze sichtbare Bereich (viewBox), bei
       // normalen Zetteln die Karte selbst.
       rec.box = p.wordartframe
@@ -499,7 +543,8 @@ function pinnwand_export_build_html($title, $json) {
       return {
         el: rec.el, cx: rec.box.x + rec.box.w / 2, cy: rec.box.y + rec.box.h / 2,
         w: rec.box.w * (1 + 2 * STEP_MARGIN), h: rec.box.h * (1 + 2 * STEP_MARGIN),
-        rot: 0, z: p.canvasz || 0, previewUrl: p.url
+        rot: 0, z: p.canvasz || 0, previewUrl: p.url,
+        buildEl: p.animsteps ? rec.el : null, buildCount: p.animsteps || 0
       };
     }
     var natW = p.canvasw;
@@ -524,6 +569,7 @@ function pinnwand_export_build_html($title, $json) {
 
   // Präsentation startet immer mit einem Überblick über die ganze
   // Pinnwand (falls der Rote Faden nicht selbst schon damit beginnt).
+  steps = PinnwandPresentation.expandBuildSteps(steps);
   if (steps.length && !steps[0].overview) { steps.unshift(overviewStep()); }
   player.start(steps, occludables, 0);
   // Notizen außerhalb der Leinwand: Überblick entsprechend vergrößern.
