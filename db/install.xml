@@ -102,6 +102,8 @@
         <FIELD NAME="framerot" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Rotation des Leerrahmens in Grad"/>
         <FIELD NAME="framez" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Z-Reihenfolge des Leerrahmens relativ zu Fotos auf dem Board"/>
         <FIELD NAME="framelabel" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="framedata" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Folieninhalt des Rahmens (Wortfeld-JSON)"/>
+        <FIELD NAME="framesvg" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Gerenderter Folieninhalt als SVG (für den HTML-Export)"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>

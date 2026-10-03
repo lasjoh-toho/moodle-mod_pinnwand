@@ -406,5 +406,19 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083146, 'pinnwand');
     }
 
+    if ($oldversion < 2026083148) {
+        // Folien: Faden-Rahmen mit eigenem Inhalt (Texte/Formen, Animation).
+        $table = new xmldb_table('pinnwand_thread_items');
+        $field = new xmldb_field('framedata', XMLDB_TYPE_TEXT, null, null, null, null, null, 'framelabel');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field('framesvg', XMLDB_TYPE_TEXT, null, null, null, null, null, 'framedata');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026083148, 'pinnwand');
+    }
+
     return true;
 }

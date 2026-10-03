@@ -53,6 +53,37 @@ $fs = get_file_storage();
 // die außerhalb Moodles nicht erreichbar wären.
 // -----------------------------------------------------------------
 $photocache = [];
+/**
+ * Anzahl der Animationsschritte einer Folie - wie slideAnimMap() in js/app.js.
+ *
+ * @param array $tf Wortfeld-Daten
+ * @return int
+ */
+function pinnwand_export_anim_steps(array $tf): int {
+    $exists = [];
+    foreach (($tf['texts'] ?? []) as $t) {
+        $exists['t' . ($t['id'] ?? '')] = true;
+    }
+    foreach (($tf['shapes'] ?? []) as $sh) {
+        if (empty($sh['main'])) {
+            $exists['s' . ($sh['id'] ?? '')] = true;
+        }
+    }
+    $steps = 0;
+    $seen = [];
+    foreach (($tf['anim'] ?? []) as $a) {
+        $key = is_array($a) ? ($a['key'] ?? '') : '';
+        if ($key === '' || empty($exists[$key]) || isset($seen[$key])) {
+            continue;
+        }
+        if (!(!empty($a['withPrev']) && $steps > 0)) {
+            $steps++;
+        }
+        $seen[$key] = true;
+    }
+    return $steps;
+}
+
 function pinnwand_export_photo_data($photoid, $context, $fs, &$photocache, $includeannot = false) {
     if ($photoid <= 0) {
         return null;
@@ -115,28 +146,7 @@ function pinnwand_export_photo_data($photoid, $context, $fs, &$photocache, $incl
             if (!empty($tf['isSlide'])) {
                 $haswordart = false;
                 $result['slide'] = true;
-                $exists = [];
-                foreach (($tf['texts'] ?? []) as $t) {
-                    $exists['t' . ($t['id'] ?? '')] = true;
-                }
-                foreach (($tf['shapes'] ?? []) as $sh) {
-                    if (empty($sh['main'])) {
-                        $exists['s' . ($sh['id'] ?? '')] = true;
-                    }
-                }
-                $steps = 0;
-                $seen = [];
-                foreach (($tf['anim'] ?? []) as $a) {
-                    $key = is_array($a) ? ($a['key'] ?? '') : '';
-                    if ($key === '' || empty($exists[$key]) || isset($seen[$key])) {
-                        continue;
-                    }
-                    if (!(!empty($a['withPrev']) && $steps > 0)) {
-                        $steps++;
-                    }
-                    $seen[$key] = true;
-                }
-                $result['animsteps'] = $steps;
+                $result['animsteps'] = pinnwand_export_anim_steps($tf);
             }
             $result['wordartframe'] = $haswordart;
             if (preg_match('/<svg\b[^>]*\sviewBox="([^"]+)"/i', $binary, $m)) {
@@ -164,6 +174,15 @@ foreach ($items as $it) {
     ];
     if ($it->itemtype === 'photo' && $it->photoid) {
         $entry['photo'] = pinnwand_export_photo_data((int) $it->photoid, $context, $fs, $photocache, $includeannot);
+    }
+    // Folie (Rahmen mit Inhalt): gerendertes SVG, Animationsschritte, Mischmodus.
+    if ($it->itemtype === 'frame' && !empty($it->framedata) && !empty($it->framesvg)) {
+        $ftf = json_decode($it->framedata, true);
+        if (is_array($ftf)) {
+            $entry['framesvg'] = (string) $it->framesvg;
+            $entry['animsteps'] = pinnwand_export_anim_steps($ftf);
+            $entry['blend'] = in_array($ftf['blend'] ?? '', ['multiply', 'difference', 'color-burn'], true) ? $ftf['blend'] : '';
+        }
     }
     $exportitems[] = $entry;
 }
@@ -530,10 +549,31 @@ function pinnwand_export_build_html($title, $json) {
   var steps = items.map(function (it) {
     if (it.itemtype === 'overview') { return overviewStep(); }
     if (it.itemtype === 'frame') {
-      return {
+      var fstep = {
         cx: it.framex + it.framew / 2, cy: it.framey + it.frameh / 2,
         w: it.framew, h: it.frameh, rot: -(it.framerot || 0), z: it.framez || 0, frame: true
       };
+      // Folie: Inhalt (SVG) im Rahmen, gedreht wie der Rahmen, mit Ebene,
+      // Mischmodus und Animationsschritten.
+      if (it.framesvg) {
+        var fel = document.createElement('div');
+        fel.className = 'ph slide';
+        fel.style.left = it.framex + 'px';
+        fel.style.top = it.framey + 'px';
+        fel.style.width = it.framew + 'px';
+        fel.style.height = it.frameh + 'px';
+        fel.style.transform = 'rotate(' + (it.framerot || 0) + 'deg)';
+        fel.style.zIndex = it.framez || 0;
+        if (it.blend) { fel.style.mixBlendMode = it.blend; }
+        fel.innerHTML = it.framesvg;
+        var fsvg = fel.querySelector('svg');
+        if (fsvg) { fsvg.style.width = '100%'; fsvg.style.height = '100%'; fsvg.style.display = 'block'; }
+        canvas.appendChild(fel);
+        occludables.push({ el: fel, z: it.framez || 0 });
+        fstep.el = fel;
+        if (it.animsteps) { fstep.buildEl = fel; fstep.buildCount = it.animsteps; }
+      }
+      return fstep;
     }
     if (!it.photo) { return null; }
     var rec = photoRecs[it.photo.id];

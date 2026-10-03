@@ -589,7 +589,9 @@ svg.ic-board-ink-layer { overflow: visible; }
    sich bei padding:40px direkt an der oberen linken Ecke aufbaut) genau
    darunter, die Undo/Redo-Knoepfe verdeckten ihn dadurch teilweise. */
 .ic-tf-stage { align-items: flex-start; justify-content: flex-start; padding: 112px 40px 40px 40px; box-sizing: border-box; overflow: auto; }
-.ic-tf-stage > .ic-textframe-preview { margin: 0; }
+/* margin:auto zentriert den Rahmen in der Bühne und bleibt dabei (anders als
+   justify-content:center) auch bei Überbreite vollständig erreichbar. */
+.ic-tf-stage > .ic-textframe-preview { margin: auto; flex: 0 0 auto; }
 .ic-textframe-inner { position: relative; width: 100%; height: 100%; z-index: 1; }
 .ic-textframe-obj {
   position: absolute; transform: translate(-50%, -50%); padding: 4px 8px; white-space: pre-wrap;
@@ -1433,3 +1435,76 @@ input.ic-stepper-value {
 .ic-tf-stage-slide .ic-textframe-card-hit:hover, .ic-tf-stage-slide .ic-textframe-card-hit.active { background: rgba(255,255,255,.12); }
 .ic-anim-toprow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .ic-anim-blend-label { font-size: 12px; opacity: .8; margin-left: auto; }
+
+/* Kantengriffe des Editor-Rahmens: unsichtbare Leisten mit Größen-Cursor,
+   in der Mitte eine kleine sichtbare Marke. */
+.ic-resize-edge { position: absolute; z-index: 25; }
+.ic-resize-edge::after { content: ''; position: absolute; background: #4f8cff; border-radius: 3px; opacity: .85; }
+.ic-resize-edge-l, .ic-resize-edge-r { top: 16px; bottom: 16px; width: 12px; cursor: ew-resize; }
+.ic-resize-edge-l { left: -7px; } .ic-resize-edge-r { right: -7px; }
+.ic-resize-edge-l::after, .ic-resize-edge-r::after { left: 4px; top: 50%; width: 4px; height: 28px; margin-top: -14px; }
+.ic-resize-edge-t, .ic-resize-edge-b { left: 16px; right: 16px; height: 12px; cursor: ns-resize; }
+.ic-resize-edge-t { top: -7px; } .ic-resize-edge-b { bottom: -7px; }
+.ic-resize-edge-t::after, .ic-resize-edge-b::after { top: 4px; left: 50%; height: 4px; width: 28px; margin-left: -14px; }
+
+/* Textfeld-Griffe im Editor: verschieben (oben links), Breite (rechts, Folie). */
+.ic-textframe-move-handle {
+  position: absolute; left: -11px; top: -11px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; color: #333; border: 2px solid var(--ic-accent); font: 12px/16px sans-serif; text-align: center;
+  cursor: move; opacity: 0; transition: opacity .15s; user-select: none; -webkit-user-select: none; z-index: 3;
+}
+.ic-textframe-width-handle {
+  position: absolute; right: -6px; top: 50%; width: 8px; height: 26px; margin-top: -13px; border-radius: 4px;
+  background: var(--ic-accent); border: 2px solid #fff; cursor: ew-resize; opacity: 0; transition: opacity .15s; z-index: 3;
+}
+.ic-textframe-obj:hover .ic-textframe-move-handle, .ic-textframe-obj.active .ic-textframe-move-handle,
+.ic-textframe-obj:hover .ic-textframe-width-handle, .ic-textframe-obj.active .ic-textframe-width-handle { opacity: 1; }
+.ic-tf-stage-slide .ic-textframe-obj { outline: 1px dashed rgba(255,255,255,.35); }
+.ic-tf-stage-slide .ic-textframe-obj.active { outline: 1px solid var(--ic-accent); }
+
+/* Folien = Faden-Rahmen mit Inhalt. */
+.ic-frame-slide { pointer-events: auto; }
+.ic-frame-edit-btn {
+  position: absolute; left: -12px; bottom: -12px; width: 26px; height: 26px; border-radius: 50%; padding: 0;
+  border: 2px solid #fff; background: rgba(20,21,24,.85); color: #fff; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 6;
+}
+.ic-frame-edit-btn svg { width: 14px; height: 14px; }
+.ic-thread-slide-btn svg { width: 14px; height: 14px; }
+
+/* Menüband der Texteditoren: schmale Reiterleiste unter der Arbeitsfläche,
+   Blockinhalte öffnen sich als Popup darüber. Der Einklapp-Schalter sitzt
+   direkt oben auf dem Band. */
+.ic-tf-dock { position: relative; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; padding-top: 2px; }
+.ic-tf-dock-toggle {
+  width: 46px; height: 18px; border: 0; border-radius: 9px 9px 0 0; padding: 0; cursor: pointer;
+  background: var(--ic-panel); color: var(--ic-muted); display: flex; align-items: center; justify-content: center;
+}
+.ic-tf-dock-toggle svg { width: 14px; height: 14px; }
+.ic-tf-dock-toggle:hover { color: #fff; }
+.ic-textframe-blocks.ic-tf-ribbon {
+  display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 4px;
+  background: var(--ic-panel); border-radius: 10px; padding: 4px 6px; max-width: 100%;
+}
+.ic-tf-dock.ic-tf-collapsed .ic-tf-ribbon { display: none; }
+.ic-tf-ribbon .ic-textframe-block { position: static; background: none; padding: 0; flex: 0 0 auto; border-radius: 0; }
+.ic-tf-ribbon .ic-textframe-block-title.ic-tf-tab {
+  margin: 0; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px;
+  border: 0; background: transparent; color: var(--ic-text, #eee); font-size: .76rem; cursor: pointer; text-transform: none;
+  letter-spacing: 0; white-space: nowrap;
+}
+.ic-tf-ribbon .ic-textframe-block-title.ic-tf-tab svg { width: 16px; height: 16px; }
+.ic-tf-ribbon .ic-textframe-block-title.ic-tf-tab::after { content: none; }
+.ic-tf-ribbon .ic-textframe-block-title.ic-tf-tab:hover { background: rgba(255,255,255,.08); }
+.ic-tf-ribbon .ic-textframe-block.ic-tf-open .ic-tf-tab { background: rgba(79,140,255,.25); box-shadow: inset 0 0 0 1px var(--ic-accent); }
+.ic-tf-ribbon .ic-textframe-block-content.ic-tf-popup { display: none; }
+.ic-tf-ribbon .ic-textframe-block.ic-tf-open .ic-textframe-block-content.ic-tf-popup {
+  display: block; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  width: max-content; min-width: 280px; max-width: min(760px, 96vw); max-height: 58vh; overflow: auto;
+  background: var(--ic-panel); border-radius: 12px; padding: 12px 14px; z-index: 60;
+  box-shadow: 0 12px 36px rgba(0,0,0,.5);
+}
+.ic-resize.ic-hidden-handle { display: none; }
+@media (max-width: 640px) {
+  .ic-tf-ribbon .ic-textframe-block-title.ic-tf-tab span { display: none; }
+}

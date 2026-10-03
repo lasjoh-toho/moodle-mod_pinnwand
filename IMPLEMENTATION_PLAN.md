@@ -4225,3 +4225,34 @@ Folien (`tf.isSlide`, zugleich `isWordArt` für freie Positionierung):
   einzelne Objekte schaltbar sind.
 
 Shipped als Version `2026083147` / `0.149.0`.
+
+## Phase 143
+
+Folie = Faden-Rahmen mit Inhalt:
+- `pinnwand_thread_items.framedata` (Wortfeld-JSON) und `framesvg`
+  (gerendertes SVG für den Export), Upgrade 2026083148, Backup.
+  Webservice `mod_pinnwand_set_frame_content` (SVG ohne Skripte/Handler).
+  `get_threads`/`add_thread_item` liefern `framedata`.
+- JS: `frameSlideTf(it)`, `buildFrameSlideEl(it, tf, cls)` (Pinnwand
+  `.ic-frame-slide`, Präsentation `.ic-present-slide`, Mischmodus `tf.blend`),
+  `openFrameSlideEditor(it)`, `currentFrameGeom(it, tf)` (Rahmenlage aus
+  `state.slideShift`/`state.slideScale`, gedreht um den Mittelpunkt),
+  `saveFrameSlide()` (Inhalt + ggf. `update_thread_frame`).
+- Hinzufügen-Dialog "Folie": `add_thread_item` (frame) an
+  `currentSlidePlacement()`, oberste Ebene, dann Editor. Ältere Foto-Folien
+  (Phase 142) werden weiter dargestellt.
+- Export: Rahmen mit `framesvg` als Inline-SVG, Ebene, Mischmodus,
+  `animsteps` (`pinnwand_export_anim_steps()`).
+
+Editoren:
+- `attachFrameResizeHandle`: linke/obere Kante behalten Text- und
+  Formpositionen (Versatz), Formgröße bleibt absolut; Kantengriffe
+  `.ic-resize-edge-*`; Rahmen zentriert (`margin:auto`, beim Ziehen fixiert).
+- `makeTextObjectMovable`: relatives Ziehen, `.ic-textframe-move-handle`,
+  Breitengriff (`t.boxW`) in Folien; Griffe werden beim Speichern aus dem
+  HTML entfernt (`objHtmlWithoutHandles`, Bereinigung in
+  `relativizeTextHtml`). Freie Texte `width:max-content`.
+- Menüband `.ic-tf-dock`/`.ic-tf-ribbon`, Popups `.ic-tf-popup`,
+  `state.tfOpenBlock`; Einklapp-Schalter `.ic-tf-dock-toggle`.
+
+Shipped als Version `2026083148` / `0.150.0`.

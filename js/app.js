@@ -621,17 +621,31 @@
     // dem sichtbaren Pinnwand-Hintergrund, mit Animationsschritten für die
     // Präsentation. Wird direkt an der gerade sichtbaren Stelle der
     // Pinnwand angelegt, damit der Editor den passenden Hintergrund zeigt.
+    // Folie = Rahmen im Roten Faden (wie "Rahmen setzen" im Faden-Menü)
+    // mit eigenem Inhalt - entsteht an der gerade sichtbaren Stelle.
     var slideBtn = el('button', { class: 'ic-choice-btn' }, [icon('frameicon'), el('span', {}, [S.addslide])]);
     slideBtn.addEventListener('click', function () {
-      var placement = currentSlidePlacement();
-      closeAndGo('textframe', function () {
-        state.textFrame = newSlideFrame(); resetTfHistory(); state.wordArtMode = true;
-        state.slidePlacement = placement;
-      });
+      var placement = currentSlidePlacement() || { canvasx: 400, canvasy: 300, canvasw: 600, canvasz: 1, boardid: state.currentBoard || 0 };
+      var fw = placement.canvasw, fh = Math.round(placement.canvasw * 9 / 16);
+      slideBtn.disabled = true;
+      callAjax('mod_pinnwand_add_thread_item', {
+        cmid: cfg.cmid, itemtype: 'frame', boardid: placement.boardid,
+        framex: placement.canvasx, framey: placement.canvasy, framew: fw, frameh: fh, framelabel: ''
+      }).then(function (res) {
+        replaceOwnThread(res);
+        var it = res.items[res.items.length - 1];
+        it.framez = placement.canvasz;
+        callAjax('mod_pinnwand_update_thread_frame', {
+          cmid: cfg.cmid, itemid: it.id, framex: it.framex, framey: it.framey, framew: it.framew, frameh: it.frameh,
+          framerot: 0, framez: it.framez
+        });
+        overlay.remove();
+        openFrameSlideEditor(it);
+      }).catch(function (e) { slideBtn.disabled = false; alert(S.error_save + ' (' + e.message + ')'); });
     });
     gridText.appendChild(textFrameBtn);
     gridText.appendChild(wordArtBtn);
-    gridText.appendChild(slideBtn);
+    if (state.canusethreads) { gridText.appendChild(slideBtn); }
     panel.appendChild(gridText);
 
     var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel, 'aria-label': S.cancel }, ['\u2715']);
@@ -1503,6 +1517,9 @@
     state.textFrame = null;
     state.slidePlacement = null;
     state.slideBlendPending = '';
+    state.editingFrameItemId = null;
+    state.slideScale = null;
+    state.slideShift = null;
     state.captureMode = null;
   }
 
@@ -1518,8 +1535,10 @@
       class: 'ic-btn ic-btn-ghost ic-btn-icon ic-cancel-btn', title: S.cancel, 'aria-label': S.cancel
     }, ['\u2715']);
     b.addEventListener('click', function () {
+      // Folien werden aus der Pinnwand heraus bearbeitet - dorthin zurück.
+      var back = state.editingFrameItemId ? 'arrange' : 'home';
       resetCaptureState();
-      state.step = 'home';
+      state.step = back;
       render();
     });
     return b;
@@ -2137,6 +2156,67 @@
     root.appendChild(overlay);
   }
 
+  // Folie = Faden-Rahmen mit Inhalt (it.framedata, Wortfeld-JSON).
+  var frameTfCache = {};
+  function frameSlideTf(it) {
+    if (!it || it.itemtype !== 'frame' || !it.framedata) { return null; }
+    if (!frameTfCache[it.framedata]) {
+      try { frameTfCache[it.framedata] = JSON.parse(it.framedata); } catch (e) { return null; }
+    }
+    return frameTfCache[it.framedata];
+  }
+  // Inhalt eines Folien-Rahmens als eigenes Element an der Rahmenposition
+  // (gedreht, Ebene, Mischmodus) - auf der Pinnwand und in der Präsentation.
+  function buildFrameSlideEl(it, tf, cls) {
+    var wrap = el('div', {
+      class: cls,
+      style: 'position:absolute;left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;' +
+        'transform:rotate(' + (it.framerot || 0) + 'deg);'
+    });
+    wrap.style.zIndex = it.framez || 0;
+    if (tf.blend) { wrap.style.mixBlendMode = tf.blend; }
+    var live = buildTextFrameLiveDom(tf, { noGuide: true });
+    live.style.height = '100%';
+    wrap.appendChild(live);
+    return wrap;
+  }
+  function openFrameSlideEditor(it) {
+    var tf = null;
+    if (it.framedata) { try { tf = JSON.parse(it.framedata); } catch (e) { tf = null; } }
+    if (!tf) {
+      tf = newSlideFrame();
+      tf.h = Math.max(80, Math.round(tf.w * it.frameh / Math.max(1, it.framew)));
+    }
+    tf.isSlide = true; tf.isWordArt = true;
+    state.textFrame = tf;
+    state.wordArtMode = true;
+    state.editingPhotoId = null;
+    state.editingFrameItemId = it.id;
+    state.slideScale = tf.w / Math.max(1, it.framew);
+    state.slideShift = { dx: 0, dy: 0 };
+    resetTfHistory();
+    state.step = 'textframe';
+    render();
+  }
+  // Aktuelle Board-Geometrie des bearbeiteten Rahmens: Ausgangsrahmen plus
+  // im Editor verschobene Kanten (slideShift, Editor-Pixel) und neue Größe,
+  // alles in Rahmenachsen und um den Mittelpunkt gedreht.
+  function currentFrameGeom(it, tf) {
+    var k = state.slideScale || 1;
+    var w1 = tf.w / k, h1 = tf.h / k, w0 = it.framew, h0 = it.frameh;
+    var sh = state.slideShift || { dx: 0, dy: 0 };
+    var lx = sh.dx / k + w1 / 2 - w0 / 2, ly = sh.dy / k + h1 / 2 - h0 / 2;
+    var rad = (it.framerot || 0) * Math.PI / 180;
+    var cx = it.framex + w0 / 2 + lx * Math.cos(rad) - ly * Math.sin(rad);
+    var cy = it.framey + h0 / 2 + lx * Math.sin(rad) + ly * Math.cos(rad);
+    return { x: cx - w1 / 2, y: cy - h1 / 2, w: w1, h: h1, rot: it.framerot || 0 };
+  }
+  function editingFrameItem() {
+    if (!state.editingFrameItemId) { return null; }
+    var ot = ownThread();
+    return ot ? ot.items.filter(function (o) { return o.itemtype === 'frame' && o.id === state.editingFrameItemId; })[0] || null : null;
+  }
+
   function newSlideFrame() {
     return {
       w: 640, h: 360, preset: 'none', isWordArt: true, isSlide: true, anim: [],
@@ -2160,6 +2240,10 @@
     var maxZ = 0;
     state.photos.forEach(function (p) {
       if (p.boardplaced && (p.boardid || 0) === (state.currentBoard || 0)) { maxZ = Math.max(maxZ, p.canvasz || 0); }
+    });
+    var otz = ownThread();
+    (otz ? otz.items : []).forEach(function (o) {
+      if (o.itemtype === 'frame' && (o.boardid || 0) === (state.currentBoard || 0)) { maxZ = Math.max(maxZ, o.framez || 0); }
     });
     return {
       canvasx: Math.round(cx - w / 2), canvasy: Math.round(cy - w * 9 / 32), canvasw: Math.round(w),
@@ -2229,6 +2313,8 @@
   // Deshalb relativ zur Grundschrift des Textobjekts (em) umrechnen.
   function relativizeTextHtml(html, baseSize) {
     if (!html || !baseSize) { return html; }
+    // Früher mitgespeicherte Editor-Griffe entfernen.
+    html = String(html).replace(/<div[^>]*ic-textframe-(size|move|width)-handle[^>]*>[^<]*<\/div>/g, '');
     return String(html).replace(/(font-size|letter-spacing)\s*:\s*(-?[\d.]+)px/gi, function (m, prop, num) {
       return prop + ': ' + (Math.round(parseFloat(num) / baseSize * 1000) / 1000) + 'em';
     });
@@ -2683,7 +2769,7 @@
               'width:' + (tbox.w / tf.w * 100) + '%;height:' + (tbox.h / tf.h * 100) + '%;padding:' + (tbox.pad / tf.w * 100) + 'cqw;' +
               'display:flex;flex-direction:column;justify-content:center;overflow:hidden;'
             : 'position:absolute;box-sizing:border-box;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
-              'padding:' + (4 / tf.w * 100) + 'cqw ' + (8 / tf.w * 100) + 'cqw;max-width:94%;') + 'white-space:pre-wrap;text-align:center;z-index:1;' +
+              'padding:' + (4 / tf.w * 100) + 'cqw ' + (8 / tf.w * 100) + 'cqw;' + (t.boxW ? 'width:' + (t.boxW * 100) + '%;' : 'width:max-content;max-width:94%;')) + 'white-space:pre-wrap;text-align:center;z-index:1;' +
             'font-family:' + fontCss + ';font-size:' + (fitSize / tf.w * 100) + 'cqw;font-weight:' + (t.fontWeight || 700) +
             ';line-height:' + (t.lineHeight || 1.2) + ';letter-spacing:' + ((t.letterSpacing || 0) / tf.w * 100) + 'cqw;' +
             (wordartCssFor(t, preset.text, false, 100 / tf.w) || computeStyle1Css(t, preset.text))
@@ -3273,7 +3359,40 @@
   // Ziehen/Größe/Rotation/Annotieren/Faden ohne Sonderbehandlung
   // funktionieren; `wordfielddata` (JSON) wird zusätzlich mitgespeichert,
   // damit "Bearbeiten" später wieder den Wortfeld-Editor öffnen kann.
+  // Folie (Faden-Rahmen): Inhalt + gerendertes SVG speichern, Rahmenlage
+  // nachführen (im Editor verschobene Kanten/geänderte Größe).
+  function saveFrameSlide(tf, saveBtn) {
+    var it = editingFrameItem();
+    if (!it) { return; }
+    saveBtn.disabled = true;
+    var svg;
+    try { svg = buildTextFrameSVG(tf); } catch (e) { alert(S.error_save + ' (' + e.message + ')'); saveBtn.disabled = false; return; }
+    var fg = currentFrameGeom(it, tf);
+    var data = JSON.stringify(tf);
+    embedFontsInSVG(svg, tf).then(function (finalSvg) {
+      return callAjax('mod_pinnwand_set_frame_content', { cmid: cfg.cmid, itemid: it.id, framedata: data, framesvg: finalSvg });
+    }).then(function () {
+      it.framedata = data;
+      var moved = Math.abs(fg.x - it.framex) > 0.01 || Math.abs(fg.y - it.framey) > 0.01 ||
+        Math.abs(fg.w - it.framew) > 0.01 || Math.abs(fg.h - it.frameh) > 0.01;
+      if (!moved) { return null; }
+      it.framex = fg.x; it.framey = fg.y; it.framew = fg.w; it.frameh = fg.h;
+      return callAjax('mod_pinnwand_update_thread_frame', {
+        cmid: cfg.cmid, itemid: it.id, framex: it.framex, framey: it.framey, framew: it.framew, frameh: it.frameh,
+        framerot: it.framerot || 0, framez: it.framez || 0
+      });
+    }).then(function () {
+      resetCaptureState();
+      state.step = 'arrange';
+      render();
+    }).catch(function (e) {
+      alert(S.error_save + ' (' + e.message + ')');
+      saveBtn.disabled = false;
+    });
+  }
+
   function saveTextFrame(tf, saveBtn, sendDirect) {
+    if (state.editingFrameItemId) { saveFrameSlide(tf, saveBtn); return; }
     saveBtn.disabled = true;
     var svg, label, wordfielddata, isEditingExisting;
     try {
@@ -3418,7 +3537,9 @@
     // sich die Seitenleiste, weil der Zettel sonst nicht mehr komplett
     // sichtbar wäre. Ein leicht hochkantiger, aber insgesamt kleiner
     // Zettel bleibt dagegen bei der gestapelten Anordnung.
-    var tfOrientation = (tf.h > tf.w && tf.h > window.innerHeight * 0.5) ? 'ic-tf-portrait' : 'ic-tf-landscape';
+    // Werkzeuge liegen jetzt immer in einem schmalen Menüband unter der
+    // Arbeitsfläche (Popups), daher stets die gestapelte Anordnung.
+    var tfOrientation = 'ic-tf-landscape';
     var layout = el('div', { class: 'ic-textframe-layout ' + tfOrientation });
     var tfShowBg = state.tfShowBoardBg !== false; // Standardmäßig aktiv, außer der Nutzer hat es explizit ausgeschaltet
     var stage = el('div', { class: 'ic-stage ic-tf-stage' + (tfShowBg ? ' ic-tf-stage-boardbg' : '') });
@@ -3430,6 +3551,14 @@
     if (!editingRec && isSlide && state.slidePlacement) {
       editingRec = { id: -1, canvasx: state.slidePlacement.canvasx, canvasy: state.slidePlacement.canvasy, canvasw: state.slidePlacement.canvasw,
         canvasz: state.slidePlacement.canvasz, boardid: state.slidePlacement.boardid };
+    }
+    // Folie = Faden-Rahmen: Lage aus dem Rahmen (inkl. im Editor
+    // verschobener Kanten), fester Maßstab für die ganze Sitzung.
+    var editFrameIt = isSlide ? editingFrameItem() : null;
+    if (editFrameIt) {
+      var efg = currentFrameGeom(editFrameIt, tf);
+      editingRec = { id: -1, canvasx: efg.x, canvasy: efg.y, canvasw: efg.w, canvasz: editFrameIt.framez || 0,
+        boardid: editFrameIt.boardid || 0, rot: efg.rot, frameId: editFrameIt.id };
     }
     if (isSlide) { stage.classList.add('ic-tf-stage-slide'); }
     var hasBoardPos = editingRec && editingRec.canvasw;
@@ -3457,6 +3586,9 @@
         var neighborsLayer = el('div', {
           class: 'ic-tf-neighbors-layer' + (isSlide ? ' ic-tf-neighbors-wide' : ''),
           style: (isSlide ? 'left:' + (-nOffX) + 'px;top:' + (-nOffY) + 'px;width:' + (BOARD_W * bgScale) + 'px;height:' + (BOARD_H * bgScale) + 'px;' : '') +
+            // Gedrehter Rahmen: die Pinnwand dreht sich im Editor entgegen,
+            // die Folie selbst steht gerade (wie die Kamera der Präsentation).
+            (isSlide && editingRec.rot ? 'transform-origin:' + (nOffX + tf.w / 2) + 'px ' + (nOffY + tf.h / 2) + 'px;transform:rotate(' + (-editingRec.rot) + 'deg);' : '') +
             (((bbg.type === 'image' || bbg.type === 'url' || bbg.type === 'upload') && bbg.url)
             // Hintergrundbild an der TATSÄCHLICH richtigen Stelle: das Bild
             // wird so groß wie das ganze Board dargestellt (BOARD_W/H
@@ -3486,6 +3618,19 @@
               (isSlide && p.blendmode ? 'mix-blend-mode:' + p.blendmode + ';' : '')
           }, [nEl || el('img', { src: p.url, alt: '', style: 'width:100%;display:block;' })]);
           neighborsLayer.appendChild(nWrap);
+        });
+        // Andere Folien des eigenen Fadens (bis zur eigenen Ebene) ebenfalls.
+        var nThread = isSlide ? ownThread() : null;
+        (nThread ? nThread.items : []).forEach(function (o) {
+          if (o.itemtype !== 'frame' || o.id === editingRec.frameId || (o.boardid || 0) !== (editingRec.boardid || 0) || (o.framez || 0) > thisZ) { return; }
+          var otf = frameSlideTf(o);
+          if (!otf) { return; }
+          var oEl = buildFrameSlideEl(o, otf, 'ic-tf-neighbor-slide');
+          oEl.style.left = (o.framex * bgScale) + 'px'; oEl.style.top = (o.framey * bgScale) + 'px';
+          oEl.style.width = (o.framew * bgScale) + 'px'; oEl.style.height = (o.frameh * bgScale) + 'px';
+          oEl.style.zIndex = '';
+          oEl.style.pointerEvents = 'none';
+          neighborsLayer.appendChild(oEl);
         });
       }
     }
@@ -3551,16 +3696,23 @@
       function down(ev) {
         dragging = true; var p = pt(ev);
         startX = p.x; startY = p.y; startW = tf.w; startH = tf.h;
-        startMarginLeft = parseFloat(frame.style.marginLeft) || 0;
-        startMarginTop = parseFloat(frame.style.marginTop) || 0;
+        // Rahmen steht zentriert (margin:auto) - für die Dauer des Ziehens
+        // die tatsächlichen Abstände festhalten, damit die gegenüberliegende
+        // Kante stehen bleibt.
+        var fcs = getComputedStyle(frame);
+        startMarginLeft = parseFloat(fcs.marginLeft) || 0;
+        startMarginTop = parseFloat(fcs.marginTop) || 0;
+        frame.style.marginLeft = startMarginLeft + 'px';
+        frame.style.marginTop = startMarginTop + 'px';
+        frame.style.marginRight = '0'; frame.style.marginBottom = '0';
         ev.stopPropagation(); ev.preventDefault();
       }
       function move(ev) {
         if (!dragging) { return; }
         var p = pt(ev);
         var dx = (p.x - startX) * cornerX, dy = (p.y - startY) * cornerY;
-        var newW = Math.max(120, startW + dx);
-        var newH = state.tfAspectLocked ? Math.max(80, Math.round(newW * (startH / startW))) : Math.max(80, startH + dy);
+        var newW = cornerX ? Math.max(120, startW + dx) : startW;
+        var newH = (state.tfAspectLocked && cornerX && cornerY) ? Math.max(80, Math.round(newW * (startH / startW))) : (cornerY ? Math.max(80, startH + dy) : startH);
         tf.w = newW; tf.h = newH;
         frame.style.width = tf.w + 'px'; frame.style.height = tf.h + 'px';
         // Bei den negativen Ecken (oben-links) wächst der Rahmen zusätzlich
@@ -3580,7 +3732,23 @@
         // nachgerechnet werden, damit sich nichts sichtbar verschiebt.
         // Erst beim Loslassen statt bei jedem Mausschritt, damit das
         // Ziehen selbst flüssig bleibt.
-        tf.texts.forEach(function (t) { t.x = (t.x * startW) / tf.w; t.y = (t.y * startH) / tf.h; });
+        // Linke/obere Kante: der Rand selbst wandert, der Inhalt bleibt an
+        // seiner Stelle (vorher rutschte alles mit dem Rand mit, sodass sich
+        // der linke Rand praktisch nicht verschieben ließ).
+        var offX = cornerX < 0 ? tf.w - startW : 0, offY = cornerY < 0 ? tf.h - startH : 0;
+        tf.texts.forEach(function (t) { t.x = (t.x * startW + offX) / tf.w; t.y = (t.y * startH + offY) / tf.h; });
+        var sizeK = Math.min(startW, startH) / Math.min(tf.w, tf.h);
+        (tf.shapes || []).forEach(function (sh) {
+          if (sh.main) { return; }
+          sh.x = ((sh.x != null ? sh.x : 0.5) * startW + offX) / tf.w;
+          sh.y = ((sh.y != null ? sh.y : 0.5) * startH + offY) / tf.h;
+          sh.size = (sh.size || 0.4) * sizeK;
+        });
+        if (tf.isSlide) {
+          // Folie = Rahmen auf der Pinnwand: dessen Ursprung wandert mit.
+          state.slideShift = state.slideShift || { dx: 0, dy: 0 };
+          state.slideShift.dx -= offX; state.slideShift.dy -= offY;
+        }
         if (!state.wordArtMode) {
           // Normale Textfelder: automatische Schriftgrößen-Anpassung
           // bleibt erhalten (dort gibt es nur diesen einen Griff).
@@ -3609,6 +3777,13 @@
       window.addEventListener('touchend', up);
     }
     if (frameResizeHandle) { attachFrameResizeHandle(frameResizeHandle, 1, 1, 'tfResizeListeners'); }
+    // Kantengriffe (alle Editoren): jede Kante einzeln verschiebbar - auch
+    // die linke und obere, ohne dass der Inhalt mitwandert.
+    [['l', -1, 0], ['r', 1, 0], ['t', 0, -1], ['b', 0, 1]].forEach(function (eg) {
+      var edgeHandle = el('div', { class: 'ic-resize-edge ic-resize-edge-' + eg[0] });
+      frame.appendChild(edgeHandle);
+      attachFrameResizeHandle(edgeHandle, eg[1], eg[2], 'tfResizeEdge' + eg[0] + 'Listeners');
+    });
 
     // Zweiter Griff oben-links: dieselbe "Rahmen erweitern ohne Text zu
     // bewegen"-Logik, nur von der linken oberen Ecke aus (cornerX/Y=-1,
@@ -3623,7 +3798,7 @@
       // die Schrift TATSÄCHLICH größer/kleiner macht (automatische
       // Schriftgrößen-Anpassung) - bewusst von den beiden blauen Griffen
       // getrennt, die NUR den Rahmen erweitern sollen.
-      var frameResizeHandleTR = el('div', { class: 'ic-resize ic-resize-tr' });
+      var frameResizeHandleTR = el('div', { class: 'ic-resize ic-resize-tr' + (tf.isSlide ? ' ic-hidden-handle' : '') });
       frame.appendChild(frameResizeHandleTR);
       (function () {
         var draggingTr = false, startXtr = 0, startYtr = 0, startWtr = 0, startHtr = 0;
@@ -3714,7 +3889,7 @@
       var edSize = useFillCentering ? fitTextSize(t, edBox, fontCss) : t.size;
       var elStyle = (useFillCentering
         ? (edBox.pad ? '' : 'inset:auto;left:' + edBox.x + 'px;top:' + edBox.y + 'px;width:' + edBox.w + 'px;height:' + edBox.h + 'px;padding:0;')
-        : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;max-width:94%;') +
+        : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;' + (t.boxW ? 'width:' + (t.boxW * 100) + '%;max-width:none;' : 'width:max-content;max-width:94%;')) +
         'font-family:' + fontCss + ';font-size:' + edSize + 'px;font-weight:' + t.fontWeight +
         ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px;' +
         (wordartCssFor(t, preset.text, useFillCentering) || computeStyle1Css(t, preset.text));
@@ -3767,11 +3942,21 @@
           autoFitPrimaryText(el2, t, edBox.h);
         });
       } else {
-        el2.addEventListener('input', function () { t.html = el2.innerHTML; t.text = el2.textContent; });
-        if (!isPrimary) {
-          var sizeHandle = el('div', { class: 'ic-textframe-size-handle', title: S.fontsize });
+        el2.addEventListener('input', function () { t.html = objHtmlWithoutHandles(el2); t.text = objTextWithoutHandles(el2); });
+        // Alle frei positionierten Texte (auch der erste bei WordArt und in
+        // Folien) lassen sich verschieben: über den Griff oben links oder -
+        // solange nicht gerade getippt wird - direkt am Text.
+        if (!isPrimary || state.wordArtMode) {
+          var sizeHandle = el('div', { class: 'ic-textframe-size-handle ic-tf-handle', title: S.fontsize, contenteditable: 'false' });
+          var moveHandle = el('div', { class: 'ic-textframe-move-handle ic-tf-handle', title: S.tf_move_text, contenteditable: 'false' }, ['\u2725']);
           el2.appendChild(sizeHandle);
-          makeTextObjectMovable(el2, frame, t, sizeHandle);
+          el2.appendChild(moveHandle);
+          var widthHandle = null;
+          if (tf.isSlide) {
+            widthHandle = el('div', { class: 'ic-textframe-width-handle ic-tf-handle', title: S.tf_text_width, contenteditable: 'false' });
+            el2.appendChild(widthHandle);
+          }
+          makeTextObjectMovable(el2, frame, t, sizeHandle, moveHandle, widthHandle);
           sizeHandle.addEventListener('mousedown', function () { selectText(t.id); });
         }
       }
@@ -3836,15 +4021,39 @@
     // nebeneinander) richtet sich nach dem Seitenverhältnis des Zettels
     // selbst (nicht nach der Bildschirmgröße), siehe CSS .ic-tf-landscape/
     // .ic-tf-portrait.
-    var blocksWrap = el('div', { class: 'ic-textframe-blocks ' + tfOrientation + (state.tfPanelsCollapsed ? ' ic-tf-panels-collapsed' : '') });
+    // Menüband: jeder Block ist ein schmaler Reiter, sein Inhalt öffnet sich
+    // als Popup darüber (state.tfOpenBlock übersteht das Neu-Rendern). Der
+    // Einklapp-Schalter sitzt direkt über dem Band.
+    var blocksWrap = el('div', { class: 'ic-textframe-blocks ic-tf-ribbon' });
+    var tfDock = el('div', { class: 'ic-tf-dock' + (state.tfPanelsCollapsed ? ' ic-tf-collapsed' : '') });
+    var dockToggle = el('button', {
+      class: 'ic-tf-dock-toggle', type: 'button',
+      title: state.tfPanelsCollapsed ? S.tf_panels_expand : S.tf_panels_collapse
+    }, [icon(state.tfPanelsCollapsed ? 'chevronup' : 'chevrondown')]);
+    dockToggle.addEventListener('click', function () { state.tfPanelsCollapsed = !state.tfPanelsCollapsed; render(); });
+    tfDock.appendChild(dockToggle);
+    tfDock.appendChild(blocksWrap);
+    var BLOCK_ICONS = {};
+    BLOCK_ICONS[S.tfblock_templates] = 'fillicon';
+    BLOCK_ICONS[S.tfblock_fonts] = 'fonts';
+    BLOCK_ICONS[S.tfblock_form] = 'effecticon';
+    BLOCK_ICONS[S.tfblock_formulas] = 'code';
+    BLOCK_ICONS[S.tfblock_slide] = 'frameicon';
     // Akkordeon: Überschrift antippen klappt den jeweiligen Block ein/aus -
     // auf dem Handy starten alle Blöcke eingeklappt (siehe CSS), auf
     // größeren Bildschirmen bleiben sie offen.
     function makeAccordionBlock(titleText) {
-      var blockEl = el('div', { class: 'ic-textframe-block' });
-      var titleEl = el('h3', { class: 'ic-textframe-block-title' }, [titleText]);
-      var contentEl = el('div', { class: 'ic-textframe-block-content' });
-      titleEl.addEventListener('click', function () { blockEl.classList.toggle('ic-tf-expanded'); });
+      var blockEl = el('div', { class: 'ic-textframe-block' + (state.tfOpenBlock === titleText ? ' ic-tf-open' : '') });
+      var titleEl = el('button', { class: 'ic-textframe-block-title ic-tf-tab', type: 'button' },
+        [icon(BLOCK_ICONS[titleText] || 'grid'), el('span', {}, [titleText])]);
+      var contentEl = el('div', { class: 'ic-textframe-block-content ic-tf-popup' });
+      titleEl.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      titleEl.addEventListener('click', function () {
+        var open = !blockEl.classList.contains('ic-tf-open');
+        blocksWrap.querySelectorAll('.ic-textframe-block').forEach(function (b) { b.classList.remove('ic-tf-open'); });
+        blockEl.classList.toggle('ic-tf-open', open);
+        state.tfOpenBlock = open ? titleText : null;
+      });
       blockEl.appendChild(titleEl);
       blockEl.appendChild(contentEl);
       blockEl.content = contentEl;
@@ -3852,11 +4061,11 @@
     }
     var blockTemplates = makeAccordionBlock(S.tfblock_templates);
     var blockFonts = makeAccordionBlock(S.tfblock_fonts);
-    var blockForm = makeAccordionBlock(state.wordArtMode ? S.tfblock_form : S.tfblock_formulas);
+    var blockForm = makeAccordionBlock(state.wordArtMode && !tf.isSlide ? S.tfblock_form : S.tfblock_formulas);
     blocksWrap.appendChild(blockTemplates);
     blocksWrap.appendChild(blockFonts);
     blocksWrap.appendChild(blockForm);
-    layout.appendChild(blocksWrap);
+    layout.appendChild(tfDock);
 
     // Block 1 "Farben und Formen" - identisch in beiden Editoren (Zettel
     // und WordArt). Enthält: Form der Kartenfläche selbst (Hintergrund),
@@ -4598,7 +4807,7 @@
         // t.html/t.text explizit synchronisieren statt sich allein auf das
         // 'input'-Event zu verlassen (feuert nach execCommand nicht immer).
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-        if (objEl) { active.html = objEl.innerHTML; active.text = objEl.textContent; }
+        if (objEl) { active.html = objHtmlWithoutHandles(objEl); active.text = objTextWithoutHandles(objEl); }
       }
       // WordArt: kuratierte Schriftbibliothek; Zettel: einfache Auswahl -
       // jeweils ein Knopf, der die aktuelle Schrift in sich selbst zeigt.
@@ -4756,7 +4965,7 @@
       // und liefen Gefahr, im exportierten Bild nicht zu erscheinen.
       // Hoch-/tiefgestellter Text und Unicode-Symbole nutzen dagegen
       // einfach die bereits vorhandene Schriftart weiter.
-      if (!state.wordArtMode) {
+      if (!state.wordArtMode || tf.isSlide) {
         var formulaRow = el('div', { class: 'ic-textframe-formatgrid' });
         var supBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_superscript }, ['x\u00b2']);
         supBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
@@ -4795,7 +5004,7 @@
       // WordArt-Vorlagen (Fläche/Rand/Extrusion) - nur im WordArt-Modus.
       // Jeder Button zeigt seinen eigenen Namen bereits im jeweiligen Stil -
       // dient dadurch gleichzeitig als Live-Vorschau ohne separate Tabs.
-      if (state.wordArtMode) {
+      if (state.wordArtMode && !tf.isSlide) {
         var currentWStyle = WORDART_STYLES.filter(function (w) { return w.id === active.wordartStyle; })[0];
         var pickerRow = el('div', { class: 'ic-textframe-wordart-picker-row' });
         var currentPreviewSvg = currentWStyle ? buildWordartGradientSvg({ wordartStyle: currentWStyle.id, size: 28 }, currentWStyle.label, resolveFontCss('sans'), true) : null;
@@ -4950,7 +5159,6 @@
     if (isSlide) {
       tf.anim = tf.anim || [];
       var blockAnim = makeAccordionBlock(S.tfblock_slide);
-      blockAnim.classList.add('ic-tf-expanded');
       blocksWrap.insertBefore(blockAnim, blocksWrap.firstChild);
       var addTextBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['+ ' + S.slide_addtext]);
       addTextBtn.addEventListener('click', function () {
@@ -4963,14 +5171,17 @@
       // Mischmodus der ganzen Folie mit dem Hintergrund - im Editor direkt
       // als Vorschau über dem abgebildeten Pinnwand-Ausschnitt.
       var slidePhoto = state.editingPhotoId ? state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0] : null;
-      var curBlend = slidePhoto ? (slidePhoto.blendmode || '') : (state.slideBlendPending || '');
+      var curBlend = state.editingFrameItemId ? (tf.blend || '') : slidePhoto ? (slidePhoto.blendmode || '') : (state.slideBlendPending || '');
       var applyEditorBlend = function (mode) {
         frame.querySelectorAll('.ic-textframe-obj, .ic-textframe-shapeobj').forEach(function (o) { o.style.mixBlendMode = mode || ''; });
       };
       slideTopRow.appendChild(el('span', { class: 'ic-anim-blend-label' }, [S.blend_mode]));
       slideTopRow.appendChild(iconDropdown(BLEND_MODES(), curBlend, S.blend_mode, function (mode) {
         applyEditorBlend(mode);
-        if (slidePhoto) {
+        if (state.editingFrameItemId) {
+          // Folien-Rahmen: Mischmodus gehört zum Folieninhalt.
+          tf.blend = mode || '';
+        } else if (slidePhoto) {
           callAjax('mod_pinnwand_set_blendmode', { cmid: cfg.cmid, photoid: slidePhoto.id, mode: mode }).then(function (res) {
             slidePhoto.blendmode = res.blendmode || '';
           });
@@ -5083,7 +5294,7 @@
       title: state.tfPanelsCollapsed ? S.tf_panels_expand : S.tf_panels_collapse
     }, [icon(state.tfPanelsCollapsed ? 'chevronup' : 'chevrondown')]);
     panelsToggleBtn.addEventListener('click', function () { state.tfPanelsCollapsed = !state.tfPanelsCollapsed; render(); });
-    tfHeaderLeft.appendChild(panelsToggleBtn);
+    // (Einklapp-Schalter sitzt jetzt direkt über dem Menüband.)
     tfHeader.appendChild(tfHeaderLeft);
     var tfHeaderRight = el('div', { class: 'ic-tf-header-group' });
     // Proportionen fixieren/lösen: beim Ziehen des Größenänderungs-Griffs
@@ -5110,7 +5321,7 @@
     // Post-Stream der Masterpinnwand (hiddenfromboard=0), statt erst über
     // "Meine Bilder" gesendet werden zu müssen. Nur sichtbar, wenn Senden
     // überhaupt erlaubt ist (konsistent mit dem Senden-Button dort).
-    if (state.studentcansend) {
+    if (state.studentcansend && !state.editingFrameItemId) {
       var sendDirectBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon', title: S.tf_send_direct, 'aria-label': S.tf_send_direct }, [icon('send')]);
       sendDirectBtn.addEventListener('click', function () { saveTextFrame(tf, sendDirectBtn, true); });
       tfHeaderRight.appendChild(sendDirectBtn);
@@ -5237,33 +5448,72 @@
     window.addEventListener('touchend', rUp);
   }
 
-  function makeTextObjectMovable(el2, frame, t, sizeHandle) {
-    var dragging = false, startX = 0, startY = 0, totalDelta = 0;
+  // Handles im contenteditable-Feld gehören nicht zum gespeicherten Text.
+  function objHtmlWithoutHandles(el2) {
+    var c = el2.cloneNode(true);
+    [].slice.call(c.querySelectorAll('.ic-tf-handle')).forEach(function (h) { h.remove(); });
+    return c.innerHTML;
+  }
+  function objTextWithoutHandles(el2) {
+    var c = el2.cloneNode(true);
+    [].slice.call(c.querySelectorAll('.ic-tf-handle')).forEach(function (h) { h.remove(); });
+    return c.textContent;
+  }
+
+  function makeTextObjectMovable(el2, frame, t, sizeHandle, moveHandle, widthHandle) {
+    var dragging = false, startX = 0, startY = 0, totalDelta = 0, startTx = 0, startTy = 0, viaHandle = false;
     function point(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
     function down(ev) {
-      if (ev.target === sizeHandle) { return; }
+      if (ev.target === sizeHandle || ev.target === widthHandle) { return; }
+      viaHandle = !!moveHandle && ev.target === moveHandle;
+      // Während getippt wird, markiert Ziehen am Text Buchstaben - dann nur
+      // über den Verschiebegriff.
+      if (!viaHandle && document.activeElement === el2) { return; }
       dragging = true; totalDelta = 0;
-      var p = point(ev); startX = p.x; startY = p.y;
+      var p = point(ev); startX = p.x; startY = p.y; startTx = t.x; startTy = t.y;
+      if (viaHandle) { ev.preventDefault(); ev.stopPropagation(); }
     }
     function move(ev) {
       if (!dragging) { return; }
       var p = point(ev);
-      totalDelta += Math.abs(p.x - startX) + Math.abs(p.y - startY);
-      if (totalDelta < 6) { return; }
+      totalDelta = Math.abs(p.x - startX) + Math.abs(p.y - startY);
+      if (!viaHandle && totalDelta < 6) { return; }
+      // Relativ zur Startlage (kein Springen der Textmitte zum Zeiger).
       var rect = frame.getBoundingClientRect();
-      var nx = (p.x - rect.left) / rect.width, ny = (p.y - rect.top) / rect.height;
-      t.x = Math.max(0.05, Math.min(0.95, nx));
-      t.y = Math.max(0.05, Math.min(0.95, ny));
+      t.x = Math.max(0, Math.min(1, startTx + (p.x - startX) / rect.width));
+      t.y = Math.max(0, Math.min(1, startTy + (p.y - startY) / rect.height));
       el2.style.left = (t.x * 100) + '%'; el2.style.top = (t.y * 100) + '%';
       ev.preventDefault();
     }
     function up() { dragging = false; }
     el2.addEventListener('mousedown', down);
-    el2.addEventListener('touchstart', down, { passive: true });
+    el2.addEventListener('touchstart', down, { passive: false });
     window.addEventListener('mousemove', move);
     window.addEventListener('touchmove', move, { passive: false });
     window.addEventListener('mouseup', up);
     window.addEventListener('touchend', up);
+
+    // Breitengriff (Folien): Textfeld-Breite als Anteil der Folienbreite,
+    // der Text bricht darin um. Die linke Kante bleibt stehen.
+    if (widthHandle) {
+      var wDragging = false, wStartX = 0, wStartW = 0, wStartTx = 0;
+      widthHandle.addEventListener('mousedown', function (ev) {
+        var rect = frame.getBoundingClientRect();
+        wDragging = true; wStartX = ev.clientX; wStartTx = t.x;
+        wStartW = t.boxW || (el2.getBoundingClientRect().width / rect.width);
+        ev.stopPropagation(); ev.preventDefault();
+      });
+      window.addEventListener('mousemove', function (ev) {
+        if (!wDragging) { return; }
+        var rect = frame.getBoundingClientRect();
+        var nw = Math.max(0.08, Math.min(1.2, wStartW + (ev.clientX - wStartX) / rect.width));
+        t.boxW = nw;
+        t.x = wStartTx + (nw - wStartW) / 2;
+        el2.style.width = (nw * 100) + '%'; el2.style.maxWidth = 'none';
+        el2.style.left = (t.x * 100) + '%';
+      });
+      window.addEventListener('mouseup', function () { wDragging = false; });
+    }
 
     // Eck-Handle: Ziehen ändert die Schriftgröße (das ist bei einem
     // Textobjekt die sinnvolle Entsprechung zu "skalieren").
@@ -5460,7 +5710,7 @@
           // 'input'-Event aus (anders als echte Tastatureingaben), sonst
           // würden diese Daten veraltet bleiben und die Formatierung bei
           // einem späteren Neu-Rendern wieder verlorengehen.
-          if (t) { t.html = objEl.innerHTML; t.text = objEl.textContent; }
+          if (t) { t.html = objHtmlWithoutHandles(objEl); t.text = objTextWithoutHandles(objEl); }
           return true;
         } catch (e) { /* Auswahl reicht über Element-Grenzen - Fallback */ }
       }
@@ -6451,6 +6701,23 @@
       }, function () { persistLayout(p); pushPhotoUndoIfChanged(); if (state.threadPanelOpen) { render(); } });
     });
 
+    // Folien (Faden-Rahmen mit Inhalt) des eigenen Fadens: Inhalt immer
+    // sichtbar - der Rahmen selbst nur bei offenem Faden-/Schichtungs-Panel.
+    // Doppelklick öffnet den Folien-Editor.
+    var frameSlideEls = {};
+    var slideThread = ownThread();
+    (slideThread ? slideThread.items : []).forEach(function (it) {
+      if (it.itemtype !== 'frame' || (it.boardid || 0) !== state.currentBoard) { return; }
+      var stf = frameSlideTf(it);
+      if (!stf) { return; }
+      var slideEl = buildFrameSlideEl(it, stf, 'ic-frame-slide');
+      if (layerPeekHides(it.framez || 0)) { slideEl.classList.add('ic-layer-peek-hidden'); }
+      slideEl.title = S.slide_edit;
+      slideEl.addEventListener('dblclick', function (ev) { ev.preventDefault(); ev.stopPropagation(); openFrameSlideEditor(it); });
+      canvas.appendChild(slideEl);
+      frameSlideEls[it.id] = slideEl;
+    });
+
     // Roter Faden auf dem Board: gesetzte Leerrahmen anzeigen + eine Linie,
     // die jeweils zwei aufeinanderfolgende Stationen verbindet - nur für
     // Stationen auf dem gerade angezeigten Board (siehe Scoping-Hinweis zu
@@ -6495,6 +6762,7 @@
             if (!frameUndoBefore) { frameUndoBefore = { x: it.framex, y: it.framey }; }
             var dx = x - it.framex, dy = y - it.framey;
             it.framex = x; it.framey = y;
+            if (frameSlideEls[it.id]) { frameSlideEls[it.id].style.left = x + 'px'; frameSlideEls[it.id].style.top = y + 'px'; }
             applyGroupDelta(frameGroupKey, dx, dy);
           }, function (moved) {
             if (moved) {
@@ -6519,6 +6787,12 @@
           frameEl.addEventListener('dblclick', function (ev) {
             if (openPresentationAtItem('frame', it.id)) { ev.preventDefault(); }
           });
+          // Folie bearbeiten (bzw. aus dem Rahmen eine Folie machen).
+          var frameEditBtn = el('button', { class: 'ic-frame-edit-btn', type: 'button', title: S.slide_edit }, [icon('imageedit')]);
+          frameEditBtn.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+          frameEditBtn.addEventListener('touchstart', function (ev) { ev.stopPropagation(); }, { passive: true });
+          frameEditBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openFrameSlideEditor(it); });
+          frameEl.appendChild(frameEditBtn);
 
           var frameResize = el('div', { class: 'ic-resize' });
           frameEl.appendChild(frameResize);
@@ -6539,8 +6813,10 @@
             var p = frPoint(ev);
             var z = state.boardZoom || 1;
             it.framew = Math.max(60, frStartW + (p.x - frStartX) / z);
-            it.frameh = Math.max(60, frStartH + (p.y - frStartY) / z);
+            // Folie: Seitenverhältnis bleibt (der Inhalt ist darauf gestaltet).
+            it.frameh = frameSlideTf(it) ? it.framew * frStartH / frStartW : Math.max(60, frStartH + (p.y - frStartY) / z);
             frameEl.style.width = it.framew + 'px'; frameEl.style.height = it.frameh + 'px';
+            if (frameSlideEls[it.id]) { frameSlideEls[it.id].style.width = it.framew + 'px'; frameSlideEls[it.id].style.height = it.frameh + 'px'; }
             ev.preventDefault();
           }
           window.addEventListener('mousemove', frMove);
@@ -6554,6 +6830,7 @@
           frameEl.appendChild(frameRotateHandle);
           makeRotatable(frameRotateHandle, frameEl, function (deg) {
             it.framerot = deg;
+            if (frameSlideEls[it.id]) { frameSlideEls[it.id].style.transform = 'rotate(' + deg + 'deg)'; }
           }, function () { persistFrame(); render(); });
         });
 
@@ -7785,7 +8062,7 @@
 
   function threadItemLabel(item) {
     if (item.itemtype === 'overview') { return S.addoverview; }
-    if (item.itemtype === 'frame') { return item.framelabel || S.emptyframe; }
+    if (item.itemtype === 'frame') { return item.framelabel || (item.framedata ? S.slide_label : S.emptyframe); }
     var p = null;
     for (var i = 0; i < state.photos.length; i++) { if (state.photos[i].id === item.photoid) { p = state.photos[i]; break; } }
     return p ? (p.sourcetitle || itemCaptionText(p)) : '';
@@ -7856,6 +8133,9 @@
           callAjax('mod_pinnwand_set_frame_label', { cmid: cfg.cmid, itemid: item.id, framelabel: text });
         });
         row.appendChild(frameLabelEl2);
+        var rowSlideBtn = el('button', { class: 'ic-thread-remove ic-thread-slide-btn', type: 'button', title: S.slide_edit }, [icon('imageedit')]);
+        rowSlideBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openFrameSlideEditor(item); });
+        row.appendChild(rowSlideBtn);
       } else {
         row.appendChild(el('span', { class: 'ic-thread-item-label' }, [threadItemLabel(item)]));
       }
@@ -8260,10 +8540,22 @@
           style: 'left:' + it.framex + 'px;top:' + it.framey + 'px;width:' + it.framew + 'px;height:' + it.frameh + 'px;'
         });
         canvasEl.appendChild(fEl);
-        return {
+        var frameStep = {
           el: fEl, cx: it.framex + it.framew / 2, cy: it.framey + it.frameh / 2,
           w: it.framew, h: it.frameh, rot: -(it.framerot || 0), z: it.framez || 0, frame: true
         };
+        // Folie: Inhalt sichtbar im Rahmen (Ebene, Mischmodus, Verdeckung wie
+        // Objekte), Animationsschritte bei stehender Kamera.
+        var slideTf = frameSlideTf(it);
+        if (slideTf) {
+          var slideEl = buildFrameSlideEl(it, slideTf, 'ic-present-slide');
+          canvasEl.appendChild(slideEl);
+          occludables.push({ el: slideEl, z: it.framez || 0 });
+          frameStep.el = slideEl;
+          var slideBuilds = slideAnimMap(slideTf).count;
+          if (slideBuilds) { frameStep.buildEl = slideEl; frameStep.buildCount = slideBuilds; }
+        }
+        return frameStep;
       }
       var rec = photoRecs[it.photoid];
       if (!rec) { return null; }

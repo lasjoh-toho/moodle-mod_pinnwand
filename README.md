@@ -1770,6 +1770,33 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Auf der Pinnwand ist bei Folien der Rahmen selbst das Objekt: gestrichelte
   Hilfslinie, Griffe an der Rahmenecke, Zoom-Ziel in der Präsentation.
 
+### Einhundertfünfzigste Überarbeitung — Folie = Faden-Rahmen, Menüband
+
+- **Folie ist jetzt ein Rahmen des Roten Fadens** (wie "Rahmen setzen" im
+  Faden-Menü) mit eigenem Inhalt:
+  - auf der Pinnwand verschieben, skalieren (Seitenverhältnis bleibt) und
+    drehen wie jeder Rahmen;
+  - Station im Faden; in der Präsentation dreht sich die Kamera mit, sodass
+    die Folie gerade steht;
+  - der Inhalt ist immer sichtbar, der Rahmen nur im Faden-/Schichtungsmodus.
+  - Bearbeiten über den Knopf am Rahmen, im Faden-Panel oder per Doppelklick
+    auf die Folie. "Folie" im Hinzufügen-Dialog legt einen solchen Rahmen an
+    der sichtbaren Stelle an.
+- **Folien-Editor**:
+  - zeigt die Pinnwand rund um den Rahmen, bei gedrehtem Rahmen entgegengedreht;
+  - Kanten verschieben auch den Rahmen auf der Pinnwand;
+  - keine WordArt-Einstellungen mehr, dafür Formeln.
+- **Rahmen im Editor**: Alle vier Kanten lassen sich einzeln verschieben,
+  auch die linke und obere, ohne dass der Inhalt mitwandert. Der Rahmen
+  steht zentriert in der Arbeitsfläche.
+- **Textfelder positionierbar**:
+  - Verschiebegriff oben links, ohne Springen zur Mausposition;
+  - auch das erste Textfeld (WordArt, Folie) lässt sich verschieben;
+  - in Folien zusätzlich ein Breitengriff, damit Text umbricht.
+- **Menüband für alle Editoren**: Die Werkzeugblöcke stehen als schmale
+  Reiter unter der Arbeitsfläche und öffnen sich als Popup. Der
+  Einklapp-Schalter sitzt direkt über dem Band.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

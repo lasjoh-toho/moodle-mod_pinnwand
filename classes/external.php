@@ -1777,6 +1777,7 @@ class mod_pinnwand_external extends external_api {
                 'framerot' => $r->framerot !== null ? (float) $r->framerot : 0,
                 'framez' => (int) $r->framez,
                 'framelabel' => (string) ($r->framelabel ?? ''),
+                'framedata' => (string) ($r->framedata ?? ''),
             ];
         }
         return $out;
@@ -1801,6 +1802,7 @@ class mod_pinnwand_external extends external_api {
                 'framerot' => new external_value(PARAM_FLOAT, 'Rotation in Grad (nur frame)'),
                 'framez' => new external_value(PARAM_INT, 'Z-Reihenfolge (nur frame)'),
                 'framelabel' => new external_value(PARAM_TEXT, 'Beschriftung (nur frame)'),
+                'framedata' => new external_value(PARAM_RAW, 'Folieninhalt (Wortfeld-JSON, nur frame)', VALUE_DEFAULT, ''),
             ])),
         ]);
     }
@@ -1930,6 +1932,7 @@ class mod_pinnwand_external extends external_api {
                 'framerot' => new external_value(PARAM_FLOAT, 'Rotation in Grad (nur frame)'),
                 'framez' => new external_value(PARAM_INT, 'Z-Reihenfolge (nur frame)'),
                 'framelabel' => new external_value(PARAM_TEXT, 'Beschriftung (nur frame)'),
+                'framedata' => new external_value(PARAM_RAW, 'Folieninhalt (Wortfeld-JSON, nur frame)', VALUE_DEFAULT, ''),
             ])),
         ]);
     }
@@ -2061,6 +2064,53 @@ class mod_pinnwand_external extends external_api {
     }
 
     public static function set_frame_label_returns() {
+        return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
+    }
+
+    public static function set_frame_content_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'itemid' => new external_value(PARAM_INT, 'Item-ID (Rahmen)'),
+            'framedata' => new external_value(PARAM_RAW, 'Folieninhalt (Wortfeld-JSON), leer = Inhalt entfernen'),
+            'framesvg' => new external_value(PARAM_RAW, 'Gerenderter Inhalt als SVG', VALUE_DEFAULT, ''),
+        ]);
+    }
+
+    /** Speichert den Folieninhalt eines Faden-Rahmens (Folie = Rahmen mit Inhalt). */
+    public static function set_frame_content($cmid, $itemid, $framedata, $framesvg = '') {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_frame_content_parameters(), [
+            'cmid' => $cmid, 'itemid' => $itemid, 'framedata' => $framedata, 'framesvg' => $framesvg,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+
+        $item = $DB->get_record('pinnwand_thread_items', ['id' => $params['itemid'], 'itemtype' => 'frame'], '*', MUST_EXIST);
+        $thread = $DB->get_record('pinnwand_threads', ['id' => $item->threadid], '*', MUST_EXIST);
+        if ($thread->userid != $USER->id || $thread->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'set_frame_content');
+        }
+        $data = trim($params['framedata']);
+        if ($data !== '' && !is_array(json_decode($data, true))) {
+            throw new moodle_exception('error_save', 'pinnwand');
+        }
+        $svg = trim($params['framesvg']);
+        if ($svg !== '') {
+            if (stripos($svg, '<svg') !== 0) {
+                throw new moodle_exception('error_save', 'pinnwand');
+            }
+            // Das SVG wird im HTML-Export direkt eingebettet: aktive Inhalte entfernen.
+            $svg = preg_replace('#<script\b[^>]*>.*?</script\s*>#is', '', $svg);
+            $svg = preg_replace('#\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)#i', '', $svg);
+            $svg = preg_replace('#javascript\s*:#i', '', $svg);
+        }
+        $item->framedata = $data !== '' ? $data : null;
+        $item->framesvg = ($data !== '' && $svg !== '') ? $svg : null;
+        $DB->update_record('pinnwand_thread_items', $item);
+
+        return ['success' => true];
+    }
+
+    public static function set_frame_content_returns() {
         return new external_single_structure(['success' => new external_value(PARAM_BOOL, 'OK')]);
     }
 

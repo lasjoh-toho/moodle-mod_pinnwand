@@ -38,7 +38,7 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
         $threaditems = new backup_nested_element('threaditems');
         $threaditem = new backup_nested_element('threaditem', ['id'], [
             'sortorder', 'itemtype', 'photoid', 'boardid',
-            'framex', 'framey', 'framew', 'frameh', 'framerot', 'framez', 'framelabel', 'timecreated',
+            'framex', 'framey', 'framew', 'frameh', 'framerot', 'framez', 'framelabel', 'framedata', 'framesvg', 'timecreated',
         ]);
 
         // Stylus-Anmerkungen direkt auf dem Board-Hintergrund - ebenfalls
