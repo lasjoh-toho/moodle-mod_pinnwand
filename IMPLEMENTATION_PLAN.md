@@ -4256,3 +4256,32 @@ Editoren:
   `state.tfOpenBlock`; Einklapp-Schalter `.ic-tf-dock-toggle`.
 
 Shipped als Version `2026083148` / `0.150.0`.
+
+## Phase 144
+
+Bildeditor:
+- `IMG_STEPS`, `goImgStep()` (mit `state.imgLeave` zum Übernehmen des
+  aktuellen Schritts und `state.imgHistory` für "Zurück"), `imgDock()`
+  (Leiste unten), `floatPanel()` (verschiebbare Popups, `state.floatPos`).
+- Pipeline: `state.cornersSrc` (Quellkoordinaten, Standard ganzes Bild),
+  `state.imgGeo` (Drehung/Spiegelung), `state.colorSettings`,
+  `state.imgMask` (Freistellmaske) -> `imgWork()`, `imgColored()`,
+  `imgFinal()` mit Cache (`imgInvalidate`).
+
+Texteditoren:
+- Popups mit Kopfzeile (`.ic-tf-popup-head`), ziehbar (`state.tfPopupPos`),
+  mehrere offen (`state.tfOpenBlocks`); Blöcke "Formen" und "Farbe" getrennt.
+- Nachbarebene immer breit (ganze Pinnwand im Editor-Maßstab), gedreht um
+  `-canvasrot` bzw. `-framerot`.
+- `.ic-obj-bounds-guide` ohne Rahmen.
+
+PDF-Hintergrund:
+- `loadPdfJs()`, `openPdfBackgroundDialog()`, `pdfSpreadsFor()`,
+  `pdfRenderSpread()`, `pdfComposeBackground()` (bestes Raster auf
+  2800x2000).
+- `save_background`: `pdfdata`/`pdfspreads`/`pdfdouble`, Dateibereich
+  `backgroundpdf` (pluginfile), `get_background_data` liefert `pdfurl`,
+  `pdfspreads` und `pdfdouble`.
+- `thirdpartylibs.xml`.
+
+Shipped als Version `2026083149` / `0.151.0`.

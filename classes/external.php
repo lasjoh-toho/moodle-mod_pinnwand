@@ -254,7 +254,8 @@ class mod_pinnwand_external extends external_api {
 
     protected static function get_background_data($instance, $context) {
         global $USER;
-        $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'fit' => 'contain'];
+        $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'fit' => 'contain',
+            'pdfurl' => '', 'pdfspreads' => '', 'pdfdouble' => false];
         $raw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
         if (!$raw) {
             return $default;
@@ -312,6 +313,19 @@ class mod_pinnwand_external extends external_api {
             if (!$bg['url']) {
                 $bg['type'] = 'color';
             }
+            // Aus einem PDF zusammengesetzt: PDF + Seitenauswahl für das
+            // erneute Öffnen der Auswahl.
+            if ($bg['type'] === 'upload' && !empty($decoded['pdf'])) {
+                $pdffiles = $fs->get_area_files($context->id, 'mod_pinnwand', 'backgroundpdf', $USER->id, 'filename', false);
+                $pdffile = reset($pdffiles);
+                if ($pdffile) {
+                    $bg['pdfurl'] = (string) moodle_url::make_pluginfile_url(
+                        $context->id, 'mod_pinnwand', 'backgroundpdf', $USER->id, '/', $pdffile->get_filename()
+                    );
+                    $bg['pdfspreads'] = preg_replace('/[^0-9,]/', '', (string) ($decoded['pdfspreads'] ?? ''));
+                    $bg['pdfdouble'] = !empty($decoded['pdfdouble']);
+                }
+            }
         }
         return $bg;
     }
@@ -330,6 +344,9 @@ class mod_pinnwand_external extends external_api {
                 'brightness' => new external_value(PARAM_INT, 'Helligkeit in %'),
                 'saturation' => new external_value(PARAM_INT, 'Sättigung in %'),
                 'fit' => new external_value(PARAM_ALPHA, 'contain oder cover'),
+                'pdfurl' => new external_value(PARAM_RAW, 'PDF, aus dem der Hintergrund stammt', VALUE_DEFAULT, ''),
+                'pdfspreads' => new external_value(PARAM_RAW, 'Gewählte (Doppel-)Seiten, kommagetrennt', VALUE_DEFAULT, ''),
+                'pdfdouble' => new external_value(PARAM_BOOL, 'Doppelseiten nebeneinander', VALUE_DEFAULT, false),
             ]),
             'photos' => new external_multiple_structure(new external_single_structure([
                 'id' => new external_value(PARAM_INT, 'ID'),
@@ -1055,14 +1072,19 @@ class mod_pinnwand_external extends external_api {
             'brightness' => new external_value(PARAM_INT, 'Helligkeit in % (20-180)', VALUE_DEFAULT, 100),
             'saturation' => new external_value(PARAM_INT, 'Sättigung in % (0-200)', VALUE_DEFAULT, 100),
             'fit' => new external_value(PARAM_ALPHA, 'contain (füllen, mit Rand) oder cover (abschneiden)', VALUE_DEFAULT, 'contain'),
+            'pdfdata' => new external_value(PARAM_RAW, 'Data-URL eines PDFs, aus dem imagedata zusammengesetzt wurde', VALUE_DEFAULT, ''),
+            'pdfspreads' => new external_value(PARAM_RAW, 'Gewählte (Doppel-)Seiten, kommagetrennt', VALUE_DEFAULT, ''),
+            'pdfdouble' => new external_value(PARAM_INT, 'Doppelseiten (1/0)', VALUE_DEFAULT, 0),
         ]);
     }
 
-    public static function save_background($cmid, $type, $color, $photoid, $url, $imagedata, $brightness, $saturation, $fit = 'contain') {
+    public static function save_background($cmid, $type, $color, $photoid, $url, $imagedata, $brightness, $saturation, $fit = 'contain',
+            $pdfdata = '', $pdfspreads = '', $pdfdouble = 0) {
         global $USER, $DB;
         $params = self::validate_parameters(self::save_background_parameters(), [
             'cmid' => $cmid, 'type' => $type, 'color' => $color, 'photoid' => $photoid, 'url' => $url,
             'imagedata' => $imagedata, 'brightness' => $brightness, 'saturation' => $saturation, 'fit' => $fit,
+            'pdfdata' => $pdfdata, 'pdfspreads' => $pdfspreads, 'pdfdouble' => $pdfdouble,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
 
@@ -1102,7 +1124,47 @@ class mod_pinnwand_external extends external_api {
             ], $binary);
         }
 
+        // PDF-Herkunft: neues PDF speichern, bei neuer Auswahl aus dem
+        // gespeicherten PDF beibehalten, sonst (anderer Hintergrund) entfernen.
+        $oldraw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
+        $old = $oldraw ? (json_decode($oldraw, true) ?: []) : [];
+        $pdf = 0;
+        $spreads = preg_replace('/[^0-9,]/', '', $params['pdfspreads']);
+        $double = (int) !empty($params['pdfdouble']);
+        $fspdf = get_file_storage();
+        if ($type === 'upload' && $params['imagedata'] !== '') {
+            if ($params['pdfdata'] !== '') {
+                if (!preg_match('#^data:application/pdf;base64,(.+)$#', $params['pdfdata'], $pm)) {
+                    throw new moodle_exception('error_save', 'pinnwand');
+                }
+                $pdfbinary = base64_decode($pm[1]);
+                if ($pdfbinary === false || strncmp($pdfbinary, '%PDF', 4) !== 0) {
+                    throw new moodle_exception('error_save', 'pinnwand');
+                }
+                $fspdf->delete_area_files($context->id, 'mod_pinnwand', 'backgroundpdf', $USER->id);
+                $fspdf->create_file_from_string([
+                    'contextid' => $context->id, 'component' => 'mod_pinnwand', 'filearea' => 'backgroundpdf',
+                    'itemid' => $USER->id, 'filepath' => '/', 'filename' => 'bg_' . $USER->id . '.pdf',
+                ], $pdfbinary);
+                $pdf = 1;
+            } else if ($spreads !== '' && !empty($old['pdf'])) {
+                $pdf = 1;
+            } else {
+                $fspdf->delete_area_files($context->id, 'mod_pinnwand', 'backgroundpdf', $USER->id);
+            }
+        } else if ($type === 'upload' && !empty($old['pdf'])) {
+            // Nur Helligkeit/Sättigung/Füllart geändert - PDF-Angaben bleiben.
+            $pdf = 1;
+            $spreads = preg_replace('/[^0-9,]/', '', (string) ($old['pdfspreads'] ?? ''));
+            $double = (int) !empty($old['pdfdouble']);
+        } else if ($type !== 'upload') {
+            $fspdf->delete_area_files($context->id, 'mod_pinnwand', 'backgroundpdf', $USER->id);
+        }
+
         $payload = [
+            'pdf' => $pdf,
+            'pdfspreads' => $pdf ? $spreads : '',
+            'pdfdouble' => $pdf ? $double : 0,
             'type' => $type,
             'color' => clean_param($params['color'], PARAM_TEXT),
             'photoid' => (int) $params['photoid'],
@@ -1125,6 +1187,9 @@ class mod_pinnwand_external extends external_api {
                 'brightness' => new external_value(PARAM_INT, 'Helligkeit in %'),
                 'saturation' => new external_value(PARAM_INT, 'Sättigung in %'),
                 'fit' => new external_value(PARAM_ALPHA, 'contain oder cover'),
+                'pdfurl' => new external_value(PARAM_RAW, 'PDF, aus dem der Hintergrund stammt', VALUE_DEFAULT, ''),
+                'pdfspreads' => new external_value(PARAM_RAW, 'Gewählte (Doppel-)Seiten, kommagetrennt', VALUE_DEFAULT, ''),
+                'pdfdouble' => new external_value(PARAM_BOOL, 'Doppelseiten nebeneinander', VALUE_DEFAULT, false),
             ]),
         ]);
     }

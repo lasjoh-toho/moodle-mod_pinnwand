@@ -55,7 +55,7 @@ function pinnwand_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
     }
     require_login($course, false, $cm);
 
-    if ($filearea === 'background') {
+    if ($filearea === 'background' || $filearea === 'backgroundpdf') {
         // Eigenes hochgeladenes Hintergrundbild - Zugriff nur für die
         // besitzende Person selbst (itemid = deren Nutzer-ID).
         $itemid = (int) array_shift($args);
@@ -65,7 +65,7 @@ function pinnwand_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
         $filename = array_pop($args);
         $filepath = $args ? '/' . implode('/', $args) . '/' : '/';
         $fs = get_file_storage();
-        $file = $fs->get_file($context->id, 'mod_pinnwand', 'background', $itemid, $filepath, $filename);
+        $file = $fs->get_file($context->id, 'mod_pinnwand', $filearea, $itemid, $filepath, $filename);
         if (!$file || $file->is_directory()) {
             return false;
         }

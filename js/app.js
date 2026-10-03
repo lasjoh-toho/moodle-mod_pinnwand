@@ -749,52 +749,254 @@
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
     state.sourceCanvas = c;
     state.corners = null;
+    imgResetPipeline();
+    state.cutoutUndo = [];
     state.step = 'perspective';
     render();
   }
 
   // ==================================================================
-  // PERSPEKTIVE: 4 Eckpunkte ziehen -> Homographie -> Entzerrtes Bild
+  // BILDEDITOR: freie Schritte (Entzerren, Drehen, Farbe, Freistellen,
+  // Angaben) als Reiter in einer Leiste unten - jeder Schritt per Klick
+  // erreichbar. Die Zwischenergebnisse werden bei Bedarf aus der Quelle neu
+  // berechnet (imgWork/imgColored/imgFinal); das Freistellen ist eine Maske,
+  // die spätere Änderungen an Zuschnitt/Farbe übersteht. Werkzeuge liegen in
+  // verschiebbaren Popups (auf dem Handy fest über der Leiste).
   // ==================================================================
-  function renderPerspective(body) {
-    var stage = el('div', { class: 'ic-stage' });
-    var canvas = el('canvas', { class: 'ic-view' });
-    stage.appendChild(canvas);
-    body.appendChild(stage);
+  var IMG_STEPS = ['perspective', 'crop', 'color', 'cutout', 'source'];
 
+  function imgResetPipeline() {
+    state.cornersSrc = null;
+    state.imgGeo = { rot: 0, mirror: false };
+    state.colorSettings = { brightness: 0, contrast: 0, saturation: 0, grayscale: false };
+    state.imgMask = null;
+    state.imgCache = {};
+    state.imgHistory = [];
+    state.imgLeave = null;
+  }
+  function imgInvalidate(level) {
+    state.imgCache = state.imgCache || {};
+    if (level === 'work') { state.imgCache.work = null; }
+    state.imgCache.colored = null;
+  }
+  function imgFullCorners() {
     var src = state.sourceCanvas;
-    var fitScale = fitImageToStage(canvas, stage, src.width, src.height);
-    canvas.getContext('2d').drawImage(src, 0, 0, canvas.width, canvas.height);
-
-    if (!state.corners) {
-      var m = 0.12;
-      state.corners = [
-        { x: canvas.width * m, y: canvas.height * m },
-        { x: canvas.width * (1 - m), y: canvas.height * m },
-        { x: canvas.width * (1 - m), y: canvas.height * (1 - m) },
-        { x: canvas.width * m, y: canvas.height * (1 - m) }
-      ];
-      state.cornersCanvasW = canvas.width; state.cornersCanvasH = canvas.height;
-    } else if (state.cornersCanvasW !== canvas.width || state.cornersCanvasH !== canvas.height) {
-      var crx = canvas.width / state.cornersCanvasW, cry = canvas.height / state.cornersCanvasH;
-      state.corners = state.corners.map(function (p) { return { x: p.x * crx, y: p.y * cry }; });
-      state.cornersCanvasW = canvas.width; state.cornersCanvasH = canvas.height;
+    return [{ x: 0, y: 0 }, { x: src.width, y: 0 }, { x: src.width, y: src.height }, { x: 0, y: src.height }];
+  }
+  function imgCornersAreFull(c) {
+    var f = imgFullCorners();
+    return c.every(function (p, i) { return Math.abs(p.x - f[i].x) < 1 && Math.abs(p.y - f[i].y) < 1; });
+  }
+  function imgCopy(c) {
+    var o = document.createElement('canvas');
+    o.width = c.width; o.height = c.height;
+    o.getContext('2d').drawImage(c, 0, 0);
+    return o;
+  }
+  // Entzerrt + gedreht/gespiegelt.
+  function imgWork() {
+    state.imgCache = state.imgCache || {};
+    if (state.imgCache.work) { return state.imgCache.work; }
+    var corners = state.cornersSrc || imgFullCorners();
+    var c = imgCornersAreFull(corners) ? imgCopy(state.sourceCanvas) : applyPerspectiveCorrection(state.sourceCanvas, corners);
+    var geo = state.imgGeo || { rot: 0, mirror: false };
+    for (var r = 0; r < geo.rot; r++) { c = rotateCanvas90(c); }
+    if (geo.mirror) { c = mirrorCanvas(c); }
+    state.imgCache.work = c;
+    return c;
+  }
+  function imgColorNeutral(f) {
+    return !f || (!f.brightness && !f.contrast && !f.saturation && !f.grayscale);
+  }
+  function imgColored() {
+    state.imgCache = state.imgCache || {};
+    if (state.imgCache.colored) { return state.imgCache.colored; }
+    var work = imgWork();
+    var out;
+    if (imgColorNeutral(state.colorSettings)) {
+      out = work;
+    } else {
+      out = document.createElement('canvas');
+      out.width = work.width; out.height = work.height;
+      var ctx = out.getContext('2d');
+      var src = work.getContext('2d').getImageData(0, 0, work.width, work.height);
+      var dst = ctx.createImageData(work.width, work.height);
+      applyColorAdjust(src, dst, state.colorSettings);
+      ctx.putImageData(dst, 0, 0);
     }
-    makeDragOverlay(stage, canvas, state.corners, true);
-    stageHint(stage, S.perspective_hint);
+    state.imgCache.colored = out;
+    return out;
+  }
+  function imgMaskFor(c) {
+    if (state.imgMask && (state.imgMask.width !== c.width || state.imgMask.height !== c.height)) { state.imgMask = null; }
+    return state.imgMask;
+  }
+  function imgFinal() {
+    var colored = imgColored();
+    var mask = imgMaskFor(colored);
+    var out = imgCopy(colored);
+    if (mask) {
+      var ctx = out.getContext('2d');
+      ctx.globalCompositeOperation = 'destination-in';
+      ctx.drawImage(mask, 0, 0);
+    }
+    return out;
+  }
 
-    stageNavArrows(stage, function () {
+  // PNG, sobald das Bild (z. B. nach dem Freistellen) durchsichtige Pixel
+  // hat - sonst JPEG (deutlich kleiner).
+  function canvasHasAlpha(c) {
+    var d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    for (var i = 3; i < d.length; i += 4) { if (d[i] < 255) { return true; } }
+    return false;
+  }
+  function canvasDataUrl(c, quality) {
+    return canvasHasAlpha(c) ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', quality || 0.88);
+  }
+
+  function goImgStep(step, noHistory) {
+    if (state.imgLeave) { try { state.imgLeave(); } catch (e) { /* ignore */ } state.imgLeave = null; }
+    if (!noHistory && state.step !== step) { (state.imgHistory = state.imgHistory || []).push(state.step); }
+    state.step = step;
+    render();
+  }
+
+  function imgSaveExisting(btn) {
+    if (state.imgLeave) { state.imgLeave(); state.imgLeave = null; }
+    var photoId = state.editingPhotoId;
+    btn.disabled = true;
+    callAjax('mod_pinnwand_update_photo', { cmid: cfg.cmid, photoid: photoId, imagedata: canvasDataUrl(imgFinal(), 0.88) }).then(function (res) {
+      var existing = state.photos.filter(function (p) { return p.id === photoId; })[0];
+      if (existing) { existing.url = res.url; }
       resetCaptureState();
       state.step = 'home';
       render();
-    }, function () {
-      var scaledCorners = state.corners.map(function (p) {
-        return { x: p.x / fitScale, y: p.y / fitScale };
+    }).catch(function (e) {
+      alert(S.error_save + ' (' + e.message + ')');
+      btn.disabled = false;
+    });
+  }
+
+  // Leiste unten: Abbrechen, Zurück, Schritt-Reiter, Speichern.
+  function imgDock(body, current, onSave) {
+    var dock = el('div', { class: 'ic-img-dock' });
+    var cancelBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-img-dock-btn', type: 'button', title: S.cancel }, ['✕', el('span', {}, [S.cancel])]);
+    cancelBtn.addEventListener('click', function () { resetCaptureState(); state.step = 'home'; render(); });
+    var hist = state.imgHistory || [];
+    var backBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-img-dock-btn', type: 'button', title: S.back }, [icon('arrowleft'), el('span', {}, [S.back])]);
+    backBtn.disabled = !hist.length && IMG_STEPS.indexOf(current) <= 0;
+    backBtn.addEventListener('click', function () {
+      var h = state.imgHistory || [];
+      var prev = h.length ? h.pop() : IMG_STEPS[Math.max(0, IMG_STEPS.indexOf(current) - 1)];
+      goImgStep(prev, true);
+    });
+    dock.appendChild(cancelBtn);
+    dock.appendChild(backBtn);
+    var tabs = el('div', { class: 'ic-img-tabs' });
+    var labels = { perspective: S.step_perspective, crop: S.img_tab_rotate, color: S.step_color, cutout: S.step_cutout, source: S.step_source };
+    var icons = { perspective: 'scissors', crop: 'rotate', color: 'fillicon', cutout: 'eraser', source: 'info' };
+    IMG_STEPS.forEach(function (st) {
+      if (st === 'source' && state.editingPhotoId) { return; }
+      var b = el('button', { class: 'ic-img-tab' + (st === current ? ' active' : ''), type: 'button' }, [icon(icons[st]), el('span', {}, [labels[st]])]);
+      b.addEventListener('click', function () { if (st !== current) { goImgStep(st); } });
+      tabs.appendChild(b);
+    });
+    dock.appendChild(tabs);
+    var saveBtn = el('button', { class: 'ic-btn ic-btn-primary ic-img-dock-btn ic-img-save', type: 'button', title: S.savephoto }, [icon('check'), el('span', {}, [S.savephoto])]);
+    saveBtn.addEventListener('click', function () {
+      if (state.editingPhotoId) { imgSaveExisting(saveBtn); return; }
+      if (current !== 'source') { goImgStep('source'); return; }
+      if (onSave) { onSave(saveBtn); }
+    });
+    dock.appendChild(saveBtn);
+    body.appendChild(dock);
+    return dock;
+  }
+
+  // Verschiebbares Werkzeug-Popup über der Arbeitsfläche; Lage je Popup in
+  // state.floatPos. Auf dem Handy (CSS) fest über der Leiste.
+  function floatPanel(body, key, title, content) {
+    var panel = el('div', { class: 'ic-float-panel', 'data-float': key });
+    var head = el('div', { class: 'ic-float-head' }, [el('span', { class: 'ic-float-grip' }, ['☰']), el('span', {}, [title])]);
+    var collapsed = !!(state.floatCollapsed || {})[key];
+    var minBtn = el('button', { class: 'ic-float-min', type: 'button', title: collapsed ? S.tf_panels_expand : S.tf_panels_collapse }, [collapsed ? '+' : '−']);
+    head.appendChild(minBtn);
+    panel.appendChild(head);
+    var inner = el('div', { class: 'ic-float-body' });
+    if (collapsed) { inner.style.display = 'none'; }
+    inner.appendChild(content);
+    panel.appendChild(inner);
+    minBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      state.floatCollapsed = state.floatCollapsed || {};
+      state.floatCollapsed[key] = !state.floatCollapsed[key];
+      inner.style.display = state.floatCollapsed[key] ? 'none' : '';
+      minBtn.textContent = state.floatCollapsed[key] ? '+' : '−';
+    });
+    body.appendChild(panel);
+    state.floatPos = state.floatPos || {};
+    function place() {
+      var pos = state.floatPos[key];
+      var bw = body.clientWidth, bh = body.clientHeight;
+      // Standard: oben mittig unter der Kopfzeile - verdeckt so keine der
+      // Bildecken (Entzerren startet mit den Ecken am Bildrand).
+      if (!pos) { pos = { x: Math.max(8, (bw - panel.offsetWidth) / 2), y: 60 }; }
+      pos.x = Math.max(0, Math.min(bw - 60, pos.x));
+      pos.y = Math.max(48, Math.min(Math.max(48, bh - 40), pos.y));
+      panel.style.left = pos.x + 'px';
+      panel.style.top = pos.y + 'px';
+    }
+    setTimeout(place, 0);
+    var drag = null;
+    head.addEventListener('pointerdown', function (ev) {
+      if (ev.target === minBtn || window.matchMedia('(max-width: 640px)').matches) { return; }
+      drag = { sx: ev.clientX, sy: ev.clientY, x: panel.offsetLeft, y: panel.offsetTop };
+      try { head.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+      ev.preventDefault();
+    });
+    head.addEventListener('pointermove', function (ev) {
+      if (!drag) { return; }
+      state.floatPos[key] = { x: drag.x + ev.clientX - drag.sx, y: drag.y + ev.clientY - drag.sy };
+      place();
+    });
+    head.addEventListener('pointerup', function () { drag = null; });
+    head.addEventListener('pointercancel', function () { drag = null; });
+    return panel;
+  }
+
+  // ---------------- ENTZERREN: vier Ecken (Start: ganzes Bild) ----------
+  function renderPerspective(body) {
+    body.classList.add('ic-img-editor');
+    var dock = imgDock(body, 'perspective');
+    var stage = el('div', { class: 'ic-stage' });
+    var canvas = el('canvas', { class: 'ic-view' });
+    stage.appendChild(canvas);
+    body.insertBefore(stage, dock);
+    var src = state.sourceCanvas;
+    var fitScale = fitImageToStage(canvas, stage, src.width, src.height);
+    canvas.getContext('2d').drawImage(src, 0, 0, canvas.width, canvas.height);
+    var cs = state.cornersSrc || imgFullCorners();
+    var points = cs.map(function (p) { return { x: p.x * fitScale, y: p.y * fitScale }; });
+    makeDragOverlay(stage, canvas, points, true);
+    state.imgLeave = function () {
+      var next = points.map(function (p) {
+        return { x: Math.max(0, Math.min(src.width, p.x / fitScale)), y: Math.max(0, Math.min(src.height, p.y / fitScale)) };
       });
-      state.workCanvas = applyPerspectiveCorrection(src, scaledCorners);
-      state.step = 'crop';
+      var prev = state.cornersSrc || imgFullCorners();
+      var changed = next.some(function (p, i) { return Math.abs(p.x - prev[i].x) > 0.5 || Math.abs(p.y - prev[i].y) > 0.5; });
+      if (changed) { state.cornersSrc = next; imgInvalidate('work'); }
+    };
+    var tools = el('div', { class: 'ic-float-tools' });
+    tools.appendChild(el('p', { class: 'ic-hint' }, [S.perspective_hint]));
+    var resetBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.img_corners_reset]);
+    resetBtn.addEventListener('click', function () {
+      state.imgLeave = null;
+      state.cornersSrc = null;
+      imgInvalidate('work');
       render();
     });
+    tools.appendChild(resetBtn);
+    floatPanel(body, 'perspective', S.step_perspective, tools);
   }
 
   // Passt eine Zielgröße (Quellbild) proportional in den verfügbaren Stage-Bereich ein.
@@ -996,93 +1198,72 @@
     return out;
   }
 
-  // ==================================================================
-  // CROP: Rechteck mit vier Eckgriffen auf dem entzerrten Bild
-  // ==================================================================
-  function renderCrop(body) {
-    body.appendChild(stepsBar(2));
-
-    // Kein Zuschnitt-Handle-Schritt mehr hier - die vier Eckpunkte im
-    // vorherigen (Perspektive-)Schritt übernehmen Zuschnitt UND
-    // Perspektivkorrektur bereits gemeinsam (das Ergebnis ist exakt auf das
-    // gewählte Viereck zugeschnitten). Dieser Schritt bietet nur noch
-    // Drehen/Spiegeln als einfache Buttons - keine Handles ein zweites Mal.
-    var toolRow = el('div', { class: 'ic-crop-tools' });
-    var rotateBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('rotate'), el('span', {}, [S.rotate90])]);
-    var mirrorBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [icon('mirror'), el('span', {}, [S.mirror])]);
-    toolRow.appendChild(rotateBtn); toolRow.appendChild(mirrorBtn);
-    body.appendChild(toolRow);
-
+  // Zeigt einen Canvas eingepasst auf der Bühne (Anzeige-Canvas im Bildraster).
+  function imgShowOnStage(body, srcCanvas, extraClass) {
     var stage = el('div', { class: 'ic-stage' });
-    var canvas = el('canvas', { class: 'ic-view' });
-    stage.appendChild(canvas);
-    body.appendChild(stage);
+    var view = el('canvas', { class: 'ic-view ic-checker-bg' + (extraClass ? ' ' + extraClass : '') });
+    view.width = srcCanvas.width; view.height = srcCanvas.height;
+    view.getContext('2d').drawImage(srcCanvas, 0, 0);
+    stage.appendChild(view);
+    body.insertBefore(stage, body.querySelector('.ic-img-dock'));
+    var probe = document.createElement('canvas');
+    var scale = fitImageToStage(probe, stage, srcCanvas.width, srcCanvas.height);
+    view.style.width = probe.style.width;
+    view.style.height = probe.style.height;
+    return { stage: stage, view: view, scale: scale };
+  }
 
-    var src = state.workCanvas;
-    fitImageToStage(canvas, stage, src.width, src.height);
-    canvas.getContext('2d').drawImage(src, 0, 0, canvas.width, canvas.height);
-
+  // ---------------- DREHEN / SPIEGELN -----------------------------------
+  function renderCrop(body) {
+    body.classList.add('ic-img-editor');
+    imgDock(body, 'crop');
+    imgShowOnStage(body, imgFinal());
+    var tools = el('div', { class: 'ic-float-tools ic-float-row' });
+    var rotateBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [icon('rotate'), el('span', {}, [S.rotate90])]);
+    var mirrorBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [icon('mirror'), el('span', {}, [S.mirror])]);
     rotateBtn.addEventListener('click', function () {
-      state.workCanvas = rotateCanvas90(state.workCanvas);
+      state.imgGeo.rot = (state.imgGeo.rot + 1) % 4;
+      if (state.imgMask) { state.imgMask = rotateCanvas90(state.imgMask); }
+      imgInvalidate('work');
       render();
     });
     mirrorBtn.addEventListener('click', function () {
-      state.workCanvas = mirrorCanvas(state.workCanvas);
+      state.imgGeo.mirror = !state.imgGeo.mirror;
+      if (state.imgMask) { state.imgMask = mirrorCanvas(state.imgMask); }
+      imgInvalidate('work');
       render();
     });
-    stageNavArrows(stage, function () {
-      state.step = 'perspective';
-      render();
-    }, function () {
-      var out = document.createElement('canvas');
-      out.width = state.workCanvas.width; out.height = state.workCanvas.height;
-      out.getContext('2d').drawImage(state.workCanvas, 0, 0);
-      state.finalCanvas = out;
-      state.colorBase = out;
-      state.colorSettings = { brightness: 0, contrast: 0, saturation: 0, grayscale: false };
-      state.step = 'color';
-      render();
-    });
+    tools.appendChild(rotateBtn);
+    tools.appendChild(mirrorBtn);
+    floatPanel(body, 'crop', S.img_tab_rotate, tools);
   }
 
-  // ==================================================================
-  // FARBE: Helligkeit / Kontrast / Sättigung / Graustufen
-  // ==================================================================
+  // ---------------- FARBE ------------------------------------------------
   function renderColor(body) {
-    body.appendChild(stepsBar(3));
-    var stage = el('div', { class: 'ic-stage' });
-    var canvas = el('canvas', { class: 'ic-view ic-checker-bg' });
-    stage.appendChild(canvas);
-    body.appendChild(stage);
-
-    var baseData = null;
-    // Immer vom unbearbeiteten Zwischenstand ausgehen - sonst würden die
-    // Regler beim Zurückkehren (z. B. aus dem Freistellen) doppelt wirken.
-    if (!state.colorBase) { state.colorBase = state.finalCanvas; }
-    var colorBase = state.colorBase;
-
+    body.classList.add('ic-img-editor');
+    imgDock(body, 'color');
+    var work = imgWork();
+    var shown = imgShowOnStage(body, work);
+    var view = shown.view, vctx = view.getContext('2d');
+    var baseData = work.getContext('2d').getImageData(0, 0, work.width, work.height);
     function draw() {
-      var f = state.colorSettings;
-      canvas.width = colorBase.width;
-      canvas.height = colorBase.height;
-      var ctx = canvas.getContext('2d');
-      if (!baseData) {
-        ctx.drawImage(colorBase, 0, 0);
-        baseData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      var out = vctx.createImageData(work.width, work.height);
+      applyColorAdjust(baseData, out, state.colorSettings);
+      vctx.putImageData(out, 0, 0);
+      var mask = imgMaskFor(work);
+      if (mask) {
+        vctx.save(); vctx.globalCompositeOperation = 'destination-in'; vctx.drawImage(mask, 0, 0); vctx.restore();
       }
-      var out = ctx.createImageData(canvas.width, canvas.height);
-      applyColorAdjust(baseData, out, f);
-      ctx.putImageData(out, 0, 0);
     }
     draw();
-
-    var panel = el('div', { class: 'ic-panel' });
+    var panel = el('div', { class: 'ic-float-tools' });
     function slider(labelKey, key, min, max) {
       var row = el('div', { class: 'ic-row' });
       row.appendChild(el('label', {}, [S[labelKey]]));
       var input = el('input', { type: 'range', min: min, max: max, value: state.colorSettings[key] });
       input.addEventListener('input', function () {
         state.colorSettings[key] = parseInt(input.value, 10);
+        imgInvalidate('color');
         draw();
       });
       row.appendChild(input);
@@ -1091,127 +1272,68 @@
     slider('brightness', 'brightness', -100, 100);
     slider('contrast', 'contrast', -100, 100);
     slider('saturation', 'saturation', -100, 100);
-
     var grayRow = el('div', { class: 'ic-row' });
-    var grayLabel = el('label', {}, [S.grayscale]);
     var grayInput = el('input', { type: 'checkbox' });
     grayInput.checked = state.colorSettings.grayscale;
     grayInput.addEventListener('change', function () {
       state.colorSettings.grayscale = grayInput.checked;
+      imgInvalidate('color');
       draw();
     });
-    grayRow.appendChild(grayLabel); grayRow.appendChild(grayInput);
+    grayRow.appendChild(el('label', {}, [S.grayscale]));
+    grayRow.appendChild(grayInput);
     panel.appendChild(grayRow);
-    body.appendChild(panel);
-
-    var isEditingExisting = !!state.editingPhotoId;
-    var arrows = stageNavArrows(stage, function () {
-      state.step = 'crop';
-      render();
-    }, function () {
-      // Ergebnis fest in finalCanvas übernehmen; das Freistellen beginnt
-      // von diesem Stand aus neu.
-      state.finalCanvas = canvas;
-      state.cutoutCanvas = null;
-      state.cutoutUndo = null;
-      state.step = 'cutout';
+    var resetBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.cutout_reset]);
+    resetBtn.addEventListener('click', function () {
+      state.colorSettings = { brightness: 0, contrast: 0, saturation: 0, grayscale: false };
+      imgInvalidate('color');
       render();
     });
+    panel.appendChild(resetBtn);
+    floatPanel(body, 'color', S.step_color, panel);
   }
 
-  // PNG, sobald das Bild (z. B. nach dem Freistellen) durchsichtige Pixel
-  // hat - sonst JPEG (deutlich kleiner).
-  function canvasHasAlpha(c) {
-    var d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    for (var i = 3; i < d.length; i += 4) { if (d[i] < 255) { return true; } }
-    return false;
-  }
-  function canvasDataUrl(c, quality) {
-    return canvasHasAlpha(c) ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', quality || 0.88);
-  }
-
-  // ==================================================================
-  // FREISTELLEN: Motiv vom Hintergrund lösen - Radierer/Wiederherstellen
-  // (Pinsel) sowie Rechteck/Ellipse (innen behalten oder innen löschen).
-  // Durchsichtige Bereiche werden als PNG gespeichert.
-  // ==================================================================
+  // ---------------- FREISTELLEN (Maske) ----------------------------------
   function renderCutout(body) {
-    body.appendChild(stepsBar(4));
-    var base = state.finalCanvas;
-    if (!state.cutoutCanvas) {
-      var w0 = document.createElement('canvas');
-      w0.width = base.width; w0.height = base.height;
-      w0.getContext('2d').drawImage(base, 0, 0);
-      state.cutoutCanvas = w0;
-      state.cutoutUndo = [];
+    body.classList.add('ic-img-editor');
+    imgDock(body, 'cutout');
+    var colored = imgColored();
+    var mask = imgMaskFor(colored);
+    if (!mask) {
+      mask = document.createElement('canvas');
+      mask.width = colored.width; mask.height = colored.height;
+      var mctx0 = mask.getContext('2d');
+      mctx0.fillStyle = '#fff';
+      mctx0.fillRect(0, 0, mask.width, mask.height);
+      state.imgMask = mask;
     }
-    var work = state.cutoutCanvas;
-    var wctx = work.getContext('2d');
+    var mctx = mask.getContext('2d');
+    state.cutoutUndo = state.cutoutUndo || [];
     if (!state.cutoutTool) { state.cutoutTool = 'erase'; }
     if (!state.cutoutSize) { state.cutoutSize = 30; }
 
-    var toolRow = el('div', { class: 'ic-crop-tools ic-cutout-tools' });
-    var tools = [
-      { key: 'erase', icon: 'eraser', label: S.cutout_erase },
-      { key: 'restore', icon: 'brush', label: S.cutout_restore },
-      { key: 'rect', icon: 'rectsel', label: S.cutout_rect },
-      { key: 'ellipse', icon: 'ellipsesel', label: S.cutout_ellipse }
-    ];
-    var toolBtns = {};
-    tools.forEach(function (t) {
-      var b = el('button', { class: 'ic-btn ic-btn-ghost' + (state.cutoutTool === t.key ? ' active' : ''), type: 'button', title: t.label },
-        [icon(t.icon), el('span', {}, [t.label])]);
-      b.addEventListener('click', function () {
-        state.cutoutTool = t.key;
-        Object.keys(toolBtns).forEach(function (k) { toolBtns[k].classList.toggle('active', k === t.key); });
-        syncOptions();
-      });
-      toolBtns[t.key] = b;
-      toolRow.appendChild(b);
-    });
-    var sizeWrap = el('label', { class: 'ic-cutout-size', title: S.cutout_size }, [S.cutout_size]);
-    var sizeInput = el('input', { type: 'range', min: 4, max: 120, value: state.cutoutSize });
-    sizeInput.addEventListener('input', function () { state.cutoutSize = parseInt(sizeInput.value, 10); });
-    sizeWrap.appendChild(sizeInput);
-    toolRow.appendChild(sizeWrap);
-    var modeSel = el('select', { class: 'ic-cutout-mode', title: S.cutout_shape_mode });
-    [['keep', S.cutout_keep], ['remove', S.cutout_remove]].forEach(function (o) {
-      var opt = el('option', { value: o[0] }, [o[1]]);
-      if ((state.cutoutShapeMode || 'keep') === o[0]) { opt.selected = true; }
-      modeSel.appendChild(opt);
-    });
-    modeSel.addEventListener('change', function () { state.cutoutShapeMode = modeSel.value; });
-    toolRow.appendChild(modeSel);
-    function syncOptions() {
-      var brush = state.cutoutTool === 'erase' || state.cutoutTool === 'restore';
-      sizeWrap.style.display = brush ? '' : 'none';
-      modeSel.style.display = brush ? 'none' : '';
-    }
-    var undoBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', title: S.cutout_undo }, [icon('undo')]);
-    var resetBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', title: S.cutout_reset }, [icon('rotate')]);
-    toolRow.appendChild(undoBtn);
-    toolRow.appendChild(resetBtn);
-    body.appendChild(toolRow);
-    syncOptions();
-
-    var stage = el('div', { class: 'ic-stage' });
-    var view = el('canvas', { class: 'ic-view ic-cutout-view ic-checker-bg' });
-    view.width = work.width; view.height = work.height;
-    stage.appendChild(view);
-    body.appendChild(stage);
-    body.appendChild(el('p', { class: 'ic-hint ic-cutout-hint' }, [S.cutout_hint]));
-    // Anzeigegröße wie in den anderen Schritten, Pixelraster bleibt aber das
-    // des Bildes (keine Qualitätsverluste beim Radieren).
-    var probe = document.createElement('canvas');
-    var dispScale = fitImageToStage(probe, stage, work.width, work.height);
-    view.style.width = probe.style.width;
-    view.style.height = probe.style.height;
-    var vctx = view.getContext('2d');
-
+    var shown = imgShowOnStage(body, colored, 'ic-cutout-view');
+    var view = shown.view, vctx = view.getContext('2d'), dispScale = shown.scale;
     var preview = null;
+    function shapePath(ctx, r) {
+      var x = Math.min(r.x1, r.x2), y = Math.min(r.y1, r.y2);
+      var w = Math.abs(r.x2 - r.x1), h = Math.abs(r.y2 - r.y1);
+      ctx.beginPath();
+      if (r.kind === 'ellipse') {
+        ctx.ellipse(x + w / 2, y + h / 2, Math.max(0.5, w / 2), Math.max(0.5, h / 2), 0, 0, Math.PI * 2);
+      } else {
+        ctx.rect(x, y, w, h);
+      }
+    }
     function redraw() {
-      vctx.clearRect(0, 0, view.width, view.height);
-      vctx.drawImage(work, 0, 0);
+      vctx.save();
+      vctx.globalCompositeOperation = 'copy';
+      vctx.drawImage(colored, 0, 0);
+      vctx.restore();
+      vctx.save();
+      vctx.globalCompositeOperation = 'destination-in';
+      vctx.drawImage(mask, 0, 0);
+      vctx.restore();
       if (preview) {
         vctx.save();
         vctx.lineWidth = 2 / dispScale;
@@ -1225,40 +1347,21 @@
         vctx.restore();
       }
     }
-    function shapePath(ctx, r) {
-      var x = Math.min(r.x1, r.x2), y = Math.min(r.y1, r.y2);
-      var w = Math.abs(r.x2 - r.x1), h = Math.abs(r.y2 - r.y1);
-      ctx.beginPath();
-      if (r.kind === 'ellipse') {
-        ctx.ellipse(x + w / 2, y + h / 2, Math.max(0.5, w / 2), Math.max(0.5, h / 2), 0, 0, Math.PI * 2);
-      } else {
-        ctx.rect(x, y, w, h);
-      }
-    }
     function pushUndo() {
-      var c = document.createElement('canvas');
-      c.width = work.width; c.height = work.height;
-      c.getContext('2d').drawImage(work, 0, 0);
-      state.cutoutUndo.push(c);
+      state.cutoutUndo.push(imgCopy(mask));
       if (state.cutoutUndo.length > 20) { state.cutoutUndo.shift(); }
     }
     function stamp(x, y, r, restore) {
-      wctx.save();
-      wctx.beginPath();
-      wctx.arc(x, y, r, 0, Math.PI * 2);
-      if (restore) {
-        wctx.clip();
-        wctx.clearRect(x - r - 1, y - r - 1, 2 * r + 2, 2 * r + 2);
-        wctx.drawImage(base, 0, 0);
-      } else {
-        wctx.globalCompositeOperation = 'destination-out';
-        wctx.fill();
-      }
-      wctx.restore();
+      mctx.save();
+      mctx.beginPath();
+      mctx.arc(x, y, r, 0, Math.PI * 2);
+      if (restore) { mctx.fillStyle = '#fff'; } else { mctx.globalCompositeOperation = 'destination-out'; }
+      mctx.fill();
+      mctx.restore();
     }
     function toImg(ev) {
       var rc = view.getBoundingClientRect();
-      return { x: (ev.clientX - rc.left) / rc.width * work.width, y: (ev.clientY - rc.top) / rc.height * work.height };
+      return { x: (ev.clientX - rc.left) / rc.width * view.width, y: (ev.clientY - rc.top) / rc.height * view.height };
     }
     var drag = null;
     view.addEventListener('pointerdown', function (ev) {
@@ -1282,12 +1385,8 @@
       var pt = toImg(ev);
       if (drag.brush) {
         var dx = pt.x - drag.last.x, dy = pt.y - drag.last.y;
-        var dist = Math.sqrt(dx * dx + dy * dy);
-        var stepLen = Math.max(1, drag.r / 3);
-        var n = Math.ceil(dist / stepLen);
-        for (var i = 1; i <= n; i++) {
-          stamp(drag.last.x + dx * i / n, drag.last.y + dy * i / n, drag.r, drag.restore);
-        }
+        var n = Math.ceil(Math.sqrt(dx * dx + dy * dy) / Math.max(1, drag.r / 3));
+        for (var i = 1; i <= n; i++) { stamp(drag.last.x + dx * i / n, drag.last.y + dy * i / n, drag.r, drag.restore); }
         drag.last = pt;
       } else {
         preview.x2 = pt.x; preview.y2 = pt.y;
@@ -1303,11 +1402,12 @@
       if (!drag) { return; }
       if (!drag.brush && preview) {
         if (Math.abs(preview.x2 - preview.x1) > 3 && Math.abs(preview.y2 - preview.y1) > 3) {
-          wctx.save();
-          wctx.globalCompositeOperation = (state.cutoutShapeMode || 'keep') === 'keep' ? 'destination-in' : 'destination-out';
-          shapePath(wctx, preview);
-          wctx.fill();
-          wctx.restore();
+          mctx.save();
+          mctx.globalCompositeOperation = (state.cutoutShapeMode || 'keep') === 'keep' ? 'destination-in' : 'destination-out';
+          mctx.fillStyle = '#fff';
+          shapePath(mctx, preview);
+          mctx.fill();
+          mctx.restore();
         } else {
           state.cutoutUndo.pop();
         }
@@ -1318,54 +1418,66 @@
     }
     view.addEventListener('pointerup', endDrag);
     view.addEventListener('pointercancel', endDrag);
+    redraw();
+
+    var tools = el('div', { class: 'ic-float-tools ic-cutout-tools' });
+    var toolRow = el('div', { class: 'ic-float-row' });
+    var toolBtns = {};
+    [
+      { key: 'erase', icon: 'eraser', label: S.cutout_erase },
+      { key: 'restore', icon: 'brush', label: S.cutout_restore },
+      { key: 'rect', icon: 'rectsel', label: S.cutout_rect },
+      { key: 'ellipse', icon: 'ellipsesel', label: S.cutout_ellipse }
+    ].forEach(function (t) {
+      var b = el('button', { class: 'ic-btn ic-btn-ghost' + (state.cutoutTool === t.key ? ' active' : ''), type: 'button', title: t.label },
+        [icon(t.icon), el('span', {}, [t.label])]);
+      b.addEventListener('click', function () {
+        state.cutoutTool = t.key;
+        Object.keys(toolBtns).forEach(function (k) { toolBtns[k].classList.toggle('active', k === t.key); });
+        syncOptions();
+      });
+      toolBtns[t.key] = b;
+      toolRow.appendChild(b);
+    });
+    tools.appendChild(toolRow);
+    var sizeWrap = el('label', { class: 'ic-cutout-size' }, [S.cutout_size]);
+    var sizeInput = el('input', { type: 'range', min: 4, max: 120, value: state.cutoutSize });
+    sizeInput.addEventListener('input', function () { state.cutoutSize = parseInt(sizeInput.value, 10); });
+    sizeWrap.appendChild(sizeInput);
+    tools.appendChild(sizeWrap);
+    var modeSel = el('select', { class: 'ic-cutout-mode', title: S.cutout_shape_mode });
+    [['keep', S.cutout_keep], ['remove', S.cutout_remove]].forEach(function (o) {
+      var opt = el('option', { value: o[0] }, [o[1]]);
+      if ((state.cutoutShapeMode || 'keep') === o[0]) { opt.selected = true; }
+      modeSel.appendChild(opt);
+    });
+    modeSel.addEventListener('change', function () { state.cutoutShapeMode = modeSel.value; });
+    tools.appendChild(modeSel);
+    function syncOptions() {
+      var brush = state.cutoutTool === 'erase' || state.cutoutTool === 'restore';
+      sizeWrap.style.display = brush ? '' : 'none';
+      modeSel.style.display = brush ? 'none' : '';
+    }
+    syncOptions();
+    var actRow = el('div', { class: 'ic-float-row' });
+    var undoBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', title: S.cutout_undo }, [icon('undo'), el('span', {}, [S.cutout_undo])]);
+    var resetBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', title: S.cutout_reset }, [S.cutout_reset]);
     undoBtn.addEventListener('click', function () {
       var prev = state.cutoutUndo.pop();
       if (!prev) { return; }
-      wctx.save();
-      wctx.globalCompositeOperation = 'copy';
-      wctx.drawImage(prev, 0, 0);
-      wctx.restore();
+      mctx.save(); mctx.globalCompositeOperation = 'copy'; mctx.drawImage(prev, 0, 0); mctx.restore();
       redraw();
     });
     resetBtn.addEventListener('click', function () {
       pushUndo();
-      wctx.save();
-      wctx.globalCompositeOperation = 'copy';
-      wctx.drawImage(base, 0, 0);
-      wctx.restore();
+      mctx.save(); mctx.globalCompositeOperation = 'copy'; mctx.fillStyle = '#fff'; mctx.fillRect(0, 0, mask.width, mask.height); mctx.restore();
       redraw();
     });
-    redraw();
-
-    var isEditingExisting = !!state.editingPhotoId;
-    var arrows = stageNavArrows(stage, function () {
-      state.step = 'color';
-      render();
-    }, function () {
-      var out = document.createElement('canvas');
-      out.width = work.width; out.height = work.height;
-      out.getContext('2d').drawImage(work, 0, 0);
-      if (isEditingExisting) {
-        arrows.nextBtn.disabled = true;
-        var photoId = state.editingPhotoId;
-        callAjax('mod_pinnwand_update_photo', { cmid: cfg.cmid, photoid: photoId, imagedata: canvasDataUrl(out, 0.88) }).then(function (res) {
-          var existing = state.photos.filter(function (p) { return p.id === photoId; })[0];
-          if (existing) { existing.url = res.url; }
-          resetCaptureState();
-          state.step = 'home';
-          render();
-        }).catch(function (e) {
-          alert(S.error_save + ' (' + e.message + ')');
-          arrows.nextBtn.disabled = false;
-        });
-        return;
-      }
-      // finalCanvas bleibt der Stand VOR dem Freistellen (Zurück aus
-      // "Angaben" setzt so das Freistellen fort); gespeichert wird out.
-      state.sourceCanvasOut = out;
-      state.step = 'source';
-      render();
-    }, isEditingExisting ? 'check' : 'arrowright', isEditingExisting ? S.savephoto : S.next);
+    actRow.appendChild(undoBtn);
+    actRow.appendChild(resetBtn);
+    tools.appendChild(actRow);
+    tools.appendChild(el('p', { class: 'ic-hint' }, [S.cutout_hint]));
+    floatPanel(body, 'cutout', S.step_cutout, tools);
   }
 
   function applyColorAdjust(src, out, f) {
@@ -1401,10 +1513,11 @@
   // Galerieansicht (Lightbox) pro Foto definiert (siehe openLightbox()).
   // ==================================================================
   function renderSource(body) {
-    body.appendChild(stepsBar(5));
+    body.classList.add('ic-img-editor', 'ic-img-source');
+    var finalCanvas = imgFinal();
 
-    var preview = el('div', { class: 'ic-stage', style: 'flex:0 0 40%' });
-    var img = el('img', { class: 'ic-checker-bg', src: canvasDataUrl(state.sourceCanvasOut || state.finalCanvas, 0.7), style: 'max-width:100%;max-height:100%' });
+    var preview = el('div', { class: 'ic-stage', style: 'flex:0 0 34%' });
+    var img = el('img', { class: 'ic-checker-bg', src: canvasDataUrl(finalCanvas, 0.7), style: 'max-width:100%;max-height:100%' });
     preview.appendChild(img);
     body.appendChild(preview);
 
@@ -1466,14 +1579,12 @@
       body.appendChild(consentRow);
     }
 
-    var bar = el('div', { class: 'ic-actionbar' });
-    bar.appendChild(cancelWizardBtn());
-    var saveBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.savephoto, 'aria-label': S.savephoto }, [icon('check')]);
-    saveBtn.addEventListener('click', function () {
+    // Speichern über die Leiste unten (Haken).
+    imgDock(body, 'source', function (saveBtn) {
       saveBtn.disabled = true;
       // Das Raster wird hier bewusst noch NICHT festgelegt - das passiert
       // erst später pro Foto in der Galerieansicht (Lightbox).
-      var dataUrl = canvasDataUrl(state.sourceCanvasOut || state.finalCanvas, 0.88);
+      var dataUrl = canvasDataUrl(finalCanvas, 0.88);
       callAjax('mod_pinnwand_save_photo', {
         cmid: cfg.cmid,
         imagedata: dataUrl,
@@ -1499,11 +1610,10 @@
         saveBtn.disabled = false;
       });
     });
-    bar.appendChild(saveBtn);
-    body.appendChild(bar);
   }
 
   function resetCaptureState() {
+    imgResetPipeline();
     state.sourceCanvas = null;
     state.corners = null;
     state.workCanvas = null;
@@ -3582,13 +3692,17 @@
         // Folie: Hintergrund und Nachbarn auch RUND UM den Rahmen (ganze
         // Pinnwand im selben Maßstab), damit die Folie im Zusammenhang
         // gestaltet werden kann. Sonst nur innerhalb des Rahmens.
-        var nOffX = isSlide ? editingRec.canvasx * bgScale : 0, nOffY = isSlide ? editingRec.canvasy * bgScale : 0;
+        // Alle Editoren: Pinnwand-Hintergrund und darunterliegende Ebenen
+        // rund um das Objekt - wie in der Präsentation.
+        var nOffX = editingRec.canvasx * bgScale, nOffY = editingRec.canvasy * bgScale;
+        // Gedrehtes Objekt/Rahmen: die Pinnwand dreht sich im Editor entgegen.
+        var edRot = editingRec.rot != null ? editingRec.rot : (editingRec.canvasrot || 0);
         var neighborsLayer = el('div', {
-          class: 'ic-tf-neighbors-layer' + (isSlide ? ' ic-tf-neighbors-wide' : ''),
-          style: (isSlide ? 'left:' + (-nOffX) + 'px;top:' + (-nOffY) + 'px;width:' + (BOARD_W * bgScale) + 'px;height:' + (BOARD_H * bgScale) + 'px;' : '') +
+          class: 'ic-tf-neighbors-layer ic-tf-neighbors-wide',
+          style: 'left:' + (-nOffX) + 'px;top:' + (-nOffY) + 'px;width:' + (BOARD_W * bgScale) + 'px;height:' + (BOARD_H * bgScale) + 'px;' +
             // Gedrehter Rahmen: die Pinnwand dreht sich im Editor entgegen,
             // die Folie selbst steht gerade (wie die Kamera der Präsentation).
-            (isSlide && editingRec.rot ? 'transform-origin:' + (nOffX + tf.w / 2) + 'px ' + (nOffY + tf.h / 2) + 'px;transform:rotate(' + (-editingRec.rot) + 'deg);' : '') +
+            (edRot ? 'transform-origin:' + (nOffX + tf.w / 2) + 'px ' + (nOffY + tf.h / 2) + 'px;transform:rotate(' + (-edRot) + 'deg);' : '') +
             (((bbg.type === 'image' || bbg.type === 'url' || bbg.type === 'upload') && bbg.url)
             // Hintergrundbild an der TATSÄCHLICH richtigen Stelle: das Bild
             // wird so groß wie das ganze Board dargestellt (BOARD_W/H
@@ -3614,13 +3728,13 @@
           }
           var nWrap = el('div', {
             style: 'position:absolute;left:' + nx + 'px;top:' + ny + 'px;width:' + nw + 'px;' +
-              'transform:rotate(' + (p.canvasrot || 0) + 'deg);opacity:' + (isSlide ? 1 : 0.85) + ';pointer-events:none;' +
-              (isSlide && p.blendmode ? 'mix-blend-mode:' + p.blendmode + ';' : '')
+              'transform:rotate(' + (p.canvasrot || 0) + 'deg);pointer-events:none;' +
+              (p.blendmode ? 'mix-blend-mode:' + p.blendmode + ';' : '')
           }, [nEl || el('img', { src: p.url, alt: '', style: 'width:100%;display:block;' })]);
           neighborsLayer.appendChild(nWrap);
         });
         // Andere Folien des eigenen Fadens (bis zur eigenen Ebene) ebenfalls.
-        var nThread = isSlide ? ownThread() : null;
+        var nThread = ownThread();
         (nThread ? nThread.items : []).forEach(function (o) {
           if (o.itemtype !== 'frame' || o.id === editingRec.frameId || (o.boardid || 0) !== (editingRec.boardid || 0) || (o.framez || 0) > thisZ) { return; }
           var otf = frameSlideTf(o);
@@ -4034,7 +4148,8 @@
     tfDock.appendChild(dockToggle);
     tfDock.appendChild(blocksWrap);
     var BLOCK_ICONS = {};
-    BLOCK_ICONS[S.tfblock_templates] = 'fillicon';
+    BLOCK_ICONS[S.tfblock_colors] = 'fillicon';
+    BLOCK_ICONS[S.tfblock_shapes] = 'starfg';
     BLOCK_ICONS[S.tfblock_fonts] = 'fonts';
     BLOCK_ICONS[S.tfblock_form] = 'effecticon';
     BLOCK_ICONS[S.tfblock_formulas] = 'code';
@@ -4042,26 +4157,62 @@
     // Akkordeon: Überschrift antippen klappt den jeweiligen Block ein/aus -
     // auf dem Handy starten alle Blöcke eingeklappt (siehe CSS), auf
     // größeren Bildschirmen bleiben sie offen.
+    // Mehrere Popups dürfen gleichzeitig offen sein; jedes lässt sich an
+    // seiner Kopfzeile frei über die Arbeitsfläche ziehen (Lage in
+    // state.tfPopupPos, übersteht das Neu-Rendern). Auf dem Handy fest.
+    state.tfOpenBlocks = state.tfOpenBlocks || {};
+    state.tfPopupPos = state.tfPopupPos || {};
+    function applyPopupPos(contentEl, key) {
+      var pos = state.tfPopupPos[key];
+      if (!pos || window.matchMedia('(max-width: 640px)').matches) { return; }
+      var x = Math.max(0, Math.min(window.innerWidth - 80, pos.x)), y = Math.max(48, Math.min(window.innerHeight - 40, pos.y));
+      contentEl.style.position = 'fixed';
+      contentEl.style.left = x + 'px'; contentEl.style.top = y + 'px';
+      contentEl.style.bottom = 'auto'; contentEl.style.transform = 'none';
+    }
     function makeAccordionBlock(titleText) {
-      var blockEl = el('div', { class: 'ic-textframe-block' + (state.tfOpenBlock === titleText ? ' ic-tf-open' : '') });
+      var blockEl = el('div', { class: 'ic-textframe-block' + (state.tfOpenBlocks[titleText] ? ' ic-tf-open' : '') });
       var titleEl = el('button', { class: 'ic-textframe-block-title ic-tf-tab', type: 'button' },
         [icon(BLOCK_ICONS[titleText] || 'grid'), el('span', {}, [titleText])]);
       var contentEl = el('div', { class: 'ic-textframe-block-content ic-tf-popup' });
-      titleEl.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-      titleEl.addEventListener('click', function () {
-        var open = !blockEl.classList.contains('ic-tf-open');
-        blocksWrap.querySelectorAll('.ic-textframe-block').forEach(function (b) { b.classList.remove('ic-tf-open'); });
+      var popHead = el('div', { class: 'ic-tf-popup-head' }, [el('span', { class: 'ic-float-grip' }, ['\u2630']), el('span', {}, [titleText])]);
+      var popClose = el('button', { class: 'ic-float-min', type: 'button', title: S.cancel }, ['\u2715']);
+      popHead.appendChild(popClose);
+      contentEl.appendChild(popHead);
+      applyPopupPos(contentEl, titleText);
+      function setOpen(open) {
         blockEl.classList.toggle('ic-tf-open', open);
-        state.tfOpenBlock = open ? titleText : null;
+        if (open) { state.tfOpenBlocks[titleText] = true; } else { delete state.tfOpenBlocks[titleText]; }
+      }
+      popClose.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      popClose.addEventListener('click', function () { setOpen(false); });
+      var pdrag = null;
+      popHead.addEventListener('pointerdown', function (ev) {
+        if (ev.target === popClose || window.matchMedia('(max-width: 640px)').matches) { return; }
+        var r = contentEl.getBoundingClientRect();
+        pdrag = { sx: ev.clientX, sy: ev.clientY, x: r.left, y: r.top };
+        try { popHead.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+        ev.preventDefault();
       });
+      popHead.addEventListener('pointermove', function (ev) {
+        if (!pdrag) { return; }
+        state.tfPopupPos[titleText] = { x: pdrag.x + ev.clientX - pdrag.sx, y: pdrag.y + ev.clientY - pdrag.sy };
+        applyPopupPos(contentEl, titleText);
+      });
+      popHead.addEventListener('pointerup', function () { pdrag = null; });
+      popHead.addEventListener('pointercancel', function () { pdrag = null; });
+      titleEl.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      titleEl.addEventListener('click', function () { setOpen(!blockEl.classList.contains('ic-tf-open')); });
       blockEl.appendChild(titleEl);
       blockEl.appendChild(contentEl);
       blockEl.content = contentEl;
       return blockEl;
     }
-    var blockTemplates = makeAccordionBlock(S.tfblock_templates);
+    var blockTemplates = makeAccordionBlock(S.tfblock_colors);
+    var blockShapes = makeAccordionBlock(S.tfblock_shapes);
     var blockFonts = makeAccordionBlock(S.tfblock_fonts);
     var blockForm = makeAccordionBlock(state.wordArtMode && !tf.isSlide ? S.tfblock_form : S.tfblock_formulas);
+    blocksWrap.appendChild(blockShapes);
     blocksWrap.appendChild(blockTemplates);
     blocksWrap.appendChild(blockFonts);
     blocksWrap.appendChild(blockForm);
@@ -4191,7 +4342,8 @@
     // lässt sich danach frei über die anderen ziehen und skalieren.
     var shapesCol = el('div', { class: 'ic-cf-shapes-col' });
     shapesCol.appendChild(presetRow);
-    columnsWrap.appendChild(shapesCol);
+    // Eigenes Popup "Formen" (getrennt von "Farbe").
+    blockShapes.content.appendChild(shapesCol);
 
     // Legt eine Form passend UM ein Textobjekt herum (hinter den Text):
     // Mittelpunkt = Textmitte, Breite/Höhe aus dem tatsächlich sichtbaren
@@ -8981,6 +9133,234 @@
     img.style.filter = 'brightness(' + brightness + '%) saturate(' + saturation + '%)';
   }
 
+  // ==================================================================
+  // PDF als Präsentationshintergrund: pdf.js (lokal mitgeliefert, siehe
+  // js/vendor/pdfjs/) rendert die gewählten Seiten - hochkant standardmäßig
+  // als Doppelseiten nebeneinander - zu EINEM Hintergrundbild auf der
+  // 1400x1000-Fläche. Das PDF wird mitgespeichert, damit die Auswahl später
+  // geändert werden kann.
+  // ==================================================================
+  var pdfJsPromise = null;
+  function loadPdfJs() {
+    if (pdfJsPromise) { return pdfJsPromise; }
+    var base = cfg.wwwroot + '/mod/pinnwand/js/vendor/pdfjs/';
+    pdfJsPromise = new Promise(function (resolve, reject) {
+      if (window.pdfjsLib) { resolve(window.pdfjsLib); return; }
+      var sc = document.createElement('script');
+      sc.src = base + 'pdf.min.js';
+      sc.onload = function () {
+        if (!window.pdfjsLib) { reject(new Error('pdf.js')); return; }
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js';
+        resolve(window.pdfjsLib);
+      };
+      sc.onerror = function () { pdfJsPromise = null; reject(new Error('pdf.js')); };
+      document.head.appendChild(sc);
+    });
+    return pdfJsPromise;
+  }
+
+  function pdfSpreadsFor(numPages, dbl) {
+    var out = [];
+    for (var i = 1; i <= numPages; i += dbl ? 2 : 1) {
+      out.push(dbl && i + 1 <= numPages ? [i, i + 1] : [i]);
+    }
+    return out;
+  }
+
+  // Rendert die Seiten einer (Doppel-)Seite nebeneinander in einen Canvas
+  // der Höhe h (Pixel).
+  function pdfRenderSpread(doc, pages, h) {
+    return Promise.all(pages.map(function (n) { return doc.getPage(n); })).then(function (pgs) {
+      var vps = pgs.map(function (pg) { var v = pg.getViewport({ scale: 1 }); return pg.getViewport({ scale: h / v.height }); });
+      var c = document.createElement('canvas');
+      c.width = Math.round(vps.reduce(function (sum, v) { return sum + v.width; }, 0));
+      c.height = Math.round(h);
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      var x = 0, chain = Promise.resolve();
+      pgs.forEach(function (pg, i) {
+        chain = chain.then(function () {
+          var pc = document.createElement('canvas');
+          pc.width = Math.round(vps[i].width); pc.height = Math.round(vps[i].height);
+          return pg.render({ canvasContext: pc.getContext('2d'), viewport: vps[i] }).promise.then(function () {
+            ctx.drawImage(pc, x, 0);
+            x += pc.width;
+          });
+        });
+      });
+      return chain.then(function () { return c; });
+    });
+  }
+
+  // Ordnet die gewählten (Doppel-)Seiten im besten Raster auf der
+  // Board-Fläche an und rendert sie in passender Auflösung.
+  function pdfComposeBackground(doc, spreads, bgColor) {
+    var W = BOARD_W * 2, H = BOARD_H * 2;
+    return Promise.all(spreads.map(function (sp) {
+      return Promise.all(sp.map(function (n) { return doc.getPage(n); })).then(function (pgs) {
+        var vs = pgs.map(function (pg) { return pg.getViewport({ scale: 1 }); });
+        var ph = Math.max.apply(null, vs.map(function (v) { return v.height; }));
+        return { pages: sp, aspect: vs.reduce(function (s2, v) { return s2 + v.width * ph / v.height; }, 0) / ph };
+      });
+    })).then(function (infos) {
+      var n = infos.length, maxA = Math.max.apply(null, infos.map(function (i) { return i.aspect; }));
+      var best = null;
+      for (var cols = 1; cols <= n; cols++) {
+        var rows = Math.ceil(n / cols);
+        var cellH = Math.min(H / rows, W / cols / maxA);
+        if (!best || cellH > best.cellH) { best = { cols: cols, rows: rows, cellH: cellH }; }
+      }
+      var gap = best.cellH * 0.04;
+      var out = document.createElement('canvas');
+      out.width = W; out.height = H;
+      var ctx = out.getContext('2d');
+      ctx.fillStyle = bgColor || '#2b2d33';
+      ctx.fillRect(0, 0, W, H);
+      var cellW = W / best.cols, cellHgt = H / best.rows;
+      var chain = Promise.resolve();
+      infos.forEach(function (info, i) {
+        chain = chain.then(function () {
+          var h = best.cellH - gap;
+          return pdfRenderSpread(doc, info.pages, h).then(function (c) {
+            var col = i % best.cols, row = Math.floor(i / best.cols);
+            var x = col * cellW + (cellW - c.width) / 2, y = row * cellHgt + (cellHgt - c.height) / 2;
+            ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = gap * 0.6;
+            ctx.drawImage(c, x, y);
+          });
+        });
+      });
+      return chain.then(function () { return out; });
+    });
+  }
+
+  function arrayBufferToBase64(buf) {
+    var bytes = new Uint8Array(buf), bin = '', chunk = 0x8000;
+    for (var i = 0; i < bytes.length; i += chunk) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(bin);
+  }
+
+  // Auswahl-Dialog: Doppelseiten an/aus, Vorschaubilder mit Häkchen.
+  // opts: { buffer, isNew, spreads (String "1,3"), double (bool|null) }
+  function openPdfBackgroundDialog(opts, onSaved) {
+    var overlay = el('div', { class: 'ic-modal-overlay' });
+    var panel = el('div', { class: 'ic-add-modal ic-pdf-modal' });
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.pdf_title]));
+    var status = el('p', { class: 'ic-hint' }, [S.pdf_loading]);
+    panel.appendChild(status);
+    var controls = el('div', { class: 'ic-pdf-controls' });
+    var dblLabel = el('label', { class: 'ic-pdf-double' });
+    var dblInput = el('input', { type: 'checkbox' });
+    dblLabel.appendChild(dblInput);
+    dblLabel.appendChild(document.createTextNode(' ' + S.pdf_double));
+    var allBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.pdf_all]);
+    var noneBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.pdf_none]);
+    controls.appendChild(dblLabel); controls.appendChild(allBtn); controls.appendChild(noneBtn);
+    panel.appendChild(controls);
+    var grid = el('div', { class: 'ic-pdf-grid' });
+    panel.appendChild(grid);
+    var bar = el('div', { class: 'ic-pdf-bar' });
+    var cancelBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.cancel]);
+    var applyBtn = el('button', { class: 'ic-btn ic-btn-primary', type: 'button' }, [S.pdf_apply]);
+    applyBtn.disabled = true;
+    bar.appendChild(cancelBtn); bar.appendChild(applyBtn);
+    panel.appendChild(bar);
+    overlay.appendChild(panel);
+    root.appendChild(overlay);
+    cancelBtn.addEventListener('click', function () { overlay.remove(); });
+
+    var doc = null, spreads = [], selected = {}, renderToken = 0;
+    function buildGrid() {
+      var token = ++renderToken;
+      grid.innerHTML = '';
+      spreads.forEach(function (sp, i) {
+        var tile = el('label', { class: 'ic-pdf-tile' + (selected[i] ? ' selected' : '') });
+        var cb = el('input', { type: 'checkbox' });
+        cb.checked = !!selected[i];
+        cb.addEventListener('change', function () {
+          if (cb.checked) { selected[i] = true; } else { delete selected[i]; }
+          tile.classList.toggle('selected', cb.checked);
+          applyBtn.disabled = !Object.keys(selected).length;
+        });
+        var thumb = el('div', { class: 'ic-pdf-thumb' });
+        tile.appendChild(thumb);
+        tile.appendChild(el('span', { class: 'ic-pdf-tile-label' }, [cb, document.createTextNode(' ' + S.pdf_page + ' ' + sp.join('–'))]));
+        grid.appendChild(tile);
+        // Vorschaubilder nacheinander (nicht alle gleichzeitig) rendern.
+        thumb.dataset.idx = String(i);
+      });
+      var thumbs = [].slice.call(grid.querySelectorAll('.ic-pdf-thumb'));
+      var chain = Promise.resolve();
+      thumbs.forEach(function (th, i) {
+        chain = chain.then(function () {
+          if (token !== renderToken) { return null; }
+          return pdfRenderSpread(doc, spreads[i], 110).then(function (c) {
+            if (token !== renderToken) { return; }
+            c.className = 'ic-pdf-thumb-canvas';
+            th.appendChild(c);
+          });
+        });
+      });
+      applyBtn.disabled = !Object.keys(selected).length;
+    }
+    function setDouble(dbl, presetSel) {
+      spreads = pdfSpreadsFor(doc.numPages, dbl);
+      selected = {};
+      if (presetSel) {
+        presetSel.split(',').forEach(function (v) { var k = parseInt(v, 10) - 1; if (k >= 0 && k < spreads.length) { selected[k] = true; } });
+      }
+      if (!Object.keys(selected).length) {
+        for (var i = 0; i < Math.min(spreads.length, 6); i++) { selected[i] = true; }
+      }
+      buildGrid();
+    }
+    allBtn.addEventListener('click', function () { spreads.forEach(function (sp, i) { selected[i] = true; }); buildGrid(); });
+    noneBtn.addEventListener('click', function () { selected = {}; buildGrid(); });
+    dblInput.addEventListener('change', function () { setDouble(dblInput.checked, null); });
+
+    loadPdfJs().then(function (lib) {
+      return lib.getDocument({ data: new Uint8Array(opts.buffer.slice(0)) }).promise;
+    }).then(function (d) {
+      doc = d;
+      return doc.getPage(1).then(function (pg) {
+        var v = pg.getViewport({ scale: 1 });
+        var dbl = opts.double != null ? !!opts.double : v.height > v.width;
+        dblInput.checked = dbl;
+        status.textContent = S.pdf_hint.replace('{$a}', String(doc.numPages));
+        setDouble(dbl, opts.spreads || '');
+      });
+    }).catch(function () { status.textContent = S.pdf_error; });
+
+    applyBtn.addEventListener('click', function () {
+      var keys = Object.keys(selected).map(Number).sort(function (a, b) { return a - b; });
+      if (!keys.length || !doc) { return; }
+      applyBtn.disabled = true;
+      status.textContent = S.pdf_rendering;
+      var bgColor = (state.background && state.background.color) || '#2b2d33';
+      pdfComposeBackground(doc, keys.map(function (k) { return spreads[k]; }), bgColor).then(function (canvas) {
+        return callAjax('mod_pinnwand_save_background', {
+          cmid: cfg.cmid, type: 'upload', color: bgColor, photoid: 0, url: '',
+          imagedata: canvas.toDataURL('image/jpeg', 0.9),
+          brightness: (state.background && state.background.brightness) || 100,
+          saturation: (state.background && state.background.saturation != null) ? state.background.saturation : 100,
+          fit: 'contain',
+          pdfdata: opts.isNew ? 'data:application/pdf;base64,' + arrayBufferToBase64(opts.buffer) : '',
+          pdfspreads: keys.map(function (k) { return k + 1; }).join(','),
+          pdfdouble: dblInput.checked ? 1 : 0
+        });
+      }).then(function (res) {
+        state.background = res.background;
+        overlay.remove();
+        if (onSaved) { onSaved(); }
+      }).catch(function (e) {
+        status.textContent = S.error_save + ' (' + (e && e.message) + ')';
+        applyBtn.disabled = false;
+      });
+    });
+  }
+
   function openBackgroundPanel(body) {
     var existing = document.getElementById('ic-bg-panel');
     if (existing) { existing.remove(); return; }
@@ -9065,6 +9445,33 @@
       reader.readAsDataURL(file);
     });
     panel.appendChild(uploadInput);
+
+    // PDF als Hintergrund (hochkant: Doppelseiten), Seitenauswahl im Dialog.
+    panel.appendChild(el('label', { style: 'margin-top:10px' }, [S.bg_pdf]));
+    var pdfInput = el('input', { type: 'file', accept: 'application/pdf,.pdf' });
+    pdfInput.addEventListener('change', function () {
+      var file = pdfInput.files[0];
+      if (!file) { return; }
+      var reader = new FileReader();
+      reader.onload = function () {
+        panel.remove();
+        openPdfBackgroundDialog({ buffer: reader.result, isNew: true, spreads: '', double: null }, function () { applyBackground(bgLayerEl()); });
+      };
+      reader.readAsArrayBuffer(file);
+    });
+    panel.appendChild(pdfInput);
+    if (state.background && state.background.pdfurl) {
+      var pdfPagesBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', style: 'margin-top:6px' }, [S.bg_pdf_pages]);
+      pdfPagesBtn.addEventListener('click', function () {
+        pdfPagesBtn.disabled = true;
+        fetch(state.background.pdfurl, { credentials: 'same-origin' }).then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
+          panel.remove();
+          openPdfBackgroundDialog({ buffer: buf, isNew: false, spreads: state.background.pdfspreads || '', double: !!state.background.pdfdouble },
+            function () { applyBackground(bgLayerEl()); });
+        }).catch(function () { pdfPagesBtn.disabled = false; alert(S.pdf_error); });
+      });
+      panel.appendChild(pdfPagesBtn);
+    }
 
     // Helligkeit/Sättigung - wirkt nur auf die Hintergrund-Ebene, damit die
     // Foto-Pins immer klar erkennbar bleiben.

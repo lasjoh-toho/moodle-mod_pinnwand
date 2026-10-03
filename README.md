@@ -1797,6 +1797,38 @@ Details und Scoping-Entscheidungen. In Kurzform:
   Reiter unter der Arbeitsfläche und öffnen sich als Popup. Der
   Einklapp-Schalter sitzt direkt über dem Band.
 
+### Einhunderteinundfünfzigste Überarbeitung — Freier Bildeditor, verschiebbare Popups, PDF-Hintergrund
+
+- **Bildeditor ohne feste Reihenfolge**:
+  - Entzerren, Drehen, Farbe, Freistellen und Angaben sind Reiter in einer
+    Leiste unten (wie im Texteditor), jeder per Klick erreichbar;
+  - in der Leiste auch "Abbrechen", "Zurück" und "Foto speichern";
+  - Zwischenergebnisse werden bei Bedarf aus dem Original neu berechnet;
+  - das Freistellen ist eine Maske, die spätere Änderungen an Zuschnitt,
+    Drehung und Farbe übersteht;
+  - Entzerren startet mit den Ecken am Bildrand (kein nach innen versetzter
+    Zuschnitt mehr), "Ganzes Bild" setzt zurück.
+  - Die Werkzeuge liegen in verschiebbaren Popups, auf dem Handy fest über
+    der Leiste.
+- **Texteditoren**:
+  - Popups lassen sich an der Kopfzeile frei über die Arbeitsfläche ziehen
+    und mehrere gleichzeitig öffnen;
+  - "Farbe" und "Formen" sind getrennte Popups;
+  - alle Editoren zeigen den Pinnwand-Hintergrund mit den darunterliegenden
+    Ebenen rund um das Objekt (wie in der Präsentation), bei gedrehten
+    Objekten entgegengedreht.
+- Der gestrichelte Rahmen hinter WordArt auf der Pinnwand ist entfernt.
+  Die Griffe erscheinen weiterhin beim Hover.
+- **PDF als Hintergrund**: Im Hintergrund-Panel lässt sich ein PDF
+  hochladen.
+  - Hochkant-Seiten werden standardmäßig als Doppelseiten nebeneinander
+    gezeigt.
+  - Bei größeren PDFs wählt man die sichtbaren (Doppel-)Seiten; sie werden
+    im besten Raster auf der Fläche angeordnet.
+  - Das PDF bleibt gespeichert, die Auswahl lässt sich über "PDF-Seiten
+    wählen" ändern.
+  - pdf.js liegt lokal im Plugin (`js/vendor/pdfjs`, Apache 2.0).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

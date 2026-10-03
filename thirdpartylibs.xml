@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<libraries>
+  <library>
+    <location>js/vendor/pdfjs</location>
+    <name>PDF.js</name>
+    <description>Renders PDF pages in the browser (PDF as presentation background).</description>
+    <version>3.11.174</version>
+    <license>Apache</license>
+    <licenseversion>2.0</licenseversion>
+    <repository>https://github.com/mozilla/pdf.js</repository>
+  </library>
+</libraries>
