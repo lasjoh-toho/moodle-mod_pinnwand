@@ -4285,3 +4285,24 @@ PDF-Hintergrund:
 - `thirdpartylibs.xml`.
 
 Shipped als Version `2026083149` / `0.151.0`.
+
+## Phase 145
+
+- Freistellen: `colorSelect()` (Farbabstand zur Startfarbe, 3x3-Mittel;
+  Flutfüllung oder global), `selectionCanvas()` (1 px weich), Werkzeuge
+  `wand`/`color`, Toleranz per Ziehen (`state.cutoutTol`), Modus
+  `state.cutoutWandMode`, Live-Markierung.
+- Nicht-destruktiv: Feld `pinnwand_photos.editdata` (Upgrade 2026083150),
+  Dateibereiche `photoorig`/`photomask` (pluginfile, Löschen, Backup/
+  Restore), `store_photo_edit()`; `save_photo`/`update_photo` nehmen
+  `origdata`/`maskdata` (`none` = entfernen)/`editdata`; `get_photos` liefert
+  `origurl`/`maskurl`/`editdata`. JS: `imgEditPayload()`,
+  `loadPhotoForEditing()`.
+- `blendModePicker()` (Pinnwand, Galerie, Bildeditor), Symbol `blend`.
+- Hintergrund: `photoid` in den Hintergrunddaten, `persistKeep()` speichert
+  ohne Bildwechsel, kompaktes Panel `.ic-bg-panel-compact`.
+- Faden-Panel: `.ic-thread-slide-btn` mit Text, Folien-Vorschau.
+- Notizen: `commitBoardInk()` mit Undo-Eintrag (`state.boardInkSnapshot`),
+  Live-Text über einen vorläufigen Text-Strich.
+
+Shipped als Version `2026083150` / `0.152.0`.

@@ -38,6 +38,25 @@
     syncUndoRedoButtons();
     render();
   }
+  // Notizen (Stift-Werkzeug) speichern - jede Änderung wird zugleich ein
+  // Schritt für Rückgängig/Wiederholen (dieselben Knöpfe wie für Objekte).
+  function commitBoardInk() {
+    var boardId = state.currentBoard;
+    var after = JSON.stringify(state.boardInkStrokes || []);
+    var before = state.boardInkSnapshot != null ? state.boardInkSnapshot : '[]';
+    state.boardInkSnapshot = after;
+    callAjax('mod_pinnwand_save_board_ink', { cmid: cfg.cmid, boardid: boardId, strokes: after });
+    if (before === after) { return; }
+    function restore(json) {
+      if (state.currentBoard !== boardId) { return; }
+      state.boardInkStrokes = JSON.parse(json);
+      state.boardInkSnapshot = json;
+      state.inkSelection = [];
+      callAjax('mod_pinnwand_save_board_ink', { cmid: cfg.cmid, boardid: boardId, strokes: json });
+    }
+    pushUndo({ undo: function () { restore(before); }, redo: function () { restore(after); } });
+  }
+
   // Entf/Rücktaste löscht ausgewählte Notizen (Stift-Werkzeug, Auswahl).
   var inkSelectionDelete = null;
   document.addEventListener('keydown', function (ev) {
@@ -766,6 +785,7 @@
   var IMG_STEPS = ['perspective', 'crop', 'color', 'cutout', 'source'];
 
   function imgResetPipeline() {
+    state.imgOrigStored = false;
     state.cornersSrc = null;
     state.imgGeo = { rot: 0, mirror: false };
     state.colorSettings = { brightness: 0, contrast: 0, saturation: 0, grayscale: false };
@@ -854,6 +874,61 @@
     return canvasHasAlpha(c) ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', quality || 0.88);
   }
 
+  // Nicht-destruktiv: Original, Maske und Einstellungen werden mit dem
+  // fertigen Bild gespeichert - erneutes Bearbeiten startet vom Original.
+  function imgEditPayload(forExisting) {
+    var mask = state.imgMask;
+    var maskData = mask && canvasHasAlpha(mask) ? mask.toDataURL('image/png') : (forExisting ? 'none' : '');
+    return {
+      origdata: state.imgOrigStored ? '' : canvasDataUrl(state.sourceCanvas, 0.92),
+      maskdata: maskData,
+      editdata: JSON.stringify({ v: 1, corners: state.cornersSrc || null, geo: state.imgGeo || { rot: 0, mirror: false }, color: state.colorSettings || null })
+    };
+  }
+  function loadImageEl(url) {
+    return new Promise(function (resolve, reject) {
+      var im = new Image();
+      im.onload = function () { resolve(im); };
+      im.onerror = reject;
+      im.src = url;
+    });
+  }
+  function loadPhotoForEditing(p) {
+    state.editingPhotoId = p.id;
+    if (!p.origurl) {
+      // Älteres Foto ohne Original: das aktuelle Bild wird zum Original.
+      loadImageEl(p.url).then(function (im) { loadCapturedImage(im); state.imgOrigStored = false; })
+        .catch(function () { alert(S.url_load_error); });
+      return;
+    }
+    Promise.all([loadImageEl(p.origurl), p.maskurl ? loadImageEl(p.maskurl) : Promise.resolve(null)]).then(function (res) {
+      var im = res[0];
+      var c = document.createElement('canvas');
+      c.width = im.naturalWidth; c.height = im.naturalHeight;
+      c.getContext('2d').drawImage(im, 0, 0);
+      state.sourceCanvas = c;
+      state.corners = null;
+      imgResetPipeline();
+      state.cutoutUndo = [];
+      var ed = null;
+      try { ed = p.editdata ? JSON.parse(p.editdata) : null; } catch (e) { ed = null; }
+      if (ed) {
+        if (ed.corners && ed.corners.length === 4) { state.cornersSrc = ed.corners; }
+        if (ed.geo) { state.imgGeo = { rot: (ed.geo.rot || 0) % 4, mirror: !!ed.geo.mirror }; }
+        if (ed.color) { state.colorSettings = ed.color; }
+      }
+      if (res[1]) {
+        var m = document.createElement('canvas');
+        m.width = res[1].naturalWidth; m.height = res[1].naturalHeight;
+        m.getContext('2d').drawImage(res[1], 0, 0);
+        state.imgMask = m;
+      }
+      state.imgOrigStored = true;
+      state.step = 'perspective';
+      render();
+    }).catch(function () { alert(S.url_load_error); });
+  }
+
   function goImgStep(step, noHistory) {
     if (state.imgLeave) { try { state.imgLeave(); } catch (e) { /* ignore */ } state.imgLeave = null; }
     if (!noHistory && state.step !== step) { (state.imgHistory = state.imgHistory || []).push(state.step); }
@@ -865,7 +940,12 @@
     if (state.imgLeave) { state.imgLeave(); state.imgLeave = null; }
     var photoId = state.editingPhotoId;
     btn.disabled = true;
-    callAjax('mod_pinnwand_update_photo', { cmid: cfg.cmid, photoid: photoId, imagedata: canvasDataUrl(imgFinal(), 0.88) }).then(function (res) {
+    var payload = imgEditPayload(true);
+    callAjax('mod_pinnwand_update_photo', {
+      cmid: cfg.cmid, photoid: photoId, imagedata: canvasDataUrl(imgFinal(), 0.88),
+      origdata: payload.origdata, maskdata: payload.maskdata, editdata: payload.editdata
+    }).then(function (res) {
+      refreshPhotos();
       var existing = state.photos.filter(function (p) { return p.id === photoId; })[0];
       if (existing) { existing.url = res.url; }
       resetCaptureState();
@@ -1290,7 +1370,74 @@
       render();
     });
     panel.appendChild(resetBtn);
+    // Überlagerung mit dem Hintergrund (nur für schon gespeicherte Bilder).
+    var blendPhoto = state.editingPhotoId ? state.photos.filter(function (o) { return o.id === state.editingPhotoId; })[0] : null;
+    if (blendPhoto) {
+      var blendRow = el('div', { class: 'ic-row' });
+      blendRow.appendChild(el('label', {}, [S.blend_mode_short]));
+      blendRow.appendChild(blendModePicker(function () { return blendPhoto; }, null));
+      panel.appendChild(blendRow);
+    }
     floatPanel(body, 'color', S.step_color, panel);
+  }
+
+  // Auswahl nach Farbähnlichkeit (wie "Sofort-Alpha" in der Vorschau von
+  // macOS): vom angeklickten Punkt aus werden Pixel gewählt, deren Farbe
+  // höchstens "tol" vom Startfarbton abweicht - zusammenhängend (Zauberstab,
+  // Flutfüllung über die 4 Nachbarn) oder im ganzen Bild (Farbbereich).
+  // Ergebnis: 0/1 je Pixel.
+  function colorSelect(data, w, h, sx, sy, tol, contiguous) {
+    var d = data, sel = new Uint8Array(w * h);
+    sx = Math.max(0, Math.min(w - 1, Math.round(sx))); sy = Math.max(0, Math.min(h - 1, Math.round(sy)));
+    // Startfarbe als Mittel eines 3x3-Felds (robuster bei Bildrauschen).
+    var r0 = 0, g0 = 0, b0 = 0, cnt = 0;
+    for (var yy = Math.max(0, sy - 1); yy <= Math.min(h - 1, sy + 1); yy++) {
+      for (var xx = Math.max(0, sx - 1); xx <= Math.min(w - 1, sx + 1); xx++) {
+        var k = (yy * w + xx) * 4; r0 += d[k]; g0 += d[k + 1]; b0 += d[k + 2]; cnt++;
+      }
+    }
+    r0 /= cnt; g0 /= cnt; b0 /= cnt;
+    var t2 = tol * tol * 3;
+    function near(i) {
+      var k = i * 4, dr = d[k] - r0, dg = d[k + 1] - g0, db = d[k + 2] - b0;
+      // Gewichtung grob nach Helligkeitswahrnehmung.
+      return (dr * dr * 1.2 + dg * dg * 1.6 + db * db * 0.8) / 1.2 <= t2;
+    }
+    if (!contiguous) {
+      for (var i = 0; i < w * h; i++) { if (near(i)) { sel[i] = 1; } }
+      return sel;
+    }
+    var stack = new Int32Array(w * h), sp = 0, seen = new Uint8Array(w * h);
+    var start = sy * w + sx;
+    stack[sp++] = start; seen[start] = 1;
+    while (sp) {
+      var p = stack[--sp];
+      if (!near(p)) { continue; }
+      sel[p] = 1;
+      var x = p % w;
+      if (x > 0 && !seen[p - 1]) { seen[p - 1] = 1; stack[sp++] = p - 1; }
+      if (x < w - 1 && !seen[p + 1]) { seen[p + 1] = 1; stack[sp++] = p + 1; }
+      if (p >= w && !seen[p - w]) { seen[p - w] = 1; stack[sp++] = p - w; }
+      if (p < w * (h - 1) && !seen[p + w]) { seen[p + w] = 1; stack[sp++] = p + w; }
+    }
+    return sel;
+  }
+  // Auswahl als Canvas (weiß = gewählt), leicht weichgezeichnet für eine
+  // saubere Kante statt Treppenstufen.
+  function selectionCanvas(sel, w, h, feather) {
+    var c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    var ctx = c.getContext('2d');
+    var img = ctx.createImageData(w, h), o = img.data;
+    for (var i = 0; i < sel.length; i++) { if (sel[i]) { var k = i * 4; o[k] = o[k + 1] = o[k + 2] = o[k + 3] = 255; } }
+    ctx.putImageData(img, 0, 0);
+    if (!feather) { return c; }
+    var f = document.createElement('canvas');
+    f.width = w; f.height = h;
+    var fctx = f.getContext('2d');
+    fctx.filter = 'blur(' + feather + 'px)';
+    fctx.drawImage(c, 0, 0);
+    return f;
   }
 
   // ---------------- FREISTELLEN (Maske) ----------------------------------
@@ -1314,7 +1461,30 @@
 
     var shown = imgShowOnStage(body, colored, 'ic-cutout-view');
     var view = shown.view, vctx = view.getContext('2d'), dispScale = shown.scale;
-    var preview = null;
+    var preview = null, wandOverlay = null, wandSel = null, colorData = null;
+    if (!state.cutoutTol) { state.cutoutTol = 28; }
+    function getColorData() {
+      if (!colorData) { colorData = colored.getContext('2d').getImageData(0, 0, colored.width, colored.height).data; }
+      return colorData;
+    }
+    // Markierung der aktuellen Auswahl (Magenta) für die Live-Vorschau.
+    function buildWandOverlay(sel) {
+      var c = document.createElement('canvas');
+      c.width = colored.width; c.height = colored.height;
+      var ctx = c.getContext('2d'), img = ctx.createImageData(c.width, c.height), o = img.data;
+      for (var i = 0; i < sel.length; i++) { if (sel[i]) { var k = i * 4; o[k] = 255; o[k + 1] = 0; o[k + 2] = 200; o[k + 3] = 255; } }
+      ctx.putImageData(img, 0, 0);
+      return c;
+    }
+    var wandFrame = null;
+    function updateWand() {
+      wandFrame = null;
+      if (!drag || !drag.wand) { return; }
+      var tol = Math.max(0, Math.min(255, state.cutoutTol + drag.extra));
+      wandSel = colorSelect(getColorData(), colored.width, colored.height, drag.seed.x, drag.seed.y, tol, drag.contiguous);
+      wandOverlay = buildWandOverlay(wandSel);
+      redraw();
+    }
     function shapePath(ctx, r) {
       var x = Math.min(r.x1, r.x2), y = Math.min(r.y1, r.y2);
       var w = Math.abs(r.x2 - r.x1), h = Math.abs(r.y2 - r.y1);
@@ -1334,6 +1504,12 @@
       vctx.globalCompositeOperation = 'destination-in';
       vctx.drawImage(mask, 0, 0);
       vctx.restore();
+      if (wandOverlay) {
+        vctx.save();
+        vctx.globalAlpha = 0.55;
+        vctx.drawImage(wandOverlay, 0, 0);
+        vctx.restore();
+      }
       if (preview) {
         vctx.save();
         vctx.lineWidth = 2 / dispScale;
@@ -1370,6 +1546,14 @@
       var pt = toImg(ev);
       pushUndo();
       var tool = state.cutoutTool;
+      if (tool === 'wand' || tool === 'color') {
+        // Klicken = Auswahl mit eingestellter Toleranz; Ziehen nach rechts/
+        // unten erweitert, nach links/oben verkleinert sie (live sichtbar).
+        drag = { wand: true, contiguous: tool === 'wand', seed: pt, sx: ev.clientX, sy: ev.clientY, extra: 0,
+          show: (state.cutoutWandMode === 'show') !== !!ev.altKey };
+        updateWand();
+        return;
+      }
       if (tool === 'erase' || tool === 'restore') {
         var r = state.cutoutSize / 2 / dispScale;
         drag = { brush: true, restore: tool === 'restore', last: pt, r: r };
@@ -1382,6 +1566,11 @@
     });
     view.addEventListener('pointermove', function (ev) {
       if (!drag) { return; }
+      if (drag.wand) {
+        drag.extra = Math.round(((ev.clientX - drag.sx) + (ev.clientY - drag.sy)) / 3);
+        if (!wandFrame) { wandFrame = requestAnimationFrame(updateWand); }
+        return;
+      }
       var pt = toImg(ev);
       if (drag.brush) {
         var dx = pt.x - drag.last.x, dy = pt.y - drag.last.y;
@@ -1400,6 +1589,22 @@
     });
     function endDrag() {
       if (!drag) { return; }
+      if (drag.wand) {
+        if (wandFrame) { cancelAnimationFrame(wandFrame); wandFrame = null; updateWand(); }
+        if (wandSel) {
+          var selC = selectionCanvas(wandSel, colored.width, colored.height, 1);
+          mctx.save();
+          // Entfernen: Auswahl aus der Maske stanzen; Zeigen: wieder deckend.
+          mctx.globalCompositeOperation = drag.show ? 'source-over' : 'destination-out';
+          mctx.drawImage(selC, 0, 0);
+          mctx.restore();
+          state.cutoutTol = Math.max(0, Math.min(255, state.cutoutTol + drag.extra));
+          if (tolInput) { tolInput.value = state.cutoutTol; }
+        }
+        wandSel = null; wandOverlay = null; drag = null;
+        redraw();
+        return;
+      }
       if (!drag.brush && preview) {
         if (Math.abs(preview.x2 - preview.x1) > 3 && Math.abs(preview.y2 - preview.y1) > 3) {
           mctx.save();
@@ -1427,7 +1632,9 @@
       { key: 'erase', icon: 'eraser', label: S.cutout_erase },
       { key: 'restore', icon: 'brush', label: S.cutout_restore },
       { key: 'rect', icon: 'rectsel', label: S.cutout_rect },
-      { key: 'ellipse', icon: 'ellipsesel', label: S.cutout_ellipse }
+      { key: 'ellipse', icon: 'ellipsesel', label: S.cutout_ellipse },
+      { key: 'wand', icon: 'wand', label: S.cutout_wand },
+      { key: 'color', icon: 'fillicon', label: S.cutout_colorrange }
     ].forEach(function (t) {
       var b = el('button', { class: 'ic-btn ic-btn-ghost' + (state.cutoutTool === t.key ? ' active' : ''), type: 'button', title: t.label },
         [icon(t.icon), el('span', {}, [t.label])]);
@@ -1453,10 +1660,31 @@
     });
     modeSel.addEventListener('change', function () { state.cutoutShapeMode = modeSel.value; });
     tools.appendChild(modeSel);
+    // Zauberstab/Farbbereich: Toleranz + Entfernen/Wieder zeigen.
+    var wandBox = el('div', { class: 'ic-float-tools' });
+    var tolWrap = el('label', { class: 'ic-cutout-size' }, [S.cutout_tolerance]);
+    var tolInput = el('input', { type: 'range', min: 0, max: 160, value: state.cutoutTol });
+    tolInput.addEventListener('input', function () { state.cutoutTol = parseInt(tolInput.value, 10); });
+    tolWrap.appendChild(tolInput);
+    wandBox.appendChild(tolWrap);
+    var wandModeRow = el('div', { class: 'ic-float-row' });
+    [['remove', S.cutout_wand_remove], ['show', S.cutout_wand_show]].forEach(function (m) {
+      var mb = el('button', { class: 'ic-btn ic-btn-ghost' + ((state.cutoutWandMode || 'remove') === m[0] ? ' active' : ''), type: 'button' }, [m[1]]);
+      mb.addEventListener('click', function () {
+        state.cutoutWandMode = m[0];
+        wandModeRow.querySelectorAll('.ic-btn').forEach(function (b2) { b2.classList.toggle('active', b2 === mb); });
+      });
+      wandModeRow.appendChild(mb);
+    });
+    wandBox.appendChild(wandModeRow);
+    wandBox.appendChild(el('p', { class: 'ic-hint' }, [S.cutout_wand_hint]));
+    tools.appendChild(wandBox);
     function syncOptions() {
       var brush = state.cutoutTool === 'erase' || state.cutoutTool === 'restore';
+      var wand = state.cutoutTool === 'wand' || state.cutoutTool === 'color';
       sizeWrap.style.display = brush ? '' : 'none';
-      modeSel.style.display = brush ? 'none' : '';
+      modeSel.style.display = (brush || wand) ? 'none' : '';
+      wandBox.style.display = wand ? '' : 'none';
     }
     syncOptions();
     var actRow = el('div', { class: 'ic-float-row' });
@@ -1476,7 +1704,12 @@
     actRow.appendChild(undoBtn);
     actRow.appendChild(resetBtn);
     tools.appendChild(actRow);
-    tools.appendChild(el('p', { class: 'ic-hint' }, [S.cutout_hint]));
+    var generalHint = el('p', { class: 'ic-hint' }, [S.cutout_hint]);
+    tools.appendChild(generalHint);
+    generalHint.style.display = (state.cutoutTool === 'wand' || state.cutoutTool === 'color') ? 'none' : '';
+    toolRow.addEventListener('click', function () {
+      generalHint.style.display = (state.cutoutTool === 'wand' || state.cutoutTool === 'color') ? 'none' : '';
+    });
     floatPanel(body, 'cutout', S.step_cutout, tools);
   }
 
@@ -1585,9 +1818,13 @@
       // Das Raster wird hier bewusst noch NICHT festgelegt - das passiert
       // erst später pro Foto in der Galerieansicht (Lightbox).
       var dataUrl = canvasDataUrl(finalCanvas, 0.88);
+      var editPayload = imgEditPayload(false);
       callAjax('mod_pinnwand_save_photo', {
         cmid: cfg.cmid,
         imagedata: dataUrl,
+        origdata: editPayload.origdata,
+        maskdata: editPayload.maskdata,
+        editdata: editPayload.editdata,
         gridtype: 'none',
         gridvalue: 0,
         consent: !!consentChecked,
@@ -5799,6 +6036,8 @@
     person: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
     courseback: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>',
     imageedit: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 17l-4.5-4.5L7 21"/><path d="M18.4 2.6a1.9 1.9 0 0 1 2.7 2.7L15 11.4l-3.6.9.9-3.6z"/></svg>',
+    blend: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6" fill="currentColor" fill-opacity=".35"/></svg>',
+    wand: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20L15 9"/><path d="M15 4v2M19 8h2M17.5 5.5l1.5-1.5M13 7l4 4"/><path d="M19 13v2M11 3h2"/></svg>',
     rectsel: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"><rect x="4" y="5" width="16" height="14" rx="1"/></svg>',
     ellipsesel: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"><ellipse cx="12" cy="12" rx="9" ry="7"/></svg>',
     scissors: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="8.5" y1="8" x2="20" y2="19"/><line x1="8.5" y1="16" x2="20" y2="5"/></svg>',
@@ -5906,6 +6145,25 @@
   // Tiefstellen): der Knopf zeigt die aktuelle Wahl, das Menü die Optionen
   // mit Symbol + Beschriftung. mousedown verhindert überall den
   // Fokuswechsel, damit eine Zeichen-Auswahl im Text erhalten bleibt.
+  // Mischmodus-Auswahl als Knopf mit eigenem Symbol (statt nur "■▾") -
+  // auf der Pinnwand, in der Galerie und im Bildeditor.
+  function blendModePicker(getPhoto, onChanged, extraClass) {
+    var cur = (getPhoto() || {}).blendmode || '';
+    var dd = iconDropdown(BLEND_MODES(), cur, S.blend_mode, function (mode) {
+      var ph = getPhoto();
+      if (!ph) { return; }
+      callAjax('mod_pinnwand_set_blendmode', { cmid: cfg.cmid, photoid: ph.id, mode: mode }).then(function (res) {
+        ph.blendmode = res.blendmode || '';
+        if (onChanged) { onChanged(ph.blendmode); }
+      });
+    });
+    var btn = dd.querySelector('.ic-dropdown-btn');
+    if (btn) { btn.insertBefore(icon('blend'), btn.firstChild); }
+    dd.classList.add('ic-blend-picker');
+    if (extraClass) { dd.classList.add(extraClass); }
+    return dd;
+  }
+
   function BLEND_MODES() {
     return [
       { value: '', text: '\u25A0', label: S.blend_normal },
@@ -6387,6 +6645,7 @@
       callAjax('mod_pinnwand_get_board_ink', { cmid: cfg.cmid, boardid: state.currentBoard }).then(function (res) {
         if (state.currentBoard !== state.boardInkBoard) { return; }
         try { state.boardInkStrokes = JSON.parse(res.strokedata || '[]'); } catch (e) { state.boardInkStrokes = []; }
+        state.boardInkSnapshot = JSON.stringify(state.boardInkStrokes);
         render();
       });
     }
@@ -6412,11 +6671,7 @@
     state.inkSelection = (state.inkSelection || []).filter(function (id) {
       return (state.boardInkStrokes || []).some(function (st) { return st.id === id; });
     });
-    function saveBoardInk() {
-      callAjax('mod_pinnwand_save_board_ink', {
-        cmid: cfg.cmid, boardid: state.currentBoard, strokes: JSON.stringify(state.boardInkStrokes)
-      });
-    }
+    function saveBoardInk() { commitBoardInk(); }
     // Ausdehnung einer Notiz in normalisierten Board-Koordinaten.
     function strokeBox(st) {
       if (st.type === 'text') {
@@ -6502,28 +6757,38 @@
       }
       function openInkText(ev, pt) {
         var screenPx = state.boardTextPx || 24;
-        var inp = el('input', { type: 'text', class: 'ic-ink-text-input' });
+        var inkColorNow = state.boardDrawColor || INK_COLORS[0];
+        // Das Feld liefert nur Cursor und Tastatur; der Text erscheint bei
+        // jedem Tastendruck direkt als Notiz in der Notiz-Ebene (live, in
+        // derselben Darstellung wie danach).
+        var inp = el('input', { type: 'text', class: 'ic-ink-text-input ic-ink-text-live' });
         inp.style.left = ev.clientX + 'px'; inp.style.top = ev.clientY + 'px';
-        inp.style.fontSize = screenPx + 'px'; inp.style.color = state.boardDrawColor || INK_COLORS[0];
+        inp.style.fontSize = screenPx + 'px'; inp.style.caretColor = inkColorNow;
         document.body.appendChild(inp);
         setTimeout(function () { inp.focus(); }, 0);
+        var boardFont = screenPx / boardZoomNow();
+        var liveStroke = {
+          id: 's' + Date.now() + Math.random().toString(36).slice(2, 7), type: 'text', text: '',
+          x: pt.x, y: pt.y, color: inkColorNow, size: boardFont / (BOARD_H / 900 * 1.6)
+        };
+        inp.addEventListener('input', function () {
+          liveStroke.text = inp.value;
+          inkLayerEl.setStrokes(state.boardInkStrokes.concat(inp.value ? [liveStroke] : []));
+        });
         var done = false;
         function commit() {
           if (done) { return; }
           done = true;
           var text = inp.value; inp.remove();
-          if (!text) { return; }
-          var boardFont = screenPx / boardZoomNow();
-          state.boardInkStrokes.push({
-            id: 's' + Date.now() + Math.random().toString(36).slice(2, 7), type: 'text', text: text,
-            x: pt.x, y: pt.y, color: state.boardDrawColor || INK_COLORS[0], size: boardFont / (BOARD_H / 900 * 1.6)
-          });
+          if (!text) { inkLayerEl.setStrokes(state.boardInkStrokes); return; }
+          liveStroke.text = text;
+          state.boardInkStrokes.push(liveStroke);
           inkLayerEl.setStrokes(state.boardInkStrokes);
           saveBoardInk();
         }
         inp.addEventListener('keydown', function (e2) {
           e2.stopPropagation();
-          if (e2.key === 'Enter') { commit(); } else if (e2.key === 'Escape') { done = true; inp.remove(); }
+          if (e2.key === 'Enter') { commit(); } else if (e2.key === 'Escape') { done = true; inp.remove(); inkLayerEl.setStrokes(state.boardInkStrokes); }
         });
         inp.addEventListener('blur', commit);
       }
@@ -6727,12 +6992,7 @@
       // Invertieren/Farbig nachbelichten) - wirkt gleich auf der Pinnwand,
       // in der Präsentation und im HTML-Export.
       var blendWrap = el('div', { class: 'ic-blend-toggle' });
-      blendWrap.appendChild(iconDropdown(BLEND_MODES(), p.blendmode || '', S.blend_mode, function (mode) {
-        callAjax('mod_pinnwand_set_blendmode', { cmid: cfg.cmid, photoid: p.id, mode: mode }).then(function (res) {
-          p.blendmode = res.blendmode || '';
-          item.style.mixBlendMode = p.blendmode || '';
-        });
-      }));
+      blendWrap.appendChild(blendModePicker(function () { return p; }, function (mode) { item.style.mixBlendMode = mode || ''; }));
       blendWrap.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); });
       blendWrap.addEventListener('click', function (ev) { ev.stopPropagation(); });
       item.appendChild(blendWrap);
@@ -7548,7 +7808,7 @@
         if (!confirm(S.clearannotations_confirm)) { return; }
         state.boardInkStrokes = [];
         state.inkSelection = [];
-        callAjax('mod_pinnwand_save_board_ink', { cmid: cfg.cmid, boardid: state.currentBoard, strokes: '[]' });
+        commitBoardInk();
         render();
       });
       stylusTools.appendChild(clearInkBtn);
@@ -8249,8 +8509,14 @@
       }
       var photo = item.itemtype === 'photo'
         ? state.photos.filter(function (p) { return p.id === item.photoid; })[0] : null;
+      var rowSlideTf = frameSlideTf(item);
       if (photo) {
         row.appendChild(el('img', { src: photo.url, alt: '' }));
+      } else if (rowSlideTf) {
+        // Folie: kleine Live-Vorschau des Inhalts.
+        var miniSlide = el('div', { class: 'ic-thread-frame-thumb ic-thread-slide-thumb' });
+        miniSlide.appendChild(buildTextFrameLiveDom(rowSlideTf, { noGuide: true }));
+        row.appendChild(miniSlide);
       } else {
         row.appendChild(el('div', { class: 'ic-thread-frame-thumb' }, [item.itemtype === 'overview' ? '\u26f6' : '\u2b1a']));
       }
@@ -8285,7 +8551,10 @@
           callAjax('mod_pinnwand_set_frame_label', { cmid: cfg.cmid, itemid: item.id, framelabel: text });
         });
         row.appendChild(frameLabelEl2);
-        var rowSlideBtn = el('button', { class: 'ic-thread-remove ic-thread-slide-btn', type: 'button', title: S.slide_edit }, [icon('imageedit')]);
+        // Deutlicher Bearbeiten-Knopf je Rahmen: öffnet ihn als Folie.
+        var rowSlideBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-thread-slide-btn', type: 'button', title: S.slide_edit },
+          [icon('imageedit'), el('span', {}, [S.frame_edit])]);
+        rowSlideBtn.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
         rowSlideBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openFrameSlideEditor(item); });
         row.appendChild(rowSlideBtn);
       } else {
@@ -9370,65 +9639,80 @@
       if (wallpaperEl) { applyWallpaperColor(wallpaperEl); }
       return document.querySelector('.ic-canvas-bg');
     }
-    function currentBrightness() { return (state.background && state.background.brightness != null) ? state.background.brightness : 100; }
-    function currentSaturation() { return (state.background && state.background.saturation != null) ? state.background.saturation : 100; }
-    function currentFit() { return (state.background && state.background.fit) || 'contain'; }
-
-    var panel = el('div', { class: 'ic-bg-panel', id: 'ic-bg-panel' });
-    panel.appendChild(el('label', {}, [S.bg_color]));
-    var colorInput = el('input', { type: 'color', value: (state.background && state.background.color) || '#2b2d33' });
-    colorInput.addEventListener('input', function () {
-      state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
-      applyBackground(bgLayerEl());
-    });
-    colorInput.addEventListener('change', function () {
+    function bg() { return state.background || { type: 'color', color: '#2b2d33', brightness: 100, saturation: 100, fit: 'contain' }; }
+    function currentBrightness() { return bg().brightness != null ? bg().brightness : 100; }
+    function currentSaturation() { return bg().saturation != null ? bg().saturation : 100; }
+    function currentFit() { return bg().fit || 'contain'; }
+    // Speichert die aktuellen Einstellungen, OHNE das Bild zu ändern (Farbe,
+    // Helligkeit, Sättigung, Füllart) - ein gewähltes Hintergrundbild bleibt.
+    function persistKeep() {
+      var b = bg();
       callAjax('mod_pinnwand_save_background', {
-        cmid: cfg.cmid, type: 'color', color: colorInput.value, photoid: 0,
+        cmid: cfg.cmid, type: b.type || 'color', color: b.color || '#2b2d33',
+        photoid: b.photoid || 0, url: b.type === 'url' ? (b.url || '') : '',
         brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
       }).then(function (res) { state.background = res.background; });
-    });
-    panel.appendChild(colorInput);
+    }
+    function chooseImage(p) {
+      state.background = { type: 'image', color: bg().color, url: p.url, photoid: p.id, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
+      applyBackground(bgLayerEl());
+      callAjax('mod_pinnwand_save_background', {
+        cmid: cfg.cmid, type: 'image', color: bg().color, photoid: p.id,
+        brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
+      }).then(function (res) { state.background = res.background; });
+    }
 
+    var panel = el('div', { class: 'ic-bg-panel ic-bg-panel-compact', id: 'ic-bg-panel' });
+    var colL = el('div', { class: 'ic-bg-col' });
+    var colR = el('div', { class: 'ic-bg-col' });
+    panel.appendChild(colL);
+    panel.appendChild(colR);
+
+    // --- Farbe (ändert nur die Farbe, das Bild bleibt) + Bild entfernen.
+    var colorRow = el('div', { class: 'ic-bg-row' });
+    colorRow.appendChild(el('label', {}, [S.bg_color]));
+    var colorInput = el('input', { type: 'color', value: bg().color || '#2b2d33' });
+    colorInput.addEventListener('input', function () {
+      state.background = state.background || {};
+      state.background.color = colorInput.value;
+      if (!state.background.type) { state.background.type = 'color'; }
+      applyBackground(bgLayerEl());
+    });
+    colorInput.addEventListener('change', persistKeep);
+    colorRow.appendChild(colorInput);
+    if (bg().type !== 'color') {
+      var noImgBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.bg_noimage }, ['✕ ' + S.bg_noimage]);
+      noImgBtn.addEventListener('click', function () {
+        state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
+        applyBackground(bgLayerEl());
+        callAjax('mod_pinnwand_save_background', {
+          cmid: cfg.cmid, type: 'color', color: colorInput.value, photoid: 0,
+          brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
+        }).then(function (res) { state.background = res.background; panel.remove(); openBackgroundPanel(body); });
+      });
+      colorRow.appendChild(noImgBtn);
+    }
+    colL.appendChild(colorRow);
+
+    // --- Eigene Bilder als Streifen.
     if (state.photos.length > 0) {
-      panel.appendChild(el('label', { style: 'margin-top:10px' }, [S.bg_image]));
+      colL.appendChild(el('label', {}, [S.bg_image]));
       var row = el('div', { class: 'ic-bg-thumbs' });
       state.photos.forEach(function (p) {
-        var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' });
-        t.addEventListener('click', function () {
-          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
-          applyBackground(bgLayerEl());
-          callAjax('mod_pinnwand_save_background', {
-            cmid: cfg.cmid, type: 'image', color: colorInput.value, photoid: p.id,
-            brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
-          }).then(function (res) { state.background = res.background; });
-        });
+        var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' + (bg().photoid === p.id ? ' active' : '') });
+        t.addEventListener('click', function () { chooseImage(p); });
         row.appendChild(t);
       });
-      panel.appendChild(row);
+      colL.appendChild(row);
     }
+    var classSlot = el('div', {});
+    colL.appendChild(classSlot);
 
-    panel.appendChild(el('label', { style: 'margin-top:10px' }, [S.bg_url]));
-    var urlRow = el('div', { style: 'display:flex;gap:6px' });
-    var urlInput = el('input', { type: 'url', placeholder: 'https://...', style: 'flex:1' });
-    if (state.background && state.background.type === 'url' && state.background.url) {
-      urlInput.value = state.background.url;
-    }
-    var urlApply = el('button', { class: 'ic-btn ic-btn-primary', style: 'flex:0 0 auto' }, [S.bg_url_apply]);
-    urlApply.addEventListener('click', function () {
-      var url = urlInput.value.trim();
-      if (!url) { return; }
-      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
-      applyBackground(bgLayerEl());
-      callAjax('mod_pinnwand_save_background', {
-        cmid: cfg.cmid, type: 'url', color: colorInput.value, photoid: 0, url: url,
-        brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
-      }).then(function (res) { state.background = res.background; });
-    });
-    urlRow.appendChild(urlInput); urlRow.appendChild(urlApply);
-    panel.appendChild(urlRow);
-
-    panel.appendChild(el('label', { style: 'margin-top:10px' }, [S.bg_upload]));
-    var uploadInput = el('input', { type: 'file', accept: 'image/*' });
+    // --- Hochladen: Bild / PDF als kompakte Knöpfe, URL in einer Zeile.
+    var upRow = el('div', { class: 'ic-bg-row' });
+    var uploadInput = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+    var uploadBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, [icon('upload'), el('span', {}, [S.bg_upload_short])]);
+    uploadBtn.addEventListener('click', function () { uploadInput.click(); });
     uploadInput.addEventListener('change', function () {
       var file = uploadInput.files[0];
       if (!file) { return; }
@@ -9444,11 +9728,9 @@
       };
       reader.readAsDataURL(file);
     });
-    panel.appendChild(uploadInput);
-
-    // PDF als Hintergrund (hochkant: Doppelseiten), Seitenauswahl im Dialog.
-    panel.appendChild(el('label', { style: 'margin-top:10px' }, [S.bg_pdf]));
-    var pdfInput = el('input', { type: 'file', accept: 'application/pdf,.pdf' });
+    var pdfInput = el('input', { type: 'file', accept: 'application/pdf,.pdf', style: 'display:none' });
+    var pdfBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, [icon('upload'), el('span', {}, [S.bg_pdf])]);
+    pdfBtn.addEventListener('click', function () { pdfInput.click(); });
     pdfInput.addEventListener('change', function () {
       var file = pdfInput.files[0];
       if (!file) { return; }
@@ -9459,94 +9741,89 @@
       };
       reader.readAsArrayBuffer(file);
     });
-    panel.appendChild(pdfInput);
-    if (state.background && state.background.pdfurl) {
-      var pdfPagesBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', style: 'margin-top:6px' }, [S.bg_pdf_pages]);
+    upRow.appendChild(uploadBtn); upRow.appendChild(uploadInput);
+    upRow.appendChild(pdfBtn); upRow.appendChild(pdfInput);
+    if (bg().pdfurl) {
+      var pdfPagesBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, [S.bg_pdf_pages]);
       pdfPagesBtn.addEventListener('click', function () {
         pdfPagesBtn.disabled = true;
-        fetch(state.background.pdfurl, { credentials: 'same-origin' }).then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
+        fetch(bg().pdfurl, { credentials: 'same-origin' }).then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
           panel.remove();
-          openPdfBackgroundDialog({ buffer: buf, isNew: false, spreads: state.background.pdfspreads || '', double: !!state.background.pdfdouble },
+          openPdfBackgroundDialog({ buffer: buf, isNew: false, spreads: bg().pdfspreads || '', double: !!bg().pdfdouble },
             function () { applyBackground(bgLayerEl()); });
         }).catch(function () { pdfPagesBtn.disabled = false; alert(S.pdf_error); });
       });
-      panel.appendChild(pdfPagesBtn);
+      upRow.appendChild(pdfPagesBtn);
     }
+    colR.appendChild(upRow);
 
-    // Helligkeit/Sättigung - wirkt nur auf die Hintergrund-Ebene, damit die
-    // Foto-Pins immer klar erkennbar bleiben.
-    panel.appendChild(el('label', { style: 'margin-top:10px' }, [S.bg_brightness]));
-    var brightnessInput = el('input', { type: 'range', min: '20', max: '180', value: currentBrightness() });
-    function persistFilter() {
+    var urlRow = el('div', { class: 'ic-bg-row' });
+    var urlInput = el('input', { type: 'url', placeholder: S.bg_url + ' (https://...)', style: 'flex:1;min-width:0' });
+    if (bg().type === 'url' && bg().url) { urlInput.value = bg().url; }
+    var urlApply = el('button', { class: 'ic-btn ic-btn-primary ic-mini-btn', type: 'button' }, [S.bg_url_apply]);
+    urlApply.addEventListener('click', function () {
+      var url = urlInput.value.trim();
+      if (!url) { return; }
+      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
+      applyBackground(bgLayerEl());
       callAjax('mod_pinnwand_save_background', {
-        cmid: cfg.cmid,
-        type: state.background.type, color: state.background.color || '#2b2d33',
-        photoid: 0, url: state.background.url || '',
+        cmid: cfg.cmid, type: 'url', color: colorInput.value, photoid: 0, url: url,
         brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
       }).then(function (res) { state.background = res.background; });
+    });
+    urlRow.appendChild(urlInput); urlRow.appendChild(urlApply);
+    colR.appendChild(urlRow);
+
+    // --- Helligkeit / Sättigung nebeneinander, Füllart als Umschalter.
+    var sliders = el('div', { class: 'ic-bg-sliders' });
+    function slider(label, min, max, get, set) {
+      var wrap = el('label', { class: 'ic-bg-slider' }, [label]);
+      var input = el('input', { type: 'range', min: String(min), max: String(max), value: get() });
+      input.addEventListener('input', function () {
+        state.background = state.background || {};
+        set(parseInt(input.value, 10));
+        applyBackground(bgLayerEl());
+      });
+      input.addEventListener('change', persistKeep);
+      wrap.appendChild(input);
+      sliders.appendChild(wrap);
     }
-    brightnessInput.addEventListener('input', function () {
-      state.background.brightness = parseInt(brightnessInput.value, 10);
-      applyBackground(bgLayerEl());
-    });
-    brightnessInput.addEventListener('change', persistFilter);
-    panel.appendChild(brightnessInput);
+    slider(S.bg_brightness, 20, 180, currentBrightness, function (v) { state.background.brightness = v; });
+    slider(S.bg_saturation, 0, 200, currentSaturation, function (v) { state.background.saturation = v; });
+    colR.appendChild(sliders);
 
-    panel.appendChild(el('label', { style: 'margin-top:6px' }, [S.bg_saturation]));
-    var saturationInput = el('input', { type: 'range', min: '0', max: '200', value: currentSaturation() });
-    saturationInput.addEventListener('input', function () {
-      state.background.saturation = parseInt(saturationInput.value, 10);
-      applyBackground(bgLayerEl());
-    });
-    saturationInput.addEventListener('change', persistFilter);
-    panel.appendChild(saturationInput);
-
-    // Abschneiden (cover) vs. Füllen (contain) - wie das Hintergrundbild
-    // die 1400x1000-Fläche ausfüllt, wenn sein Seitenverhältnis nicht
-    // exakt passt.
-    panel.appendChild(el('label', { style: 'margin-top:10px' }, [S.bg_fit]));
-    var fitRow = el('div', { class: 'ic-seg' });
+    var fitRow = el('div', { class: 'ic-bg-row' });
+    fitRow.appendChild(el('label', {}, [S.bg_fit]));
     [['contain', S.bg_fit_contain], ['cover', S.bg_fit_cover]].forEach(function (opt) {
-      var fitBtn = el('button', { class: 'ic-btn ic-btn-ghost' + (currentFit() === opt[0] ? ' ic-btn-primary' : '') }, [opt[1]]);
+      var fitBtn = el('button', { class: 'ic-btn ic-mini-btn ' + (currentFit() === opt[0] ? 'ic-btn-primary' : 'ic-btn-ghost'), type: 'button' }, [opt[1]]);
       fitBtn.addEventListener('click', function () {
+        state.background = state.background || {};
         state.background.fit = opt[0];
         applyBackground(bgLayerEl());
-        persistFilter();
+        persistKeep();
         panel.remove();
         openBackgroundPanel(body);
       });
       fitRow.appendChild(fitBtn);
     });
-    panel.appendChild(fitRow);
+    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-bg-close', type: 'button' }, [S.draw_done]);
+    closeBtn.addEventListener('click', function () { panel.remove(); });
+    fitRow.appendChild(closeBtn);
+    colR.appendChild(fitRow);
 
-    // Hintergrundbild auch aus den Uploads der Klasse wählbar - Berechtigung
-    // wird server-seitig über dieselbe Regel wie die Klassenansicht geprüft
-    // (mod/pinnwand:viewall oder studentclassview); ohne Berechtigung bleibt
-    // dieser Abschnitt einfach weg, statt einen Fehler zu zeigen.
+    // Bilder aus den Uploads der Klasse (falls berechtigt).
     callAjax('mod_pinnwand_get_all_photos', { cmid: cfg.cmid }).then(function (res) {
       var classPhotos = (res.photos || []).filter(function (p) { return !state.photos.some(function (o) { return o.id === p.id; }); });
       if (!classPhotos.length) { return; }
-      var classLabel = el('label', { style: 'margin-top:10px' }, [S.bg_image_class]);
+      classSlot.appendChild(el('label', {}, [S.bg_image_class]));
       var classRow = el('div', { class: 'ic-bg-thumbs' });
       classPhotos.forEach(function (p) {
-        var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' });
-        t.addEventListener('click', function () {
-          state.background = { type: 'image', color: colorInput.value, url: p.url, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
-          applyBackground(bgLayerEl());
-          callAjax('mod_pinnwand_save_background', {
-            cmid: cfg.cmid, type: 'image', color: colorInput.value, photoid: p.id,
-            brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
-          }).then(function (res2) { state.background = res2.background; });
-        });
+        var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' + (bg().photoid === p.id ? ' active' : '') });
+        t.addEventListener('click', function () { chooseImage(p); });
         classRow.appendChild(t);
       });
-      panel.insertBefore(classRow, closeBtn);
-      panel.insertBefore(classLabel, classRow);
-    }).catch(function () { /* keine Berechtigung (o.ä.) - Abschnitt einfach weglassen */ });
-
-    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost', style: 'margin-top:10px' }, [S.draw_done]);
-    closeBtn.addEventListener('click', function () { panel.remove(); });
-    panel.appendChild(closeBtn);
+      classSlot.appendChild(classRow);
+    }).catch(function () { /* keine Berechtigung - Abschnitt weglassen */ });
 
     body.appendChild(panel);
 
@@ -9719,17 +9996,14 @@
         render();
         return;
       }
-      var img = new Image();
-      img.onload = function () {
-        state.editingPhotoId = p.id;
-        loadCapturedImage(img);
-      };
-      img.onerror = function () { alert(S.url_load_error); };
-      img.src = p.url;
+      loadPhotoForEditing(p);
     });
     var backsideBtn = el('button', { class: 'ic-fab', title: S.backside }, [icon('rotate')]);
     backsideBtn.addEventListener('click', function () { closeAllPanels('back'); toggleBackPanel(); });
     leftDock.appendChild(gridBtn); leftDock.appendChild(dataBtn); leftDock.appendChild(editBtn); leftDock.appendChild(backsideBtn);
+    // Überlagerungsmodus (Mischmodus mit dem Hintergrund) des Bildes.
+    var lbBlend = blendModePicker(function () { return state.photos[state.lightboxIndex]; }, null, 'ic-blend-picker-fab');
+    leftDock.appendChild(lbBlend);
 
     // Zusätzlicher, immer sichtbarer (sehr transparenter) Raster-Button oben
     // links - bleibt auch im Fokus-Modus erreichbar (der reguläre gridBtn im
@@ -9962,6 +10236,9 @@
       refreshOverlays();
       caption.textContent = captionText(p);
       updateFocusMode();
+      var lbBlendNew = blendModePicker(function () { return state.photos[state.lightboxIndex]; }, null, 'ic-blend-picker-fab');
+      lbBlend.replaceWith(lbBlendNew);
+      lbBlend = lbBlendNew;
     }
 
     // ---- Zeichnen/Schreiben: Striche als Vektordaten (Punkte, Farbe, Breite,

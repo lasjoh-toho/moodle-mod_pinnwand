@@ -1829,6 +1829,34 @@ Details und Scoping-Entscheidungen. In Kurzform:
     wählen" ändern.
   - pdf.js liegt lokal im Plugin (`js/vendor/pdfjs`, Apache 2.0).
 
+### Einhundertzweiundfünfzigste Überarbeitung — Zauberstab, nicht-destruktive Bilder, Hintergrund-Panel
+
+- **Freistellen** mit zwei neuen Werkzeugen nach dem Prinzip von
+  "Sofort-Alpha" (Vorschau unter macOS):
+  - **Zauberstab** wählt die zusammenhängende Fläche ähnlicher Farbe;
+  - **Farbbereich** wählt alle ähnlichen Farben im ganzen Bild;
+  - Klicken und Ziehen vergrößert (rechts/unten) oder verkleinert (links/
+    oben) die Toleranz, die Auswahl ist live markiert;
+  - beim Loslassen "Entfernen" oder "Wieder zeigen" (Alt kehrt um), mit
+    leicht weicher Kante.
+- **Nicht-destruktive Bildbearbeitung**: Original, Freistellmaske und
+  Einstellungen (Ecken, Drehung, Farbe) werden mitgespeichert. Erneutes
+  Bearbeiten beginnt mit dem Original und den bisherigen Einstellungen.
+  Ältere Bilder werden beim ersten Bearbeiten zum Original.
+- **Überlagerungsmodus** gut auffindbar:
+  - eigenes Symbol (zwei Kreise) am Objekt auf der Pinnwand;
+  - als Knopf in der Galerie-Leiste;
+  - im Bildeditor unter "Farbe".
+- **Hintergrund**:
+  - Die Farbwahl behält ein gewähltes Hintergrundbild (vorher wurde es
+    gelöscht); "Ohne Bild" entfernt es bewusst.
+  - Das Panel ist kompakt und zweispaltig, ohne Scrollen.
+- **Roter Faden**: jeder Rahmen mit deutlichem "Bearbeiten"-Knopf, Folien
+  mit Vorschaubild.
+- **Notizen (Stift-Werkzeug)**:
+  - Rückgängig/Wiederholen gilt auch für Notizen;
+  - getippter Text erscheint beim Tippen direkt als Notiz.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

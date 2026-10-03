@@ -1585,3 +1585,45 @@ input.ic-stepper-value {
 .ic-pdf-thumb-canvas { max-width: 100%; max-height: 110px; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .ic-pdf-tile-label { font-size: .8rem; display: inline-flex; align-items: center; gap: 4px; }
 .ic-pdf-bar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+/* Überlagerungsmodus: Knopf mit eigenem Symbol. */
+.ic-blend-picker .ic-dropdown-btn { display: inline-flex; align-items: center; gap: 4px; }
+.ic-blend-picker .ic-dropdown-btn svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.ic-blend-toggle .ic-dropdown-btn { height: 30px; padding: 0 8px; border-radius: 15px; }
+.ic-blend-toggle .ic-dropdown-text { display: none; }
+.ic-blend-picker-fab .ic-dropdown-btn {
+  width: 48px; height: 48px; border-radius: 50%; justify-content: center; padding: 0;
+  background: rgba(20,21,24,.75); color: #fff; border: 0;
+}
+.ic-blend-picker-fab .ic-dropdown-btn svg { width: 22px; height: 22px; }
+.ic-blend-picker-fab .ic-dropdown-text, .ic-blend-picker-fab .ic-dropdown-caret { display: none; }
+/* Kompaktes Hintergrund-Panel: zwei Spalten, keine Scrollleiste. */
+.ic-bg-panel.ic-bg-panel-compact {
+  width: min(680px, calc(100vw - 24px)); max-height: none; overflow: visible;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; padding: 10px 12px;
+}
+.ic-bg-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ic-bg-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ic-bg-row > label { flex: 0 0 auto; }
+.ic-bg-panel-compact input[type=color] { width: 44px; height: 30px; flex: 0 0 auto; }
+.ic-bg-panel-compact .ic-mini-btn { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; font-size: .78rem; }
+.ic-bg-panel-compact .ic-mini-btn svg { width: 14px; height: 14px; }
+.ic-bg-panel-compact .ic-bg-thumbs { flex-wrap: nowrap; padding: 2px 0; }
+.ic-bg-panel-compact .ic-bg-thumb { width: 44px; height: 44px; }
+.ic-bg-thumb.active { border-color: var(--ic-accent); }
+.ic-bg-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ic-bg-slider { display: flex; flex-direction: column; gap: 2px; }
+.ic-bg-close { margin-left: auto; }
+@media (max-width: 640px) {
+  .ic-bg-panel.ic-bg-panel-compact { grid-template-columns: 1fr; }
+}
+/* Faden-Panel: Bearbeiten-Knopf je Rahmen, Folien-Vorschau. */
+.ic-thread-item .ic-thread-slide-btn {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; font-size: .75rem;
+  border: 1px solid var(--ic-accent); color: var(--ic-text); border-radius: 8px; background: rgba(79,140,255,.15);
+}
+.ic-thread-item .ic-thread-slide-btn svg { width: 14px; height: 14px; }
+.ic-thread-slide-thumb { width: 56px; height: 42px; padding: 0; overflow: hidden; display: block; }
+.ic-thread-slide-thumb .ic-tf-live { width: 100%; }
+/* Live-Text: Zeichen werden direkt als Notiz gezeichnet, das Feld zeigt nur den Cursor. */
+.ic-ink-text-input.ic-ink-text-live { color: transparent; background: transparent; border-color: rgba(255,255,255,.45); }
+.ic-ink-text-input.ic-ink-text-live::selection { background: rgba(79,140,255,.35); color: transparent; }

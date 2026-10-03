@@ -61,6 +61,7 @@
         <FIELD NAME="showingback" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Welche Seite aktuell oben liegt: 0=Vorderseite, 1=Rückseite"/>
         <FIELD NAME="boardplaced" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Erst wenn 1: Foto hat reale Board-Koordinaten und erscheint auf der Leinwand - vorher liegt es im Post-Stream bereit"/>
         <FIELD NAME="wordfielddata" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Falls dieses 'Foto' ein Wortfeld ist: die strukturierten Daten (JSON: Preset, Maße, Texte) für erneutes Bearbeiten als Text statt als Bild"/>
+        <FIELD NAME="editdata" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Nicht-destruktive Bildbearbeitung: Ecken, Drehung, Farbe (JSON)"/>
         <FIELD NAME="blendmode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="" SEQUENCE="false" COMMENT="Mischmodus mit dem Hintergrund: leer=Überdecken, multiply, difference (Invertieren), color-burn"/>
         <FIELD NAME="status" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="active" SEQUENCE="false" COMMENT="active|trash - gelöschte Objekte landen im Trashbin statt sofort endgültig gelöscht zu werden"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>

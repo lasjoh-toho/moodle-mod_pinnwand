@@ -73,7 +73,7 @@ function pinnwand_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
         return;
     }
 
-    if ($filearea !== 'photo') {
+    if ($filearea !== 'photo' && $filearea !== 'photoorig' && $filearea !== 'photomask') {
         return false;
     }
 

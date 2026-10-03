@@ -96,6 +96,8 @@ class restore_pinnwand_activity_structure_step extends restore_activity_structur
     protected function after_execute() {
         // Fotodateien - itemid entspricht der (neuen) photo-id.
         $this->add_related_files('mod_pinnwand', 'photo', 'pinnwand_photo');
+        $this->add_related_files('mod_pinnwand', 'photoorig', 'pinnwand_photo');
+        $this->add_related_files('mod_pinnwand', 'photomask', 'pinnwand_photo');
 
         // Editor-Dateien der Aktivitätsbeschreibung.
         $this->add_related_files('mod_pinnwand', 'intro', null);

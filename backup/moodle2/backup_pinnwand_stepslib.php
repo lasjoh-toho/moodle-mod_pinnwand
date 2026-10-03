@@ -29,7 +29,7 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
             'sourceorigauthor', 'sourcetitle', 'gridcolor', 'hiddenfromboard',
             'annotationonboard', 'annotationdata', 'canvasx', 'canvasy',
             'canvasw', 'canvasrot', 'canvasz', 'boardid', 'sourcephotoid',
-            'backphotoid', 'showingback', 'boardplaced', 'wordfielddata', 'blendmode', 'timecreated',
+            'backphotoid', 'showingback', 'boardplaced', 'wordfielddata', 'editdata', 'blendmode', 'timecreated',
         ]);
 
         // Rote Fäden - ebenfalls personenbezogen (ein Faden pro Person).
@@ -92,6 +92,8 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
 
         // Fotodateien - itemid entspricht jeweils der photo-id (siehe photo->id).
         $photo->annotate_files('mod_pinnwand', 'photo', 'id');
+        $photo->annotate_files('mod_pinnwand', 'photoorig', 'id');
+        $photo->annotate_files('mod_pinnwand', 'photomask', 'id');
 
         if ($userinfo) {
             // Persönliche Hintergrundbilder (Anordnungs-Leinwand) - itemid ist

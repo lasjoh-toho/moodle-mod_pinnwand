@@ -420,5 +420,16 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083148, 'pinnwand');
     }
 
+    if ($oldversion < 2026083150) {
+        // Nicht-destruktive Bildbearbeitung: Einstellungen je Foto (Original
+        // und Freistellmaske liegen als Dateien in photoorig/photomask).
+        $table = new xmldb_table('pinnwand_photos');
+        $field = new xmldb_field('editdata', XMLDB_TYPE_TEXT, null, null, null, null, null, 'wordfielddata');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026083150, 'pinnwand');
+    }
+
     return true;
 }

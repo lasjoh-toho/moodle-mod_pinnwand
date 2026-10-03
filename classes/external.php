@@ -55,6 +55,50 @@ class mod_pinnwand_external extends external_api {
     // ---------------------------------------------------------------
     // save_photo
     // ---------------------------------------------------------------
+    /**
+     * Nicht-destruktive Bildbearbeitung: Original, Freistellmaske und
+     * Einstellungen eines Fotos speichern. Leere Werte lassen das
+     * Vorhandene unverändert; maskdata 'none' entfernt die Maske.
+     */
+    protected static function store_photo_edit($context, $photo, $origdata, $maskdata, $editdata) {
+        global $DB;
+        $fs = get_file_storage();
+        $store = function ($area, $dataurl) use ($fs, $context, $photo) {
+            if (!preg_match('#^data:image/(png|jpeg|jpg);base64,(.+)$#', $dataurl, $m)) {
+                return;
+            }
+            $bin = base64_decode($m[2]);
+            if ($bin === false || strlen($bin) < 20) {
+                return;
+            }
+            $fs->delete_area_files($context->id, 'mod_pinnwand', $area, $photo->id);
+            $fs->create_file_from_string([
+                'contextid' => $context->id, 'component' => 'mod_pinnwand', 'filearea' => $area,
+                'itemid' => $photo->id, 'filepath' => '/',
+                'filename' => $area . '_' . $photo->id . '_' . time() . '.' . ($m[1] === 'png' ? 'png' : 'jpg'),
+            ], $bin);
+        };
+        if ($origdata !== '') {
+            $store('photoorig', $origdata);
+        }
+        if ($maskdata === 'none') {
+            $fs->delete_area_files($context->id, 'mod_pinnwand', 'photomask', $photo->id);
+        } else if ($maskdata !== '') {
+            $store('photomask', $maskdata);
+        }
+        if ($editdata !== '' && is_array(json_decode($editdata, true))) {
+            $DB->set_field('pinnwand_photos', 'editdata', $editdata, ['id' => $photo->id]);
+        }
+    }
+
+    /** URL der ersten Datei eines Foto-Dateibereichs (oder ''). */
+    protected static function photo_area_url($context, $area, $photoid) {
+        $fs = get_file_storage();
+        $files = $fs->get_area_files($context->id, 'mod_pinnwand', $area, $photoid, 'filename', false);
+        $file = reset($files);
+        return $file ? (string) moodle_url::make_pluginfile_url($context->id, 'mod_pinnwand', $area, $photoid, '/', $file->get_filename()) : '';
+    }
+
     public static function save_photo_parameters() {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
@@ -70,12 +114,15 @@ class mod_pinnwand_external extends external_api {
             'sourceorigauthor' => new external_value(PARAM_TEXT, 'Autor*in der Vorlage', VALUE_DEFAULT, ''),
             'boardid' => new external_value(PARAM_INT, 'Board-ID', VALUE_DEFAULT, 0),
             'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON), falls dieses Foto ein Wortfeld ist', VALUE_DEFAULT, ''),
+            'origdata' => new external_value(PARAM_RAW, 'Originalbild (Data-URL) für nicht-destruktive Bearbeitung', VALUE_DEFAULT, ''),
+            'maskdata' => new external_value(PARAM_RAW, 'Freistellmaske (PNG-Data-URL)', VALUE_DEFAULT, ''),
+            'editdata' => new external_value(PARAM_RAW, 'Bearbeitungseinstellungen (JSON)', VALUE_DEFAULT, ''),
         ]);
     }
 
     public static function save_photo($cmid, $imagedata, $gridtype, $gridvalue, $consent,
             $sourcetitle, $sourceauthor, $sourceyear, $sourceepoch, $sourceplace, $sourceorigauthor, $boardid = 0,
-            $wordfielddata = '') {
+            $wordfielddata = '', $origdata = '', $maskdata = '', $editdata = '') {
         global $DB, $USER;
 
         $params = self::validate_parameters(self::save_photo_parameters(), [
@@ -83,7 +130,7 @@ class mod_pinnwand_external extends external_api {
             'gridvalue' => $gridvalue, 'consent' => $consent, 'sourcetitle' => $sourcetitle,
             'sourceauthor' => $sourceauthor, 'sourceyear' => $sourceyear, 'sourceepoch' => $sourceepoch,
             'sourceplace' => $sourceplace, 'sourceorigauthor' => $sourceorigauthor, 'boardid' => $boardid,
-            'wordfielddata' => $wordfielddata,
+            'wordfielddata' => $wordfielddata, 'origdata' => $origdata, 'maskdata' => $maskdata, 'editdata' => $editdata,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
 
@@ -149,6 +196,7 @@ class mod_pinnwand_external extends external_api {
             'filename'  => 'photo_' . $record->id . '.' . $ext,
         ];
         $fs->create_file_from_string($filerecord, $binary);
+        self::store_photo_edit($context, $record, $params['origdata'], $params['maskdata'], $params['editdata']);
 
         $newcount = $existing + 1;
         return [
@@ -237,6 +285,9 @@ class mod_pinnwand_external extends external_api {
                 'boardplaced' => (bool) $r->boardplaced,
                 'wordfielddata' => (string) ($r->wordfielddata ?? ''),
                 'blendmode' => (string) ($r->blendmode ?? ''),
+                'origurl' => self::photo_area_url($context, 'photoorig', $r->id),
+                'maskurl' => self::photo_area_url($context, 'photomask', $r->id),
+                'editdata' => (string) ($r->editdata ?? ''),
                 'otherboardcount' => $placementcounts[$r->id] ?? 0,
                 'userfullname' => fullname($USER),
             ];
@@ -255,7 +306,7 @@ class mod_pinnwand_external extends external_api {
     protected static function get_background_data($instance, $context) {
         global $USER;
         $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'fit' => 'contain',
-            'pdfurl' => '', 'pdfspreads' => '', 'pdfdouble' => false];
+            'pdfurl' => '', 'pdfspreads' => '', 'pdfdouble' => false, 'photoid' => 0];
         $raw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
         if (!$raw) {
             return $default;
@@ -283,6 +334,7 @@ class mod_pinnwand_external extends external_api {
                 $photo = false;
             }
             if ($photo) {
+                $bg['photoid'] = (int) $photo->id;
                 $fs = get_file_storage();
                 $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id, 'filename', false);
                 $file = reset($files);
@@ -347,6 +399,7 @@ class mod_pinnwand_external extends external_api {
                 'pdfurl' => new external_value(PARAM_RAW, 'PDF, aus dem der Hintergrund stammt', VALUE_DEFAULT, ''),
                 'pdfspreads' => new external_value(PARAM_RAW, 'Gewählte (Doppel-)Seiten, kommagetrennt', VALUE_DEFAULT, ''),
                 'pdfdouble' => new external_value(PARAM_BOOL, 'Doppelseiten nebeneinander', VALUE_DEFAULT, false),
+                'photoid' => new external_value(PARAM_INT, 'Foto-ID bei Hintergrund aus eigenem/fremdem Foto', VALUE_DEFAULT, 0),
             ]),
             'photos' => new external_multiple_structure(new external_single_structure([
                 'id' => new external_value(PARAM_INT, 'ID'),
@@ -376,6 +429,9 @@ class mod_pinnwand_external extends external_api {
                 'boardplaced' => new external_value(PARAM_BOOL, 'Hat reale Board-Koordinaten (ist auf der Leinwand platziert)'),
                 'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON) oder leer'),
                 'blendmode' => new external_value(PARAM_ALPHAEXT, 'Mischmodus mit dem Hintergrund', VALUE_DEFAULT, ''),
+                'origurl' => new external_value(PARAM_RAW, 'Originalbild (nicht-destruktive Bearbeitung)', VALUE_DEFAULT, ''),
+                'maskurl' => new external_value(PARAM_RAW, 'Freistellmaske', VALUE_DEFAULT, ''),
+                'editdata' => new external_value(PARAM_RAW, 'Bearbeitungseinstellungen (JSON)', VALUE_DEFAULT, ''),
                 'otherboardcount' => new external_value(PARAM_INT, 'Anzahl zusätzlicher aktiver Platzierungen auf anderen Boards'),
                 'userfullname' => new external_value(PARAM_TEXT, 'Name der hochladenden Person (auf dem eigenen Board immer man selbst)'),
             ])),
@@ -1190,6 +1246,7 @@ class mod_pinnwand_external extends external_api {
                 'pdfurl' => new external_value(PARAM_RAW, 'PDF, aus dem der Hintergrund stammt', VALUE_DEFAULT, ''),
                 'pdfspreads' => new external_value(PARAM_RAW, 'Gewählte (Doppel-)Seiten, kommagetrennt', VALUE_DEFAULT, ''),
                 'pdfdouble' => new external_value(PARAM_BOOL, 'Doppelseiten nebeneinander', VALUE_DEFAULT, false),
+                'photoid' => new external_value(PARAM_INT, 'Foto-ID bei Hintergrund aus eigenem/fremdem Foto', VALUE_DEFAULT, 0),
             ]),
         ]);
     }
@@ -1426,6 +1483,8 @@ class mod_pinnwand_external extends external_api {
         }
         $fs = get_file_storage();
         $fs->delete_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id);
+        $fs->delete_area_files($context->id, 'mod_pinnwand', 'photoorig', $photo->id);
+        $fs->delete_area_files($context->id, 'mod_pinnwand', 'photomask', $photo->id);
         $DB->delete_records('pinnwand_photos', ['id' => $photo->id]);
         $DB->delete_records('pinnwand_object_placements', ['photoid' => $photo->id]);
 
@@ -1733,13 +1792,17 @@ class mod_pinnwand_external extends external_api {
             'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
             'imagedata' => new external_value(PARAM_RAW, 'Data-URL (base64) des neu bearbeiteten Fotos'),
             'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON), falls Wortfeld', VALUE_DEFAULT, ''),
+            'origdata' => new external_value(PARAM_RAW, 'Originalbild (Data-URL), leer = unverändert', VALUE_DEFAULT, ''),
+            'maskdata' => new external_value(PARAM_RAW, 'Freistellmaske (PNG), leer = unverändert, none = entfernen', VALUE_DEFAULT, ''),
+            'editdata' => new external_value(PARAM_RAW, 'Bearbeitungseinstellungen (JSON)', VALUE_DEFAULT, ''),
         ]);
     }
 
-    public static function update_photo($cmid, $photoid, $imagedata, $wordfielddata = '') {
+    public static function update_photo($cmid, $photoid, $imagedata, $wordfielddata = '', $origdata = '', $maskdata = '', $editdata = '') {
         global $DB, $USER;
         $params = self::validate_parameters(self::update_photo_parameters(), [
             'cmid' => $cmid, 'photoid' => $photoid, 'imagedata' => $imagedata, 'wordfielddata' => $wordfielddata,
+            'origdata' => $origdata, 'maskdata' => $maskdata, 'editdata' => $editdata,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
 
@@ -1778,6 +1841,7 @@ class mod_pinnwand_external extends external_api {
             'filename'  => 'photo_' . $photo->id . '_' . time() . '.' . $ext,
         ];
         $fs->create_file_from_string($filerecord, $binary);
+        self::store_photo_edit($context, $photo, $params['origdata'], $params['maskdata'], $params['editdata']);
 
         return [
             'success' => true,
