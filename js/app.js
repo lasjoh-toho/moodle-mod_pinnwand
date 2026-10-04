@@ -59,7 +59,20 @@
 
   // Entf/Rücktaste löscht ausgewählte Notizen (Stift-Werkzeug, Auswahl).
   var inkSelectionDelete = null;
+  function selectAllInk() {
+    state.boardDrawTool = 'select';
+    state.boardDrawErase = false;
+    state.inkSelection = (state.boardInkStrokes || []).map(function (st) { return st.id; }).filter(Boolean);
+    render();
+  }
   document.addEventListener('keydown', function (ev) {
+    if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'a' || ev.key === 'A') && state.boardDrawMode && state.step === 'arrange') {
+      var t0 = ev.target;
+      if (t0 && (t0.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t0.tagName))) { return; }
+      ev.preventDefault();
+      selectAllInk();
+      return;
+    }
     if ((ev.key === 'Delete' || ev.key === 'Backspace') && state.boardDrawMode && (state.inkSelection || []).length && inkSelectionDelete) {
       var tgt = ev.target;
       if (tgt && (tgt.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName))) { return; }
@@ -2522,10 +2535,37 @@
     });
     wrap.style.zIndex = it.framez || 0;
     if (tf.blend) { wrap.style.mixBlendMode = tf.blend; }
+    applySlideBg(wrap, tf);
     var live = buildTextFrameLiveDom(tf, { noGuide: true });
     live.style.height = '100%';
     wrap.appendChild(live);
     return wrap;
+  }
+  // Kleiner Bearbeiten-Knopf (nur Symbol, Text als Tooltip) für Rahmen -
+  // im Roten Faden, in der Schichtung und am Rahmen auf der Pinnwand.
+  function frameEditButton(it, extraClass) {
+    var b = el('button', { class: 'ic-frame-edit-icon' + (extraClass ? ' ' + extraClass : ''), type: 'button', title: S.slide_edit, 'aria-label': S.slide_edit }, [icon('imageedit')]);
+    b.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+    b.addEventListener('touchstart', function (ev) { ev.stopPropagation(); }, { passive: true });
+    b.addEventListener('click', function (ev) { ev.stopPropagation(); openFrameSlideEditor(it); });
+    return b;
+  }
+  // Folien-Hintergrund: Farbe mit Deckkraft und optionaler Weichzeichnung
+  // dessen, was dahinter liegt (Milchglas).
+  function slideBgCss(tf) {
+    var bg = tf && tf.slideBg;
+    if (!bg || (!bg.opacity && !bg.blur)) { return null; }
+    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg.color || '#000000') || [0, '00', '00', '00'];
+    return {
+      background: 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + ((bg.opacity || 0) / 100) + ')',
+      filter: bg.blur ? 'blur(' + bg.blur + 'px)' : ''
+    };
+  }
+  function applySlideBg(elm, tf) {
+    var css = slideBgCss(tf);
+    elm.style.background = css ? css.background : '';
+    elm.style.backdropFilter = css ? css.filter : '';
+    elm.style.webkitBackdropFilter = css ? css.filter : '';
   }
   function openFrameSlideEditor(it) {
     var tf = null;
@@ -4011,6 +4051,24 @@
       style: cardBg + cardBorder
     });
     frame.appendChild(frameInner);
+    if (isSlide) { applySlideBg(frameInner, tf); }
+    // Mit der Folie verknüpfte Objekte, die eigentlich darüber liegen: im
+    // Editor über der Folie zeigen (wie später in der Präsentation).
+    if (isSlide && hasBoardPos && tfShowBg && (tf.linked || []).length) {
+      var aboveLayer = el('div', {
+        class: 'ic-tf-neighbors-layer ic-tf-neighbors-wide ic-tf-above-layer',
+        style: neighborsLayer ? neighborsLayer.getAttribute('style').replace(/background-image:[^;]*;|background-repeat:[^;]*;|background-size:[^;]*;|background-position:[^;]*;/g, '') : ''
+      });
+      state.photos.filter(function (p) { return tf.linked.indexOf(p.id) !== -1; }).forEach(function (p) {
+        var lEl = null;
+        if (p.wordfielddata) { try { lEl = buildTextFrameLiveDom(JSON.parse(p.wordfielddata), { noGuide: true }); } catch (eL) { lEl = null; } }
+        aboveLayer.appendChild(el('div', {
+          style: 'position:absolute;left:' + (p.canvasx * bgScale) + 'px;top:' + (p.canvasy * bgScale) + 'px;width:' + (p.canvasw * bgScale) + 'px;' +
+            'transform:rotate(' + (p.canvasrot || 0) + 'deg);pointer-events:none;' + (p.blendmode ? 'mix-blend-mode:' + p.blendmode + ';' : '')
+        }, [lEl || el('img', { src: p.url, alt: '', style: 'width:100%;display:block;' })]));
+      });
+      frame.appendChild(aboveLayer);
+    }
 
     // Klickbarer Rahmen um den Zettel zur Auswahl der Kartenfläche selbst
     // (Kontur/Hintergrund/Effekte werden dann bearbeitbar) - liegt als
@@ -4274,7 +4332,9 @@
       // wiederhergestellt.
       el2.addEventListener('focus', function () {
         selectText(t.id);
-        if (t.wordartStyle && t.wordartStyle !== 'none') { el2.style.transform = 'none'; }
+        // Nur Verzerrung/Drehung aussetzen - die Zentrierung (translate)
+        // muss bleiben, sonst springt der Text um die halbe Größe.
+        if (t.wordartStyle && t.wordartStyle !== 'none') { el2.style.transform = useFillCentering ? 'none' : 'translate(-50%, -50%)'; }
       });
       el2.addEventListener('blur', function () {
         if (activeId === t.id) {
@@ -5580,6 +5640,51 @@
       }));
       setTimeout(function () { applyEditorBlend(curBlend); }, 0);
       blockAnim.content.appendChild(slideTopRow);
+
+      // Hintergrund der Folie: Farbe, Deckkraft, Weichzeichnung (Milchglas).
+      tf.slideBg = tf.slideBg || { color: '#000000', opacity: 0, blur: 0 };
+      var bgRow = el('div', { class: 'ic-slide-bg-row' });
+      bgRow.appendChild(el('span', { class: 'ic-anim-blend-label' }, [S.slide_bg]));
+      var bgColor = el('input', { type: 'color', value: tf.slideBg.color || '#000000', title: S.slide_bg });
+      bgColor.addEventListener('input', function () { tf.slideBg.color = bgColor.value; applySlideBg(frameInner, tf); });
+      bgRow.appendChild(bgColor);
+      function bgSlider(label, key, max) {
+        var lab = el('label', { class: 'ic-slide-bg-slider' }, [label]);
+        var r = el('input', { type: 'range', min: '0', max: String(max), value: String(tf.slideBg[key] || 0) });
+        r.addEventListener('input', function () { tf.slideBg[key] = parseInt(r.value, 10); applySlideBg(frameInner, tf); });
+        lab.appendChild(r);
+        bgRow.appendChild(lab);
+      }
+      bgSlider(S.slide_bg_opacity, 'opacity', 100);
+      bgSlider(S.slide_bg_blur, 'blur', 30);
+      blockAnim.content.appendChild(bgRow);
+
+      // Objekte, die über der Folie liegen, mit ihr verknüpfen: sie bleiben
+      // in der Präsentation bei dieser Folie sichtbar statt ausgeblendet.
+      if (editingRec && editingRec.canvasw) {
+        tf.linked = tf.linked || [];
+        var aboveCands = state.photos.filter(function (p) {
+          return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === (editingRec.boardid || 0) && (p.canvasz || 0) > (editingRec.canvasz || 0);
+        });
+        if (aboveCands.length) {
+          blockAnim.content.appendChild(el('div', { class: 'ic-anim-sep' }, [S.slide_linked]));
+          var linkList = el('div', { class: 'ic-slide-link-list' });
+          aboveCands.forEach(function (p) {
+            var lab = el('label', { class: 'ic-slide-link' + (tf.linked.indexOf(p.id) !== -1 ? ' active' : ''), title: itemCaptionText(p) });
+            var cb = el('input', { type: 'checkbox' });
+            cb.checked = tf.linked.indexOf(p.id) !== -1;
+            cb.addEventListener('change', function () {
+              tf.linked = tf.linked.filter(function (x) { return x !== p.id; });
+              if (cb.checked) { tf.linked.push(p.id); }
+              render();
+            });
+            lab.appendChild(cb);
+            lab.appendChild(el('img', { src: p.url, alt: '' }));
+            linkList.appendChild(lab);
+          });
+          blockAnim.content.appendChild(linkList);
+        }
+      }
       blockAnim.content.appendChild(el('p', { class: 'ic-hint ic-anim-hint' }, [S.slide_anim_hint]));
       var animInfo = slideAnimMap(tf);
       tf.anim = tf.anim.filter(function (a) { return animInfo.map[a.key]; });
@@ -7157,7 +7262,12 @@
           frameEl.style.zIndex = it.framez || 0;
           if (layerPeekHides(it.framez || 0)) { frameEl.classList.add('ic-layer-peek-hidden'); }
           var stepNum = boardItems.indexOf(it) + 1;
-          frameEl.appendChild(el('span', { style: 'color:' + lineColor }, [it.framelabel || String(stepNum)]));
+          // Zahl/Beschriftung im Rahmen anklicken öffnet den Folien-Editor.
+          var frameNum = el('span', { class: 'ic-frame-num', style: 'color:' + lineColor, title: S.slide_edit }, [it.framelabel || String(stepNum)]);
+          frameNum.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+          frameNum.addEventListener('touchstart', function (ev) { ev.stopPropagation(); }, { passive: true });
+          frameNum.addEventListener('click', function (ev) { ev.stopPropagation(); openFrameSlideEditor(it); });
+          frameEl.appendChild(frameNum);
           canvas.appendChild(frameEl);
 
           if (!threadForCanvas.isown) { return; }
@@ -7200,11 +7310,7 @@
             if (openPresentationAtItem('frame', it.id)) { ev.preventDefault(); }
           });
           // Folie bearbeiten (bzw. aus dem Rahmen eine Folie machen).
-          var frameEditBtn = el('button', { class: 'ic-frame-edit-btn', type: 'button', title: S.slide_edit }, [icon('imageedit')]);
-          frameEditBtn.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
-          frameEditBtn.addEventListener('touchstart', function (ev) { ev.stopPropagation(); }, { passive: true });
-          frameEditBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openFrameSlideEditor(it); });
-          frameEl.appendChild(frameEditBtn);
+          frameEl.appendChild(frameEditButton(it, 'ic-frame-edit-btn'));
 
           var frameResize = el('div', { class: 'ic-resize' });
           frameEl.appendChild(frameResize);
@@ -7766,7 +7872,14 @@
       var textIcon = el('span', { class: 'ic-stylus-text-icon' }, ['T']);
       toolButton('text', textIcon, S.ink_tool_text, sliderFlyout(S.ink_fontsize, 10, 72, state.boardTextPx || 24, function (v) { state.boardTextPx = v; }));
       toolButton('eraser', icon('eraser'), S.erase, null);
-      toolButton('select', icon('boxselect'), S.ink_tool_select, null);
+      // Auswählen: Rahmen aufziehen/anklicken; im Ausklapp-Feld "Alle
+      // auswählen" (auch Strg/Cmd+A) - erfasst auch Notizen außerhalb des
+      // sichtbaren Ausschnitts.
+      var selFly = el('div', { class: 'ic-stylus-flyout' });
+      var selAllBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, [S.ink_select_all]);
+      selAllBtn.addEventListener('click', function () { selectAllInk(); });
+      selFly.appendChild(selAllBtn);
+      toolButton('select', icon('boxselect'), S.ink_tool_select + ' (' + S.ink_select_all + ': Strg+A)', selFly);
       stylusTools.appendChild(el('div', { class: 'ic-stylus-sep' }));
       // Farben untereinander; wirken auch auf ausgewählte Notizen.
       INK_COLORS.forEach(function (c) {
@@ -8324,7 +8437,14 @@
         row.appendChild(el('img', { src: entry.ref.url, alt: '' }));
         row.appendChild(el('span', { class: 'ic-thread-item-label' }, [entry.ref.sourcetitle || itemCaptionText(entry.ref)]));
       } else {
-        row.appendChild(el('div', { class: 'ic-thread-frame-thumb' }, ['\u2b1a']));
+        var layerSlideTf = frameSlideTf(entry.ref);
+        if (layerSlideTf) {
+          var layerMini = el('div', { class: 'ic-thread-frame-thumb ic-thread-slide-thumb' });
+          layerMini.appendChild(buildTextFrameLiveDom(layerSlideTf, { noGuide: true }));
+          row.appendChild(layerMini);
+        } else {
+          row.appendChild(el('div', { class: 'ic-thread-frame-thumb' }, ['\u2b1a']));
+        }
         var frameLabelEl = el('span', {
           class: 'ic-thread-item-label ic-thread-item-label-editable', contenteditable: 'true'
         }, [entry.ref.framelabel || S.emptyframe]);
@@ -8351,6 +8471,7 @@
           callAjax('mod_pinnwand_set_frame_label', { cmid: cfg.cmid, itemid: entry.ref.id, framelabel: text });
         });
         row.appendChild(frameLabelEl);
+        row.appendChild(frameEditButton(entry.ref, 'ic-thread-slide-btn'));
       }
 
       var peekActive = state.layerPeekKey === key;
@@ -8551,12 +8672,8 @@
           callAjax('mod_pinnwand_set_frame_label', { cmid: cfg.cmid, itemid: item.id, framelabel: text });
         });
         row.appendChild(frameLabelEl2);
-        // Deutlicher Bearbeiten-Knopf je Rahmen: öffnet ihn als Folie.
-        var rowSlideBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-thread-slide-btn', type: 'button', title: S.slide_edit },
-          [icon('imageedit'), el('span', {}, [S.frame_edit])]);
-        rowSlideBtn.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
-        rowSlideBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openFrameSlideEditor(item); });
-        row.appendChild(rowSlideBtn);
+        // Bearbeiten-Knopf je Rahmen (Symbol, Tooltip): öffnet ihn als Folie.
+        row.appendChild(frameEditButton(item, 'ic-thread-slide-btn'));
       } else {
         row.appendChild(el('span', { class: 'ic-thread-item-label' }, [threadItemLabel(item)]));
       }
@@ -8975,6 +9092,7 @@
           frameStep.el = slideEl;
           var slideBuilds = slideAnimMap(slideTf).count;
           if (slideBuilds) { frameStep.buildEl = slideEl; frameStep.buildCount = slideBuilds; }
+          frameStep.keep = (slideTf.linked || []).map(function (pid) { return photoRecs[pid] && photoRecs[pid].el; }).filter(Boolean);
         }
         return frameStep;
       }

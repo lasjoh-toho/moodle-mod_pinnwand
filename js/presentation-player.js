@@ -91,22 +91,28 @@
     '.pwp-pen:hover,.pwp-pen.pwp-on{opacity:1;background:rgba(20,21,24,.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}',
     '.pwp-pen.pwp-on{box-shadow:0 0 0 2px #4f8cff;}',
     '.pwp-pen svg{width:22px;height:22px;display:block;}',
-    '.pwp-pen-panel{position:fixed;left:18px;bottom:74px;z-index:22;display:none;flex-direction:column;gap:6px;padding:8px;border-radius:12px;',
-    'background:rgba(20,21,24,.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 6px 20px rgba(0,0,0,.45);}',
+    '.pwp-pen-panel{position:fixed;left:18px;bottom:74px;z-index:22;display:none;flex-direction:column;align-items:center;gap:6px;padding:8px 6px;border-radius:16px;',
+    'background:rgba(20,21,24,.75);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 20px rgba(0,0,0,.45);}',
     '.pwp-pen-panel.pwp-visible{display:flex;}',
-    '.pwp-pen-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;max-width:260px;}',
-    '.pwp-pen-tool{width:32px;height:32px;border-radius:8px;border:none;margin:0;padding:0;background:rgba(255,255,255,.08);color:#fff;',
+    '.pwp-pen-toolwrap{position:relative;display:flex;}',
+    '.pwp-pen-tool{width:34px;height:34px;border-radius:50%;border:none;margin:0;padding:0;background:rgba(20,21,24,.55);color:#fff;',
     'display:flex;align-items:center;justify-content:center;cursor:pointer;}',
     '.pwp-pen-tool svg{width:18px;height:18px;display:block;}',
     '.pwp-pen-tool:hover{background:rgba(255,255,255,.18);}',
     '.pwp-pen-tool.pwp-on{background:#4f8cff;}',
-    '.pwp-pen-size{width:80px;margin:0 2px;}',
-    '.pwp-pen-color{width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,.3);margin:0;padding:0;cursor:pointer;}',
+    '.pwp-pen-danger{background:#e0342a;}',
+    '.pwp-pen-flyout{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);display:none;align-items:center;gap:8px;padding:6px 10px;',
+    'border-radius:12px;white-space:nowrap;background:rgba(20,21,24,.9);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);',
+    'box-shadow:0 4px 16px rgba(0,0,0,.4);font-size:.75rem;color:rgba(255,255,255,.65);}',
+    '.pwp-pen-flyout::before{content:"";position:absolute;left:-10px;top:0;bottom:0;width:10px;}',
+    '.pwp-pen-toolwrap:hover .pwp-pen-flyout{display:flex;}',
+    '.pwp-pen-flyout input{width:110px;}',
+    '.pwp-pen-flyout-val{min-width:2em;text-align:right;color:#fff;font-variant-numeric:tabular-nums;}',
+    '.pwp-pen-sep{width:22px;height:1px;background:rgba(255,255,255,.18);margin:2px 0;}',
+    '.pwp-pen-color{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.3);margin:0;padding:0;cursor:pointer;}',
     '.pwp-pen-color.pwp-on{border-color:#fff;box-shadow:0 0 0 2px #4f8cff;}',
-    '.pwp-pen-chip{height:28px;padding:0 10px;border-radius:14px;border:none;margin:0;font:inherit;font-size:.78rem;cursor:pointer;',
-    'background:rgba(255,255,255,.08);color:rgba(255,255,255,.55);}',
-    '.pwp-pen-chip.pwp-on{background:rgba(79,140,255,.35);color:#fff;}',
-    '.pwp-pen-input{position:fixed;z-index:23;transform:translateY(-2px);min-width:120px;background:rgba(0,0,0,.25);border:1px dashed rgba(255,255,255,.6);',
+    '.pwp-pen-custom{width:26px;height:26px;border:none;border-radius:50%;padding:0;background:transparent;cursor:pointer;}',
+    '.pwp-pen-input{position:fixed;z-index:23;transform:translateY(-2px);min-width:120px;background:transparent;color:transparent;border:1px dashed rgba(255,255,255,.45);',
     'border-radius:4px;padding:0 4px;outline:none;font-family:sans-serif;}',
     '.pwp-drawing .pwp-navzone{display:none;}',
     '.pwp-drawing .pwp-stage{cursor:crosshair;}',
@@ -116,6 +122,8 @@
   var SVG_PEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
   var SVG_TEXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5h14M12 5v14M9 19h6"/></svg>';
   var SVG_ERASER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H9L3.5 14.5a2 2 0 0 1 0-2.8l8.2-8.2a2 2 0 0 1 2.8 0l5.5 5.5a2 2 0 0 1 0 2.8L13 19"/><path d="M8 10l6 6"/></svg>';
+  var SVG_EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var SVG_EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7c2 0 3.7.6 5.1 1.5M22 12s-3.5 7-10 7c-2 0-3.7-.6-5.1-1.5"/><path d="M3 3l18 18"/></svg>';
   var SVG_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>';
 
   // Zeichnet Stylus-Striche/-Texte (0..1-normalisierte Koordinaten,
@@ -331,7 +339,7 @@
       var els = root.querySelectorAll('.pwp-layer-' + key);
       for (var i = 0; i < els.length; i++) { els[i].style.display = hidden[key] ? 'none' : ''; }
     }
-    var pen = { on: false, tool: 'pen', color: PEN_COLORS[0], px: 4, strokes: [] };
+    var pen = { on: false, tool: 'pen', color: PEN_COLORS[0], px: 6, textPx: 24, strokes: [] };
     var drawCanvas = null;
     function ensureDrawCanvas() {
       if (!drawCanvas) { drawCanvas = inkLayer([], BW, BH, 'draw', 700); canvas.appendChild(drawCanvas); }
@@ -349,24 +357,32 @@
       b.addEventListener('click', function () { pen.tool = pen.tool === tool ? null : tool; renderPenPanel(); });
       return b;
     }
+    // Wie die Stift-Spalte auf der Pinnwand: alle Werkzeuge untereinander am
+    // linken Rand, Stärke bzw. Schriftgröße klappen beim Überfahren nach
+    // rechts aus, darunter Farben, eigene Farbe, Ebenen und Löschen.
+    function flyout(label, min, max, get, set) {
+      var fl = div('pwp-pen-flyout');
+      fl.appendChild(document.createTextNode(label));
+      var r = document.createElement('input');
+      r.type = 'range'; r.min = String(min); r.max = String(max); r.value = String(get());
+      var val = div('pwp-pen-flyout-val', String(get()));
+      r.addEventListener('input', function () { set(parseInt(r.value, 10)); val.textContent = r.value; });
+      fl.appendChild(r);
+      fl.appendChild(val);
+      return fl;
+    }
+    function toolWrap(tool, svg, title, fl) {
+      var w = div('pwp-pen-toolwrap');
+      w.appendChild(toolBtn(tool, svg, title));
+      if (fl) { w.appendChild(fl); }
+      return w;
+    }
     function renderPenPanel() {
       penPanel.innerHTML = '';
-      var row1 = div('pwp-pen-row');
-      row1.appendChild(toolBtn('pen', SVG_PEN, L.penDraw));
-      row1.appendChild(toolBtn('text', SVG_TEXT, L.penText));
-      row1.appendChild(toolBtn('eraser', SVG_ERASER, L.penErase));
-      var size = document.createElement('input');
-      size.type = 'range'; size.min = '2'; size.max = '16'; size.step = '1'; size.value = String(pen.px);
-      size.className = 'pwp-pen-size'; size.title = L.penSize;
-      size.addEventListener('input', function () { pen.px = parseInt(size.value, 10) || 4; });
-      row1.appendChild(size);
-      var clr = button('pwp-pen-tool', '', L.penClear);
-      clr.title = L.penClear;
-      clr.innerHTML = SVG_TRASH;
-      clr.addEventListener('click', function () { pen.strokes = []; redrawPen(); });
-      row1.appendChild(clr);
-      penPanel.appendChild(row1);
-      var row2 = div('pwp-pen-row');
+      penPanel.appendChild(toolWrap('pen', SVG_PEN, L.penDraw, flyout(L.penSize, 2, 30, function () { return pen.px; }, function (v) { pen.px = v; })));
+      penPanel.appendChild(toolWrap('text', SVG_TEXT, L.penText, flyout(L.penSize, 10, 72, function () { return pen.textPx; }, function (v) { pen.textPx = v; })));
+      penPanel.appendChild(toolWrap('eraser', SVG_ERASER, L.penErase, flyout(L.penSize, 2, 30, function () { return pen.px; }, function (v) { pen.px = v; })));
+      penPanel.appendChild(div('pwp-pen-sep'));
       PEN_COLORS.forEach(function (c) {
         var sw = button('pwp-pen-color' + (pen.color === c ? ' pwp-on' : ''), '', c);
         sw.style.background = c;
@@ -375,20 +391,29 @@
           if (pen.tool !== 'pen' && pen.tool !== 'text') { pen.tool = 'pen'; }
           renderPenPanel();
         });
-        row2.appendChild(sw);
+        penPanel.appendChild(sw);
       });
-      penPanel.appendChild(row2);
+      var custom = document.createElement('input');
+      custom.type = 'color'; custom.className = 'pwp-pen-custom'; custom.value = pen.color; custom.title = L.penDraw;
+      custom.addEventListener('input', function () { pen.color = custom.value; if (pen.tool !== 'pen' && pen.tool !== 'text') { pen.tool = 'pen'; } });
+      custom.addEventListener('change', renderPenPanel);
+      penPanel.appendChild(custom);
       if (layers.length) {
-        var row3 = div('pwp-pen-row');
+        penPanel.appendChild(div('pwp-pen-sep'));
         layers.forEach(function (ly) {
-          var chip = button('pwp-pen-chip' + (hidden[ly.key] ? '' : ' pwp-on'), '', ly.label);
-          chip.textContent = (hidden[ly.key] ? '○ ' : '● ') + ly.label;
-          chip.title = hidden[ly.key] ? L.show + ': ' + ly.label : L.hide + ': ' + ly.label;
+          var chip = button('pwp-pen-tool pwp-pen-layer' + (hidden[ly.key] ? '' : ' pwp-on'), '', ly.label);
+          chip.innerHTML = hidden[ly.key] ? SVG_EYE_OFF : SVG_EYE;
+          chip.title = (hidden[ly.key] ? L.show : L.hide) + ': ' + ly.label;
           chip.addEventListener('click', function () { hidden[ly.key] = !hidden[ly.key]; applyToggle(ly.key); renderPenPanel(); });
-          row3.appendChild(chip);
+          penPanel.appendChild(chip);
         });
-        penPanel.appendChild(row3);
       }
+      penPanel.appendChild(div('pwp-pen-sep'));
+      var clr = button('pwp-pen-tool pwp-pen-danger', '', L.penClear);
+      clr.title = L.penClear;
+      clr.innerHTML = SVG_TRASH;
+      clr.addEventListener('click', function () { pen.strokes = []; redrawPen(); });
+      penPanel.appendChild(clr);
     }
     function setPenOn(on) {
       pen.on = on;
@@ -433,32 +458,38 @@
     window.addEventListener('pointermove', onPenMove);
     window.addEventListener('pointerup', onPenUp);
     function openTextInput(clientX, clientY, b) {
-      var fontScreen = 12 + pen.px * 2;
+      var fontScreen = pen.textPx;
       var inp = document.createElement('input');
       inp.type = 'text';
       inp.className = 'pwp-pen-input';
       inp.style.left = clientX + 'px';
       inp.style.top = clientY + 'px';
       inp.style.fontSize = fontScreen + 'px';
-      inp.style.color = pen.color;
+      inp.style.caretColor = pen.color;
       root.appendChild(inp);
       setTimeout(function () { inp.focus(); }, 0);
+      // Gleiches Textformat wie die Notizen der Pinnwand; der Text erscheint
+      // beim Tippen direkt (live) in der Zeichenebene.
+      var boardFont = fontScreen / currentTransform.scale;
+      var live = { type: 'text', text: '', x: b.x / BW, y: b.y / BH, color: pen.color, size: boardFont / (BH / 900 * 1.6) };
+      inp.addEventListener('input', function () {
+        live.text = inp.value;
+        ensureDrawCanvas();
+        drawCanvas.setStrokes(pen.strokes.concat(inp.value ? [live] : []));
+      });
       var done = false;
       function commit() {
         if (done) { return; }
         done = true;
         var text = inp.value;
         inp.remove();
-        if (!text) { return; }
-        // Gleiches Textformat wie die Notizen der Pinnwand (drawInk).
-        var boardFont = fontScreen / currentTransform.scale;
-        pen.strokes.push({ type: 'text', text: text, x: b.x / BW, y: b.y / BH, color: pen.color, size: boardFont / (BH / 900 * 1.6) });
+        if (text) { live.text = text; pen.strokes.push(live); }
         redrawPen();
       }
       inp.addEventListener('keydown', function (ev) {
         ev.stopPropagation();
         if (ev.key === 'Enter') { commit(); }
-        else if (ev.key === 'Escape') { done = true; inp.remove(); }
+        else if (ev.key === 'Escape') { done = true; inp.remove(); redrawPen(); }
       });
       inp.addEventListener('blur', commit);
     }
@@ -556,7 +587,10 @@
     function updateOcclusion() {
       var active = steps[idx];
       occludables.forEach(function (rec) {
-        var hide = !!active && !active.overview && rec.el !== active.el && (rec.z || 0) > (active.z || 0);
+        // Mit der Folie verknüpfte Objekte (active.keep) bleiben sichtbar,
+        // obwohl sie darüber liegen.
+        var hide = !!active && !active.overview && rec.el !== active.el && (rec.z || 0) > (active.z || 0) &&
+          !(active.keep && active.keep.indexOf(rec.el) !== -1);
         rec.el.classList.toggle('pwp-occluded', hide);
       });
     }

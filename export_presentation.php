@@ -182,6 +182,15 @@ foreach ($items as $it) {
             $entry['framesvg'] = (string) $it->framesvg;
             $entry['animsteps'] = pinnwand_export_anim_steps($ftf);
             $entry['blend'] = in_array($ftf['blend'] ?? '', ['multiply', 'difference', 'color-burn'], true) ? $ftf['blend'] : '';
+            // Folien-Hintergrund (Farbe/Deckkraft/Weichzeichnen) und mit der
+            // Folie verknüpfte Objekte (bleiben trotz höherer Ebene sichtbar).
+            $sbg = is_array($ftf['slideBg'] ?? null) ? $ftf['slideBg'] : [];
+            $entry['slidebg'] = [
+                'color' => preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($sbg['color'] ?? '')) ? $sbg['color'] : '#000000',
+                'opacity' => max(0, min(100, (int) ($sbg['opacity'] ?? 0))),
+                'blur' => max(0, min(30, (int) ($sbg['blur'] ?? 0))),
+            ];
+            $entry['linked'] = array_values(array_map('intval', is_array($ftf['linked'] ?? null) ? $ftf['linked'] : []));
         }
     }
     $exportitems[] = $entry;
@@ -565,6 +574,11 @@ function pinnwand_export_build_html($title, $json) {
         fel.style.transform = 'rotate(' + (it.framerot || 0) + 'deg)';
         fel.style.zIndex = it.framez || 0;
         if (it.blend) { fel.style.mixBlendMode = it.blend; }
+        if (it.slidebg && (it.slidebg.opacity || it.slidebg.blur)) {
+          var sc = it.slidebg.color || '#000000';
+          fel.style.background = 'rgba(' + parseInt(sc.substr(1, 2), 16) + ',' + parseInt(sc.substr(3, 2), 16) + ',' + parseInt(sc.substr(5, 2), 16) + ',' + ((it.slidebg.opacity || 0) / 100) + ')';
+          if (it.slidebg.blur) { fel.style.backdropFilter = fel.style.webkitBackdropFilter = 'blur(' + it.slidebg.blur + 'px)'; }
+        }
         fel.innerHTML = it.framesvg;
         var fsvg = fel.querySelector('svg');
         if (fsvg) { fsvg.style.width = '100%'; fsvg.style.height = '100%'; fsvg.style.display = 'block'; }
@@ -572,6 +586,7 @@ function pinnwand_export_build_html($title, $json) {
         occludables.push({ el: fel, z: it.framez || 0 });
         fstep.el = fel;
         if (it.animsteps) { fstep.buildEl = fel; fstep.buildCount = it.animsteps; }
+        fstep.keep = (it.linked || []).map(function (pid) { return photoRecs[pid] && photoRecs[pid].el; }).filter(Boolean);
       }
       return fstep;
     }

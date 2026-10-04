@@ -1857,6 +1857,31 @@ Details und Scoping-Entscheidungen. In Kurzform:
   - Rückgängig/Wiederholen gilt auch für Notizen;
   - getippter Text erscheint beim Tippen direkt als Notiz.
 
+### Einhundertdreiundfünfzigste Überarbeitung — Stift in der Präsentation, Rahmen-Bedienung, Folien-Hintergrund
+
+- **Stift in der Präsentation und im Export** sieht aus wie auf der
+  Pinnwand: Werkzeuge in einer Spalte am linken Rand, Stärke bzw.
+  Schriftgröße klappen beim Hover aus, Farben untereinander, eigene Farbe,
+  Ebenen-Augen, Löschen. Getippter Text erscheint live.
+- **Notizen auswählen**: "Alle auswählen" im Ausklapp-Feld des
+  Auswahlwerkzeugs (auch Strg/Cmd+A). Erfasst alle Notizen, auch außerhalb
+  des sichtbaren Ausschnitts.
+- **Rahmen bearbeiten**:
+  - Bearbeiten-Knopf nur als Symbol mit Tooltip, an jedem Rahmen im Roten
+    Faden und in der Schichtung (dort mit Folien-Vorschau);
+  - ein Klick auf die Zahl bzw. Beschriftung im Rahmen auf der Pinnwand
+    öffnet den Folien-Editor.
+- **WordArt springt nicht mehr**, wenn man zum Markieren oder Einfärben
+  eines Wortes hineinklickt (die Zentrierung blieb beim Bearbeiten nicht
+  erhalten).
+- **Folien-Hintergrund**: Farbe, Deckkraft und Weichzeichnen (Milchglas)
+  dessen, was hinter der Folie liegt - auf der Pinnwand, in der
+  Präsentation und im Export.
+- **Verknüpfte Objekte**: Objekte, die über einer Folie liegen, lassen
+  sich mit ihr verknüpfen. Sie bleiben bei dieser Folie in der Präsentation
+  sichtbar, statt ausgeblendet zu werden, und erscheinen im Editor über der
+  Folie.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

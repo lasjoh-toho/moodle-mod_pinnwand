@@ -4306,3 +4306,19 @@ Shipped als Version `2026083149` / `0.151.0`.
   Live-Text über einen vorläufigen Text-Strich.
 
 Shipped als Version `2026083150` / `0.152.0`.
+
+## Phase 146
+
+- Player: Stift-Spalte (`.pwp-pen-toolwrap`, `.pwp-pen-flyout`,
+  `pen.textPx`), Live-Text, Augen-Knöpfe für Ebenen; `updateOcclusion`
+  beachtet `step.keep` (verknüpfte Objekte).
+- Notizen: `selectAllInk()` (Knopf im Ausklapp-Feld, Strg/Cmd+A).
+- `frameEditButton(it)` (Faden-Panel, Schichtung, Pinnwand),
+  `.ic-frame-num` öffnet den Editor.
+- WordArt-Fokus: `transform: translate(-50%,-50%)` statt `none`.
+- Folien: `tf.slideBg` {color, opacity, blur} über `applySlideBg()` (Hülle
+  auf Pinnwand/Präsentation, `.ic-textframe-inner` im Editor, Export
+  `slidebg`); `tf.linked` (Foto-IDs) -> `step.keep`, Editor-Ebene
+  `.ic-tf-above-layer`, Export `linked`.
+
+Shipped als Version `2026083151` / `0.153.0`.

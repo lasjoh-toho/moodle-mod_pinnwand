@@ -1627,3 +1627,24 @@ input.ic-stepper-value {
 /* Live-Text: Zeichen werden direkt als Notiz gezeichnet, das Feld zeigt nur den Cursor. */
 .ic-ink-text-input.ic-ink-text-live { color: transparent; background: transparent; border-color: rgba(255,255,255,.45); }
 .ic-ink-text-input.ic-ink-text-live::selection { background: rgba(79,140,255,.35); color: transparent; }
+/* Bearbeiten-Knopf für Rahmen (nur Symbol). */
+.ic-frame-edit-icon {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--ic-accent); background: rgba(79,140,255,.18); color: #fff;
+}
+.ic-frame-edit-icon svg { width: 15px; height: 15px; }
+.ic-frame-edit-icon:hover { background: var(--ic-accent); }
+.ic-thread-item .ic-thread-slide-btn { padding: 0; border-radius: 50%; }
+.ic-frame-num { cursor: pointer; pointer-events: auto; font-weight: 700; padding: 2px 6px; border-radius: 6px; }
+.ic-frame-num:hover { background: rgba(255,255,255,.15); text-decoration: underline; }
+/* Folie: Hintergrund und verknüpfte Objekte. */
+.ic-slide-bg-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.ic-slide-bg-row input[type=color] { width: 32px; height: 26px; border: none; padding: 0; background: transparent; }
+.ic-slide-bg-slider { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; }
+.ic-slide-bg-slider input { width: 90px; }
+.ic-slide-link-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.ic-slide-link { position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 3px; border-radius: 8px; background: rgba(255,255,255,.05); cursor: pointer; }
+.ic-slide-link.active { box-shadow: inset 0 0 0 2px var(--ic-accent); }
+.ic-slide-link img { width: 44px; height: 34px; object-fit: contain; }
+.ic-tf-above-layer { z-index: 2; }
