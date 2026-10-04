@@ -4322,3 +4322,21 @@ Shipped als Version `2026083150` / `0.152.0`.
   `.ic-tf-above-layer`, Export `linked`.
 
 Shipped als Version `2026083151` / `0.153.0`.
+
+## Phase 147
+
+- "+ Rahmen": Ziehen per Pointer-Events mit Vorschau (`.ic-frame-drag-ghost`),
+  Ablage in Board-Koordinaten, `framez` = oberste Ebene.
+- Folien-Editor: `.ic-slide-world-frame` absolut an `editingRec` +
+  `state.tfPan`; Ziehen auf der Bühne verschiebt die Ansicht. Gedrehte
+  Rahmen: Gegendrehung um die feste Rahmenmitte beim Öffnen (`rotCx`/
+  `rotCy`), Editor-Lage des Rahmens daraus abgeleitet.
+- Leere Textfelder: Klasse `ic-tf-empty`, Umrandung nur bei Hover/Fokus.
+  `newSlideFrame()` mit einem Titel.
+- Plus-Menü `.ic-slide-plus`/`.ic-slide-add-menu`, `state.tfFocusTextId`.
+- Verknüpfungs-Kandidaten: höhere Ebene und Überlappung mit dem
+  (umschließenden) Rahmenrechteck; `photoBoardHeight()` (Bilder:
+  `p._ratio` beim Laden gemerkt).
+- Folien-Popup: `.ic-slide-cols` (ab 1100 px zweispaltig).
+
+Shipped als Version `2026083152` / `0.154.0`.

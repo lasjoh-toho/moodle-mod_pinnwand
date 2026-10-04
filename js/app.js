@@ -2567,6 +2567,14 @@
     elm.style.backdropFilter = css ? css.filter : '';
     elm.style.webkitBackdropFilter = css ? css.filter : '';
   }
+  // Höhe eines Objekts auf der Pinnwand: Wortfelder über ihr Seitenverhältnis,
+  // Bilder über das beim Anzeigen gemerkte Seitenverhältnis (sonst 4:3).
+  function photoBoardHeight(p) {
+    if (p.wordfielddata) {
+      try { var wtf = JSON.parse(p.wordfielddata); return p.canvasw * wtf.h / wtf.w; } catch (e) { /* weiter unten */ }
+    }
+    return p.canvasw * (p._ratio || 0.75);
+  }
   function openFrameSlideEditor(it) {
     var tf = null;
     if (it.framedata) { try { tf = JSON.parse(it.framedata); } catch (e) { tf = null; } }
@@ -2581,6 +2589,7 @@
     state.editingFrameItemId = it.id;
     state.slideScale = tf.w / Math.max(1, it.framew);
     state.slideShift = { dx: 0, dy: 0 };
+    state.tfPan = null;
     resetTfHistory();
     state.step = 'textframe';
     render();
@@ -2608,8 +2617,7 @@
     return {
       w: 640, h: 360, preset: 'none', isWordArt: true, isSlide: true, anim: [],
       texts: [
-        { id: 1, text: '', font: 'sans', size: 40, x: 0.5, y: 0.2 },
-        { id: 2, text: '', font: 'sans', size: 24, x: 0.5, y: 0.6, fontWeight: 400 }
+        { id: 1, text: '', font: 'sans', size: 40, x: 0.5, y: 0.2 }
       ]
     };
   }
@@ -3944,8 +3952,16 @@
     var editFrameIt = isSlide ? editingFrameItem() : null;
     if (editFrameIt) {
       var efg = currentFrameGeom(editFrameIt, tf);
-      editingRec = { id: -1, canvasx: efg.x, canvasy: efg.y, canvasw: efg.w, canvasz: editFrameIt.framez || 0,
-        boardid: editFrameIt.boardid || 0, rot: efg.rot, frameId: editFrameIt.id };
+      // Gedrehter Rahmen: die Pinnwand dreht sich im Editor um einen FESTEN
+      // Punkt (Rahmenmitte beim Öffnen) entgegen - so bleibt sie beim
+      // Verschieben der Kanten exakt stehen. Die Lage des (gerade
+      // dargestellten) Rahmens folgt daraus.
+      var rcx = editFrameIt.framex + editFrameIt.framew / 2, rcy = editFrameIt.framey + editFrameIt.frameh / 2;
+      var erad = -(efg.rot || 0) * Math.PI / 180;
+      var ecx = efg.x + efg.w / 2 - rcx, ecy = efg.y + efg.h / 2 - rcy;
+      var edx = rcx + ecx * Math.cos(erad) - ecy * Math.sin(erad), edy = rcy + ecx * Math.sin(erad) + ecy * Math.cos(erad);
+      editingRec = { id: -1, canvasx: edx - efg.w / 2, canvasy: edy - efg.h / 2, canvasw: efg.w, canvasz: editFrameIt.framez || 0,
+        boardid: editFrameIt.boardid || 0, rot: efg.rot, frameId: editFrameIt.id, rotCx: rcx, rotCy: rcy, fg: efg };
     }
     if (isSlide) { stage.classList.add('ic-tf-stage-slide'); }
     var hasBoardPos = editingRec && editingRec.canvasw;
@@ -3979,7 +3995,8 @@
           style: 'left:' + (-nOffX) + 'px;top:' + (-nOffY) + 'px;width:' + (BOARD_W * bgScale) + 'px;height:' + (BOARD_H * bgScale) + 'px;' +
             // Gedrehter Rahmen: die Pinnwand dreht sich im Editor entgegen,
             // die Folie selbst steht gerade (wie die Kamera der Präsentation).
-            (edRot ? 'transform-origin:' + (nOffX + tf.w / 2) + 'px ' + (nOffY + tf.h / 2) + 'px;transform:rotate(' + (-edRot) + 'deg);' : '') +
+            (edRot ? 'transform-origin:' + (editingRec.rotCx != null ? editingRec.rotCx * bgScale : nOffX + tf.w / 2) + 'px ' +
+              (editingRec.rotCy != null ? editingRec.rotCy * bgScale : nOffY + tf.h / 2) + 'px;transform:rotate(' + (-edRot) + 'deg);' : '') +
             (((bbg.type === 'image' || bbg.type === 'url' || bbg.type === 'upload') && bbg.url)
             // Hintergrundbild an der TATSÄCHLICH richtigen Stelle: das Bild
             // wird so groß wie das ganze Board dargestellt (BOARD_W/H
@@ -4087,6 +4104,41 @@
     });
     frame.appendChild(cardFrameHit);
     stage.appendChild(frame);
+    // Folie: die Pinnwand steht fest, der Rahmen liegt an seiner echten
+    // Stelle darauf. Kanten ändern nur die Rahmengröße (der Inhalt der
+    // Pinnwand wandert nicht mit); Ziehen auf freier Fläche verschiebt die
+    // Ansicht.
+    if (editFrameIt && hasBoardPos) {
+      var worldK = bgScale;
+      if (!state.tfPan) {
+        state.tfPan = {
+          x: window.innerWidth / 2 - (editingRec.canvasx * worldK + tf.w / 2),
+          y: (window.innerHeight - 60) / 2 - (editingRec.canvasy * worldK + tf.h / 2)
+        };
+      }
+      frame.classList.add('ic-slide-world-frame');
+      var placeWorldFrame = function () {
+        frame.style.left = (editingRec.canvasx * worldK + state.tfPan.x) + 'px';
+        frame.style.top = (editingRec.canvasy * worldK + state.tfPan.y) + 'px';
+      };
+      placeWorldFrame();
+      var panDrag = null;
+      stage.addEventListener('pointerdown', function (ev) {
+        if (ev.target !== stage) { return; }
+        panDrag = { sx: ev.clientX, sy: ev.clientY, px: state.tfPan.x, py: state.tfPan.y };
+        try { stage.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+        stage.classList.add('ic-panning');
+      });
+      stage.addEventListener('pointermove', function (ev) {
+        if (!panDrag) { return; }
+        state.tfPan.x = panDrag.px + ev.clientX - panDrag.sx;
+        state.tfPan.y = panDrag.py + ev.clientY - panDrag.sy;
+        placeWorldFrame();
+      });
+      var endPan = function () { panDrag = null; stage.classList.remove('ic-panning'); };
+      stage.addEventListener('pointerup', endPan);
+      stage.addEventListener('pointercancel', endPan);
+    }
     layout.appendChild(stage);
     body.appendChild(layout);
 
@@ -4314,7 +4366,8 @@
       // Abwärtskompatibel: ältere gespeicherte Wortfelder haben nur t.text
       // (kein t.html) - dann als Klartext übernehmen statt leer zu bleiben.
       if (t.html) { el2.innerHTML = relativizeTextHtml(t.html, t.size); } else if (t.text) { el2.textContent = t.text; }
-      if (!t.html && !t.text) { el2.setAttribute('data-placeholder', S.textframe_placeholder); }
+      if (!t.html && !t.text) { el2.setAttribute('data-placeholder', S.textframe_placeholder); el2.classList.add('ic-tf-empty'); }
+      el2.addEventListener('input', function () { el2.classList.toggle('ic-tf-empty', !objTextWithoutHandles(el2).trim()); });
       // Wichtig: hier KEIN render() aufrufen - das würde das gerade fokussierte
       // contenteditable-Element sofort zerstören und den Cursor verlieren,
       // noch bevor überhaupt etwas eingegeben werden kann. Stattdessen wird
@@ -5602,6 +5655,70 @@
     }
     refreshControls();
 
+    // Folie: Plus an freien Stellen im Rahmen -> Menü (Überschrift, Textfeld,
+    // Aufzählung, Form) legt das Objekt genau dort an.
+    if (isSlide) {
+      var plusEl = el('button', { class: 'ic-slide-plus', type: 'button', title: S.slide_add }, ['+']);
+      plusEl.style.display = 'none';
+      frame.appendChild(plusEl);
+      var plusPos = null;
+      var isFreeSpot = function (target) {
+        return target === frame || target === frameInner || (target.classList && target.classList.contains('ic-tf-neighbors-layer'));
+      };
+      frame.addEventListener('mousemove', function (ev) {
+        if (ev.target === plusEl) { return; }
+        if (!isFreeSpot(ev.target) || document.querySelector('.ic-slide-add-menu')) { plusEl.style.display = 'none'; return; }
+        var fr = frame.getBoundingClientRect();
+        plusPos = { x: (ev.clientX - fr.left) / fr.width, y: (ev.clientY - fr.top) / fr.height };
+        plusEl.style.left = (ev.clientX - fr.left) + 'px';
+        plusEl.style.top = (ev.clientY - fr.top) + 'px';
+        plusEl.style.display = '';
+      });
+      frame.addEventListener('mouseleave', function () { plusEl.style.display = 'none'; });
+      plusEl.addEventListener('mousedown', function (ev) { ev.stopPropagation(); ev.preventDefault(); });
+      plusEl.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (!plusPos) { return; }
+        var at = plusPos;
+        var menu = el('div', { class: 'ic-slide-add-menu', style: 'left:' + ev.clientX + 'px;top:' + ev.clientY + 'px;' });
+        function addText(size, weight, html, boxW) {
+          var nid = Math.max.apply(null, [0].concat(tf.texts.map(function (t) { return t.id; }))) + 1;
+          var nt = { id: nid, text: '', font: 'sans', size: size, x: at.x, y: at.y, fontWeight: weight };
+          if (html) { nt.html = html; nt.text = ''; }
+          if (boxW) { nt.boxW = boxW; }
+          tf.texts.push(nt);
+          state.tfFocusTextId = nid;
+          menu.remove();
+          render();
+        }
+        [
+          [S.slide_add_title, function () { addText(40, 700, '', 0); }],
+          [S.slide_add_text, function () { addText(24, 400, '', 0.4); }],
+          [S.slide_add_list, function () { addText(24, 400, '<ul><li><br></li></ul>', 0.4); }],
+          [S.slide_add_shape, function () { menu.remove(); state.tfOpenBlocks = state.tfOpenBlocks || {}; state.tfOpenBlocks[S.tfblock_shapes] = true; render(); }]
+        ].forEach(function (o) {
+          var b = el('button', { class: 'ic-slide-add-item', type: 'button' }, [o[0]]);
+          b.addEventListener('click', o[1]);
+          menu.appendChild(b);
+        });
+        root.appendChild(menu);
+        setTimeout(function () {
+          document.addEventListener('mousedown', function closeMenu(e2) {
+            if (!menu.contains(e2.target)) { menu.remove(); document.removeEventListener('mousedown', closeMenu); }
+          });
+        }, 0);
+      });
+      // Neu angelegtes Textfeld direkt zum Tippen fokussieren.
+      if (state.tfFocusTextId) {
+        var focusId = state.tfFocusTextId;
+        state.tfFocusTextId = null;
+        setTimeout(function () {
+          var fe = frame.querySelector('[data-textid="' + focusId + '"]');
+          if (fe) { fe.focus(); }
+        }, 0);
+      }
+    }
+
     // Folie: Block "Folie & Animation" - weitere Textfelder anlegen und die
     // Objekte in Animationsschritte sortieren (Reihenfolge, "mit
     // vorherigem"). Die Schrittnummer erscheint als Marke am Objekt.
@@ -5615,6 +5732,13 @@
         tf.texts.push({ id: nid, text: '', font: 'sans', size: 24, x: 0.5, y: Math.min(0.9, 0.3 + 0.12 * (tf.texts.length % 6)), fontWeight: 400 });
         render();
       });
+      // Zwei Spalten (großer Bildschirm): links Folie/Hintergrund/Objekte,
+      // rechts die Animationsschritte.
+      var slideCols = el('div', { class: 'ic-slide-cols' });
+      var slideColL = el('div', { class: 'ic-slide-col' });
+      var slideColR = el('div', { class: 'ic-slide-col' });
+      slideCols.appendChild(slideColL); slideCols.appendChild(slideColR);
+      blockAnim.content.appendChild(slideCols);
       var slideTopRow = el('div', { class: 'ic-anim-toprow' });
       slideTopRow.appendChild(addTextBtn);
       // Mischmodus der ganzen Folie mit dem Hintergrund - im Editor direkt
@@ -5639,7 +5763,7 @@
         }
       }));
       setTimeout(function () { applyEditorBlend(curBlend); }, 0);
-      blockAnim.content.appendChild(slideTopRow);
+      slideColL.appendChild(slideTopRow);
 
       // Hintergrund der Folie: Farbe, Deckkraft, Weichzeichnung (Milchglas).
       tf.slideBg = tf.slideBg || { color: '#000000', opacity: 0, blur: 0 };
@@ -5657,17 +5781,26 @@
       }
       bgSlider(S.slide_bg_opacity, 'opacity', 100);
       bgSlider(S.slide_bg_blur, 'blur', 30);
-      blockAnim.content.appendChild(bgRow);
+      slideColL.appendChild(bgRow);
 
       // Objekte, die über der Folie liegen, mit ihr verknüpfen: sie bleiben
       // in der Präsentation bei dieser Folie sichtbar statt ausgeblendet.
       if (editingRec && editingRec.canvasw) {
         tf.linked = tf.linked || [];
+        // Nur Objekte, die in den Ebenen ÜBER der Folie liegen UND den Rahmen
+        // überlappen (Rahmen ggf. gedreht: dessen umschließendes Rechteck).
+        var fgx = editingRec.fg ? editingRec.fg.x : editingRec.canvasx, fgy = editingRec.fg ? editingRec.fg.y : editingRec.canvasy;
+        var fgw = editingRec.canvasw, fgh = editingRec.canvasw * tf.h / tf.w;
+        var frad = (editingRec.rot || 0) * Math.PI / 180, fca = Math.abs(Math.cos(frad)), fsa = Math.abs(Math.sin(frad));
+        var fbw = fgw * fca + fgh * fsa, fbh = fgw * fsa + fgh * fca;
+        var fbx = fgx + fgw / 2 - fbw / 2, fby = fgy + fgh / 2 - fbh / 2;
         var aboveCands = state.photos.filter(function (p) {
-          return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === (editingRec.boardid || 0) && (p.canvasz || 0) > (editingRec.canvasz || 0);
+          if (p.hiddenfromboard || !p.boardplaced || (p.boardid || 0) !== (editingRec.boardid || 0) || (p.canvasz || 0) <= (editingRec.canvasz || 0)) { return false; }
+          var ph = photoBoardHeight(p);
+          return !(p.canvasx + p.canvasw < fbx || p.canvasx > fbx + fbw || p.canvasy + ph < fby || p.canvasy > fby + fbh);
         });
         if (aboveCands.length) {
-          blockAnim.content.appendChild(el('div', { class: 'ic-anim-sep' }, [S.slide_linked]));
+          slideColL.appendChild(el('div', { class: 'ic-anim-sep' }, [S.slide_linked]));
           var linkList = el('div', { class: 'ic-slide-link-list' });
           aboveCands.forEach(function (p) {
             var lab = el('label', { class: 'ic-slide-link' + (tf.linked.indexOf(p.id) !== -1 ? ' active' : ''), title: itemCaptionText(p) });
@@ -5682,10 +5815,10 @@
             lab.appendChild(el('img', { src: p.url, alt: '' }));
             linkList.appendChild(lab);
           });
-          blockAnim.content.appendChild(linkList);
+          slideColL.appendChild(linkList);
         }
       }
-      blockAnim.content.appendChild(el('p', { class: 'ic-hint ic-anim-hint' }, [S.slide_anim_hint]));
+      slideColR.appendChild(el('p', { class: 'ic-hint ic-anim-hint' }, [S.slide_anim_hint]));
       var animInfo = slideAnimMap(tf);
       tf.anim = tf.anim.filter(function (a) { return animInfo.map[a.key]; });
       var objLabel = function (key) {
@@ -5739,7 +5872,7 @@
           animList.appendChild(row);
         });
       }
-      blockAnim.content.appendChild(animList);
+      slideColR.appendChild(animList);
       // Schrittmarken an den Objekten im Rahmen (nach dem Layout messen).
       setTimeout(function () {
         if (!frame.isConnected) { return; }
@@ -7064,6 +7197,7 @@
         }
       } else {
         var img = el('img', { src: (p.showingback && backPhoto) ? backPhoto.url : p.url, alt: '' });
+        img.addEventListener('load', function () { if (img.naturalWidth) { p._ratio = img.naturalHeight / img.naturalWidth; } });
         item.appendChild(img);
       }
       if (backPhoto) {
@@ -8810,6 +8944,66 @@
           render();
         });
       });
+      // Knopf auf die Pinnwand ziehen: der Rahmen entsteht genau dort, wo er
+      // losgelassen wird (oberste Ebene). Ein normaler Klick legt ihn wie
+      // bisher oben links an.
+      (function () {
+        var fd = null, suppressClick = false;
+        var FW = 320, FH = 180;
+        addFrameBtn.addEventListener('pointerdown', function (ev) {
+          if (ev.button !== undefined && ev.button !== 0) { return; }
+          fd = { sx: ev.clientX, sy: ev.clientY, ghost: null };
+          try { addFrameBtn.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+        });
+        addFrameBtn.addEventListener('pointermove', function (ev) {
+          if (!fd) { return; }
+          if (!fd.ghost && Math.abs(ev.clientX - fd.sx) + Math.abs(ev.clientY - fd.sy) > 6) {
+            var z = state.boardZoom || 1;
+            fd.ghost = el('div', { class: 'ic-frame-drag-ghost', style: 'width:' + (FW * z) + 'px;height:' + (FH * z) + 'px;border-color:' + ((own && own.color) || '#e0503f') + ';' });
+            document.body.appendChild(fd.ghost);
+          }
+          if (fd.ghost) {
+            fd.ghost.style.left = (ev.clientX - fd.ghost.offsetWidth / 2) + 'px';
+            fd.ghost.style.top = (ev.clientY - fd.ghost.offsetHeight / 2) + 'px';
+          }
+        });
+        function endFrameDrag(ev) {
+          if (!fd) { return; }
+          var wasDrag = !!fd.ghost;
+          if (fd.ghost) { fd.ghost.remove(); }
+          fd = null;
+          if (!wasDrag) { return; }
+          suppressClick = true;
+          var canvasNode = document.querySelector('.ic-arrange-canvas');
+          var wrapNode = document.querySelector('.ic-canvas-wrap');
+          var under = document.elementFromPoint(ev.clientX, ev.clientY);
+          if (!canvasNode || !wrapNode || !under || !wrapNode.contains(under) || (under.closest && under.closest('.ic-thread-panel'))) { return; }
+          var rc = canvasNode.getBoundingClientRect(), z2 = rc.width / BOARD_W || 1;
+          var bx = (ev.clientX - rc.left) / z2 - FW / 2, by = (ev.clientY - rc.top) / z2 - FH / 2;
+          var topZ = 0;
+          state.photos.forEach(function (p) { if (p.boardplaced && (p.boardid || 0) === state.currentBoard) { topZ = Math.max(topZ, p.canvasz || 0); } });
+          (own ? own.items : []).forEach(function (o) { if (o.itemtype === 'frame') { topZ = Math.max(topZ, o.framez || 0); } });
+          callAjax('mod_pinnwand_add_thread_item', {
+            cmid: cfg.cmid, itemtype: 'frame', boardid: state.currentBoard,
+            framex: bx, framey: by, framew: FW, frameh: FH, framelabel: ''
+          }).then(function (res) {
+            replaceOwnThread(res);
+            var it = res.items[res.items.length - 1];
+            it.framez = topZ + 1;
+            callAjax('mod_pinnwand_update_thread_frame', {
+              cmid: cfg.cmid, itemid: it.id, framex: it.framex, framey: it.framey, framew: it.framew, frameh: it.frameh,
+              framerot: 0, framez: it.framez
+            });
+            render();
+          });
+        }
+        addFrameBtn.addEventListener('pointerup', endFrameDrag);
+        addFrameBtn.addEventListener('pointercancel', function () { if (fd && fd.ghost) { fd.ghost.remove(); } fd = null; });
+        addFrameBtn.addEventListener('click', function (ev) {
+          if (suppressClick) { suppressClick = false; ev.stopImmediatePropagation(); ev.preventDefault(); }
+        }, true);
+      })();
+      addFrameBtn.title = S.addframe_drag;
       actions.appendChild(addFrameBtn);
       var addOverviewBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.addoverview]);
       addOverviewBtn.addEventListener('click', function () {

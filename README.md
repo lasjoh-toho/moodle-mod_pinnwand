@@ -1882,6 +1882,27 @@ Details und Scoping-Entscheidungen. In Kurzform:
   sichtbar, statt ausgeblendet zu werden, und erscheinen im Editor über der
   Folie.
 
+### Einhundertvierundfünfzigste Überarbeitung — Folien-Editor auf fester Pinnwand
+
+- **"+ Rahmen" auf die Pinnwand ziehen**: Der Rahmen entsteht genau an der
+  Stelle, wo man loslässt (oberste Ebene). Ein Klick funktioniert wie
+  bisher.
+- **Folien-Editor mit fester Pinnwand**:
+  - der Rahmen liegt an seiner echten Stelle auf der Pinnwand;
+  - die linke und obere Kante ändern nur die Rahmengröße wie die rechte,
+    die Pinnwand wandert nicht mehr mit - auch bei gedrehten Rahmen;
+  - Ziehen auf freier Fläche außerhalb des Rahmens verschiebt die Ansicht.
+- **Leere Textfelder** sind in Folien nicht mehr als gestrichelte Kästen
+  sichtbar, nur beim Überfahren oder Bearbeiten. Neue Folien starten mit
+  einem einzigen Titel.
+- **Plus an freien Stellen** im Rahmen öffnet ein Menü (Überschrift,
+  Textfeld, Aufzählung, Form). Das Objekt entsteht genau dort und ist
+  sofort zum Tippen bereit.
+- **Verknüpfte Objekte**: Die Liste zeigt nur noch Objekte, die in den
+  Ebenen über der Folie liegen UND den Rahmen überlappen.
+- **Popup "Folie & Animation"** auf großen Bildschirmen zweispaltig, rechts
+  die Animationsschritte.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

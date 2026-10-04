@@ -1461,8 +1461,22 @@ input.ic-stepper-value {
 }
 .ic-textframe-obj:hover .ic-textframe-move-handle, .ic-textframe-obj.active .ic-textframe-move-handle,
 .ic-textframe-obj:hover .ic-textframe-width-handle, .ic-textframe-obj.active .ic-textframe-width-handle { opacity: 1; }
-.ic-tf-stage-slide .ic-textframe-obj { outline: 1px dashed rgba(255,255,255,.35); }
-.ic-tf-stage-slide .ic-textframe-obj.active { outline: 1px solid var(--ic-accent); }
+/* Folie: Textfelder nur beim Überfahren/Bearbeiten umrandet; leere Felder
+   unauffällig (keine gestrichelten Kästen). */
+.ic-tf-stage-slide .ic-textframe-obj:hover { outline: 1px dashed rgba(255,255,255,.35); }
+.ic-tf-stage-slide .ic-textframe-obj.active, .ic-tf-stage-slide .ic-textframe-obj:focus { outline: 1px solid var(--ic-accent); }
+.ic-tf-stage-slide .ic-textframe-obj.ic-tf-empty:not(:focus):not(.active)::before { opacity: .28; }
+.ic-slide-plus {
+  position: absolute; z-index: 20; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
+  border: 2px solid #fff; background: var(--ic-accent); color: #fff; font: 700 18px/20px sans-serif; padding: 0;
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.ic-slide-add-menu {
+  position: fixed; z-index: 500; display: flex; flex-direction: column; min-width: 150px; padding: 6px;
+  background: var(--ic-panel); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
+.ic-slide-add-item { text-align: left; border: 0; background: transparent; color: var(--ic-text); padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: .85rem; }
+.ic-slide-add-item:hover { background: rgba(79,140,255,.25); }
 
 /* Folien = Faden-Rahmen mit Inhalt. */
 .ic-frame-slide { pointer-events: auto; }
@@ -1648,3 +1662,17 @@ input.ic-stepper-value {
 .ic-slide-link.active { box-shadow: inset 0 0 0 2px var(--ic-accent); }
 .ic-slide-link img { width: 44px; height: 34px; object-fit: contain; }
 .ic-tf-above-layer { z-index: 2; }
+/* Folien-Editor: Pinnwand fest, Rahmen an seiner Stelle, Ansicht ziehbar. */
+.ic-tf-stage.ic-tf-stage-slide { overflow: hidden; padding: 0; cursor: grab; }
+.ic-tf-stage.ic-tf-stage-slide.ic-panning { cursor: grabbing; }
+.ic-tf-stage > .ic-textframe-preview.ic-slide-world-frame { position: absolute; margin: 0; cursor: default; }
+/* Folien-Popup: zwei Spalten auf großen Bildschirmen. */
+.ic-slide-cols { display: grid; grid-template-columns: 1fr; gap: 10px 18px; }
+@media (min-width: 1100px) {
+  .ic-slide-cols { grid-template-columns: minmax(300px, 1fr) minmax(300px, 1fr); }
+  .ic-tf-ribbon .ic-textframe-block.ic-tf-open .ic-textframe-block-content.ic-tf-popup:has(.ic-slide-cols) { max-width: min(960px, 96vw); }
+}
+.ic-slide-col { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+/* "+ Rahmen" auf die Pinnwand ziehen: Vorschau-Rahmen am Mauszeiger. */
+.ic-frame-drag-ghost { position: fixed; z-index: 600; border: 3px dashed #e0503f; border-radius: 6px; background: rgba(224,80,63,.08); pointer-events: none; }
+.ic-thread-actions .ic-btn { touch-action: none; }
