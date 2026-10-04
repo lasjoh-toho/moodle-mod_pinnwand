@@ -5024,7 +5024,15 @@
       function openStyle1Popup(anchorBtn, title, buildRows) {
         openDraggableModal(title, anchorBtn, function (content) { buildRows(content); });
       }
+      // Zuletzt gewählte Einzelfarbe je Ziel - erscheint sofort im Feld hinter
+      // der Verlauf-Checkbox (auch wenn sie nur auf eine Textauswahl wirkte).
+      function solidColorShown() {
+        var lc = state.lastSolidColor;
+        if (lc && lc.target === styleTarget) { return lc.color; }
+        return styleTarget.fillColor || preset.text;
+      }
       function applyFillColor(color) {
+        state.lastSolidColor = { target: styleTarget, color: color };
         noteRecentColor(color);
         if (isShapeTarget) {
           styleTarget.fillColor = color; styleTarget.fillGradient = null;
@@ -5153,7 +5161,7 @@
         var gradCheck = el('input', { type: 'checkbox' });
         gradCheck.checked = !!styleTarget.fillGradient;
         gradCheck.addEventListener('change', function () {
-          styleTarget.fillGradient = gradCheck.checked ? [styleTarget.fillColor || '#e0503f', '#4f8cff'] : null;
+          styleTarget.fillGradient = gradCheck.checked ? [solidColorShown() || '#e0503f', '#4f8cff'] : null;
           styleTarget.fillGradientAngle = styleTarget.fillGradientAngle || 135;
           if (isShapeTarget) { render(); } else { applyStyle1(); refreshControls(); }
         });
@@ -5179,35 +5187,41 @@
               class: 'ic-gradient-stop' + (state.gradientStopSid === stop.sid ? ' active' : ''),
               style: 'left:' + (stop.pos * 100) + '%;background:' + stop.color
             });
-            var markerDragging = false, markerMoved = false;
-            function markerDown(ev) { markerDragging = true; markerMoved = false; ev.stopPropagation(); ev.preventDefault(); }
-            function markerMove(ev) {
+            // Pointer-Events mit Pointer-Capture statt window-Listenern: der
+            // Marker verliert das Ziehen nie (auch nicht über Popups/Iframes)
+            // und es sammeln sich keine Listener bei jedem Neuaufbau an.
+            var markerDragging = false, markerMoved = false, markerStartX = 0;
+            marker.addEventListener('pointerdown', function (ev) {
+              if (ev.button !== undefined && ev.button !== 0) { return; }
+              markerDragging = true; markerMoved = false; markerStartX = ev.clientX;
+              try { marker.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+              ev.stopPropagation(); ev.preventDefault();
+            });
+            marker.addEventListener('pointermove', function (ev) {
               if (!markerDragging) { return; }
+              if (!markerMoved && Math.abs(ev.clientX - markerStartX) < 3) { return; }
               markerMoved = true;
               var rect = band.getBoundingClientRect();
-              var p = ev.touches ? ev.touches[0] : ev;
-              stop.pos = Math.max(0, Math.min(1, (p.clientX - rect.left) / rect.width));
+              stop.pos = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
               marker.style.left = (stop.pos * 100) + '%';
               band.style.background = 'linear-gradient(90deg,' + gradientCssStops(stops) + ')';
               ev.preventDefault();
-            }
-            function markerUp() {
+            });
+            function markerEnd(ev) {
               if (!markerDragging) { return; }
               markerDragging = false;
-              if (markerMoved) { commitStops(stops); applyShapeOrTextChange(); }
+              try { marker.releasePointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+              if (markerMoved) {
+                state.gradientStopSid = stop.sid;
+                commitStops(stops); applyShapeOrTextChange();
+                if (!isShapeTarget) { refreshControls(); }
+              } else {
+                state.gradientStopSid = stop.sid;
+                refreshControls();
+              }
             }
-            marker.addEventListener('mousedown', markerDown);
-            marker.addEventListener('touchstart', markerDown, { passive: false });
-            window.addEventListener('mousemove', markerMove);
-            window.addEventListener('touchmove', markerMove, { passive: false });
-            window.addEventListener('mouseup', markerUp);
-            window.addEventListener('touchend', markerUp);
-            marker.addEventListener('click', function (ev) {
-              if (markerMoved) { return; }
-              ev.stopPropagation();
-              state.gradientStopSid = state.gradientStopSid === stop.sid ? null : stop.sid;
-              refreshControls();
-            });
+            marker.addEventListener('pointerup', markerEnd);
+            marker.addEventListener('pointercancel', markerEnd);
             marker.addEventListener('dblclick', function (ev) {
               ev.stopPropagation();
               if (stops.length <= 2) { return; } // mindestens 2 Stufen bleiben erhalten
@@ -5215,6 +5229,7 @@
               commitStops(without);
               state.gradientStopSid = null;
               applyShapeOrTextChange();
+              if (!isShapeTarget) { refreshControls(); }
             });
             band.appendChild(marker);
           });
@@ -5224,9 +5239,11 @@
             var pos = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
             // Farbe an der neuen Stelle interpolieren, als sinnvoller Start.
             var before = stops.filter(function (s2) { return s2.pos <= pos; }).pop() || stops[0];
-            var newStops = stops.concat([{ color: before.color, pos: pos }]);
-            commitStops(newStops);
+            var newStop = { color: before.color, pos: pos, sid: gradientStopIdCounter++ };
+            commitStops(stops.concat([newStop]));
+            state.gradientStopSid = newStop.sid;
             applyShapeOrTextChange();
+            if (!isShapeTarget) { refreshControls(); }
           });
           gradientBarRow.appendChild(band);
           var angleKnob = el('div', { class: 'ic-gradient-angle', style: '--angle:' + angle + 'deg;' + (styleTarget.fillGradientType === 'radial' ? 'display:none;' : ''), title: S.tf_gradient_angle });
@@ -5245,12 +5262,15 @@
             band.style.background = 'linear-gradient(90deg,' + gradientCssStops(stops) + ')';
             ev.preventDefault();
           }
-          angleKnob.addEventListener('mousedown', function (ev) { angleDragging = true; ev.preventDefault(); });
-          angleKnob.addEventListener('touchstart', function (ev) { angleDragging = true; }, { passive: true });
-          window.addEventListener('mousemove', onAngleMove);
-          window.addEventListener('touchmove', onAngleMove, { passive: false });
-          window.addEventListener('mouseup', function () { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } });
-          window.addEventListener('touchend', function () { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } });
+          angleKnob.addEventListener('pointerdown', function (ev) {
+            angleDragging = true;
+            try { angleKnob.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+            ev.preventDefault();
+          });
+          angleKnob.addEventListener('pointermove', onAngleMove);
+          function angleEnd() { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } }
+          angleKnob.addEventListener('pointerup', angleEnd);
+          angleKnob.addEventListener('pointercancel', angleEnd);
           gradientBarRow.appendChild(angleKnob);
           // Kleiner Umschalter linear <-> radial (Verlauf von der Mitte aus).
           var radialBtn = el('button', {
@@ -5288,12 +5308,12 @@
         } else {
           // Ungecheckt: Balken zeigt die aktuelle Vollfarbe, Klick öffnet
           // dieselbe Palette darunter wie gewohnt.
-          var soloBar = el('div', { class: 'ic-gradient-band ic-gradient-band-solid', style: 'background:' + (styleTarget.fillColor || preset.text) });
+          var soloBar = el('div', { class: 'ic-gradient-band ic-gradient-band-solid', style: 'background:' + solidColorShown() });
           gradientBarRow.appendChild(soloBar);
           if (state.colorTab === 'wheel') {
-            buildColorWheel(bigPaletteContainer, styleTarget.fillColor || preset.text, applyFillColor);
+            buildColorWheel(bigPaletteContainer, solidColorShown(), applyFillColor);
           } else if (state.colorTab === 'grid') {
-            buildBigColorPalette(bigPaletteContainer, styleTarget.fillColor || preset.text, null, applyFillColor, null);
+            buildBigColorPalette(bigPaletteContainer, solidColorShown(), null, applyFillColor, null);
           }
         }
       }
@@ -8959,18 +8979,28 @@
           if (!fd) { return; }
           if (!fd.ghost && Math.abs(ev.clientX - fd.sx) + Math.abs(ev.clientY - fd.sy) > 6) {
             var z = state.boardZoom || 1;
-            fd.ghost = el('div', { class: 'ic-frame-drag-ghost', style: 'width:' + (FW * z) + 'px;height:' + (FH * z) + 'px;border-color:' + ((own && own.color) || '#e0503f') + ';' });
+            fd.ghost = el('div', { class: 'ic-frame-drag-ghost', 'data-label': S.slide_label || 'Folie', style: 'width:' + (FW * z) + 'px;height:' + (FH * z) + 'px;border-color:' + ((own && own.color) || '#e0503f') + ';' });
             document.body.appendChild(fd.ghost);
           }
           if (fd.ghost) {
             fd.ghost.style.left = (ev.clientX - fd.ghost.offsetWidth / 2) + 'px';
             fd.ghost.style.top = (ev.clientY - fd.ghost.offsetHeight / 2) + 'px';
+            // Sichtbares Feedback: grün = hier wird der Rahmen abgelegt,
+            // rot = ungültige Stelle (Seitenleiste/außerhalb der Pinnwand).
+            var dropWrap = document.querySelector('.ic-canvas-wrap');
+            var hit = document.elementFromPoint(ev.clientX, ev.clientY);
+            var okDrop = !!(dropWrap && hit && dropWrap.contains(hit) && !(hit.closest && hit.closest('.ic-thread-panel')));
+            fd.ghost.classList.toggle('ic-drop-ok', okDrop);
+            fd.ghost.classList.toggle('ic-drop-no', !okDrop);
+            if (dropWrap) { dropWrap.classList.toggle('ic-frame-drop-target', okDrop); }
           }
         });
         function endFrameDrag(ev) {
           if (!fd) { return; }
           var wasDrag = !!fd.ghost;
           if (fd.ghost) { fd.ghost.remove(); }
+          var dropWrapEnd = document.querySelector('.ic-canvas-wrap');
+          if (dropWrapEnd) { dropWrapEnd.classList.remove('ic-frame-drop-target'); }
           fd = null;
           if (!wasDrag) { return; }
           suppressClick = true;
@@ -8998,7 +9028,12 @@
           });
         }
         addFrameBtn.addEventListener('pointerup', endFrameDrag);
-        addFrameBtn.addEventListener('pointercancel', function () { if (fd && fd.ghost) { fd.ghost.remove(); } fd = null; });
+        addFrameBtn.addEventListener('pointercancel', function () {
+          if (fd && fd.ghost) { fd.ghost.remove(); }
+          var dw = document.querySelector('.ic-canvas-wrap');
+          if (dw) { dw.classList.remove('ic-frame-drop-target'); }
+          fd = null;
+        });
         addFrameBtn.addEventListener('click', function (ev) {
           if (suppressClick) { suppressClick = false; ev.stopImmediatePropagation(); ev.preventDefault(); }
         }, true);
@@ -9347,6 +9382,8 @@
     document.body.appendChild(overlay);
 
     var startStep = (typeof startIndex === 'number' && stepByItem[startIndex]) ? steps.indexOf(stepByItem[startIndex]) : 0;
+    // Einstellung "Start der Präsentation": erste Folie statt Überblick.
+    if (typeof startIndex !== 'number' && cfg.startmode === 'slide' && steps.length > 1 && steps[0].overview) { startStep = 1; }
     player.start(steps, occludables, Math.max(0, startStep));
     return true;
   }

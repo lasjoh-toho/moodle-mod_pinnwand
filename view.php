@@ -62,6 +62,7 @@ $config = [
     'wwwroot' => $CFG->wwwroot,
     'maxpictures' => (int) $instance->maxpictures,
     'boardpannable' => (bool) $instance->boardpannable,
+    'startmode' => ($instance->startmode ?? 'overview') === 'slide' ? 'slide' : 'overview',
     'sidebaropacity' => (int) $instance->sidebaropacity,
     'studentboardclone' => (bool) $instance->studentboardclone,
     'studentboardcreate' => (bool) $instance->studentboardcreate,

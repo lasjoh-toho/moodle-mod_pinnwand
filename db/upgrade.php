@@ -431,5 +431,15 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083150, 'pinnwand');
     }
 
+    if ($oldversion < 2026083153) {
+        // Startansicht der Präsentation: Überblick oder erste Folie.
+        $table = new xmldb_table('pinnwand');
+        $field = new xmldb_field('startmode', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'overview', 'boardpannable');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026083153, 'pinnwand');
+    }
+
     return true;
 }

@@ -342,6 +342,7 @@ $exportdata = [
     'pluginVersion' => get_config('mod_pinnwand', 'version'),
     'boardid' => $boardid,
     'boardWidth' => 1400,
+    'startMode' => (($instance->startmode ?? 'overview') === 'slide') ? 'slide' : 'overview',
     'boardHeight' => 1000,
     'background' => $background,
     'thread' => [
@@ -626,7 +627,7 @@ function pinnwand_export_build_html($title, $json) {
   // Pinnwand (falls der Rote Faden nicht selbst schon damit beginnt).
   steps = PinnwandPresentation.expandBuildSteps(steps);
   if (steps.length && !steps[0].overview) { steps.unshift(overviewStep()); }
-  player.start(steps, occludables, 0);
+  player.start(steps, occludables, (data.startMode === 'slide' && steps.length > 1 && steps[0].overview) ? 1 : 0);
   // Notizen außerhalb der Leinwand: Überblick entsprechend vergrößern.
   if (inkForOverview) { player.includeInOverview(inkForOverview); }
 })();

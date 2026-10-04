@@ -55,6 +55,13 @@ class mod_pinnwand_mod_form extends moodleform_mod {
         $mform->setDefault('boardpannable', 0);
         $mform->addHelpButton('boardpannable', 'boardpannable', 'pinnwand');
 
+        $mform->addElement('select', 'startmode', get_string('startmode', 'pinnwand'), [
+            'overview' => get_string('startmode_overview', 'pinnwand'),
+            'slide' => get_string('startmode_slide', 'pinnwand'),
+        ]);
+        $mform->setDefault('startmode', 'overview');
+        $mform->addHelpButton('startmode', 'startmode', 'pinnwand');
+
         $mform->addElement('text', 'sidebaropacity', get_string('sidebaropacity', 'pinnwand'), ['size' => 4]);
         $mform->setType('sidebaropacity', PARAM_INT);
         $mform->setDefault('sidebaropacity', 92);
