@@ -1903,6 +1903,29 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - **Popup "Folie & Animation"** auf großen Bildschirmen zweispaltig, rechts
   die Animationsschritte.
 
+### Einhundertfünfundfünfzigste Überarbeitung — Verlaufsmarker, Folien-Abgang, Formen-Werkzeug
+
+- **Farbverlauf**:
+  - ein neuer mittlerer Marker bekommt die Mischfarbe seiner Nachbarn (vorher
+    die Farbe des linken Nachbarn, dadurch unsichtbar);
+  - ist ein Marker aktiv, übernimmt er Palettenfarben sofort - auch Marker
+    und Band in der Bedienleiste zeigen die neue Farbe.
+- **Folien**:
+  - Hintergrundfarbe und Weichzeichnen verschwinden standardmäßig beim
+    Wechsel zur nächsten Folie (abschaltbar mit "bleibt beim
+    Weiterblättern");
+  - je Objekt gibt es neben dem Auftritt (Animationsschritt) einen
+    **Abgang**: das Objekt verschwindet beim Wechsel zur nächsten Folie;
+  - gilt in der Präsentation und im Export.
+- **Formen für Notizen** (Pinnwand und Präsentation/Export): ein
+  Formen-Werkzeug, das beim Überfahren nach rechts aufklappt.
+  - Rechteck, Kreis/Ellipse und Linie entstehen durch Ziehen (Umschalt:
+    Quadrat, Kreis, 45°-Schritte).
+  - Linienzug und Kurve (glatt durch alle Punkte) entstehen durch Klicks;
+    Doppelklick oder Enter beendet, Esc bricht ab.
+  - Formen sind normale Notizen: auswählbar, verschiebbar, umfärbbar,
+    löschbar, mit Rückgängig.
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

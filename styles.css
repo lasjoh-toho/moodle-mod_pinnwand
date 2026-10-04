@@ -1684,3 +1684,9 @@ input.ic-stepper-value {
 .ic-frame-drag-ghost.ic-drop-no { border-color: #d94343; background: rgba(217,67,67,.18); cursor: not-allowed; }
 .ic-frame-drag-ghost::after { content: attr(data-label); position: absolute; left: 6px; top: 4px; font: 600 12px sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
 .ic-canvas-wrap.ic-frame-drop-target { outline: 3px dashed #2fb36b; outline-offset: -3px; }
+.ic-anim-row .ic-anim-exit { font-size: .7rem; padding: 2px 6px; }
+.ic-anim-row .ic-anim-exit.active { background: rgba(224,80,63,.35); box-shadow: inset 0 0 0 1px #e0503f; }
+/* Formen-Werkzeug: Ausklapp-Feld mit den Formarten. */
+.ic-stylus-shape-fly { gap: 4px; padding: 5px 8px; }
+.ic-stylus-shape-fly .ic-icon-btn svg, .ic-stylus-svg svg { width: 18px; height: 18px; display: block; }
+.ic-stylus-svg { display: inline-flex; }

@@ -4340,3 +4340,18 @@ Shipped als Version `2026083151` / `0.153.0`.
 - Folien-Popup: `.ic-slide-cols` (ab 1100 px zweispaltig).
 
 Shipped als Version `2026083152` / `0.154.0`.
+
+## Phase 148
+
+- Verlauf: `mixHexColors()` für neue Stufen; `applyGradStopColor()` ändert
+  die Stufe direkt und führt Marker/Band nach (`markerBySid`).
+- Folien: `tf.bgPersist` (Standard aus) und `tf.exit` {key: true} ->
+  `data-pwp-exit`; Player `updateBuilds()` setzt `.pwp-bg-off` (inaktive
+  Folie) und `.pwp-exit-hidden` (Folie verlassen) über `step.slideEl`/
+  `step.slideBgOnly`; Export `bgpersist`.
+- Formen: `PinnwandPresentation.shapePoints(kind, pts, aspect, square)` (rect,
+  ellipse, line, poly, curve = Catmull-Rom), `SHAPE_KINDS`/`SHAPE_SVG`;
+  Pinnwand-Werkzeug `shape` (`state.boardShapeKind`, Ausklapp-Feld,
+  `inkShapeKeyHandler`), Präsentations-Stift `pen.tool = 'shape'`.
+
+Shipped als Version `2026083153` / `0.155.0`.

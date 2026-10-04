@@ -33,6 +33,9 @@
     '.pwp-canvas{position:absolute;left:0;top:0;transform-origin:0 0;z-index:1;}',
     '.pwp-occluded{opacity:0 !important;pointer-events:none !important;}',
     '[data-pwp-build]{transition:opacity .45s ease,transform .45s ease;}',
+    '[data-pwp-exit]{transition:opacity .45s ease;}',
+    '.pwp-exit-hidden{opacity:0 !important;pointer-events:none !important;}',
+    '.pwp-bg-off{background:transparent !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}',
     '.pwp-build-hidden{opacity:0 !important;pointer-events:none !important;}',
     '.pwp-hint{position:fixed;top:16px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(0,0,0,.55);',
     'padding:6px 16px;border-radius:20px;font-size:.85rem;z-index:20;pointer-events:none;transition:opacity 1s;',
@@ -107,6 +110,7 @@
     '.pwp-pen-flyout::before{content:"";position:absolute;left:-10px;top:0;bottom:0;width:10px;}',
     '.pwp-pen-toolwrap:hover .pwp-pen-flyout{display:flex;}',
     '.pwp-pen-flyout input{width:110px;}',
+    '.pwp-pen-shapes{gap:4px;padding:5px 8px;}',
     '.pwp-pen-flyout-val{min-width:2em;text-align:right;color:#fff;font-variant-numeric:tabular-nums;}',
     '.pwp-pen-sep{width:22px;height:1px;background:rgba(255,255,255,.18);margin:2px 0;}',
     '.pwp-pen-color{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.3);margin:0;padding:0;cursor:pointer;}',
@@ -339,7 +343,7 @@
       var els = root.querySelectorAll('.pwp-layer-' + key);
       for (var i = 0; i < els.length; i++) { els[i].style.display = hidden[key] ? 'none' : ''; }
     }
-    var pen = { on: false, tool: 'pen', color: PEN_COLORS[0], px: 6, textPx: 24, strokes: [] };
+    var pen = { on: false, tool: 'pen', color: PEN_COLORS[0], px: 6, textPx: 24, shape: 'rect', strokes: [] };
     var drawCanvas = null;
     function ensureDrawCanvas() {
       if (!drawCanvas) { drawCanvas = inkLayer([], BW, BH, 'draw', 700); canvas.appendChild(drawCanvas); }
@@ -381,6 +385,23 @@
       penPanel.innerHTML = '';
       penPanel.appendChild(toolWrap('pen', SVG_PEN, L.penDraw, flyout(L.penSize, 2, 30, function () { return pen.px; }, function (v) { pen.px = v; })));
       penPanel.appendChild(toolWrap('text', SVG_TEXT, L.penText, flyout(L.penSize, 10, 72, function () { return pen.textPx; }, function (v) { pen.textPx = v; })));
+      // Formen hinter einem Werkzeug, Auswahl im Ausklapp-Feld.
+      var shapeFl = div('pwp-pen-flyout pwp-pen-shapes');
+      SHAPE_KINDS.forEach(function (k) {
+        var kb = button('pwp-pen-tool' + (pen.tool === 'shape' && pen.shape === k ? ' pwp-on' : ''), '', (L.shapes && L.shapes[k]) || k);
+        kb.title = (L.shapes && L.shapes[k]) || k;
+        kb.innerHTML = SHAPE_SVG[k];
+        kb.addEventListener('click', function () { pen.shape = k; pen.tool = 'shape'; renderPenPanel(); });
+        shapeFl.appendChild(kb);
+      });
+      var shapeWrap = div('pwp-pen-toolwrap');
+      var shapeMain = button('pwp-pen-tool' + (pen.tool === 'shape' ? ' pwp-on' : ''), '', L.penShapes || 'Formen');
+      shapeMain.title = L.penShapes || '';
+      shapeMain.innerHTML = SHAPE_SVG[pen.tool === 'shape' ? pen.shape : 'shapes'];
+      shapeMain.addEventListener('click', function () { pen.tool = pen.tool === 'shape' ? null : 'shape'; renderPenPanel(); });
+      shapeWrap.appendChild(shapeMain);
+      shapeWrap.appendChild(shapeFl);
+      penPanel.appendChild(shapeWrap);
       penPanel.appendChild(toolWrap('eraser', SVG_ERASER, L.penErase, flyout(L.penSize, 2, 30, function () { return pen.px; }, function (v) { pen.px = v; })));
       penPanel.appendChild(div('pwp-pen-sep'));
       PEN_COLORS.forEach(function (c) {
@@ -443,18 +464,71 @@
       if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
       var b = toBoard(ev.clientX, ev.clientY);
       if (pen.tool === 'text') { openTextInput(ev.clientX, ev.clientY, b); return; }
+      if (pen.tool === 'shape') {
+        var bp = { x: b.x / BW, y: b.y / BH };
+        if (pen.shape === 'poly' || pen.shape === 'curve') {
+          if (!penShape) {
+            penShape = { pts: [bp], stroke: { points: [bp, bp], color: pen.color, width: pen.px / currentTransform.scale / BH, erase: false } };
+            pen.strokes.push(penShape.stroke);
+          } else { penShape.pts.push(bp); }
+          penShape.stroke.points = shapePoints(pen.shape, penShape.pts.concat([bp]), BW / BH, false);
+        } else {
+          penShape = { drag: true, pts: [bp], stroke: { points: [bp, bp], color: pen.color, width: pen.px / currentTransform.scale / BH, erase: false } };
+          pen.strokes.push(penShape.stroke);
+        }
+        redrawPen();
+        return;
+      }
       var widthBoard = (pen.tool === 'eraser' ? pen.px * 4 : pen.px) / currentTransform.scale;
       penStroke = { points: [{ x: b.x / BW, y: b.y / BH }], color: pen.color, width: widthBoard / BH, erase: pen.tool === 'eraser' };
       pen.strokes.push(penStroke);
       redrawPen();
     });
+    var penShape = null;
+    function finishPenShape(cancel) {
+      if (!penShape) { return; }
+      var d = penShape;
+      penShape = null;
+      var pts = [];
+      d.pts.forEach(function (q) {
+        var last = pts[pts.length - 1];
+        if (!last || Math.abs(last.x - q.x) * BW > 2 || Math.abs(last.y - q.y) * BH > 2) { pts.push(q); }
+      });
+      if (cancel || pts.length < 2) { pen.strokes = pen.strokes.filter(function (st) { return st !== d.stroke; }); }
+      else { d.stroke.points = shapePoints(pen.shape, pts, BW / BH, false); }
+      redrawPen();
+    }
+    stage.addEventListener('dblclick', function () { if (penShape && !penShape.drag) { finishPenShape(false); } });
+    document.addEventListener('keydown', function (ev) {
+      if (!penShape || penShape.drag) { return; }
+      if (ev.key === 'Enter') { finishPenShape(false); ev.preventDefault(); ev.stopPropagation(); }
+      else if (ev.key === 'Escape') { finishPenShape(true); ev.preventDefault(); ev.stopPropagation(); }
+    }, true);
     function onPenMove(ev) {
+      if (penShape && currentTransform) {
+        var mb = toBoard(ev.clientX, ev.clientY), mp = { x: mb.x / BW, y: mb.y / BH };
+        penShape.stroke.points = penShape.drag
+          ? shapePoints(pen.shape, [penShape.pts[0], mp], BW / BH, ev.shiftKey)
+          : shapePoints(pen.shape, penShape.pts.concat([mp]), BW / BH, false);
+        redrawPen();
+        return;
+      }
       if (!penStroke) { return; }
       var b = toBoard(ev.clientX, ev.clientY);
       penStroke.points.push({ x: b.x / BW, y: b.y / BH });
       redrawPen();
     }
-    function onPenUp() { penStroke = null; }
+    function onPenUp(ev) {
+      penStroke = null;
+      if (penShape && penShape.drag) {
+        var ub = toBoard(ev.clientX, ev.clientY), up = { x: ub.x / BW, y: ub.y / BH };
+        var moved = Math.abs(up.x - penShape.pts[0].x) * BW > 2 || Math.abs(up.y - penShape.pts[0].y) * BH > 2;
+        penShape.stroke.points = shapePoints(pen.shape, [penShape.pts[0], up], BW / BH, ev.shiftKey);
+        if (!moved) { var dead = penShape.stroke; pen.strokes = pen.strokes.filter(function (st) { return st !== dead; }); }
+        penShape = null;
+        redrawPen();
+      }
+    }
     window.addEventListener('pointermove', onPenMove);
     window.addEventListener('pointerup', onPenUp);
     function openTextInput(clientX, clientY, b) {
@@ -642,6 +716,21 @@
       var active = steps[idx];
       var els = [];
       steps.forEach(function (st) { if (st.buildEl && els.indexOf(st.buildEl) === -1) { els.push(st.buildEl); } });
+      // Folien: Hintergrund (Farbe/Weichzeichnen) nur solange die Folie
+      // aktiv ist (Standard), Objekte mit "Abgang" verschwinden beim
+      // Weiterblättern.
+      var slides = [];
+      steps.forEach(function (st) { if (st.slideEl && slides.indexOf(st.slideEl) === -1) { slides.push(st.slideEl); } });
+      slides.forEach(function (sel) {
+        var isActive = !!active && active.slideEl === sel;
+        var showAll = !active || active.overview;
+        var last = -1, bgOnly = false;
+        steps.forEach(function (st, si) { if (st.slideEl === sel) { last = si; bgOnly = !!st.slideBgOnly; } });
+        sel.classList.toggle('pwp-bg-off', bgOnly && !isActive && !showAll);
+        var passed = !isActive && !showAll && idx > last;
+        var exits = sel.querySelectorAll('[data-pwp-exit]');
+        for (var xi = 0; xi < exits.length; xi++) { exits[xi].classList.toggle('pwp-exit-hidden', passed); }
+      });
       els.forEach(function (bel) {
         var level;
         if (active && active.buildEl === bel) {
@@ -832,6 +921,61 @@
     };
   }
 
+  // Formen der Stift-Werkzeuge (Pinnwand und Präsentation) als Punktfolge
+  // in normalisierten Koordinaten - so funktionieren Zeichnen, Auswahl,
+  // Verschieben und Export ohne Sonderfälle. aspect = Breite/Höhe der Fläche
+  // (für echte Kreise/Quadrate), square = Umschalt gedrückt.
+  function shapePoints(kind, pts, aspect, square) {
+    if (!pts || !pts.length) { return []; }
+    aspect = aspect || 1;
+    var a = pts[0], b = pts[pts.length - 1];
+    if ((kind === 'rect' || kind === 'ellipse') && square) {
+      var dxp = (b.x - a.x) * aspect, dyp = b.y - a.y, side = Math.max(Math.abs(dxp), Math.abs(dyp));
+      b = { x: a.x + (dxp < 0 ? -side : side) / aspect, y: a.y + (dyp < 0 ? -side : side) };
+    }
+    if (kind === 'rect') {
+      return [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }, { x: a.x, y: a.y }];
+    }
+    if (kind === 'ellipse') {
+      var cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2, rx = Math.abs(b.x - a.x) / 2, ry = Math.abs(b.y - a.y) / 2, out = [];
+      for (var i = 0; i <= 64; i++) { var t = i / 64 * Math.PI * 2; out.push({ x: cx + Math.cos(t) * rx, y: cy + Math.sin(t) * ry }); }
+      return out;
+    }
+    if (kind === 'line') {
+      if (square) {
+        // Umschalt: in 45°-Schritten.
+        var lx = (b.x - a.x) * aspect, ly = b.y - a.y, ang = Math.round(Math.atan2(ly, lx) / (Math.PI / 4)) * (Math.PI / 4), len = Math.sqrt(lx * lx + ly * ly);
+        b = { x: a.x + Math.cos(ang) * len / aspect, y: a.y + Math.sin(ang) * len };
+      }
+      return [a, b];
+    }
+    if (kind === 'curve' && pts.length > 2) {
+      // Glatte Kurve durch alle Punkte (Catmull-Rom als kubische Bezier).
+      var res = [pts[0]];
+      for (var k = 0; k < pts.length - 1; k++) {
+        var p0 = pts[k - 1] || pts[k], p1 = pts[k], p2 = pts[k + 1], p3 = pts[k + 2] || p2;
+        for (var j = 1; j <= 12; j++) {
+          var u = j / 12, u2 = u * u, u3 = u2 * u;
+          res.push({
+            x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * u + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * u2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * u3),
+            y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * u + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * u2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * u3)
+          });
+        }
+      }
+      return res;
+    }
+    return pts.slice();
+  }
+  var SHAPE_KINDS = ['rect', 'ellipse', 'line', 'poly', 'curve'];
+  var SHAPE_SVG = {
+    rect: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="12" rx="1"/></svg>',
+    ellipse: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg>',
+    line: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 19L19 5"/></svg>',
+    poly: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18l5-10 5 7 6-9"/></svg>',
+    curve: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18C8 4 14 22 20 6"/></svg>',
+    shapes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="9" height="9" rx="1"/><circle cx="16" cy="8" r="5"/></svg>'
+  };
+
   // Station mit buildCount n wird zu n+1 Stationen mit derselben Kamera:
   // Stufe 0 (nur die festen Objekte) bis Stufe n (alles sichtbar).
   function expandBuildSteps(list) {
@@ -851,5 +995,5 @@
     return out;
   }
 
-  global.PinnwandPresentation = { create: create, expandBuildSteps: expandBuildSteps, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk, inkBounds: inkBounds };
+  global.PinnwandPresentation = { create: create, expandBuildSteps: expandBuildSteps, shapePoints: shapePoints, SHAPE_KINDS: SHAPE_KINDS, SHAPE_SVG: SHAPE_SVG, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk, inkBounds: inkBounds };
 })(window);

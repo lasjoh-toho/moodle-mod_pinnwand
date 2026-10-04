@@ -59,6 +59,14 @@
 
   // Entf/Rücktaste löscht ausgewählte Notizen (Stift-Werkzeug, Auswahl).
   var inkSelectionDelete = null;
+  var inkShapeKeyHandler = null;
+  document.addEventListener('keydown', function (ev) {
+    if (inkShapeKeyHandler && state.boardDrawMode && (ev.key === 'Enter' || ev.key === 'Escape')) {
+      var tk = ev.target;
+      if (tk && (tk.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(tk.tagName))) { return; }
+      if (inkShapeKeyHandler(ev.key)) { ev.preventDefault(); }
+    }
+  });
   function selectAllInk() {
     state.boardDrawTool = 'select';
     state.boardDrawErase = false;
@@ -2382,6 +2390,13 @@
   // ([{color,pos}, ...]) werden hier auf Letzteres normalisiert -
   // Rückwärtskompatibilität für bereits gespeicherte Zettel.
   var gradientStopIdCounter = 1;
+  // Mischt zwei Hex-Farben (t = 0..1) - für neue Verlaufsmarker.
+  function mixHexColors(a, b, t) {
+    function hx(c) { var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(c || ''); return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null; }
+    var ca = hx(a), cb = hx(b);
+    if (!ca || !cb) { return a; }
+    return '#' + [0, 1, 2].map(function (i) { return ('0' + Math.round(ca[i] + (cb[i] - ca[i]) * t).toString(16)).slice(-2); }).join('');
+  }
   function normalizeGradientStops(g) {
     if (!g || !g.length) { return null; }
     if (typeof g[0] === 'string') {
@@ -3121,6 +3136,7 @@
           'background-position:center;background-size:100% 100%;' + (s.wrapMode === 'front' ? 'z-index:2;' : 'z-index:0;')
       });
       if (animMap['s' + s.id]) { shapeEl.setAttribute('data-pwp-build', String(animMap['s' + s.id])); }
+      if (tf.isSlide && tf.exit && tf.exit['s' + s.id]) { shapeEl.setAttribute('data-pwp-exit', '1'); }
       outer.appendChild(shapeEl);
     });
     var textElByIdx = [];
@@ -3171,6 +3187,7 @@
         });
       }
       if (animMap['t' + t.id]) { textEl2.setAttribute('data-pwp-build', String(animMap['t' + t.id])); }
+      if (tf.isSlide && tf.exit && tf.exit['t' + t.id]) { textEl2.setAttribute('data-pwp-exit', '1'); }
       outer.appendChild(textEl2);
       textElByIdx[idx] = textEl2;
     });
@@ -5182,11 +5199,13 @@
             newStops.sort(function (a, b) { return a.pos - b.pos; });
             styleTarget.fillGradient = newStops;
           }
+          var markerBySid = {};
           stops.forEach(function (stop, stopIdx) {
             var marker = el('div', {
               class: 'ic-gradient-stop' + (state.gradientStopSid === stop.sid ? ' active' : ''),
               style: 'left:' + (stop.pos * 100) + '%;background:' + stop.color
             });
+            markerBySid[stop.sid] = marker;
             // Pointer-Events mit Pointer-Capture statt window-Listenern: der
             // Marker verliert das Ziehen nie (auch nicht über Popups/Iframes)
             // und es sammeln sich keine Listener bei jedem Neuaufbau an.
@@ -5237,9 +5256,12 @@
             if (ev.target !== band) { return; } // nicht auf einem Marker
             var rect = band.getBoundingClientRect();
             var pos = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
-            // Farbe an der neuen Stelle interpolieren, als sinnvoller Start.
+            // Farbe an der neuen Stelle aus den Nachbarn mischen - so ist der
+            // neue Marker sofort als Teil des Verlaufs sichtbar.
             var before = stops.filter(function (s2) { return s2.pos <= pos; }).pop() || stops[0];
-            var newStop = { color: before.color, pos: pos, sid: gradientStopIdCounter++ };
+            var after = stops.filter(function (s2) { return s2.pos >= pos; })[0] || stops[stops.length - 1];
+            var mixT = after.pos > before.pos ? (pos - before.pos) / (after.pos - before.pos) : 0;
+            var newStop = { color: mixHexColors(before.color, after.color, mixT), pos: pos, sid: gradientStopIdCounter++ };
             commitStops(stops.concat([newStop]));
             state.gradientStopSid = newStop.sid;
             applyShapeOrTextChange();
@@ -5285,16 +5307,15 @@
 
           var stopSel = stops.filter(function (s2) { return s2.sid === state.gradientStopSid; })[0] || stops[0];
           if (stopSel) {
+            // Palette/Farbrad färben den aktiven Marker. Dieselben Stufen-
+            // Objekte bleiben erhalten (sid), Marker und Band werden sofort
+            // nachgeführt - vorher blieb der Marker in der alten Farbe.
             function applyGradStopColor(color) {
-              // sid MUSS übernommen werden, sonst bekäme diese Stufe beim
-              // nächsten Rendern eine neue sid und die Auswahl ginge
-              // verloren - genau das war der Grund, warum Farben für
-              // weitere Marker nicht zuverlässig gespeichert wurden.
-              var newStops = stops.map(function (s2) {
-                return s2.sid === stopSel.sid ? { color: color, pos: s2.pos, sid: s2.sid } : s2;
-              });
-              commitStops(newStops);
+              stopSel.color = color;
+              commitStops(stops);
               noteRecentColor(color);
+              if (markerBySid[stopSel.sid]) { markerBySid[stopSel.sid].style.background = color; }
+              band.style.background = 'linear-gradient(90deg,' + gradientCssStops(stops) + ')';
               applyShapeOrTextChange();
             }
             if (state.colorTab === 'wheel') {
@@ -5801,6 +5822,14 @@
       }
       bgSlider(S.slide_bg_opacity, 'opacity', 100);
       bgSlider(S.slide_bg_blur, 'blur', 30);
+      // Standard: Farbe/Weichzeichnen verschwinden beim Weiterblättern.
+      var keepLab = el('label', { class: 'ic-slide-bg-slider' });
+      var keepCb = el('input', { type: 'checkbox' });
+      keepCb.checked = !!tf.bgPersist;
+      keepCb.addEventListener('change', function () { tf.bgPersist = keepCb.checked; });
+      keepLab.appendChild(keepCb);
+      keepLab.appendChild(document.createTextNode(' ' + S.slide_bg_persist));
+      bgRow.appendChild(keepLab);
       slideColL.appendChild(bgRow);
 
       // Objekte, die über der Folie liegen, mit ihr verknüpfen: sie bleiben
@@ -5856,6 +5885,17 @@
         if (key.charAt(0) === 't') { state.activeShapeId = null; selectText(id); }
         else { state.activeShapeId = id; state.styleTargetMode = 'shape'; render(); }
       };
+      // "Abgang": Objekt verschwindet beim Wechsel zur nächsten Folie.
+      tf.exit = tf.exit || {};
+      var exitToggle = function (key) {
+        var on = !!tf.exit[key];
+        var b = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-anim-exit' + (on ? ' active' : ''), type: 'button', title: S.slide_exit_hint }, [S.slide_exit]);
+        b.addEventListener('click', function () {
+          if (tf.exit[key]) { delete tf.exit[key]; } else { tf.exit[key] = true; }
+          b.classList.toggle('active', !!tf.exit[key]);
+        });
+        return b;
+      };
       var animList = el('div', { class: 'ic-anim-list' });
       tf.anim.forEach(function (a, i) {
         var row = el('div', { class: 'ic-anim-row' });
@@ -5874,7 +5914,7 @@
         downBtn.addEventListener('click', function () { var x = tf.anim[i + 1]; tf.anim[i + 1] = a; tf.anim[i] = x; render(); });
         var rmBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_anim_remove }, ['\u2715']);
         rmBtn.addEventListener('click', function () { tf.anim.splice(i, 1); render(); });
-        row.appendChild(withBtn); row.appendChild(upBtn); row.appendChild(downBtn); row.appendChild(rmBtn);
+        row.appendChild(withBtn); row.appendChild(upBtn); row.appendChild(downBtn); row.appendChild(exitToggle(a.key)); row.appendChild(rmBtn);
         animList.appendChild(row);
       });
       var staticKeys = tf.texts.map(function (t) { return 't' + t.id; })
@@ -5888,7 +5928,7 @@
           lab.addEventListener('click', function () { selectKey(key); });
           var addBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_anim_add }, ['+ ' + S.slide_anim_step]);
           addBtn.addEventListener('click', function () { tf.anim.push({ key: key, withPrev: false }); render(); });
-          row.appendChild(lab); row.appendChild(addBtn);
+          row.appendChild(lab); row.appendChild(addBtn); row.appendChild(exitToggle(key));
           animList.appendChild(row);
         });
       }
@@ -7055,6 +7095,7 @@
         ev.preventDefault();
         var pt = inkPoint(ev);
         if (drawTool === 'text') { openInkText(ev, pt); return; }
+        if (drawTool === 'shape') { shapeDown(ev, pt); return; }
         try { inkCapture.setPointerCapture(ev.pointerId); } catch (e) { /* ältere Browser */ }
         if (drawTool === 'select') {
           var sb = selectionBox();
@@ -7080,7 +7121,62 @@
         state.boardInkStrokes.push(curStroke);
         inkLayerEl.setStrokes(state.boardInkStrokes);
       });
+      // Formen (Rechteck, Kreis, Linie: ziehen; Linienzug, Kurve: Punkte
+      // klicken, Doppelklick/Enter beendet, Esc bricht ab). Ergebnis ist ein
+      // normaler Strich (Punktfolge) - Auswahl, Verschieben, Export gelten.
+      var SPL = window.PinnwandPresentation;
+      var shapeKind = state.boardShapeKind || 'rect';
+      var shapeDraft = null;
+      function shapeStroke(firstPt) {
+        var st = { id: 's' + Date.now() + Math.random().toString(36).slice(2, 7), points: [firstPt, firstPt],
+          color: state.boardDrawColor || INK_COLORS[0], width: inkWidthNorm(), erase: false };
+        state.boardInkStrokes.push(st);
+        return st;
+      }
+      function shapeDown(ev, pt) {
+        if (shapeKind === 'poly' || shapeKind === 'curve') {
+          if (!shapeDraft) { shapeDraft = { pts: [pt], stroke: shapeStroke(pt) }; } else { shapeDraft.pts.push(pt); }
+          shapeDraft.stroke.points = SPL.shapePoints(shapeKind, shapeDraft.pts.concat([pt]), BOARD_W / BOARD_H, false);
+          inkLayerEl.setStrokes(state.boardInkStrokes);
+          return;
+        }
+        try { inkCapture.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+        shapeDraft = { pts: [pt], drag: true, stroke: shapeStroke(pt) };
+      }
+      function finishShapeDraft(cancel) {
+        if (!shapeDraft) { return; }
+        var d = shapeDraft;
+        shapeDraft = null;
+        var pts = [];
+        d.pts.forEach(function (q) {
+          var last = pts[pts.length - 1];
+          if (!last || Math.abs(last.x - q.x) * BOARD_W * boardZoomNow() > 3 || Math.abs(last.y - q.y) * BOARD_H * boardZoomNow() > 3) { pts.push(q); }
+        });
+        if (cancel || pts.length < 2) {
+          state.boardInkStrokes = state.boardInkStrokes.filter(function (st) { return st !== d.stroke; });
+          inkLayerEl.setStrokes(state.boardInkStrokes);
+          return;
+        }
+        d.stroke.points = SPL.shapePoints(shapeKind, pts, BOARD_W / BOARD_H, false);
+        inkLayerEl.setStrokes(state.boardInkStrokes);
+        saveBoardInk();
+      }
+      inkCapture.addEventListener('dblclick', function () { if (shapeDraft && !shapeDraft.drag) { finishShapeDraft(false); } });
+      inkShapeKeyHandler = function (key) {
+        if (!shapeDraft || shapeDraft.drag) { return false; }
+        if (key === 'Enter') { finishShapeDraft(false); return true; }
+        if (key === 'Escape') { finishShapeDraft(true); return true; }
+        return false;
+      };
       inkCapture.addEventListener('pointermove', function (ev) {
+        if (shapeDraft) {
+          var sp = inkPoint(ev);
+          shapeDraft.stroke.points = shapeDraft.drag
+            ? SPL.shapePoints(shapeKind, [shapeDraft.pts[0], sp], BOARD_W / BOARD_H, ev.shiftKey)
+            : SPL.shapePoints(shapeKind, shapeDraft.pts.concat([sp]), BOARD_W / BOARD_H, false);
+          inkLayerEl.setStrokes(state.boardInkStrokes);
+          return;
+        }
         if (curStroke) {
           ev.preventDefault();
           curStroke.points.push(inkPoint(ev));
@@ -7101,6 +7197,20 @@
         }
       });
       function inkUp(ev) {
+        if (shapeDraft && shapeDraft.drag) {
+          var up = ev && ev.clientX != null ? inkPoint(ev) : shapeDraft.pts[0];
+          shapeDraft.stroke.points = SPL.shapePoints(shapeKind, [shapeDraft.pts[0], up], BOARD_W / BOARD_H, ev && ev.shiftKey);
+          var moved = Math.abs(up.x - shapeDraft.pts[0].x) * BOARD_W * boardZoomNow() > 3 || Math.abs(up.y - shapeDraft.pts[0].y) * BOARD_H * boardZoomNow() > 3;
+          var dd = shapeDraft;
+          shapeDraft = null;
+          if (!moved) {
+            state.boardInkStrokes = state.boardInkStrokes.filter(function (st) { return st !== dd.stroke; });
+            inkLayerEl.setStrokes(state.boardInkStrokes);
+          } else {
+            saveBoardInk();
+          }
+          return;
+        }
         if (curStroke) { curStroke = null; saveBoardInk(); return; }
         if (moveStart) { moveStart = null; moveOrig = null; saveBoardInk(); return; }
         if (bandStart) {
@@ -8025,6 +8135,20 @@
       toolButton('pen', icon('pen'), S.ink_tool_pen, sliderFlyout(S.ink_width, 2, 30, state.boardDrawPx || 6, function (v) { state.boardDrawPx = v; }));
       var textIcon = el('span', { class: 'ic-stylus-text-icon' }, ['T']);
       toolButton('text', textIcon, S.ink_tool_text, sliderFlyout(S.ink_fontsize, 10, 72, state.boardTextPx || 24, function (v) { state.boardTextPx = v; }));
+      // Formen hinter EINEM Werkzeug, das beim Überfahren nach rechts
+      // aufklappt (Rechteck, Kreis, Linie, Linienzug, Kurve).
+      var SPV = window.PinnwandPresentation;
+      var shapeFly = el('div', { class: 'ic-stylus-flyout ic-stylus-shape-fly' });
+      var shapeLabels = { rect: S.ink_shape_rect, ellipse: S.ink_shape_ellipse, line: S.ink_shape_line, poly: S.ink_shape_poly, curve: S.ink_shape_curve };
+      SPV.SHAPE_KINDS.forEach(function (k) {
+        var kb = el('button', {
+          class: 'ic-icon-btn' + (tool === 'shape' && (state.boardShapeKind || 'rect') === k ? ' active' : ''),
+          type: 'button', title: shapeLabels[k], html: SPV.SHAPE_SVG[k]
+        });
+        kb.addEventListener('click', function () { state.boardShapeKind = k; setTool('shape'); });
+        shapeFly.appendChild(kb);
+      });
+      toolButton('shape', el('span', { class: 'ic-stylus-svg', html: SPV.SHAPE_SVG[state.boardShapeKind || 'shapes'] }), S.ink_tool_shapes, shapeFly);
       toolButton('eraser', icon('eraser'), S.erase, null);
       // Auswählen: Rahmen aufziehen/anklicken; im Ausklapp-Feld "Alle
       // auswählen" (auch Strg/Cmd+A) - erfasst auch Notizen außerhalb des
@@ -9184,6 +9308,8 @@
         empty: S.present_empty, prev: S.present_prev, next: S.present_next,
         pen: S.present_pen, penDraw: S.present_pen_draw, penText: S.present_pen_text,
         penErase: S.present_pen_erase, penSize: S.present_pen_size, penClear: S.present_pen_clear,
+        penShapes: S.ink_tool_shapes,
+        shapes: { rect: S.ink_shape_rect, ellipse: S.ink_shape_ellipse, line: S.ink_shape_line, poly: S.ink_shape_poly, curve: S.ink_shape_curve },
         show: S.present_show, hide: S.present_hide
       },
       onEscape: function () { closeBtn.click(); }
@@ -9322,6 +9448,8 @@
           var slideBuilds = slideAnimMap(slideTf).count;
           if (slideBuilds) { frameStep.buildEl = slideEl; frameStep.buildCount = slideBuilds; }
           frameStep.keep = (slideTf.linked || []).map(function (pid) { return photoRecs[pid] && photoRecs[pid].el; }).filter(Boolean);
+          frameStep.slideEl = slideEl;
+          frameStep.slideBgOnly = !slideTf.bgPersist;
         }
         return frameStep;
       }

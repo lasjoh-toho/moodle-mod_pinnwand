@@ -190,6 +190,7 @@ foreach ($items as $it) {
                 'opacity' => max(0, min(100, (int) ($sbg['opacity'] ?? 0))),
                 'blur' => max(0, min(30, (int) ($sbg['blur'] ?? 0))),
             ];
+            $entry['bgpersist'] = !empty($ftf['bgPersist']);
             $entry['linked'] = array_values(array_map('intval', is_array($ftf['linked'] ?? null) ? $ftf['linked'] : []));
         }
     }
@@ -362,6 +363,14 @@ $exportdata = [
         'penErase' => get_string('present_pen_erase', 'pinnwand'),
         'penSize' => get_string('present_pen_size', 'pinnwand'),
         'penClear' => get_string('present_pen_clear', 'pinnwand'),
+        'penShapes' => get_string('ink_tool_shapes', 'pinnwand'),
+        'shapes' => [
+            'rect' => get_string('ink_shape_rect', 'pinnwand'),
+            'ellipse' => get_string('ink_shape_ellipse', 'pinnwand'),
+            'line' => get_string('ink_shape_line', 'pinnwand'),
+            'poly' => get_string('ink_shape_poly', 'pinnwand'),
+            'curve' => get_string('ink_shape_curve', 'pinnwand'),
+        ],
         'show' => get_string('present_show', 'pinnwand'),
         'hide' => get_string('present_hide', 'pinnwand'),
         'hint' => get_string('present_hint', 'pinnwand'),
@@ -588,6 +597,8 @@ function pinnwand_export_build_html($title, $json) {
         fstep.el = fel;
         if (it.animsteps) { fstep.buildEl = fel; fstep.buildCount = it.animsteps; }
         fstep.keep = (it.linked || []).map(function (pid) { return photoRecs[pid] && photoRecs[pid].el; }).filter(Boolean);
+        fstep.slideEl = fel;
+        fstep.slideBgOnly = !it.bgpersist;
       }
       return fstep;
     }
