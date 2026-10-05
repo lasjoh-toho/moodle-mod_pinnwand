@@ -1690,3 +1690,5 @@ input.ic-stepper-value {
 .ic-stylus-shape-fly { gap: 4px; padding: 5px 8px; }
 .ic-stylus-shape-fly .ic-icon-btn svg, .ic-stylus-svg svg { width: 18px; height: 18px; display: block; }
 .ic-stylus-svg { display: inline-flex; }
+.ic-anim-row .ic-anim-exit { padding: 2px 5px; display: inline-flex; align-items: center; }
+.ic-anim-row .ic-anim-exit svg { width: 15px; height: 15px; }

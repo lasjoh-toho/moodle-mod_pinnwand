@@ -4355,3 +4355,20 @@ Shipped als Version `2026083152` / `0.154.0`.
   `inkShapeKeyHandler`), Präsentations-Stift `pen.tool = 'shape'`.
 
 Shipped als Version `2026083153` / `0.155.0`.
+
+## Phase 149
+
+- Notizen: `inkHitAt()` (Abstand zum Polygonzug, Text über Rechteck),
+  Auswahlmodus: Treffer -> auswählen und sofort verschieben,
+  Strg/Cmd/Umschalt -> umschalten; Kasten mit Strg/Cmd/Umschalt additiv;
+  nach Auswahl/Verschieben `render()` (Papierkorb kennt die Auswahl).
+- Präsentationsstart je Person: `startmode` in den Hintergrund-Präferenzen
+  (`save_background`/`get_background_data`), App `state.background.startmode`
+  vor `cfg.startmode`, Export `$exportstartmode`.
+- Folien: `tf.bgShowBefore` (Standard aus) -> `step.slideBgHideBefore`,
+  `tf.bgPersist` -> `step.slideBgHideAfter`; Player blendet den Hintergrund
+  vor bzw. nach der Folie aus.
+- `view.php`: Rückfall auf die Sprachdatei, wenn `get_string` "[[...]]"
+  liefert (veralteter Sprach-Cache).
+
+Shipped als Version `2026083154` / `0.156.0`.

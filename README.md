@@ -1926,6 +1926,24 @@ Details und Scoping-Entscheidungen. In Kurzform:
   - Formen sind normale Notizen: auswählbar, verschiebbar, umfärbbar,
     löschbar, mit Rückgängig.
 
+### Einhundertsechsundfünfzigste Überarbeitung — Notizen gezielt auswählen, Präsentationsstart, Sprach-Rückfall
+
+- **Notizen auswählen und verschieben**:
+  - ein Klick wählt genau den Strich unter dem Zeiger (nicht mehr nur
+    irgendeinen, dessen Rechteck getroffen ist);
+  - Strg/Cmd- oder Umschalt-Klick fügt hinzu bzw. entfernt, ebenso beim
+    Kasten;
+  - Klicken und Ziehen verschiebt sofort - einzeln oder alle Ausgewählten.
+- **Präsentationsstart** (Überblick oder erste Folie) ist jetzt auch im
+  Hintergrund-Modal wählbar, je Person. Ohne eigene Wahl gilt weiterhin die
+  Aktivitätseinstellung. Gilt auch für den Export.
+- **Folien-Hintergrund**: zusätzlich "vorher unsichtbar" (Standard an) neben
+  "bleibt beim Weiterblättern".
+- **Abgang** als Symbol mit Tooltip.
+- **Sprachtexte**: Ist Moodles Sprach-Cache nach einem Update noch nicht
+  erneuert, liest die Pinnwand neue Texte direkt aus der Sprachdatei (keine
+  "[[schlüssel]]"-Anzeigen mehr).
+
 ## Bekannte Grenzen dieser Version
 
 - Keine Bewertungsfunktion (bewusst weggelassen, da nicht gefordert).

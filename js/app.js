@@ -5830,6 +5830,14 @@
       keepLab.appendChild(keepCb);
       keepLab.appendChild(document.createTextNode(' ' + S.slide_bg_persist));
       bgRow.appendChild(keepLab);
+      // Standard: vor dem Erreichen der Folie ist der Hintergrund unsichtbar.
+      var beforeLab = el('label', { class: 'ic-slide-bg-slider' });
+      var beforeCb = el('input', { type: 'checkbox' });
+      beforeCb.checked = !tf.bgShowBefore;
+      beforeCb.addEventListener('change', function () { tf.bgShowBefore = !beforeCb.checked; });
+      beforeLab.appendChild(beforeCb);
+      beforeLab.appendChild(document.createTextNode(' ' + S.slide_bg_hide_before));
+      bgRow.appendChild(beforeLab);
       slideColL.appendChild(bgRow);
 
       // Objekte, die über der Folie liegen, mit ihr verknüpfen: sie bleiben
@@ -5889,7 +5897,8 @@
       tf.exit = tf.exit || {};
       var exitToggle = function (key) {
         var on = !!tf.exit[key];
-        var b = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-anim-exit' + (on ? ' active' : ''), type: 'button', title: S.slide_exit_hint }, [S.slide_exit]);
+        var b = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-anim-exit' + (on ? ' active' : ''), type: 'button',
+          title: S.slide_exit + ': ' + S.slide_exit_hint, 'aria-label': S.slide_exit }, [icon('exitstep')]);
         b.addEventListener('click', function () {
           if (tf.exit[key]) { delete tf.exit[key]; } else { tf.exit[key] = true; }
           b.classList.toggle('active', !!tf.exit[key]);
@@ -6334,6 +6343,7 @@
     person: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
     courseback: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>',
     imageedit: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 17l-4.5-4.5L7 21"/><path d="M18.4 2.6a1.9 1.9 0 0 1 2.7 2.7L15 11.4l-3.6.9.9-3.6z"/></svg>',
+    exitstep: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h5v16h-5"/><path d="M3 12h11M10 8l4 4-4 4"/></svg>',
     blend: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6" fill="currentColor" fill-opacity=".35"/></svg>',
     wand: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20L15 9"/><path d="M15 4v2M19 8h2M17.5 5.5l1.5-1.5M13 7l4 4"/><path d="M19 13v2M11 3h2"/></svg>',
     rectsel: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"><rect x="4" y="5" width="16" height="14" rx="1"/></svg>',
@@ -7098,8 +7108,25 @@
         if (drawTool === 'shape') { shapeDown(ev, pt); return; }
         try { inkCapture.setPointerCapture(ev.pointerId); } catch (e) { /* ältere Browser */ }
         if (drawTool === 'select') {
+          // Einzelne Notiz direkt anklicken: genau der Strich unter dem
+          // Zeiger. Strg/Cmd/Umschalt: zur Auswahl hinzufügen/entfernen.
+          // Klicken und Ziehen verschiebt sofort (auch mehrere Ausgewählte).
+          var additive = ev.ctrlKey || ev.metaKey || ev.shiftKey;
+          var hitId = inkHitAt(pt);
+          if (hitId) {
+            var curSel = state.inkSelection || [];
+            if (additive) {
+              state.inkSelection = curSel.indexOf(hitId) === -1 ? curSel.concat([hitId]) : curSel.filter(function (x) { return x !== hitId; });
+              render();
+              return;
+            }
+            if (curSel.indexOf(hitId) === -1) { state.inkSelection = [hitId]; updateInkSelection(); }
+            moveStart = pt;
+            moveOrig = selectedStrokes().map(function (st) { return JSON.parse(JSON.stringify(st)); });
+            return;
+          }
           var sb = selectionBox();
-          if (sb && pt.x >= sb.x1 && pt.x <= sb.x2 && pt.y >= sb.y1 && pt.y <= sb.y2) {
+          if (!additive && sb && pt.x >= sb.x1 && pt.x <= sb.x2 && pt.y >= sb.y1 && pt.y <= sb.y2) {
             // Ausgewählte Notizen verschieben.
             moveStart = pt;
             moveOrig = selectedStrokes().map(function (st) { return JSON.parse(JSON.stringify(st)); });
@@ -7196,6 +7223,31 @@
           bandEl.style.width = Math.abs(ev.clientX - bandStart.x) + 'px'; bandEl.style.height = Math.abs(ev.clientY - bandStart.y) + 'px';
         }
       });
+      // Genaue Trefferprüfung: Abstand zum Strich (nicht nur dessen Rechteck).
+      function inkHitAt(pt) {
+        var z = boardZoomNow();
+        for (var i = state.boardInkStrokes.length - 1; i >= 0; i--) {
+          var st = state.boardInkStrokes[i];
+          if (st.erase) { continue; }
+          if (st.type === 'text') {
+            var tb = strokeBox(st);
+            if (tb && pt.x >= tb.x1 && pt.x <= tb.x2 && pt.y >= tb.y1 && pt.y <= tb.y2) { return st.id; }
+            continue;
+          }
+          var pts = st.points || [];
+          var tol = Math.max(8 / z, (st.width || 0) * BOARD_H / 2 + 4 / z);
+          var px = pt.x * BOARD_W, py = pt.y * BOARD_H;
+          for (var j = 0; j < pts.length; j++) {
+            var ax = pts[j].x * BOARD_W, ay = pts[j].y * BOARD_H;
+            var bx = (pts[j + 1] || pts[j]).x * BOARD_W, by = (pts[j + 1] || pts[j]).y * BOARD_H;
+            var dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+            var t = l2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2)) : 0;
+            var qx = ax + t * dx - px, qy = ay + t * dy - py;
+            if (qx * qx + qy * qy <= tol * tol) { return st.id; }
+          }
+        }
+        return null;
+      }
       function inkUp(ev) {
         if (shapeDraft && shapeDraft.drag) {
           var up = ev && ev.clientX != null ? inkPoint(ev) : shapeDraft.pts[0];
@@ -7212,7 +7264,7 @@
           return;
         }
         if (curStroke) { curStroke = null; saveBoardInk(); return; }
-        if (moveStart) { moveStart = null; moveOrig = null; saveBoardInk(); return; }
+        if (moveStart) { moveStart = null; moveOrig = null; saveBoardInk(); render(); return; }
         if (bandStart) {
           var p1 = bandStart.pt, p2 = ev && ev.clientX != null ? inkPoint(ev) : p1;
           var r = { x1: Math.min(p1.x, p2.x), y1: Math.min(p1.y, p2.y), x2: Math.max(p1.x, p2.x), y2: Math.max(p1.y, p2.y) };
@@ -7228,7 +7280,10 @@
               : !(sb.x2 < r.x1 || sb.x1 > r.x2 || sb.y2 < r.y1 || sb.y1 > r.y2);
             if (hit) { hits.push(st.id); if (tiny) { break; } }
           }
-          state.inkSelection = (ev && ev.shiftKey) ? (state.inkSelection || []).concat(hits) : hits;
+          var addSel = ev && (ev.shiftKey || ev.ctrlKey || ev.metaKey);
+          state.inkSelection = addSel
+            ? (state.inkSelection || []).concat(hits.filter(function (h) { return (state.inkSelection || []).indexOf(h) === -1; }))
+            : hits;
           bandStart = null;
           if (bandEl) { bandEl.remove(); bandEl = null; }
           render();
@@ -9449,7 +9504,8 @@
           if (slideBuilds) { frameStep.buildEl = slideEl; frameStep.buildCount = slideBuilds; }
           frameStep.keep = (slideTf.linked || []).map(function (pid) { return photoRecs[pid] && photoRecs[pid].el; }).filter(Boolean);
           frameStep.slideEl = slideEl;
-          frameStep.slideBgOnly = !slideTf.bgPersist;
+          frameStep.slideBgHideBefore = !slideTf.bgShowBefore;
+          frameStep.slideBgHideAfter = !slideTf.bgPersist;
         }
         return frameStep;
       }
@@ -9511,7 +9567,8 @@
 
     var startStep = (typeof startIndex === 'number' && stepByItem[startIndex]) ? steps.indexOf(stepByItem[startIndex]) : 0;
     // Einstellung "Start der Präsentation": erste Folie statt Überblick.
-    if (typeof startIndex !== 'number' && cfg.startmode === 'slide' && steps.length > 1 && steps[0].overview) { startStep = 1; }
+    var effStart = (state.background && state.background.startmode) || cfg.startmode;
+    if (typeof startIndex !== 'number' && effStart === 'slide' && steps.length > 1 && steps[0].overview) { startStep = 1; }
     player.start(steps, occludables, Math.max(0, startStep));
     return true;
   }
@@ -10283,6 +10340,23 @@
       });
       fitRow.appendChild(fitBtn);
     });
+    // Wie die Präsentation startet (eigene Wahl, sonst Aktivitäts-Einstellung).
+    var startRow = el('div', { class: 'ic-bg-row' });
+    startRow.appendChild(el('label', {}, [S.startmode]));
+    var curStart = bg().startmode || cfg.startmode || 'overview';
+    [['overview', S.startmode_overview], ['slide', S.startmode_slide]].forEach(function (opt) {
+      var sb = el('button', { class: 'ic-btn ic-mini-btn ' + (curStart === opt[0] ? 'ic-btn-primary' : 'ic-btn-ghost'), type: 'button' }, [opt[1]]);
+      sb.addEventListener('click', function () {
+        var b = bg();
+        callAjax('mod_pinnwand_save_background', {
+          cmid: cfg.cmid, type: b.type || 'color', color: b.color || '#2b2d33', photoid: b.photoid || 0,
+          url: b.type === 'url' ? (b.url || '') : '', brightness: currentBrightness(), saturation: currentSaturation(),
+          fit: currentFit(), startmode: opt[0]
+        }).then(function (res) { state.background = res.background; panel.remove(); openBackgroundPanel(body); });
+      });
+      startRow.appendChild(sb);
+    });
+    colR.appendChild(startRow);
     var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-bg-close', type: 'button' }, [S.draw_done]);
     closeBtn.addEventListener('click', function () { panel.remove(); });
     fitRow.appendChild(closeBtn);

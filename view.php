@@ -206,6 +206,12 @@ $config = [
         'present_overview' => get_string('present_overview', 'pinnwand'),
         'present_frame' => get_string('present_frame', 'pinnwand'),
         'present_hint' => get_string('present_hint', 'pinnwand'),
+        'startmode_overview' => get_string('startmode_overview', 'pinnwand'),
+        'startmode_slide' => get_string('startmode_slide', 'pinnwand'),
+        'slide_bg_hide_before' => get_string('slide_bg_hide_before', 'pinnwand'),
+        'startmode' => get_string('startmode', 'pinnwand'),
+        'startmode_overview' => get_string('startmode_overview', 'pinnwand'),
+        'startmode_slide' => get_string('startmode_slide', 'pinnwand'),
         'ink_tool_shapes' => get_string('ink_tool_shapes', 'pinnwand'),
         'ink_shape_rect' => get_string('ink_shape_rect', 'pinnwand'),
         'ink_shape_ellipse' => get_string('ink_shape_ellipse', 'pinnwand'),
@@ -503,6 +509,30 @@ $config = [
         'deletephoto_confirm_other' => get_string('deletephoto_confirm_other', 'pinnwand'),
     ],
 ];
+
+// Ist Moodles Sprach-Cache noch nicht erneuert (z. B. Dateien aktualisiert,
+// aber Caches nicht geleert), liefert get_string für neue Texte "[[schlüssel]]".
+// Dann direkt aus der Sprachdatei des Plugins lesen (aktuelle Sprache, sonst
+// Englisch), damit die Oberfläche trotzdem lesbar bleibt.
+$pinnwandlangfile = function ($lang) {
+    $string = [];
+    $file = __DIR__ . '/lang/' . clean_param($lang, PARAM_SAFEDIR) . '/pinnwand.php';
+    if (is_readable($file)) {
+        include($file);
+    }
+    return $string;
+};
+$pinnwandlangraw = null;
+foreach ($config['strings'] as $skey => $sval) {
+    if (is_string($sval) && strpos($sval, '[[') === 0) {
+        if ($pinnwandlangraw === null) {
+            $pinnwandlangraw = $pinnwandlangfile(current_language()) + $pinnwandlangfile('en');
+        }
+        if (isset($pinnwandlangraw[$skey])) {
+            $config['strings'][$skey] = $pinnwandlangraw[$skey];
+        }
+    }
+}
 
 $PAGE->requires->css(new moodle_url('/mod/pinnwand/styles.css', ['v' => get_config('mod_pinnwand', 'version')]));
 

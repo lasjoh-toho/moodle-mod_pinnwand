@@ -70,6 +70,7 @@ $string['present_smallscreen'] = 'Präsentation ist für große Bildschirme geda
 $string['present_overview'] = 'Übersicht';
 $string['present_frame'] = 'Rahmen';
 $string['present_hint'] = '← → oder Leertaste zum Navigieren, Klick außerhalb zum Verschieben, Mausrad zum Zoomen';
+$string['slide_bg_hide_before'] = 'vorher unsichtbar';
 $string['ink_tool_shapes'] = 'Formen (Rechteck, Kreis, Linie, Linienzug, Kurve)';
 $string['ink_shape_rect'] = 'Rechteck (Umschalt: Quadrat)';
 $string['ink_shape_ellipse'] = 'Kreis/Ellipse (Umschalt: Kreis)';

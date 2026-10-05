@@ -306,7 +306,7 @@ class mod_pinnwand_external extends external_api {
     protected static function get_background_data($instance, $context) {
         global $USER;
         $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'fit' => 'contain',
-            'pdfurl' => '', 'pdfspreads' => '', 'pdfdouble' => false, 'photoid' => 0];
+            'pdfurl' => '', 'pdfspreads' => '', 'pdfdouble' => false, 'photoid' => 0, 'startmode' => ''];
         $raw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
         if (!$raw) {
             return $default;
@@ -316,6 +316,9 @@ class mod_pinnwand_external extends external_api {
             return $default;
         }
         $bg = $default;
+        // Eigener Präsentationsstart (leer = Einstellung der Aktivität).
+        $sm = (string) ($decoded['startmode'] ?? '');
+        $bg['startmode'] = in_array($sm, ['overview', 'slide'], true) ? $sm : '';
         $type = $decoded['type'] ?? 'color';
         $bg['type'] = in_array($type, ['image', 'url', 'upload'], true) ? $type : 'color';
         $bg['color'] = clean_param($decoded['color'] ?? $default['color'], PARAM_TEXT);
@@ -400,6 +403,7 @@ class mod_pinnwand_external extends external_api {
                 'pdfspreads' => new external_value(PARAM_RAW, 'Gewählte (Doppel-)Seiten, kommagetrennt', VALUE_DEFAULT, ''),
                 'pdfdouble' => new external_value(PARAM_BOOL, 'Doppelseiten nebeneinander', VALUE_DEFAULT, false),
                 'photoid' => new external_value(PARAM_INT, 'Foto-ID bei Hintergrund aus eigenem/fremdem Foto', VALUE_DEFAULT, 0),
+                'startmode' => new external_value(PARAM_ALPHA, 'Eigener Präsentationsstart (overview|slide, leer = Aktivität)', VALUE_DEFAULT, ''),
             ]),
             'photos' => new external_multiple_structure(new external_single_structure([
                 'id' => new external_value(PARAM_INT, 'ID'),
@@ -1131,16 +1135,17 @@ class mod_pinnwand_external extends external_api {
             'pdfdata' => new external_value(PARAM_RAW, 'Data-URL eines PDFs, aus dem imagedata zusammengesetzt wurde', VALUE_DEFAULT, ''),
             'pdfspreads' => new external_value(PARAM_RAW, 'Gewählte (Doppel-)Seiten, kommagetrennt', VALUE_DEFAULT, ''),
             'pdfdouble' => new external_value(PARAM_INT, 'Doppelseiten (1/0)', VALUE_DEFAULT, 0),
+            'startmode' => new external_value(PARAM_ALPHA, 'Präsentationsstart overview|slide (leer = unverändert)', VALUE_DEFAULT, ''),
         ]);
     }
 
     public static function save_background($cmid, $type, $color, $photoid, $url, $imagedata, $brightness, $saturation, $fit = 'contain',
-            $pdfdata = '', $pdfspreads = '', $pdfdouble = 0) {
+            $pdfdata = '', $pdfspreads = '', $pdfdouble = 0, $startmode = '') {
         global $USER, $DB;
         $params = self::validate_parameters(self::save_background_parameters(), [
             'cmid' => $cmid, 'type' => $type, 'color' => $color, 'photoid' => $photoid, 'url' => $url,
             'imagedata' => $imagedata, 'brightness' => $brightness, 'saturation' => $saturation, 'fit' => $fit,
-            'pdfdata' => $pdfdata, 'pdfspreads' => $pdfspreads, 'pdfdouble' => $pdfdouble,
+            'pdfdata' => $pdfdata, 'pdfspreads' => $pdfspreads, 'pdfdouble' => $pdfdouble, 'startmode' => $startmode,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
 
@@ -1218,6 +1223,8 @@ class mod_pinnwand_external extends external_api {
         }
 
         $payload = [
+            'startmode' => in_array($params['startmode'], ['overview', 'slide'], true) ? $params['startmode']
+                : (in_array($old['startmode'] ?? '', ['overview', 'slide'], true) ? $old['startmode'] : ''),
             'pdf' => $pdf,
             'pdfspreads' => $pdf ? $spreads : '',
             'pdfdouble' => $pdf ? $double : 0,
@@ -1247,6 +1254,7 @@ class mod_pinnwand_external extends external_api {
                 'pdfspreads' => new external_value(PARAM_RAW, 'Gewählte (Doppel-)Seiten, kommagetrennt', VALUE_DEFAULT, ''),
                 'pdfdouble' => new external_value(PARAM_BOOL, 'Doppelseiten nebeneinander', VALUE_DEFAULT, false),
                 'photoid' => new external_value(PARAM_INT, 'Foto-ID bei Hintergrund aus eigenem/fremdem Foto', VALUE_DEFAULT, 0),
+                'startmode' => new external_value(PARAM_ALPHA, 'Eigener Präsentationsstart (overview|slide, leer = Aktivität)', VALUE_DEFAULT, ''),
             ]),
         ]);
     }

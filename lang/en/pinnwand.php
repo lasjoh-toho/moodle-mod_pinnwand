@@ -70,6 +70,7 @@ $string['present_smallscreen'] = 'Presentation mode is meant for large screens.'
 $string['present_overview'] = 'Overview';
 $string['present_frame'] = 'Frame';
 $string['present_hint'] = '← → or space to navigate, drag to pan, mouse wheel to zoom';
+$string['slide_bg_hide_before'] = 'hidden before';
 $string['ink_tool_shapes'] = 'Shapes (rectangle, circle, line, polyline, curve)';
 $string['ink_shape_rect'] = 'Rectangle (Shift: square)';
 $string['ink_shape_ellipse'] = 'Circle/ellipse (Shift: circle)';

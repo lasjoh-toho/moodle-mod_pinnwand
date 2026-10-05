@@ -724,9 +724,16 @@
       slides.forEach(function (sel) {
         var isActive = !!active && active.slideEl === sel;
         var showAll = !active || active.overview;
-        var last = -1, bgOnly = false;
-        steps.forEach(function (st, si) { if (st.slideEl === sel) { last = si; bgOnly = !!st.slideBgOnly; } });
-        sel.classList.toggle('pwp-bg-off', bgOnly && !isActive && !showAll);
+        var first = -1, last = -1, hideBefore = true, hideAfter = true;
+        steps.forEach(function (st, si) {
+          if (st.slideEl !== sel) { return; }
+          if (first === -1) { first = si; }
+          last = si;
+          hideBefore = st.slideBgHideBefore !== false;
+          hideAfter = st.slideBgHideAfter !== false;
+        });
+        var bgOff = !isActive && !showAll && ((idx < first && hideBefore) || (idx > last && hideAfter));
+        sel.classList.toggle('pwp-bg-off', bgOff);
         var passed = !isActive && !showAll && idx > last;
         var exits = sel.querySelectorAll('[data-pwp-exit]');
         for (var xi = 0; xi < exits.length; xi++) { exits[xi].classList.toggle('pwp-exit-hidden', passed); }

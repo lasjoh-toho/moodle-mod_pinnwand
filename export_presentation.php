@@ -191,6 +191,7 @@ foreach ($items as $it) {
                 'blur' => max(0, min(30, (int) ($sbg['blur'] ?? 0))),
             ];
             $entry['bgpersist'] = !empty($ftf['bgPersist']);
+            $entry['bgshowbefore'] = !empty($ftf['bgShowBefore']);
             $entry['linked'] = array_values(array_map('intval', is_array($ftf['linked'] ?? null) ? $ftf['linked'] : []));
         }
     }
@@ -315,6 +316,14 @@ function pinnwand_export_background_data($instance, $context, $fs) {
     return $result;
 }
 $background = pinnwand_export_background_data($instance, $context, $fs);
+// Präsentationsstart: eigene Wahl (Hintergrund-Einstellungen), sonst die
+// Einstellung der Aktivität.
+$exportstartmode = (($instance->startmode ?? 'overview') === 'slide') ? 'slide' : 'overview';
+$bgprefraw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
+$bgpref = $bgprefraw ? json_decode($bgprefraw, true) : null;
+if (is_array($bgpref) && in_array($bgpref['startmode'] ?? '', ['overview', 'slide'], true)) {
+    $exportstartmode = $bgpref['startmode'];
+}
 
 // -----------------------------------------------------------------
 // Versionierter Datenblock - bewusst so aufgebaut, dass ein späterer
@@ -343,7 +352,7 @@ $exportdata = [
     'pluginVersion' => get_config('mod_pinnwand', 'version'),
     'boardid' => $boardid,
     'boardWidth' => 1400,
-    'startMode' => (($instance->startmode ?? 'overview') === 'slide') ? 'slide' : 'overview',
+    'startMode' => $exportstartmode,
     'boardHeight' => 1000,
     'background' => $background,
     'thread' => [
@@ -598,7 +607,8 @@ function pinnwand_export_build_html($title, $json) {
         if (it.animsteps) { fstep.buildEl = fel; fstep.buildCount = it.animsteps; }
         fstep.keep = (it.linked || []).map(function (pid) { return photoRecs[pid] && photoRecs[pid].el; }).filter(Boolean);
         fstep.slideEl = fel;
-        fstep.slideBgOnly = !it.bgpersist;
+        fstep.slideBgHideBefore = !it.bgshowbefore;
+        fstep.slideBgHideAfter = !it.bgpersist;
       }
       return fstep;
     }
