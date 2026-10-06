@@ -5036,7 +5036,11 @@
       var styleTarget = isShapeTarget ? styleActiveShape : active;
       var styleTargetMissing = isShapeTarget && !styleTarget;
       function applyShapeOrTextChange() {
-        if (isShapeTarget) { render(); } else { applyStyle1(); }
+        if (isShapeTarget) { render(); return; }
+        // Verlauf gilt für den ganzen Text: Einzelfarben auf Textstücken weichen.
+        var gradObj = frame.querySelector('[data-textid="' + active.id + '"]');
+        if (gradObj && active.fillGradient) { stripInnerColors(gradObj, active); }
+        applyStyle1();
       }
       function openStyle1Popup(anchorBtn, title, buildRows) {
         openDraggableModal(title, anchorBtn, function (content) { buildRows(content); });
@@ -5061,6 +5065,7 @@
         applyStyleToSelectionOrWhole(objEl, 'color:' + color + ';', function () {
           active.fillColor = active.color = color;
           active.fillGradient = null;
+          stripInnerColors(objEl, active);
           applyStyle1();
         }, active);
         refreshControls();
@@ -5180,7 +5185,7 @@
         gradCheck.addEventListener('change', function () {
           styleTarget.fillGradient = gradCheck.checked ? [solidColorShown() || '#e0503f', '#4f8cff'] : null;
           styleTarget.fillGradientAngle = styleTarget.fillGradientAngle || 135;
-          if (isShapeTarget) { render(); } else { applyStyle1(); refreshControls(); }
+if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControls(); }
         });
         gradientBarRow.appendChild(gradCheck);
 
@@ -6388,6 +6393,22 @@
       if (!node.getAttribute('style')) { node.removeAttribute('style'); }
     }
   }
+  // Eine Farbe/ein Verlauf für den ganzen Text: früher auf Textstücke gesetzte
+  // Einzelfarben (<span style="color">) entfernen, sonst bleiben sie dauerhaft
+  // sichtbar und lassen sich nicht mehr zurücknehmen.
+  function stripInnerColors(objEl, t) {
+    var changed = false;
+    Array.prototype.slice.call(objEl.querySelectorAll('[style]')).forEach(function (n) {
+      if (n.classList.contains('ic-tf-handle') || !n.style.color) { return; }
+      n.style.removeProperty('color');
+      changed = true;
+      if (!n.getAttribute('style') && n.tagName === 'SPAN') {
+        while (n.firstChild) { n.parentNode.insertBefore(n.firstChild, n); }
+        n.remove();
+      } else if (!n.getAttribute('style')) { n.removeAttribute('style'); }
+    });
+    if (changed && t) { t.html = objHtmlWithoutHandles(objEl); t.text = objTextWithoutHandles(objEl); }
+  }
   function applyStyleToSelectionOrWhole(objEl, cssText, wholeObjectFallback, t) {
     var sel = window.getSelection();
     if (sel && sel.rangeCount && !sel.isCollapsed) {
@@ -6400,6 +6421,16 @@
           stripConflictingStyles(content, cssText);
           span.appendChild(content);
           range.insertNode(span);
+          // Dieselbe Auswahl erneut formatiert: das leere äußere Span nicht
+          // verschachteln, sondern durch das neue ersetzen.
+          var outer = span.parentNode;
+          if (outer && outer !== objEl && outer.tagName === 'SPAN' && outer.childNodes.length === 1) {
+            for (var oi = 0; oi < outer.style.length; oi++) {
+              var op = outer.style[oi];
+              if (!span.style.getPropertyValue(op)) { span.style.setProperty(op, outer.style.getPropertyValue(op)); }
+            }
+            outer.parentNode.replaceChild(span, outer);
+          }
           sel.removeAllRanges();
           var newRange = document.createRange();
           newRange.selectNodeContents(span);
