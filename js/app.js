@@ -2569,11 +2569,11 @@
   // dessen, was dahinter liegt (Milchglas).
   function slideBgCss(tf) {
     var bg = tf && tf.slideBg;
-    if (!bg || (!bg.opacity && !bg.blur)) { return null; }
+    if (!bg || (!bg.opacity && !bg.blur && !bg.invert)) { return null; }
     var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg.color || '#000000') || [0, '00', '00', '00'];
     return {
       background: 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + ((bg.opacity || 0) / 100) + ')',
-      filter: bg.blur ? 'blur(' + bg.blur + 'px)' : ''
+      filter: (bg.blur ? 'blur(' + bg.blur + 'px)' : '') + (bg.invert ? (bg.blur ? ' ' : '') + 'invert(' + bg.invert + '%)' : '')
     };
   }
   function applySlideBg(elm, tf) {
@@ -4521,6 +4521,7 @@
     BLOCK_ICONS[S.tfblock_form] = 'effecticon';
     BLOCK_ICONS[S.tfblock_formulas] = 'code';
     BLOCK_ICONS[S.tfblock_slide] = 'frameicon';
+    BLOCK_ICONS[S.tfblock_elements] = 'grid';
     // Akkordeon: Überschrift antippen klappt den jeweiligen Block ein/aus -
     // auf dem Handy starten alle Blöcke eingeklappt (siehe CSS), auf
     // größeren Bildschirmen bleiben sie offen.
@@ -5771,6 +5772,8 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     if (isSlide) {
       tf.anim = tf.anim || [];
       var blockAnim = makeAccordionBlock(S.tfblock_slide);
+      var blockElems = makeAccordionBlock(S.tfblock_elements);
+      blocksWrap.insertBefore(blockElems, blocksWrap.firstChild);
       blocksWrap.insertBefore(blockAnim, blocksWrap.firstChild);
       var addTextBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['+ ' + S.slide_addtext]);
       addTextBtn.addEventListener('click', function () {
@@ -5778,15 +5781,14 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         tf.texts.push({ id: nid, text: '', font: 'sans', size: 24, x: 0.5, y: Math.min(0.9, 0.3 + 0.12 * (tf.texts.length % 6)), fontWeight: 400 });
         render();
       });
-      // Zwei Spalten (großer Bildschirm): links Folie/Hintergrund/Objekte,
-      // rechts die Animationsschritte.
-      var slideCols = el('div', { class: 'ic-slide-cols' });
+      // Zwei Popups: "Folie" (Mischmodus, Hintergrund, verknüpfte Objekte)
+      // und "Elemente" (Textfeld anlegen, Animationsschritte).
       var slideColL = el('div', { class: 'ic-slide-col' });
       var slideColR = el('div', { class: 'ic-slide-col' });
-      slideCols.appendChild(slideColL); slideCols.appendChild(slideColR);
-      blockAnim.content.appendChild(slideCols);
+      blockAnim.content.appendChild(slideColL);
+      blockElems.content.appendChild(slideColR);
       var slideTopRow = el('div', { class: 'ic-anim-toprow' });
-      slideTopRow.appendChild(addTextBtn);
+      slideColR.appendChild(el('div', { class: 'ic-anim-toprow' }, [addTextBtn]));
       // Mischmodus der ganzen Folie mit dem Hintergrund - im Editor direkt
       // als Vorschau über dem abgebildeten Pinnwand-Ausschnitt.
       var slidePhoto = state.editingPhotoId ? state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0] : null;
@@ -5827,6 +5829,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       }
       bgSlider(S.slide_bg_opacity, 'opacity', 100);
       bgSlider(S.slide_bg_blur, 'blur', 30);
+      bgSlider(S.slide_bg_invert, 'invert', 100);
       // Standard: Farbe/Weichzeichnen verschwinden beim Weiterblättern.
       var keepLab = el('label', { class: 'ic-slide-bg-slider' });
       var keepCb = el('input', { type: 'checkbox' });

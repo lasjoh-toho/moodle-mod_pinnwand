@@ -189,6 +189,7 @@ foreach ($items as $it) {
                 'color' => preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($sbg['color'] ?? '')) ? $sbg['color'] : '#000000',
                 'opacity' => max(0, min(100, (int) ($sbg['opacity'] ?? 0))),
                 'blur' => max(0, min(30, (int) ($sbg['blur'] ?? 0))),
+                'invert' => max(0, min(100, (int) ($sbg['invert'] ?? 0))),
             ];
             $entry['bgpersist'] = !empty($ftf['bgPersist']);
             $entry['bgshowbefore'] = !empty($ftf['bgShowBefore']);
@@ -593,10 +594,11 @@ function pinnwand_export_build_html($title, $json) {
         fel.style.transform = 'rotate(' + (it.framerot || 0) + 'deg)';
         fel.style.zIndex = it.framez || 0;
         if (it.blend) { fel.style.mixBlendMode = it.blend; }
-        if (it.slidebg && (it.slidebg.opacity || it.slidebg.blur)) {
+        if (it.slidebg && (it.slidebg.opacity || it.slidebg.blur || it.slidebg.invert)) {
           var sc = it.slidebg.color || '#000000';
           fel.style.background = 'rgba(' + parseInt(sc.substr(1, 2), 16) + ',' + parseInt(sc.substr(3, 2), 16) + ',' + parseInt(sc.substr(5, 2), 16) + ',' + ((it.slidebg.opacity || 0) / 100) + ')';
-          if (it.slidebg.blur) { fel.style.backdropFilter = fel.style.webkitBackdropFilter = 'blur(' + it.slidebg.blur + 'px)'; }
+          var sbf = (it.slidebg.blur ? 'blur(' + it.slidebg.blur + 'px) ' : '') + (it.slidebg.invert ? 'invert(' + it.slidebg.invert + '%)' : '');
+          if (sbf) { fel.style.backdropFilter = fel.style.webkitBackdropFilter = sbf; }
         }
         fel.innerHTML = it.framesvg;
         var fsvg = fel.querySelector('svg');
