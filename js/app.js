@@ -2634,7 +2634,9 @@
     });
     wrap.style.zIndex = it.framez || 0;
     if (tf.blend) { wrap.style.mixBlendMode = tf.blend; }
-    applySlideBg(wrap, tf);
+    // Auf der Pinnwand gilt "vorher unsichtbar": die Effekte (Farbe, Weichzeichnen,
+    // Invertieren, Helligkeit) sind dann nur im Folieneditor zu sehen.
+    if (cls !== 'ic-frame-slide' || tf.bgShowBefore) { applySlideBg(wrap, tf); }
     var live = buildTextFrameLiveDom(tf, { noGuide: true });
     live.style.height = '100%';
     wrap.appendChild(live);
@@ -2653,11 +2655,13 @@
   // dessen, was dahinter liegt (Milchglas).
   function slideBgCss(tf) {
     var bg = tf && tf.slideBg;
-    if (!bg || (!bg.opacity && !bg.blur && !bg.invert)) { return null; }
+    var bright = bg && bg.brightness != null ? bg.brightness : 100;
+    if (!bg || (!bg.opacity && !bg.blur && !bg.invert && bright === 100)) { return null; }
     var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg.color || '#000000') || [0, '00', '00', '00'];
     return {
       background: 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + ((bg.opacity || 0) / 100) + ')',
-      filter: (bg.blur ? 'blur(' + bg.blur + 'px)' : '') + (bg.invert ? (bg.blur ? ' ' : '') + 'invert(' + bg.invert + '%)' : '')
+      filter: [bg.blur ? 'blur(' + bg.blur + 'px)' : '', bg.invert ? 'invert(' + bg.invert + '%)' : '',
+        bright !== 100 ? 'brightness(' + bright + '%)' : ''].filter(Boolean).join(' ')
     };
   }
   function applySlideBg(elm, tf) {
@@ -5872,7 +5876,45 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       blockAnim.content.appendChild(slideColL);
       blockElems.content.appendChild(slideColR);
       var slideTopRow = el('div', { class: 'ic-anim-toprow' });
-      slideColR.appendChild(el('div', { class: 'ic-anim-toprow' }, [addTextBtn]));
+      var upBtnImg = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['+ ' + S.slide_upload_image]);
+      var upInput = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+      upBtnImg.addEventListener('click', function () { upInput.click(); });
+      upInput.addEventListener('change', function () {
+        var f = upInput.files && upInput.files[0];
+        upInput.value = '';
+        if (!f || !/^image\//.test(f.type) || !editingRec || !editingRec.canvasw) { return; }
+        upBtnImg.disabled = true;
+        var url = URL.createObjectURL(f);
+        var im = new Image();
+        im.onerror = function () { URL.revokeObjectURL(url); upBtnImg.disabled = false; };
+        im.onload = function () {
+          var sc = Math.min(1, 1800 / Math.max(im.naturalWidth, im.naturalHeight));
+          var c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(im.naturalWidth * sc)); c.height = Math.max(1, Math.round(im.naturalHeight * sc));
+          c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+          URL.revokeObjectURL(url);
+          var w = Math.max(60, editingRec.canvasw * 0.4), h = w * c.height / c.width;
+          var fh = editingRec.canvasw * tf.h / tf.w;
+          var nx = (editingRec.fg ? editingRec.fg.x : editingRec.canvasx) + editingRec.canvasw / 2 - w / 2;
+          var ny = (editingRec.fg ? editingRec.fg.y : editingRec.canvasy) + fh / 2 - h / 2;
+          callAjax('mod_pinnwand_save_photo', {
+            cmid: cfg.cmid, imagedata: canvasDataUrl(c, 0.85), gridtype: 'none', gridvalue: 0, consent: false,
+            sourcetitle: f.name.replace(/\.[^.]+$/, ''), sourceauthor: '', sourceyear: '', sourceepoch: '',
+            sourceplace: '', sourceorigauthor: '', boardid: state.currentBoard || 0
+          }).then(function (res) {
+            if (!res || !res.photoid) { throw new Error('save'); }
+            return callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: res.photoid, hidden: false }).catch(function () { return null; })
+              .then(function () {
+                return callAjax('mod_pinnwand_update_layout', {
+                  cmid: cfg.cmid, photoid: res.photoid, x: nx, y: ny, w: w, rot: 0,
+                  z: (editingRec.canvasz || 0) + 1, boardid: state.currentBoard || 0
+                });
+              }).then(function () { tf.linked = tf.linked || []; tf.linked.push(res.photoid); return refreshPhotos(); });
+          }).then(function () { render(); }).catch(function () { upBtnImg.disabled = false; alert(S.bulk_failed.replace('{failed}', 1)); });
+        };
+        im.src = url;
+      });
+      slideColR.appendChild(el('div', { class: 'ic-anim-toprow' }, [addTextBtn, upBtnImg, upInput]));
       // Mischmodus der ganzen Folie mit dem Hintergrund - im Editor direkt
       // als Vorschau über dem abgebildeten Pinnwand-Ausschnitt.
       var slidePhoto = state.editingPhotoId ? state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0] : null;
@@ -5914,6 +5956,11 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       bgSlider(S.slide_bg_opacity, 'opacity', 100);
       bgSlider(S.slide_bg_blur, 'blur', 30);
       bgSlider(S.slide_bg_invert, 'invert', 100);
+      var brLab = el('label', { class: 'ic-slide-bg-slider' }, [S.slide_bg_brightness]);
+      var brR = el('input', { type: 'range', min: '0', max: '200', value: String(tf.slideBg.brightness != null ? tf.slideBg.brightness : 100) });
+      brR.addEventListener('input', function () { tf.slideBg.brightness = parseInt(brR.value, 10); applySlideBg(frameInner, tf); });
+      brLab.appendChild(brR);
+      bgRow.appendChild(brLab);
       // Standard: Farbe/Weichzeichnen verschwinden beim Weiterblättern.
       var keepLab = el('label', { class: 'ic-slide-bg-slider' });
       var keepCb = el('input', { type: 'checkbox' });
@@ -5949,7 +5996,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           return !(p.canvasx + p.canvasw < fbx || p.canvasx > fbx + fbw || p.canvasy + ph < fby || p.canvasy > fby + fbh);
         });
         if (aboveCands.length) {
-          slideColL.appendChild(el('div', { class: 'ic-anim-sep' }, [S.slide_linked]));
+          slideColR.appendChild(el('div', { class: 'ic-anim-sep', title: S.slide_linked }, [S.slide_link_image]));
           var linkList = el('div', { class: 'ic-slide-link-list' });
           aboveCands.forEach(function (p) {
             var lab = el('label', { class: 'ic-slide-link' + (tf.linked.indexOf(p.id) !== -1 ? ' active' : ''), title: itemCaptionText(p) });
@@ -5964,7 +6011,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
             lab.appendChild(el('img', { src: p.url, alt: '' }));
             linkList.appendChild(lab);
           });
-          slideColL.appendChild(linkList);
+          slideColR.appendChild(linkList);
         }
       }
       slideColR.appendChild(el('p', { class: 'ic-hint ic-anim-hint' }, [S.slide_anim_hint]));
