@@ -42,6 +42,14 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:view',
     ],
+    'mod_pinnwand_set_photo_tags' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'set_photo_tags',
+        'description' => 'Setzt oder ergänzt Schlagwörter (Tags) für ein oder mehrere Objekte (eigene, mit manage-Recht auch fremde)',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:view',
+    ],
     'mod_pinnwand_delete_photo' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'delete_photo',

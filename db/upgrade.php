@@ -441,5 +441,15 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083153, 'pinnwand');
     }
 
+    if ($oldversion < 2026083159) {
+        // Schlagwörter (Tags) für Bilder und Texte, kommagetrennt.
+        $table = new xmldb_table('pinnwand_photos');
+        $field = new xmldb_field('tags', XMLDB_TYPE_TEXT, null, null, null, null, null, 'editdata');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026083159, 'pinnwand');
+    }
+
     return true;
 }

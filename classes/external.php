@@ -273,6 +273,7 @@ class mod_pinnwand_external extends external_api {
                 'sourceepoch' => (string) $r->sourceepoch,
                 'sourceplace' => (string) $r->sourceplace,
                 'sourceorigauthor' => (string) $r->sourceorigauthor,
+                'tags' => (string) ($r->tags ?? ''),
                 'timecreated' => (int) $r->timecreated,
                 'canvasx' => (float) $r->canvasx,
                 'canvasy' => (float) $r->canvasy,
@@ -421,6 +422,7 @@ class mod_pinnwand_external extends external_api {
                 'sourceepoch' => new external_value(PARAM_TEXT, 'Epoche'),
                 'sourceplace' => new external_value(PARAM_TEXT, 'Ort'),
                 'sourceorigauthor' => new external_value(PARAM_TEXT, 'Autor*in der Vorlage'),
+                'tags' => new external_value(PARAM_TEXT, 'Schlagwörter, kommagetrennt', VALUE_DEFAULT, ''),
                 'timecreated' => new external_value(PARAM_INT, 'Hochgeladen am (Unix-Zeitstempel)'),
                 'canvasx' => new external_value(PARAM_FLOAT, 'x'),
                 'canvasy' => new external_value(PARAM_FLOAT, 'y'),
@@ -1400,6 +1402,71 @@ class mod_pinnwand_external extends external_api {
     }
 
     // ---------------------------------------------------------------
+    // set_photo_tags: Schlagwörter für ein oder mehrere Objekte.
+    // mode 'replace' ersetzt die Tags, 'add' ergänzt sie. Objekte ohne
+    // Berechtigung werden übersprungen (eigene mit submit-Recht, fremde nur
+    // mit manage-Recht).
+    // ---------------------------------------------------------------
+    public static function set_photo_tags_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoids' => new external_multiple_structure(new external_value(PARAM_INT, 'Foto-ID')),
+            'tags' => new external_value(PARAM_TEXT, 'Schlagwörter, kommagetrennt', VALUE_DEFAULT, ''),
+            'mode' => new external_value(PARAM_ALPHA, 'replace|add', VALUE_DEFAULT, 'replace'),
+        ]);
+    }
+
+    public static function set_photo_tags($cmid, $photoids, $tags, $mode = 'replace') {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_photo_tags_parameters(), [
+            'cmid' => $cmid, 'photoids' => $photoids, 'tags' => $tags, 'mode' => $mode,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+        $canmanage = has_capability('mod/pinnwand:manage', $context);
+        $cansubmit = has_capability('mod/pinnwand:submit', $context);
+
+        $normalize = function ($str) {
+            $out = [];
+            foreach (explode(',', (string) $str) as $t) {
+                $t = trim(clean_param($t, PARAM_TEXT));
+                if ($t !== '' && !in_array(\core_text::strtolower($t), array_map('core_text::strtolower', $out))) {
+                    $out[] = $t;
+                }
+            }
+            return $out;
+        };
+        $newtags = $normalize($params['tags']);
+
+        $result = [];
+        foreach (array_unique($params['photoids']) as $photoid) {
+            $photo = $DB->get_record('pinnwand_photos', ['id' => $photoid, 'pinnwandid' => $instance->id]);
+            if (!$photo) {
+                continue;
+            }
+            if (!($canmanage || ($photo->userid == $USER->id && $cansubmit))) {
+                continue;
+            }
+            $merged = $newtags;
+            if ($params['mode'] === 'add') {
+                $merged = $normalize(implode(',', array_merge($normalize($photo->tags ?? ''), $newtags)));
+            }
+            $photo->tags = implode(', ', $merged);
+            $DB->update_record('pinnwand_photos', $photo);
+            $result[] = ['id' => (int) $photo->id, 'tags' => (string) $photo->tags];
+        }
+        return ['photos' => $result];
+    }
+
+    public static function set_photo_tags_returns() {
+        return new external_single_structure([
+            'photos' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Foto-ID'),
+                'tags' => new external_value(PARAM_TEXT, 'Schlagwörter, kommagetrennt'),
+            ])),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
     // delete_photo
     // ---------------------------------------------------------------
     public static function delete_photo_parameters() {
@@ -1621,6 +1688,7 @@ class mod_pinnwand_external extends external_api {
                 'sourceepoch' => (string) $r->sourceepoch,
                 'sourceplace' => (string) $r->sourceplace,
                 'sourceorigauthor' => (string) $r->sourceorigauthor,
+                'tags' => (string) ($r->tags ?? ''),
                 'consent' => (bool) $r->consent,
                 'hiddenfromboard' => (bool) $r->hiddenfromboard,
                 'otherboardcount' => $placementcounts[$r->id] ?? 0,
@@ -1650,6 +1718,7 @@ class mod_pinnwand_external extends external_api {
                 'sourceepoch' => new external_value(PARAM_TEXT, 'Epoche'),
                 'sourceplace' => new external_value(PARAM_TEXT, 'Ort'),
                 'sourceorigauthor' => new external_value(PARAM_TEXT, 'Autor*in der Vorlage'),
+                'tags' => new external_value(PARAM_TEXT, 'Schlagwörter, kommagetrennt', VALUE_DEFAULT, ''),
                 'consent' => new external_value(PARAM_BOOL, 'Einwilligung'),
                 'hiddenfromboard' => new external_value(PARAM_BOOL, 'Von der Pinnwand ausgeblendet'),
                 'otherboardcount' => new external_value(PARAM_INT, 'Anzahl zusätzlicher aktiver Platzierungen auf anderen Boards'),

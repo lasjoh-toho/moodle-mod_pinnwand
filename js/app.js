@@ -558,13 +558,14 @@
       meLabel.appendChild(meCheck);
       authorWrap.appendChild(meLabel);
       fieldsRow1.appendChild(authorWrap);
-      fields.appendChild(fieldsRow1);
       var fieldsRow2 = el('div', { class: 'ic-moderate-fields' });
       fieldsRow2.appendChild(editField('sourceyear', 'sourceyear', 'narrow'));
       fieldsRow2.appendChild(editField('sourceepoch', 'sourceepoch', 'narrow'));
       fieldsRow2.appendChild(editField('sourceplace', 'sourceplace', 'wide'));
       fieldsRow2.appendChild(editField('sourceorigauthor', 'sourceorigauthor'));
-      fields.appendChild(fieldsRow2);
+      var srcBox = el('div', { class: 'ic-source-box' }, [fieldsRow1, fieldsRow2]);
+      fields.appendChild(buildTextOrSource(p, true, srcBox));
+      fields.appendChild(buildTagsInput(p, true));
       row.appendChild(fields);
 
       // Nur auf schmalen Bildschirmen sichtbar (siehe CSS): Info-Button
@@ -7989,6 +7990,8 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       if (!isEmptyAreaTarget(ev.target)) { return; }
       if (boxModeArmed) {
         boxModeArmed = false;
+        wrap.classList.remove('ic-box-armed');
+        wrap.removeAttribute('title');
         startSelectionBox(ev.clientX, ev.clientY, ev.ctrlKey || ev.metaKey);
         return;
       }
@@ -8085,9 +8088,20 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       // (danach angetippte einzelne Objekte werden zur Auswahl hinzugefügt/
       // entfernt). Auge: springt mit der Kamera genau auf den Ausschnitt,
       // in dem die aktuelle Auswahl zu sehen ist.
-      var boxSelBtn = el('button', { class: 'ic-icon-btn', title: S.boxselect }, [icon('boxselect')]);
+      var boxSelBtn = el('button', { class: 'ic-icon-btn' + (boxModeArmed ? ' active' : ''), title: S.boxselect }, [icon('boxselect')]);
       boxSelBtn.addEventListener('click', function () {
         popup.remove();
+        // Erster Klick: Kastenmodus - der nächste Zug auf leerer Fläche
+        // zieht einen Kasten. Zweiter Klick (Modus aktiv): alles auswählen.
+        if (!boxModeArmed) {
+          boxModeArmed = true;
+          wrap.classList.add('ic-box-armed');
+          wrap.title = S.boxselect_hint;
+          return;
+        }
+        boxModeArmed = false;
+        wrap.classList.remove('ic-box-armed');
+        wrap.removeAttribute('title');
         var keys = visible.map(function (p) { return 'photo:' + p.id; });
         if (state.threadPanelOpen || state.layerPanelOpen) {
           var ot = ownThread();
@@ -8467,6 +8481,18 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           render();
         });
         selOverlay.appendChild(selAddBtn);
+
+        var selPhotoIds = state.multiSelect.filter(function (k) { return k.indexOf('photo:') === 0; })
+          .map(function (k) { return parseInt(k.split(':')[1], 10); });
+        if (selPhotoIds.length > 0) {
+          var selTagBtn = el('button', { class: 'ic-selection-tag-btn', title: S.tags_selection_btn }, ['\u{1F3F7}']);
+          selTagBtn.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); });
+          selTagBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            openTagSelectionPopup(selPhotoIds);
+          });
+          selOverlay.appendChild(selTagBtn);
+        }
 
         // Mittelpunkt-Griff: zieht man daran, bewegt sich die ganze Gruppe -
         // eine klar erkennbare, dedizierte Grifffläche zusätzlich zum Klick
@@ -9834,14 +9860,15 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         authorWrap.appendChild(meLabel);
       }
       fieldsRow1.appendChild(authorWrap);
-      meta.appendChild(fieldsRow1);
 
       var fieldsRow2 = el('div', { class: 'ic-moderate-fields' });
       fieldsRow2.appendChild(editField('sourceyear', 'sourceyear', p.sourceyear, 'narrow'));
       fieldsRow2.appendChild(editField('sourceepoch', 'sourceepoch', p.sourceepoch, 'narrow'));
       fieldsRow2.appendChild(editField('sourceplace', 'sourceplace', p.sourceplace, 'wide'));
       fieldsRow2.appendChild(editField('sourceorigauthor', 'sourceorigauthor', p.sourceorigauthor));
-      meta.appendChild(fieldsRow2);
+      var modSrcBox = el('div', { class: 'ic-source-box' }, [fieldsRow1, fieldsRow2]);
+      meta.appendChild(buildTextOrSource(p, canedit, modSrcBox));
+      meta.appendChild(buildTagsInput(p, canedit));
       meta.appendChild(el('div', { class: 'ic-moderate-sub' }, [S.uploaded_on + ': ' + formatDate(p.timecreated)]));
       row.appendChild(meta);
       container.appendChild(row);
@@ -11260,6 +11287,101 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   // Kompakte Bildunterschrift für die Anordnungs-Leinwand ("Daten anzeigen"):
   // Titel, Autor*in, Entstehungsjahr, Epoche, Ort - kein Upload-Datum (die
   // eigene Leinwand zeigt ohnehin nur eigene Fotos).
+  // Tags für mehrere ausgewählte Objekte gemeinsam setzen.
+  function openTagSelectionPopup(photoids) {
+    var existing = document.getElementById('ic-tagsel-overlay');
+    if (existing) { existing.remove(); }
+    var overlay = el('div', { class: 'ic-modal-overlay', id: 'ic-tagsel-overlay' });
+    overlay.addEventListener('click', function (ev) { if (ev.target === overlay) { overlay.remove(); } });
+    var panel = el('div', { class: 'ic-add-modal ic-tagsel-modal' });
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.tags_selection_title + ' (' + photoids.length + ')']));
+    var input = el('input', { type: 'text', class: 'ic-moderate-input', placeholder: S.tags_placeholder });
+    panel.appendChild(input);
+    var row = el('div', { class: 'ic-menu-row' });
+    function apply(mode) {
+      if (!input.value.trim() && mode === 'add') { overlay.remove(); return; }
+      callAjax('mod_pinnwand_set_photo_tags', { cmid: cfg.cmid, photoids: photoids, tags: input.value, mode: mode })
+        .then(function (res) {
+          (res.photos || []).forEach(function (r) {
+            state.photos.forEach(function (p) { if (p.id === r.id) { p.tags = r.tags; } });
+          });
+          overlay.remove();
+          render();
+        }).catch(function (e) { alert(S.error_save + ' (' + e.message + ')'); });
+    }
+    var addBtn = el('button', { class: 'ic-btn ic-btn-primary' }, [S.tags_apply_add]);
+    addBtn.addEventListener('click', function () { apply('add'); });
+    var replBtn = el('button', { class: 'ic-btn ic-btn-ghost' }, [S.tags_apply_replace]);
+    replBtn.addEventListener('click', function () { apply('replace'); });
+    row.appendChild(addBtn); row.appendChild(replBtn);
+    panel.appendChild(row);
+    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel, 'aria-label': S.cancel }, ['\u2715']);
+    closeBtn.addEventListener('click', function () { overlay.remove(); });
+    panel.appendChild(closeBtn);
+    input.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { apply('add'); } });
+    overlay.appendChild(panel);
+    root.appendChild(overlay);
+    input.focus();
+  }
+
+  // Reiner Text eines Textobjekts (Wortfeld) - statt Quellenangaben anzeigen.
+  function wordfieldPlainText(p) {
+    if (!p || !p.wordfielddata) { return ''; }
+    try {
+      var tf = JSON.parse(p.wordfielddata);
+      return (tf.texts || []).map(function (t) {
+        var h = t.html || t.text || '';
+        var d = document.createElement('div');
+        d.innerHTML = String(h).replace(/<br\s*\/?>/gi, ' ');
+        return (d.textContent || '').trim();
+      }).filter(Boolean).join(' ');
+    } catch (e) { return ''; }
+  }
+  // Ein Textobjekt gilt als Zitat, sobald irgendeine Quellenangabe befüllt ist.
+  function textHasSource(p) {
+    return !!(p.sourcetitle || p.sourceauthor || p.sourceyear || p.sourceepoch || p.sourceplace || p.sourceorigauthor);
+  }
+  // Tag-Eingabe für ein Objekt; speichert beim Verlassen des Feldes.
+  function buildTagsInput(p, canedit) {
+    var input = el('input', {
+      type: 'text', value: p.tags || '', placeholder: S.tags_placeholder, title: S.tags_label,
+      class: 'ic-moderate-input ic-tags-input', disabled: canedit ? null : 'disabled'
+    });
+    if (canedit) {
+      input.addEventListener('change', function () {
+        callAjax('mod_pinnwand_set_photo_tags', { cmid: cfg.cmid, photoids: [p.id], tags: input.value, mode: 'replace' })
+          .then(function (res) {
+            if (res.photos && res.photos[0]) { p.tags = res.photos[0].tags; input.value = p.tags; }
+          }).catch(function () { /* bleibt lokal sichtbar */ });
+      });
+    }
+    return input;
+  }
+  // Text-Objekte zeigen ihren Text statt der Quellenangaben; erst "Zitat /
+  // Quelle angeben" (oder bereits vorhandene Angaben) blendet die Felder ein.
+  function buildTextOrSource(p, canedit, sourceBox) {
+    var host = el('div', { class: 'ic-textsource' });
+    if (!p.wordfielddata) { host.appendChild(sourceBox); return host; }
+    var textBox = el('div', { class: 'ic-text-excerpt' }, [wordfieldPlainText(p) || '\u2013']);
+    var quote = textHasSource(p);
+    var toggleLabel = el('label', { class: 'ic-quote-toggle' });
+    var toggle = el('input', { type: 'checkbox' });
+    toggle.checked = quote;
+    toggle.disabled = !canedit && !quote;
+    toggleLabel.appendChild(toggle);
+    toggleLabel.appendChild(el('span', {}, [S.text_is_quote]));
+    function sync() {
+      sourceBox.style.display = toggle.checked ? '' : 'none';
+      textBox.style.display = toggle.checked ? 'none' : '';
+    }
+    toggle.addEventListener('change', sync);
+    sync();
+    host.appendChild(textBox);
+    host.appendChild(toggleLabel);
+    host.appendChild(sourceBox);
+    return host;
+  }
+
   function itemCaptionText(p) {
     var lines = [];
     var top = [p.sourcetitle, p.sourceauthor].filter(Boolean).join(' — ');
@@ -11267,6 +11389,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     if (top) { lines.push(top); }
     var rest = [p.sourceyear, p.sourceepoch, p.sourceplace].filter(Boolean).join(' · ');
     if (rest) { lines.push(rest); }
+    if (p.tags) { lines.push('#' + p.tags.split(/\s*,\s*/).join(' #')); }
     return lines.join(' / ') || S.sourcetitle + ': –';
   }
 
