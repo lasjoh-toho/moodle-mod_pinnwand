@@ -372,6 +372,7 @@ $string['zoomtool'] = 'Zoom';
 $string['selection_add'] = 'Tap objects to add/remove them';
 $string['boxselect'] = 'Selection box';
 $string['selection_move'] = 'Move selection';
+$string['selection_slideshow'] = 'Show selection as image sequence in the lightbox';
 $string['selection_fit'] = 'Zoom to selection';
 $string['trashbin'] = 'Trash';
 $string['trashbin_empty'] = 'Trash is empty.';

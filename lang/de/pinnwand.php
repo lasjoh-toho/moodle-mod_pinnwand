@@ -372,6 +372,7 @@ $string['zoomtool'] = 'Zoom';
 $string['selection_add'] = 'Objekte antippen, um sie hinzuzufügen/zu entfernen';
 $string['boxselect'] = 'Auswahlbox';
 $string['selection_move'] = 'Auswahl verschieben';
+$string['selection_slideshow'] = 'Auswahl als Bildfolge in der Lightbox zeigen';
 $string['selection_fit'] = 'Auf Auswahl zoomen';
 $string['trashbin'] = 'Papierkorb';
 $string['trashbin_empty'] = 'Papierkorb ist leer.';

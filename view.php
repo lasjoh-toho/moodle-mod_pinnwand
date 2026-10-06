@@ -175,6 +175,7 @@ $config = [
         'boxselect_hint' => get_string('boxselect_hint', 'pinnwand'),
         'boxselect_cancel' => get_string('boxselect_cancel', 'pinnwand'),
         'selection_move' => get_string('selection_move', 'pinnwand'),
+        'selection_slideshow' => get_string('selection_slideshow', 'pinnwand'),
         'selection_fit' => get_string('selection_fit', 'pinnwand'),
         'trashbin' => get_string('trashbin', 'pinnwand'),
         'trashbin_empty' => get_string('trashbin_empty', 'pinnwand'),

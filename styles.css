@@ -1046,8 +1046,22 @@ svg.ic-board-ink-layer { overflow: visible; }
 }
 .ic-lb-transform { position: relative; transform-origin: center center; touch-action: none; }
 .ic-lb-transform img { display: block; object-fit: contain; user-select: none; -webkit-user-drag: none; }
-.ic-lightbox .ic-lb-nav { display: flex; gap: 16px; padding: 10px 0 calc(8px + env(safe-area-inset-bottom, 0px)); flex: 0 0 auto; flex-wrap: wrap; justify-content: center; }
-.ic-lightbox .ic-lb-nav .ic-btn { flex: 0 0 auto; min-width: 52px; padding: 10px 14px; }
+.ic-lightbox .ic-lb-nav {
+  /* schwebt über dem Bild statt eine eigene Leiste (Rand) unten zu belegen */
+  position: absolute; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 12;
+  display: flex; gap: 8px; padding: 6px 10px; border-radius: 28px;
+  background: rgba(20,21,24,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  opacity: .8; transition: opacity .15s;
+}
+.ic-lightbox .ic-lb-nav:hover, .ic-lightbox .ic-lb-nav:focus-within { opacity: 1; }
+.ic-lightbox .ic-lb-nav .ic-btn { flex: 0 0 auto; min-width: 46px; padding: 8px 12px; }
+.ic-lightbox .ic-caption {
+  position: absolute; left: 50%; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 11;
+  max-width: calc(100% - 120px); color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.9); pointer-events: none; padding: 0;
+}
+.ic-lightbox .ic-caption:empty { display: none; }
+.ic-lb-stylus-tools { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); z-index: 12; max-height: calc(100vh - 140px); flex-wrap: wrap; }
+.ic-selection-seq-btn { right: auto; left: -14px; }
 .ic-lightbox.ic-lb-focus .ic-lb-nav,
 .ic-lightbox.ic-lb-focus .ic-caption,
 .ic-lightbox.ic-lb-focus .ic-lb-left-dock {

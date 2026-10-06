@@ -8494,6 +8494,21 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           selOverlay.appendChild(selTagBtn);
         }
 
+        // Bildfolge: die ausgewählten Fotos als eigene Folge in der Lightbox zeigen.
+        var seqPhotoIds = state.multiSelect.filter(function (k) { return k.indexOf('photo:') === 0; })
+          .map(function (k) { return parseInt(k.split(':')[1], 10); })
+          .filter(function (id) { return state.photos.some(function (ph) { return ph.id === id; }); });
+        if (seqPhotoIds.length > 1) {
+          var selSeqBtn = el('button', { class: 'ic-selection-add-btn ic-selection-seq-btn', title: S.selection_slideshow }, [icon('play')]);
+          selSeqBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            var ordered = state.photos.filter(function (ph) { return seqPhotoIds.indexOf(ph.id) !== -1; })
+              .map(function (ph) { return ph.id; });
+            openLightbox(state.photos.indexOf(state.photos.filter(function (ph) { return ph.id === ordered[0]; })[0]), false, ordered);
+          });
+          selOverlay.appendChild(selSeqBtn);
+        }
+
         // Mittelpunkt-Griff: zieht man daran, bewegt sich die ganze Gruppe -
         // eine klar erkennbare, dedizierte Grifffläche zusätzlich zum Klick
         // auf die Box selbst (siehe wrap-pointerdown weiter unten).
@@ -10640,9 +10655,23 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   // Raster-Overlay (nur hier!) und eine editierbare Zeichen-/Schreib-Ebene,
   // die exakt auf das Foto gemappt ist.
   // ==================================================================
-  function openLightbox(index, startDrawing) {
+  function openLightbox(index, startDrawing, seq) {
     closeLightbox();
     state.lightboxIndex = index;
+    // Bildfolge: nur die übergebenen Foto-IDs (z.B. die Mehrfachauswahl)
+    // werden durchgeblättert; ohne seq alle Fotos der Pinnwand.
+    var seqIds = (seq && seq.length > 1) ? seq.slice() : null;
+    function lbList() {
+      var all = [];
+      state.photos.forEach(function (ph, i) { if (!seqIds || seqIds.indexOf(ph.id) !== -1) { all.push(i); } });
+      return all;
+    }
+    function lbCaption(p) {
+      var list = lbList();
+      var pos = list.indexOf(state.lightboxIndex);
+      var base = captionText(p);
+      return (seqIds && pos >= 0) ? ((pos + 1) + ' / ' + list.length + (base ? ' \u00B7 ' + base : '')) : base;
+    }
 
     var zoom = 1, panX = 0, panY = 0;
     var drawing = false;
@@ -10729,7 +10758,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     transform.appendChild(imgbox);
     viewport.appendChild(transform);
 
-    var caption = el('div', { class: 'ic-caption' }, [captionText(state.photos[index])]);
+    var caption = el('div', { class: 'ic-caption' }, [lbCaption(state.photos[index])]);
     var close = el('button', { class: 'ic-btn ic-btn-ghost ic-lb-close' }, ['\u2715']);
     close.addEventListener('click', function () { exitDrawing(true); closeLightbox(); });
 
@@ -10931,14 +10960,17 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       if (gridPanel) { gridPanel.remove(); }
       var dataPanel = document.getElementById('ic-data-panel');
       if (dataPanel) { dataPanel.remove(); }
-      var n = state.photos.length;
-      state.lightboxIndex = (state.lightboxIndex + dir + n) % n;
+      var list = lbList();
+      var n = list.length;
+      if (!n) { return; }
+      var pos = Math.max(0, list.indexOf(state.lightboxIndex));
+      state.lightboxIndex = list[(pos + dir + n) % n];
       var p = state.photos[state.lightboxIndex];
       img.src = p.url;
       setZoom(1);
       sizeLightboxImage();
       refreshOverlays();
-      caption.textContent = captionText(p);
+      caption.textContent = lbCaption(p);
       updateFocusMode();
       var lbBlendNew = blendModePicker(function () { return state.photos[state.lightboxIndex]; }, null, 'ic-blend-picker-fab');
       lbBlend.replaceWith(lbBlendNew);
@@ -10980,61 +11012,74 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       inkCanvas._icResizeHandler = sizeCanvas;
       window.addEventListener('resize', sizeCanvas);
 
-      var toolbar = el('div', { class: 'ic-ink-dock' });
-      // Scheren- (Bearbeiten) und Info-Button (Bild-Informationen) auch
-      // hier oben im Annotations-Werkzeug sichtbar, nicht nur im
-      // leftDock, der während des Zeichnens ausgeblendet ist (siehe
-      // .ic-lb-focus) - ruft die dortige, bereits vorhandene Logik per
-      // click() auf, statt sie zu duplizieren.
-      var annotTopRow = el('div', { class: 'ic-ink-dock-row' });
-      var annotEditBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.editphoto }, [icon('imageedit')]);
+      // Gleiche Optik wie das Stift-Werkzeug auf der Pinnwand: eine Spalte
+      // runder Symbol-Knöpfe, Stärke/Größe klappt beim Überfahren aus.
+      var toolbar = el('div', { class: 'ic-stylus-tools ic-lb-stylus-tools' });
+      function lbSliderFlyout(label, onInput) {
+        var fly = el('div', { class: 'ic-stylus-flyout' });
+        var val = el('span', { class: 'ic-stylus-flyout-val' }, [String(inkSize)]);
+        var range = el('input', { type: 'range', min: '2', max: '40', step: '1', value: String(inkSize), class: 'ic-stylus-size', title: label });
+        range.addEventListener('input', function () { val.textContent = range.value; onInput(parseFloat(range.value)); });
+        fly.appendChild(el('span', { class: 'ic-stylus-flyout-label' }, [label]));
+        fly.appendChild(range);
+        fly.appendChild(val);
+        return fly;
+      }
+      function lbToolWrap(btn, flyout) {
+        var w = el('div', { class: 'ic-stylus-tool' });
+        w.appendChild(btn);
+        if (flyout) { w.appendChild(flyout); }
+        toolbar.appendChild(w);
+      }
+      // Bearbeiten- und Info-Button auch hier (der leftDock ist im
+      // Fokus-Modus ausgeblendet) - rufen die vorhandene Logik per click() auf.
+      var annotEditBtn = el('button', { class: 'ic-icon-btn', title: S.editphoto }, [icon('imageedit')]);
       annotEditBtn.addEventListener('click', function () { editBtn.click(); });
-      var annotInfoBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.databtn }, [icon('info')]);
+      var annotInfoBtn = el('button', { class: 'ic-icon-btn', title: S.databtn }, [icon('info')]);
       annotInfoBtn.addEventListener('click', function () { dataBtn.click(); });
-      annotTopRow.appendChild(annotEditBtn); annotTopRow.appendChild(annotInfoBtn);
-      toolbar.appendChild(annotTopRow);
-      var penBtn = el('button', { class: 'ic-btn ic-btn-primary', title: S.draw_pen }, [icon('pen')]);
-      var eraserBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.draw_eraser }, [icon('eraser')]);
-      var textBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.draw_text }, [icon('text')]);
+      lbToolWrap(annotEditBtn); lbToolWrap(annotInfoBtn);
+      toolbar.appendChild(el('div', { class: 'ic-stylus-sep' }));
+      var penBtn = el('button', { class: 'ic-icon-btn' + (inkTool === 'pen' ? ' active' : ''), title: S.draw_pen }, [icon('pen')]);
+      var textBtn = el('button', { class: 'ic-icon-btn' + (inkTool === 'text' ? ' active' : ''), title: S.draw_text }, [el('span', { class: 'ic-stylus-text-icon' }, ['T'])]);
+      var eraserBtn = el('button', { class: 'ic-icon-btn' + (inkTool === 'eraser' ? ' active' : ''), title: S.draw_eraser }, [icon('eraser')]);
       function selectTool(t, activeBtn) {
         inkTool = t;
-        [penBtn, eraserBtn, textBtn].forEach(function (b) { b.classList.remove('ic-btn-primary'); b.classList.add('ic-btn-ghost'); });
-        activeBtn.classList.remove('ic-btn-ghost'); activeBtn.classList.add('ic-btn-primary');
+        [penBtn, eraserBtn, textBtn].forEach(function (b) { b.classList.remove('active'); });
+        activeBtn.classList.add('active');
       }
       penBtn.addEventListener('click', function () { selectTool('pen', penBtn); });
       eraserBtn.addEventListener('click', function () { selectTool('eraser', eraserBtn); });
       textBtn.addEventListener('click', function () { selectTool('text', textBtn); });
-      toolbar.appendChild(penBtn); toolbar.appendChild(eraserBtn); toolbar.appendChild(textBtn);
+      lbToolWrap(penBtn, lbSliderFlyout(S.ink_width, function (v) { inkSize = v; }));
+      lbToolWrap(textBtn, lbSliderFlyout(S.ink_fontsize, function (v) { inkSize = v; }));
+      lbToolWrap(eraserBtn);
+      toolbar.appendChild(el('div', { class: 'ic-stylus-sep' }));
 
-      var colorRow = el('div', { class: 'ic-ink-dock-row' });
-      // Freie Farbwahl zusätzlich zur festen Palette - direkter Zugriff
-      // statt nur per Doppelklick auf ein bestehendes Farbfeld.
+      var colorRow = toolbar;
+      // Freie Farbwahl zusätzlich zur festen Palette.
       var customColorInput = el('input', { type: 'color', value: inkColor, class: 'ic-textframe-custom-color' });
       customColorInput.addEventListener('input', function () {
         inkColor = customColorInput.value;
-        colorRow.querySelectorAll('.ic-ink-swatch').forEach(function (s) { s.classList.remove('active'); });
+        colorRow.querySelectorAll('.ic-color-swatch').forEach(function (s) { s.classList.remove('active'); });
         updateToolColor();
       });
-      // Stift, Text-Werkzeug und Größen-Punkte übernehmen die gewählte Farbe,
-      // damit auf einen Blick klar ist, mit welcher Farbe gerade gezeichnet wird.
+      // Stift und Text-Werkzeug übernehmen die gewählte Farbe.
       function updateToolColor() {
         penBtn.style.color = inkColor;
         textBtn.style.color = inkColor;
-        toolbar.querySelectorAll('.ic-ink-size span').forEach(function (dot) { dot.style.background = inkColor; });
       }
       INK_COLORS.forEach(function (c, colorIdx) {
         var sw = el('button', {
-          class: 'ic-ink-swatch' + (sessionColors[colorIdx] === inkColor ? ' active' : ''), style: 'background:' + sessionColors[colorIdx]
+          class: 'ic-color-swatch' + (sessionColors[colorIdx] === inkColor ? ' active' : ''), style: 'background:' + sessionColors[colorIdx]
         });
         sw.addEventListener('click', function () {
           inkColor = sessionColors[colorIdx];
-          colorRow.querySelectorAll('.ic-ink-swatch').forEach(function (s) { s.classList.remove('active'); });
+          colorRow.querySelectorAll('.ic-color-swatch').forEach(function (s) { s.classList.remove('active'); });
           sw.classList.add('active');
           updateToolColor();
         });
         // Doppelklick: diese Palettenfarbe neu definieren - gilt nur für
-        // die aktuelle Zeichensitzung/dieses Foto (sessionColors), nicht
-        // global für alle Fotos.
+        // die aktuelle Zeichensitzung/dieses Foto (sessionColors).
         sw.addEventListener('dblclick', function (ev) {
           ev.stopPropagation();
           var picker = el('input', { type: 'color', value: sessionColors[colorIdx], style: 'position:absolute;opacity:0;pointer-events:none' });
@@ -11048,24 +11093,13 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           sw._icPrevColor = sessionColors[colorIdx];
           picker.click();
         });
-        colorRow.appendChild(sw);
+        toolbar.appendChild(sw);
       });
-      colorRow.appendChild(customColorInput);
-      toolbar.appendChild(colorRow);
-
-      var sizeRow = el('div', { class: 'ic-ink-dock-row' });
-      // Ein Regler statt fester Größen-Stufen - steuert sowohl die
-      // Pinsel-/Radiergummi-Dicke als auch die Größe von Textobjekten
-      // (inkSize wird für beides verwendet, siehe unten bei "text").
-      var sizeSlider = el('input', {
-        type: 'range', min: '2', max: '40', step: '1', value: String(inkSize), class: 'ic-ink-size-slider'
-      });
-      sizeSlider.addEventListener('input', function () { inkSize = parseFloat(sizeSlider.value); });
-      sizeRow.appendChild(sizeSlider);
-      toolbar.appendChild(sizeRow);
+      toolbar.appendChild(customColorInput);
       updateToolColor();
+      toolbar.appendChild(el('div', { class: 'ic-stylus-sep' }));
 
-      var clearBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.draw_clear }, [icon('trash')]);
+      var clearBtn = el('button', { class: 'ic-icon-btn', title: S.draw_clear }, [icon('trash')]);
       clearBtn.addEventListener('click', function () {
         if (strokes.length && !confirm(S.confirmdelete)) { return; }
         strokes = [];
@@ -11077,14 +11111,14 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       // sichtbar ist (unabhängig von der Galerie-Anzeige).
       var p0 = state.photos[state.lightboxIndex];
       var onboardBtn = el('button', {
-        class: 'ic-btn ' + (p0.annotationonboard !== false ? 'ic-btn-primary' : 'ic-btn-ghost'),
+        class: 'ic-icon-btn' + (p0.annotationonboard !== false ? ' active' : ''),
         title: S.overlay_onboard
       }, [icon('thumbtack')]);
       onboardBtn.addEventListener('click', function () {
         var newState = !(p0.annotationonboard !== false);
         callAjax('mod_pinnwand_set_annotation_onboard', { cmid: cfg.cmid, photoid: p0.id, onboard: newState }).then(function (res) {
           p0.annotationonboard = res.annotationonboard;
-          onboardBtn.className = 'ic-btn ' + (p0.annotationonboard !== false ? 'ic-btn-primary' : 'ic-btn-ghost');
+          onboardBtn.classList.toggle('active', p0.annotationonboard !== false);
         });
       });
       toolbar.appendChild(onboardBtn);
@@ -11262,9 +11296,22 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     // um das Bild geschrumpft).
     function sizeLightboxImage() {
       var r = viewport.getBoundingClientRect();
-      img.style.maxWidth = Math.round(r.width) + 'px';
-      img.style.maxHeight = Math.round(r.height) + 'px';
+      var nw = img.naturalWidth, nh = img.naturalHeight;
+      if (nw && nh) {
+        // Auch kleine Bilder wachsen auf die volle Fläche (bis 3-fach).
+        var sc = Math.min(3, r.width / nw, r.height / nh);
+        img.style.maxWidth = 'none'; img.style.maxHeight = 'none';
+        img.style.width = Math.max(1, Math.round(nw * sc)) + 'px';
+        img.style.height = Math.max(1, Math.round(nh * sc)) + 'px';
+      } else {
+        img.style.maxWidth = Math.round(r.width) + 'px';
+        img.style.maxHeight = Math.round(r.height) + 'px';
+      }
     }
+    img.addEventListener('load', function () {
+      sizeLightboxImage();
+      if (inkCanvas && inkCanvas._icResizeHandler) { inkCanvas._icResizeHandler(); }
+    });
     sizeLightboxImage();
     window.addEventListener('resize', sizeLightboxImage);
     lb._icResizeHandler = sizeLightboxImage;
