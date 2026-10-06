@@ -599,7 +599,13 @@ function pinnwand_export_build_html($title, $json) {
         if (it.blend) { fel.style.mixBlendMode = it.blend; }
         if (it.slidebg && (it.slidebg.opacity || it.slidebg.blur || it.slidebg.invert || it.slidebg.brightness !== 100)) {
           var sc = it.slidebg.color || '#000000';
-          fel.style.background = 'rgba(' + parseInt(sc.substr(1, 2), 16) + ',' + parseInt(sc.substr(3, 2), 16) + ',' + parseInt(sc.substr(5, 2), 16) + ',' + ((it.slidebg.opacity || 0) / 100) + ')';
+          // Überlagerungsfarbe durchläuft Helligkeit und Invertieren wie der Hintergrund.
+          var sbr = (it.slidebg.brightness != null ? it.slidebg.brightness : 100) / 100, sinv = (it.slidebg.invert || 0) / 100;
+          var srgb = [1, 3, 5].map(function (o) {
+            var v = Math.min(1, parseInt(sc.substr(o, 2), 16) / 255 * sbr);
+            return Math.round(255 * (v * (1 - sinv) + (1 - v) * sinv));
+          });
+          fel.style.background = 'rgba(' + srgb[0] + ',' + srgb[1] + ',' + srgb[2] + ',' + ((it.slidebg.opacity || 0) / 100) + ')';
           var sbf = (it.slidebg.blur ? 'blur(' + it.slidebg.blur + 'px) ' : '') + (it.slidebg.invert ? 'invert(' + it.slidebg.invert + '%) ' : '') + (it.slidebg.brightness !== 100 ? 'brightness(' + it.slidebg.brightness + '%)' : '');
           if (sbf) { fel.style.backdropFilter = fel.style.webkitBackdropFilter = sbf; }
         }

@@ -732,7 +732,9 @@
           hideBefore = st.slideBgHideBefore !== false;
           hideAfter = st.slideBgHideAfter !== false;
         });
-        var bgOff = !isActive && !showAll && ((idx < first && hideBefore) || (idx > last && hideAfter));
+        // Im Überblick gilt "vorher unsichtbar" ebenfalls: der Effekt erscheint
+        // erst, wenn die Folie selbst an der Reihe ist.
+        var bgOff = !isActive && (showAll ? hideBefore : ((idx < first && hideBefore) || (idx > last && hideAfter)));
         sel.classList.toggle('pwp-bg-off', bgOff);
         var passed = !isActive && !showAll && idx > last;
         var exits = sel.querySelectorAll('[data-pwp-exit]');

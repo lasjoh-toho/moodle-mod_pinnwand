@@ -2657,9 +2657,11 @@
     var bg = tf && tf.slideBg;
     var bright = bg && bg.brightness != null ? bg.brightness : 100;
     if (!bg || (!bg.opacity && !bg.blur && !bg.invert && bright === 100)) { return null; }
-    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg.color || '#000000') || [0, '00', '00', '00'];
+    // Die Überlagerungsfarbe durchläuft dieselben Effekte (Helligkeit, Invertieren)
+    // wie das, was dahinter liegt - so wirken sie auf Hintergrund UND Farbe.
+    var rgb = effectBgRgb({ color: bg.color || '#000000', brightness: bright, invert: bg.invert || 0 }) || [0, 0, 0];
     return {
-      background: 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + ((bg.opacity || 0) / 100) + ')',
+      background: 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + ((bg.opacity || 0) / 100) + ')',
       filter: [bg.blur ? 'blur(' + bg.blur + 'px)' : '', bg.invert ? 'invert(' + bg.invert + '%)' : '',
         bright !== 100 ? 'brightness(' + bright + '%)' : ''].filter(Boolean).join(' ')
     };
@@ -10097,19 +10099,20 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   // Hintergrundfarbe mit denselben Effekten wie das Bild (Helligkeit, Sättigung,
   // Invertieren, in CSS-Reihenfolge), damit auch die Fläche außerhalb des
   // Bildbereichs mitwirkt, nicht nur die Bildfläche.
-  function effectBgColor(bg) {
-    var hex = bg.color || '#2b2d33';
-    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
-    if (!m) { return hex; }
+  function effectBgRgb(bg) {
+    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg.color || '#2b2d33');
+    if (!m) { return null; }
     var br = (bg.brightness != null ? bg.brightness : 100) / 100;
     var sat = (bg.saturation != null ? bg.saturation : 100) / 100;
     var inv = (bg.invert != null ? bg.invert : 0) / 100;
-    if (br === 1 && sat === 1 && !inv) { return hex; }
     var c = [parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255].map(function (v) { return Math.min(1, v * br); });
     var lum = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     c = c.map(function (v) { return Math.max(0, Math.min(1, lum + (v - lum) * sat)); });
-    c = c.map(function (v) { return Math.round(255 * (v * (1 - inv) + (1 - v) * inv)); });
-    return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+    return c.map(function (v) { return Math.round(255 * (v * (1 - inv) + (1 - v) * inv)); });
+  }
+  function effectBgColor(bg) {
+    var c = effectBgRgb(bg);
+    return c ? 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')' : (bg.color || '#2b2d33');
   }
   function applyWallpaperColor(wallpaperEl) {
     var bg = state.background || { type: 'color', color: '#2b2d33' };
