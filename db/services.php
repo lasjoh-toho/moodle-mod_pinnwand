@@ -186,6 +186,14 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:submit',
     ],
+    'mod_pinnwand_set_tags' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'set_tags',
+        'description' => 'Setzt oder ergänzt die Schlagwörter eines oder mehrerer Objekte',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:view',
+    ],
     'mod_pinnwand_set_annotation_onboard' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'set_annotation_onboard',

@@ -57,6 +57,12 @@
     pushUndo({ undo: function () { restore(before); }, redo: function () { restore(after); } });
   }
 
+  // Hinweis "wirkt nur auf den markierten Teil" im Farb-Popup nachführen.
+  document.addEventListener('selectionchange', function () {
+    var hint = document.getElementById('ic-fill-scope');
+    if (hint && hint._update) { hint._update(); }
+  });
+
   // Entf/Rücktaste löscht ausgewählte Notizen (Stift-Werkzeug, Auswahl).
   var inkSelectionDelete = null;
   var inkShapeKeyHandler = null;
@@ -141,7 +147,8 @@
     canmoderate: false,    // darf Klassenansicht sehen
     studentcansend: true,  // Aktivitätseinstellung: Lernende dürfen eigene Fotos zur Pinnwand senden/entfernen
     teachercansend: true,  // Aktivitätseinstellung: Lehrkräfte dürfen beliebige Fotos zur Pinnwand senden/entfernen
-    showData: false,       // Anordnung: Metadaten unter jedem Foto ein-/ausblenden
+    labelMode: 'show',     // Labels auf der Pinnwand: show | tooltip | off (Einstellungen, je Gerät gemerkt)
+    labelDelay: 1,         // Tooltip-Modus: Label erscheint nach so vielen Sekunden über dem Objekt
     editingPhotoId: null,  // falls gesetzt: die Pipeline überschreibt dieses bestehende Foto statt ein neues anzulegen
     sourceInfo: null,
     photos: [],           // vom Server geladene / neu gespeicherte Fotos
@@ -182,6 +189,18 @@
     boardHideMedia: false, // Lupenmenü: alle Medien (Fotos ohne Wortfeld-Daten) ausblenden, nur Texte/Wortfelder zeigen
     trashItems: []
   };
+
+  // Label-Einstellung je Gerät und Aktivität merken.
+  var LABEL_PREF_KEY = 'pinnwand_labels_' + cfg.cmid;
+  (function () {
+    var lp = null;
+    try { lp = JSON.parse(window.localStorage.getItem(LABEL_PREF_KEY) || 'null'); } catch (e) { lp = null; }
+    if (lp && ['show', 'tooltip', 'off'].indexOf(lp.mode) !== -1) { state.labelMode = lp.mode; }
+    if (lp && typeof lp.delay === 'number' && lp.delay >= 0) { state.labelDelay = lp.delay; }
+  })();
+  function saveLabelPrefs() {
+    try { window.localStorage.setItem(LABEL_PREF_KEY, JSON.stringify({ mode: state.labelMode, delay: state.labelDelay })); } catch (e) { /* ohne Speicher nur für diese Sitzung */ }
+  }
 
   // ------------------------------------------------------------------
   // Kleine DOM-Helfer
@@ -524,6 +543,12 @@
         return input;
       }
       var fields = el('div', { class: 'ic-home-fields' });
+      if (p.wordfielddata) {
+        fields.appendChild(el('div', { class: 'ic-home-fields-head' }, [quoteToggle(p, render)]));
+      }
+      if (!showsSourceFields(p)) {
+        fields.appendChild(el('div', { class: 'ic-text-preview' }, [wordfieldPlainText(p)]));
+      }
       var fieldsRow1 = el('div', { class: 'ic-moderate-fields' });
       var titleWrap = el('div', { class: 'ic-field-inline', style: 'flex:1 1 140px' });
       titleWrap.appendChild(editField('sourcetitle', 'sourcetitle'));
@@ -555,6 +580,8 @@
       fieldsRow2.appendChild(editField('sourceplace', 'sourceplace', 'wide'));
       fieldsRow2.appendChild(editField('sourceorigauthor', 'sourceorigauthor'));
       fields.appendChild(fieldsRow2);
+      if (!showsSourceFields(p)) { fieldsRow1.remove(); fieldsRow2.remove(); }
+      fields.appendChild(tagEditor(p, true));
       row.appendChild(fields);
 
       // Nur auf schmalen Bildschirmen sichtbar (siehe CSS): Info-Button
@@ -2565,15 +2592,15 @@
     b.addEventListener('click', function (ev) { ev.stopPropagation(); openFrameSlideEditor(it); });
     return b;
   }
-  // Folien-Hintergrund: Farbe mit Deckkraft und optionaler Weichzeichnung
-  // dessen, was dahinter liegt (Milchglas).
+  // Folien-Hintergrund: Farbe mit Deckkraft, optional Invertieren und
+  // Weichzeichnen dessen, was dahinter liegt (Milchglas).
   function slideBgCss(tf) {
     var bg = tf && tf.slideBg;
-    if (!bg || (!bg.opacity && !bg.blur)) { return null; }
+    if (!bg || (!bg.opacity && !bg.blur && !bg.invert)) { return null; }
     var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg.color || '#000000') || [0, '00', '00', '00'];
     return {
       background: 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + ((bg.opacity || 0) / 100) + ')',
-      filter: bg.blur ? 'blur(' + bg.blur + 'px)' : ''
+      filter: ((bg.invert ? 'invert(1) ' : '') + (bg.blur ? 'blur(' + bg.blur + 'px)' : '')).trim()
     };
   }
   function applySlideBg(elm, tf) {
@@ -3244,6 +3271,10 @@
       // (nicht im Editor - dort würde ein Neuaufbau den Cursor verlieren).
       clearTimeout(fontRerenderTimer);
       fontRerenderTimer = setTimeout(function () {
+        // Nicht neu aufbauen, solange ein Dialog offen ist: render() würde ihn
+        // schließen. pdf.js lädt beim Zeichnen der Seiten eigene Schriften -
+        // dadurch verschwand die PDF-Seitenauswahl sofort wieder.
+        if (root.querySelector('.ic-modal-overlay, #ic-settings-panel')) { return; }
         if (state.step === 'arrange' || state.step === 'home' || state.step === 'moderate') { render(); }
       }, 120);
     });
@@ -4520,7 +4551,8 @@
     BLOCK_ICONS[S.tfblock_fonts] = 'fonts';
     BLOCK_ICONS[S.tfblock_form] = 'effecticon';
     BLOCK_ICONS[S.tfblock_formulas] = 'code';
-    BLOCK_ICONS[S.tfblock_slide] = 'frameicon';
+    BLOCK_ICONS[S.tfblock_slidebg] = 'frameicon';
+    BLOCK_ICONS[S.tfblock_elements] = 'layers';
     // Akkordeon: Überschrift antippen klappt den jeweiligen Block ein/aus -
     // auf dem Handy starten alle Blöcke eingeklappt (siehe CSS), auf
     // größeren Bildschirmen bleiben sie offen.
@@ -5038,6 +5070,32 @@
       function applyShapeOrTextChange() {
         if (isShapeTarget) { render(); } else { applyStyle1(); }
       }
+      // Markierter Teil des aktiven Textes (nicht der ganze Text)?
+      function activeObjEl() { return frame.querySelector('[data-textid="' + active.id + '"]'); }
+      function partialSelectionInActive() {
+        var sel = window.getSelection(), o = activeObjEl();
+        if (!o || !sel || !sel.rangeCount || sel.isCollapsed) { return false; }
+        if (!o.contains(sel.getRangeAt(0).commonAncestorContainer)) { return false; }
+        var whole = objTextWithoutHandles(o).replace(/\s+/g, '');
+        return sel.toString().replace(/\s+/g, '') !== whole;
+      }
+      // Fläche für den GANZEN Text: frühere Farben/Verläufe einzelner
+      // Abschnitte entfernen - sonst überdecken sie die neue Farbe bzw. den
+      // Verlauf, und Änderungen scheinen nur noch den einen Teil zu treffen.
+      function stripInnerFill() {
+        var o = activeObjEl();
+        if (!o) { return; }
+        stripConflictingStyles(o, 'color:;background-image:;-webkit-background-clip:;background-clip:;-webkit-text-fill-color:;');
+        active.html = objHtmlWithoutHandles(o); active.text = objTextWithoutHandles(o);
+      }
+      function applyFillWhole() {
+        if (!isShapeTarget) {
+          var sel = window.getSelection();
+          if (sel && partialSelectionInActive()) { sel.removeAllRanges(); }
+          stripInnerFill();
+        }
+        applyShapeOrTextChange();
+      }
       function openStyle1Popup(anchorBtn, title, buildRows) {
         openDraggableModal(title, anchorBtn, function (content) { buildRows(content); });
       }
@@ -5058,11 +5116,17 @@
         }
         var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
         if (!objEl) { return; }
-        applyStyleToSelectionOrWhole(objEl, 'color:' + color + ';', function () {
+        var applyWhole = function () {
+          stripInnerFill();
           active.fillColor = active.color = color;
           active.fillGradient = null;
           applyStyle1();
-        }, active);
+        };
+        if (partialSelectionInActive()) {
+          applyStyleToSelectionOrWhole(objEl, 'color:' + color + ';', applyWhole, active);
+        } else {
+          applyWhole();
+        }
         refreshControls();
       }
       opacitySliderRow.innerHTML = '';
@@ -5175,12 +5239,29 @@
         }
       } else if (state.styleTab === 'fill') {
         gradientBarRow.innerHTML = '';
+        // Sichtbar machen, wenn nur ein markierter Teil des Textes gefärbt
+        // wird - "Ganzer Text" hebt die Markierung auf.
+        if (!isShapeTarget) {
+          var scopeHint = el('div', { class: 'ic-fill-scope', id: 'ic-fill-scope' });
+          var scopeWhole = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, [S.tf_fill_whole_text]);
+          scopeWhole.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+          scopeWhole.addEventListener('click', function () {
+            var sel = window.getSelection();
+            if (sel) { sel.removeAllRanges(); }
+            scopeHint._update();
+          });
+          scopeHint.appendChild(el('span', {}, [S.tf_fill_on_selection]));
+          scopeHint.appendChild(scopeWhole);
+          scopeHint._update = function () { scopeHint.classList.toggle('ic-hidden', !partialSelectionInActive()); };
+          scopeHint._update();
+          bigPaletteContainer.appendChild(scopeHint);
+        }
         var gradCheck = el('input', { type: 'checkbox' });
         gradCheck.checked = !!styleTarget.fillGradient;
         gradCheck.addEventListener('change', function () {
           styleTarget.fillGradient = gradCheck.checked ? [solidColorShown() || '#e0503f', '#4f8cff'] : null;
           styleTarget.fillGradientAngle = styleTarget.fillGradientAngle || 135;
-          if (isShapeTarget) { render(); } else { applyStyle1(); refreshControls(); }
+          applyFillWhole(); if (!isShapeTarget) { refreshControls(); }
         });
         gradientBarRow.appendChild(gradCheck);
 
@@ -5232,7 +5313,7 @@
               try { marker.releasePointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
               if (markerMoved) {
                 state.gradientStopSid = stop.sid;
-                commitStops(stops); applyShapeOrTextChange();
+                commitStops(stops); applyFillWhole();
                 if (!isShapeTarget) { refreshControls(); }
               } else {
                 state.gradientStopSid = stop.sid;
@@ -5247,7 +5328,7 @@
               var without = stops.filter(function (s2) { return s2 !== stop; });
               commitStops(without);
               state.gradientStopSid = null;
-              applyShapeOrTextChange();
+              applyFillWhole();
               if (!isShapeTarget) { refreshControls(); }
             });
             band.appendChild(marker);
@@ -5264,7 +5345,7 @@
             var newStop = { color: mixHexColors(before.color, after.color, mixT), pos: pos, sid: gradientStopIdCounter++ };
             commitStops(stops.concat([newStop]));
             state.gradientStopSid = newStop.sid;
-            applyShapeOrTextChange();
+            applyFillWhole();
             if (!isShapeTarget) { refreshControls(); }
           });
           gradientBarRow.appendChild(band);
@@ -5290,7 +5371,7 @@
             ev.preventDefault();
           });
           angleKnob.addEventListener('pointermove', onAngleMove);
-          function angleEnd() { if (angleDragging) { angleDragging = false; applyShapeOrTextChange(); } }
+          function angleEnd() { if (angleDragging) { angleDragging = false; applyFillWhole(); } }
           angleKnob.addEventListener('pointerup', angleEnd);
           angleKnob.addEventListener('pointercancel', angleEnd);
           gradientBarRow.appendChild(angleKnob);
@@ -5301,7 +5382,7 @@
           });
           radialBtn.addEventListener('click', function () {
             styleTarget.fillGradientType = styleTarget.fillGradientType === 'radial' ? null : 'radial';
-            if (isShapeTarget) { render(); } else { applyStyle1(); refreshControls(); }
+            applyFillWhole(); if (!isShapeTarget) { refreshControls(); }
           });
           gradientBarRow.appendChild(radialBtn);
 
@@ -5316,7 +5397,7 @@
               noteRecentColor(color);
               if (markerBySid[stopSel.sid]) { markerBySid[stopSel.sid].style.background = color; }
               band.style.background = 'linear-gradient(90deg,' + gradientCssStops(stops) + ')';
-              applyShapeOrTextChange();
+              applyFillWhole();
             }
             if (state.colorTab === 'wheel') {
               buildColorWheel(bigPaletteContainer, stopSel.color, applyGradStopColor);
@@ -5760,26 +5841,26 @@
       }
     }
 
-    // Folie: Block "Folie & Animation" - weitere Textfelder anlegen und die
-    // Objekte in Animationsschritte sortieren (Reihenfolge, "mit
-    // vorherigem"). Die Schrittnummer erscheint als Marke am Objekt.
+    // Folie: zwei eigene Popups - "Folie" (Textfeld anlegen, Mischmodus,
+    // Hintergrund, verknüpfte Objekte) und "Elemente" (Objekte in
+    // Animationsschritte sortieren, Reihenfolge, "mit vorherigem", Abgang).
+    // Die Schrittnummer erscheint als Marke am Objekt.
     if (isSlide) {
       tf.anim = tf.anim || [];
-      var blockAnim = makeAccordionBlock(S.tfblock_slide);
-      blocksWrap.insertBefore(blockAnim, blocksWrap.firstChild);
+      var blockSlide = makeAccordionBlock(S.tfblock_slidebg);
+      var blockElems = makeAccordionBlock(S.tfblock_elements);
+      blocksWrap.insertBefore(blockElems, blocksWrap.firstChild);
+      blocksWrap.insertBefore(blockSlide, blocksWrap.firstChild);
       var addTextBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['+ ' + S.slide_addtext]);
       addTextBtn.addEventListener('click', function () {
         var nid = Math.max.apply(null, [0].concat(tf.texts.map(function (t) { return t.id; }))) + 1;
         tf.texts.push({ id: nid, text: '', font: 'sans', size: 24, x: 0.5, y: Math.min(0.9, 0.3 + 0.12 * (tf.texts.length % 6)), fontWeight: 400 });
         render();
       });
-      // Zwei Spalten (großer Bildschirm): links Folie/Hintergrund/Objekte,
-      // rechts die Animationsschritte.
-      var slideCols = el('div', { class: 'ic-slide-cols' });
       var slideColL = el('div', { class: 'ic-slide-col' });
       var slideColR = el('div', { class: 'ic-slide-col' });
-      slideCols.appendChild(slideColL); slideCols.appendChild(slideColR);
-      blockAnim.content.appendChild(slideCols);
+      blockSlide.content.appendChild(slideColL);
+      blockElems.content.appendChild(slideColR);
       var slideTopRow = el('div', { class: 'ic-anim-toprow' });
       slideTopRow.appendChild(addTextBtn);
       // Mischmodus der ganzen Folie mit dem Hintergrund - im Editor direkt
@@ -5813,6 +5894,18 @@
       var bgColor = el('input', { type: 'color', value: tf.slideBg.color || '#000000', title: S.slide_bg });
       bgColor.addEventListener('input', function () { tf.slideBg.color = bgColor.value; applySlideBg(frameInner, tf); });
       bgRow.appendChild(bgColor);
+      // "Invertieren" als eigene Farbwahl: kehrt die Farben dessen um, was
+      // hinter der Folie liegt (Pinnwand, Hintergrund).
+      var invertBtn = el('button', {
+        class: 'ic-btn ic-btn-ghost ic-mini-btn ic-slide-bg-invert' + (tf.slideBg.invert ? ' active' : ''),
+        type: 'button', title: S.slide_bg_invert_hint
+      }, [el('span', { class: 'ic-slide-bg-invert-swatch' }), el('span', {}, [S.slide_bg_invert])]);
+      invertBtn.addEventListener('click', function () {
+        tf.slideBg.invert = !tf.slideBg.invert;
+        invertBtn.classList.toggle('active', !!tf.slideBg.invert);
+        applySlideBg(frameInner, tf);
+      });
+      bgRow.appendChild(invertBtn);
       function bgSlider(label, key, max) {
         var lab = el('label', { class: 'ic-slide-bg-slider' }, [label]);
         var r = el('input', { type: 'range', min: '0', max: String(max), value: String(tf.slideBg[key] || 0) });
@@ -6292,6 +6385,10 @@
   // damit sich das Design vertraut anfühlt). "text" bleibt bewusst ein
   // simpler Buchstabe, genau wie im Original.
   var ICON_SVG = {
+    image: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',
+    tag: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><path d="M7 7h.01"/></svg>',
+    sortgrid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17.5 13v8M14.5 18l3 3 3-3"/></svg>',
+    slides: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="15" height="14" rx="2"/><path d="M20 7v10M23 9v6"/><path d="M8 9l5 3-5 3z"/></svg>',
     pen: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>',
     eraser: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H8l-6-6a2 2 0 0 1 0-2.8l8-8a2 2 0 0 1 2.8 0l7 7a2 2 0 0 1 0 2.8L13 20"/><path d="M6 13l6 6"/></svg>',
     clone: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
@@ -6805,6 +6902,103 @@
     return '';
   }
 
+  // Tags (Schlagwörter): kommagetrennt gespeichert, für Bilder und Texte.
+  function parseTags(str) {
+    var seen = {}, out = [];
+    String(str || '').split(',').forEach(function (t) {
+      t = t.replace(/\s+/g, ' ').trim();
+      if (t && !seen[t.toLowerCase()]) { seen[t.toLowerCase()] = true; out.push(t); }
+    });
+    return out;
+  }
+  // Gleiche Änderung auch in den übrigen Kopien desselben Objekts nachführen
+  // (Klassenansicht und Post-Stream halten eigene Objekte).
+  function syncPhotoField(id, key, value) {
+    (state.photos || []).concat(state.streamPhotos || []).forEach(function (o) { if (o.id === id) { o[key] = value; } });
+  }
+  function saveTags(photoids, tags, mode) {
+    return callAjax('mod_pinnwand_set_tags', { cmid: cfg.cmid, photoids: photoids, tags: tags, mode: mode || 'set' }).then(function (res) {
+      (res.photos || []).forEach(function (r) { syncPhotoField(r.id, 'tags', r.tags); });
+      return res.photos || [];
+    });
+  }
+  function tagEditor(p, canedit) {
+    var wrap = el('div', { class: 'ic-tags' });
+    function save(list) {
+      p.tags = list.join(', ');
+      draw();
+      saveTags([p.id], p.tags, 'set').then(function (rows) {
+        if (rows[0]) { p.tags = rows[0].tags; draw(); }
+      }).catch(function () { /* bleibt lokal sichtbar, Speichern fehlgeschlagen */ });
+    }
+    function draw() {
+      var hadFocus = document.activeElement && wrap.contains(document.activeElement);
+      wrap.innerHTML = '';
+      var tags = parseTags(p.tags);
+      if (!tags.length && !canedit) { wrap.classList.add('ic-hidden'); return; }
+      wrap.appendChild(el('span', { class: 'ic-tags-label' }, [S.tags]));
+      tags.forEach(function (t) {
+        var chip = el('span', { class: 'ic-tag' }, ['#' + t]);
+        if (canedit) {
+          var x = el('button', { class: 'ic-tag-x', type: 'button', title: S.tag_remove, 'aria-label': S.tag_remove }, ['\u2715']);
+          x.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            save(parseTags(p.tags).filter(function (o) { return o !== t; }));
+          });
+          chip.appendChild(x);
+        }
+        wrap.appendChild(chip);
+      });
+      if (canedit) {
+        var inp = el('input', { type: 'text', class: 'ic-tag-input', placeholder: S.tags_placeholder, 'aria-label': S.tags });
+        var commit = function () {
+          var v = inp.value.trim();
+          if (!v) { return; }
+          inp.value = '';
+          save(parseTags(p.tags).concat(parseTags(v)));
+        };
+        inp.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter' || ev.key === ',') { ev.preventDefault(); commit(); wrap.querySelector('.ic-tag-input').focus(); }
+        });
+        inp.addEventListener('change', commit);
+        wrap.appendChild(inp);
+        if (hadFocus) { inp.focus(); }
+      }
+    }
+    draw();
+    return wrap;
+  }
+  // Texte (Wortfelder): reiner Text für die Vorschau statt Quellenangaben.
+  function wordfieldPlainText(p) {
+    if (!p.wordfielddata) { return ''; }
+    try {
+      var wtf = JSON.parse(p.wordfielddata);
+      return (wtf.texts || []).map(function (t) { return String(t.text || '').trim(); }).filter(Boolean).join('\n');
+    } catch (e) { return ''; }
+  }
+  // Quellenangaben gehören zu Bildern und zu Zitaten - bei eigenen Texten
+  // zeigt die Liste stattdessen den Text selbst.
+  function showsSourceFields(p) { return !p.wordfielddata || !!p.isquote; }
+  function quoteToggle(p, onChange) {
+    var b = el('button', {
+      class: 'ic-btn ic-btn-ghost ic-mini-btn ic-quote-toggle' + (p.isquote ? ' active' : ''), type: 'button',
+      title: S.quote_toggle, 'aria-label': S.quote_toggle, 'aria-pressed': p.isquote ? 'true' : 'false'
+    }, ['\u201C']);
+    b.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      p.isquote = !p.isquote;
+      syncPhotoField(p.id, 'isquote', p.isquote);
+      callAjax('mod_pinnwand_update_source', {
+        cmid: cfg.cmid, photoid: p.id,
+        sourcetitle: p.sourcetitle || '', sourceauthor: p.sourceauthor || '', sourceyear: p.sourceyear || '',
+        sourceepoch: p.sourceepoch || '', sourceplace: p.sourceplace || '', sourceorigauthor: p.sourceorigauthor || '',
+        isquote: p.isquote ? 1 : 0
+      }).catch(function () { /* bleibt lokal sichtbar, Speichern fehlgeschlagen */ });
+      onChange();
+    });
+    return b;
+  }
+
   function boardDisplayName(boardId) {
     if (state.boardNames && state.boardNames[boardId]) { return state.boardNames[boardId]; }
     var boards = boardList();
@@ -6897,7 +7091,7 @@
     var ownThreadForColor = ownThread();
     root.style.setProperty('--ic-thread-color', (ownThreadForColor && ownThreadForColor.color) || '#4f8cff');
 
-    var wrap = el('div', { class: 'ic-canvas-wrap' + (cfg.boardpannable ? ' pannable' : '') });
+    var wrap = el('div', { class: 'ic-canvas-wrap' + (cfg.boardpannable ? ' pannable' : '') + (state.boxModeArmed ? ' ic-box-armed' : '') });
     // Tapete: AUSSERHALB der gezoomten .ic-canvas-panzoom-Ebene, sonst würde
     // sie mit skaliert und bei einem Zoom < 1 (typischer Fall) nur einen Teil
     // des Fensters füllen. Füllt dadurch immer den kompletten sichtbaren
@@ -7311,7 +7505,7 @@
     if (state.boardFilter && state.boardFilter.trim()) {
       var fq = state.boardFilter.trim().toLowerCase();
       visible = visible.filter(function (p) {
-        return [p.sourcetitle, p.sourceyear, p.sourceepoch, p.sourceorigauthor, p.sourceauthor].some(function (v) {
+        return [p.sourcetitle, p.sourceyear, p.sourceepoch, p.sourceorigauthor, p.sourceauthor, p.tags].some(function (v) {
           return (v || '').toLowerCase().indexOf(fq) !== -1;
         });
       });
@@ -7457,7 +7651,20 @@
       // auch hier zu sehen, außer die Person hat sie explizit für die
       // Pinnwand ausgeblendet (annotationonboard).
       if (p.annotationonboard !== false) { buildInkDisplay(item, p); }
-      if (state.showData) { item.appendChild(el('div', { class: 'ic-item-caption' }, [itemCaptionText(p)])); }
+      // Label (Einstellungen): dauerhaft oder als Tooltip nach x Sekunden.
+      var labelText = state.labelMode !== 'off' ? boardLabelText(p) : '';
+      if (labelText) {
+        var labelEl = el('div', { class: 'ic-item-caption' + (state.labelMode === 'tooltip' ? ' ic-caption-tooltip' : '') }, [labelText]);
+        item.appendChild(labelEl);
+        if (state.labelMode === 'tooltip') {
+          var labelTimer = null;
+          item.addEventListener('mouseenter', function () {
+            clearTimeout(labelTimer);
+            labelTimer = setTimeout(function () { labelEl.classList.add('show'); }, Math.max(0, state.labelDelay) * 1000);
+          });
+          item.addEventListener('mouseleave', function () { clearTimeout(labelTimer); labelEl.classList.remove('show'); });
+        }
+      }
 
       // Handles (Größe/Rotation) nur bei Hover (Maus) bzw. nach Antippen
       // (Touch) einblenden - siehe .ic-arrange-item.show-handles in CSS.
@@ -7838,7 +8045,8 @@
     }
 
     var longPressTimer = null, longPressStartX = 0, longPressStartY = 0;
-    var boxModeArmed = false; // per Lupen-Popup aktiviert - nächster Klick auf leere Fläche startet die Box sofort
+    // state.boxModeArmed: per Lupen-Popup ("Kasten", erster Klick) aktiviert -
+    // das nächste Ziehen auf der Pinnwand zieht den Auswahlkasten auf.
     var selectionBoxEl = null, selBoxStartWorld = null, selBoxAdd = false;
 
     var lastPointerCtrl = false;
@@ -7883,7 +8091,7 @@
     }
     function boardRectOf(idOrItem, kind) {
       if (kind === 'photo') {
-        return { x: idOrItem.canvasx, y: idOrItem.canvasy, w: idOrItem.canvasw, h: idOrItem.canvasw * 0.75 };
+        return { x: idOrItem.canvasx, y: idOrItem.canvasy, w: idOrItem.canvasw, h: photoBoardHeight(idOrItem) };
       }
       return { x: idOrItem.framex, y: idOrItem.framey, w: idOrItem.framew, h: idOrItem.frameh };
     }
@@ -7942,9 +8150,12 @@
     wrap.addEventListener('pointerdown', function (ev) {
       if (ev.pointerType === 'touch' && activeTouches > 1) { return; } // Pinch hat Vorrang
       if (!isEmptyAreaTarget(ev.target)) { return; }
-      if (boxModeArmed) {
-        boxModeArmed = false;
-        startSelectionBox(ev.clientX, ev.clientY, ev.ctrlKey || ev.metaKey);
+      if (state.boxModeArmed) {
+        state.boxModeArmed = false;
+        wrap.classList.remove('ic-box-armed');
+        var zp = document.getElementById('ic-zoom-popup');
+        if (zp) { zp.remove(); }
+        startSelectionBox(ev.clientX, ev.clientY, ev.ctrlKey || ev.metaKey || ev.shiftKey);
         return;
       }
       // Klick innerhalb der Box der Mehrfachauswahl (aber auf kein Objekt
@@ -8013,20 +8224,23 @@
     // Zeichnen) bleiben davon bewusst getrennt (eigene linke Dock-Leiste dort).
     var fabRow = el('div', { class: 'ic-fab-row' });
 
-    var gearBtn = el('button', { class: 'ic-fab ic-tablet-up ic-fab-biglabel', title: S.options }, ['\u2699']);
-    gearBtn.addEventListener('click', function () { openBackgroundPanel(body); });
+    // Zahnrad: Einstellungen (Labels, Präsentationsstart); der Hintergrund
+    // hat ein eigenes Modal, das von dort aus geöffnet wird.
+    var gearBtn = el('button', { class: 'ic-fab ic-tablet-up ic-fab-biglabel', title: S.settings_title }, ['\u2699']);
+    gearBtn.addEventListener('click', function () { openBoardSettingsPanel(body); });
     fabRow.appendChild(gearBtn);
-
-    var dataBtn = el('button', { class: 'ic-fab' + (state.showData ? ' active' : ''), title: state.showData ? S.hidedata : S.showdata }, ['\u{1F3F7}']);
-    dataBtn.addEventListener('click', function () { state.showData = !state.showData; render(); });
-    fabRow.appendChild(dataBtn);
 
     // Lupe: öffnet ein kleines Zoom-Popup (Regler + Plus/Minus + Auswahl-
     // Werkzeuge + Filterleiste) statt mehrerer permanent sichtbarer Buttons.
     var zoomBtn = el('button', { class: 'ic-fab' + (state.boardFilter ? ' active' : ''), title: S.zoomtool }, [icon('search')]);
     zoomBtn.addEventListener('click', function () {
       var existing = document.getElementById('ic-zoom-popup');
-      if (existing) { existing.remove(); return; }
+      if (existing) {
+        existing.remove();
+        state.boxModeArmed = false;
+        wrap.classList.remove('ic-box-armed');
+        return;
+      }
       var popup = el('div', { class: 'ic-zoom-popup', id: 'ic-zoom-popup' });
       var zoomOutBtn = el('button', { class: 'ic-icon-btn', title: S.zoomout }, ['\u2212']);
       zoomOutBtn.addEventListener('click', function () { zoomBoardBy(0.85); zoomSlider.value = Math.round(state.boardZoom * 100); });
@@ -8044,8 +8258,20 @@
       // (danach angetippte einzelne Objekte werden zur Auswahl hinzugefügt/
       // entfernt). Auge: springt mit der Kamera genau auf den Ausschnitt,
       // in dem die aktuelle Auswahl zu sehen ist.
-      var boxSelBtn = el('button', { class: 'ic-icon-btn', title: S.boxselect }, [icon('boxselect')]);
+      // Kasten: erster Klick -> Kasten auf der Pinnwand aufziehen; zweiter
+      // Klick -> sofort alles Angezeigte auswählen.
+      var boxSelBtn = el('button', { class: 'ic-icon-btn' + (state.boxModeArmed ? ' active' : ''), title: S.boxselect + ': ' + S.boxselect_hint }, [icon('boxselect')]);
+      var boxHint = el('div', { class: 'ic-zoom-popup-hint' + (state.boxModeArmed ? '' : ' ic-hidden') }, [S.boxselect_hint]);
       boxSelBtn.addEventListener('click', function () {
+        if (!state.boxModeArmed) {
+          state.boxModeArmed = true;
+          boxSelBtn.classList.add('active');
+          boxHint.classList.remove('ic-hidden');
+          wrap.classList.add('ic-box-armed');
+          return;
+        }
+        state.boxModeArmed = false;
+        wrap.classList.remove('ic-box-armed');
         popup.remove();
         var keys = visible.map(function (p) { return 'photo:' + p.id; });
         if (state.threadPanelOpen || state.layerPanelOpen) {
@@ -8083,8 +8309,10 @@
         state.boardHideMedia = !state.boardHideMedia;
         render();
       });
+      var sortBtn = el('button', { class: 'ic-icon-btn', title: S.sort_board + ': ' + S.sort_board_hint }, [icon('sortgrid')]);
+      sortBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openSortMenu(sortBtn); });
       var row2 = el('div', { class: 'ic-zoom-popup-row' });
-      row2.appendChild(boxSelBtn); row2.appendChild(addSelBtn); row2.appendChild(fitSelBtn); row2.appendChild(hideMediaBtn);
+      row2.appendChild(boxSelBtn); row2.appendChild(addSelBtn); row2.appendChild(fitSelBtn); row2.appendChild(hideMediaBtn); row2.appendChild(sortBtn);
 
       // Filterleiste (Titel/Jahr/Epoche/Autor der Vorlage/Autor) direkt
       // hier statt eines eigenen Buttons.
@@ -8100,7 +8328,7 @@
       var row3 = el('div', { class: 'ic-zoom-popup-row' });
       row3.appendChild(filterInput); row3.appendChild(filterClear);
 
-      popup.appendChild(row1); popup.appendChild(row2); popup.appendChild(row3);
+      popup.appendChild(row1); popup.appendChild(row2); popup.appendChild(boxHint); popup.appendChild(row3);
       body.appendChild(popup);
     });
     fabRow.appendChild(zoomBtn);
@@ -8391,6 +8619,107 @@
       });
       canvas.appendChild(plItem);
     });
+
+    // Bilder sortieren: die Auswahl (ab zwei Objekten) bzw. alle Bilder des
+    // Boards werden nach Titel/Jahr/Autor*in/Upload/Tag in einem Raster
+    // angeordnet - ab der oberen linken Ecke der bisherigen Gruppe.
+    // Rückgängig machen stellt alle Positionen wieder her.
+    function selectedPhotos() {
+      return state.multiSelect.filter(function (k) { return k.indexOf('photo:') === 0; }).map(function (k) {
+        var id = parseInt(k.slice(6), 10);
+        return state.photos.filter(function (o) { return o.id === id; })[0];
+      }).filter(Boolean);
+    }
+    function sortBoardPhotos(key) {
+      var sel = selectedPhotos();
+      var targets = sel.length >= 2 ? sel : visible.filter(function (p) { return !p.wordfielddata; });
+      if (targets.length < 2) { return; }
+      var val = {
+        title: function (p) { return p.sourcetitle || ''; },
+        year: function (p) { return p.sourceyear || ''; },
+        author: function (p) { return p.sourceauthor || p.userfullname || ''; },
+        upload: function (p) { return p.timecreated || 0; },
+        tag: function (p) { return parseTags(p.tags)[0] || ''; }
+      }[key];
+      var sorted = targets.slice().sort(function (a, b) {
+        var va = val(a), vb = val(b);
+        if (key === 'upload') { return va - vb; }
+        if (!va !== !vb) { return va ? -1 : 1; } // ohne Angabe ans Ende
+        return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' });
+      });
+      var gap = 24;
+      var minX = Math.min.apply(null, targets.map(function (p) { return p.canvasx; }));
+      var minY = Math.min.apply(null, targets.map(function (p) { return p.canvasy; }));
+      var cellW = Math.max.apply(null, targets.map(function (p) { return p.canvasw; })) + gap;
+      var cellH = Math.max.apply(null, targets.map(function (p) { return photoBoardHeight(p); })) + gap;
+      var cols = Math.max(1, Math.round(Math.sqrt(sorted.length * (BOARD_W / BOARD_H) * cellH / cellW)));
+      var before = targets.map(function (p) { return { p: p, x: p.canvasx, y: p.canvasy }; });
+      sorted.forEach(function (p, i) {
+        p.canvasx = minX + (i % cols) * cellW + (cellW - gap - p.canvasw) / 2;
+        p.canvasy = minY + Math.floor(i / cols) * cellH;
+      });
+      var after = targets.map(function (p) { return { p: p, x: p.canvasx, y: p.canvasy }; });
+      function apply(list) { list.forEach(function (e) { e.p.canvasx = e.x; e.p.canvasy = e.y; persistLayout(e.p); }); }
+      apply(after);
+      pushUndo({ undo: function () { apply(before); }, redo: function () { apply(after); } });
+      render();
+    }
+    function openSortMenu(anchor) {
+      var old = document.getElementById('ic-sort-menu');
+      if (old) { old.remove(); return; }
+      var menu = el('div', { class: 'ic-sort-menu', id: 'ic-sort-menu' });
+      menu.appendChild(el('div', { class: 'ic-sort-menu-title' }, [S.sort_board]));
+      [['title', S.sort_by_title], ['year', S.sort_year], ['author', S.sort_by_author], ['upload', S.sort_upload], ['tag', S.sort_by_tag]].forEach(function (o) {
+        var b = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, [o[1]]);
+        b.addEventListener('click', function () { menu.remove(); sortBoardPhotos(o[0]); });
+        menu.appendChild(b);
+      });
+      var r = anchor.getBoundingClientRect();
+      menu.style.left = Math.max(8, Math.min(window.innerWidth - 200, r.left)) + 'px';
+      menu.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+      document.body.appendChild(menu);
+      setTimeout(function () {
+        document.addEventListener('click', function closeSort(ev) {
+          if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', closeSort); }
+        });
+      }, 0);
+    }
+
+    // Leiste zur Auswahl (bildschirmfest, unabhängig vom Zoom): Tags für alle
+    // ausgewählten Objekte, Auswahl als eigene Folge in der Lightbox,
+    // Auswahl sortieren.
+    var selPhotosNow = selectedPhotos();
+    if (selPhotosNow.length > 0) {
+      var selBar = el('div', { class: 'ic-selection-bar' });
+      selBar.appendChild(el('span', { class: 'ic-selection-count' }, [String(selPhotosNow.length)]));
+      var tagWrap = el('label', { class: 'ic-selection-tag', title: S.tags_selection_prompt.replace('{$a}', String(selPhotosNow.length)) }, [icon('tag')]);
+      var tagInput = el('input', { type: 'text', placeholder: S.tags_selection, 'aria-label': S.tags_selection });
+      tagInput.addEventListener('keydown', function (ev) {
+        ev.stopPropagation();
+        if (ev.key !== 'Enter') { return; }
+        ev.preventDefault();
+        var v = tagInput.value.trim();
+        if (!v) { return; }
+        tagInput.disabled = true;
+        saveTags(selPhotosNow.map(function (p) { return p.id; }), v, 'add').then(function () { render(); })
+          .catch(function () { tagInput.disabled = false; });
+      });
+      tagWrap.appendChild(tagInput);
+      selBar.appendChild(tagWrap);
+      var lbSelBtn = el('button', { class: 'ic-icon-btn', type: 'button', title: S.lightbox_selection, 'aria-label': S.lightbox_selection }, [icon('slides')]);
+      lbSelBtn.addEventListener('click', function () {
+        var seq = selPhotosNow.map(function (p) { return state.photos.indexOf(p); }).filter(function (i) { return i >= 0; });
+        if (seq.length) { openLightbox(seq[0], false, seq); }
+      });
+      selBar.appendChild(lbSelBtn);
+      if (selPhotosNow.length >= 2) {
+        var sortSelBtn = el('button', { class: 'ic-icon-btn', type: 'button', title: S.sort_board, 'aria-label': S.sort_board }, [icon('sortgrid')]);
+        sortSelBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openSortMenu(sortSelBtn); });
+        selBar.appendChild(sortSelBtn);
+      }
+      ['pointerdown', 'click'].forEach(function (t) { selBar.addEventListener(t, function (ev) { ev.stopPropagation(); }); });
+      body.appendChild(selBar);
+    }
 
     // Umrandung der Mehrfachauswahl mit Plus-Button oben rechts - Klick
     // darauf aktiviert den Hinzufügen/Entfernen-Modus: normale Klicks auf
@@ -9801,6 +10130,14 @@
       fieldsRow2.appendChild(editField('sourceplace', 'sourceplace', p.sourceplace, 'wide'));
       fieldsRow2.appendChild(editField('sourceorigauthor', 'sourceorigauthor', p.sourceorigauthor));
       meta.appendChild(fieldsRow2);
+      if (p.wordfielddata && canedit) {
+        meta.insertBefore(el('div', { class: 'ic-home-fields-head' }, [quoteToggle(p, renderList)]), meta.firstChild);
+      }
+      if (!showsSourceFields(p)) {
+        fieldsRow1.remove(); fieldsRow2.remove();
+        meta.appendChild(el('div', { class: 'ic-text-preview' }, [wordfieldPlainText(p)]));
+      }
+      meta.appendChild(tagEditor(p, canedit));
       meta.appendChild(el('div', { class: 'ic-moderate-sub' }, [S.uploaded_on + ': ' + formatDate(p.timecreated)]));
       row.appendChild(meta);
       container.appendChild(row);
@@ -9951,10 +10288,23 @@
       if (window.pdfjsLib) { resolve(window.pdfjsLib); return; }
       var sc = document.createElement('script');
       sc.src = base + 'pdf.min.js';
+      var ready = function (lib) {
+        if (!lib) { pdfJsPromise = null; reject(new Error('pdf.js')); return; }
+        window.pdfjsLib = lib;
+        lib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js';
+        resolve(lib);
+      };
       sc.onload = function () {
-        if (!window.pdfjsLib) { reject(new Error('pdf.js')); return; }
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js';
-        resolve(window.pdfjsLib);
+        if (window.pdfjsLib) { ready(window.pdfjsLib); return; }
+        // Moodle lädt auf jeder Seite RequireJS (define.amd). pdf.js meldet
+        // sich dann als AMD-Modul an, statt window.pdfjsLib zu setzen - es
+        // muss deshalb über require() abgeholt werden. (Daran scheiterte die
+        // PDF-Anzeige bisher in allen Moodle-Versionen.)
+        if (typeof window.require === 'function' && typeof window.define === 'function' && window.define.amd) {
+          window.require(['pdfjs-dist/build/pdf'], ready, function () { ready(null); });
+          return;
+        }
+        ready(null);
       };
       sc.onerror = function () { pdfJsPromise = null; reject(new Error('pdf.js')); };
       document.head.appendChild(sc);
@@ -10164,8 +10514,102 @@
     });
   }
 
+  // Einstellungen der Pinnwand (Zahnrad): Labels, Präsentationsstart und
+  // der Weg zum Hintergrund-Modal.
+  function openBoardSettingsPanel(body) {
+    var existing = document.getElementById('ic-settings-panel');
+    if (existing) { existing.remove(); return; }
+    var panel = el('div', { class: 'ic-bg-panel ic-settings-panel', id: 'ic-settings-panel' });
+    function reopen() {
+      render();
+      var nb = root.querySelector('.ic-body');
+      if (nb) { openBoardSettingsPanel(nb); }
+    }
+    panel.appendChild(el('div', { class: 'ic-settings-title' }, [S.settings_title]));
+
+    // Labels: anzeigen (Standard), als Tooltip nach x Sekunden oder aus.
+    panel.appendChild(el('label', {}, [S.label_title]));
+    var labelBox = el('div', { class: 'ic-settings-options' });
+    function labelOption(mode, text, extra) {
+      var lab = el('label', { class: 'ic-settings-option' });
+      var rb = el('input', { type: 'radio', name: 'ic-label-mode', value: mode });
+      rb.checked = state.labelMode === mode;
+      rb.addEventListener('change', function () {
+        if (!rb.checked) { return; }
+        state.labelMode = mode;
+        saveLabelPrefs();
+        reopen();
+      });
+      lab.appendChild(rb);
+      lab.appendChild(document.createTextNode(' ' + text));
+      if (extra) { lab.appendChild(extra); }
+      labelBox.appendChild(lab);
+    }
+    labelOption('show', S.label_show);
+    var delayWrap = el('span', { class: 'ic-settings-delay' });
+    var delayInput = el('input', { type: 'number', min: '0', max: '30', step: '0.5', value: String(state.labelDelay), 'aria-label': S.label_seconds });
+    delayInput.addEventListener('change', function () {
+      var v = parseFloat(delayInput.value);
+      state.labelDelay = isNaN(v) ? 1 : Math.max(0, Math.min(30, v));
+      delayInput.value = String(state.labelDelay);
+      saveLabelPrefs();
+    });
+    delayWrap.appendChild(delayInput);
+    delayWrap.appendChild(document.createTextNode(' ' + S.label_seconds));
+    labelOption('tooltip', S.label_tooltip, delayWrap);
+    labelOption('off', S.label_off);
+    panel.appendChild(labelBox);
+
+    // Wie die Präsentation startet (eigene Wahl, sonst Aktivitäts-Einstellung).
+    var startRow = el('div', { class: 'ic-bg-row' });
+    startRow.appendChild(el('label', {}, [S.startmode]));
+    var b0 = state.background || { type: 'color', color: '#2b2d33' };
+    var curStart = b0.startmode || cfg.startmode || 'overview';
+    [['overview', S.startmode_overview], ['slide', S.startmode_slide]].forEach(function (opt) {
+      var sb = el('button', { class: 'ic-btn ic-mini-btn ' + (curStart === opt[0] ? 'ic-btn-primary' : 'ic-btn-ghost'), type: 'button' }, [opt[1]]);
+      sb.addEventListener('click', function () {
+        var b = state.background || { type: 'color', color: '#2b2d33' };
+        callAjax('mod_pinnwand_save_background', {
+          cmid: cfg.cmid, type: b.type || 'color', color: b.color || '#2b2d33', photoid: b.photoid || 0,
+          url: b.type === 'url' ? (b.url || '') : '', brightness: b.brightness != null ? b.brightness : 100,
+          saturation: b.saturation != null ? b.saturation : 100, fit: b.fit || 'contain', startmode: opt[0]
+        }).then(function (res) { state.background = res.background; panel.remove(); openBoardSettingsPanel(body); });
+      });
+      startRow.appendChild(sb);
+    });
+    panel.appendChild(startRow);
+
+    var bottomRow = el('div', { class: 'ic-bg-row' });
+    var bgBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, [icon('image'), el('span', {}, [S.bg_choose])]);
+    bgBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      panel.remove();
+      openBackgroundPanel(body);
+    });
+    bottomRow.appendChild(bgBtn);
+    var doneBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-bg-close', type: 'button' }, [S.draw_done]);
+    doneBtn.addEventListener('click', function () { panel.remove(); });
+    bottomRow.appendChild(doneBtn);
+    panel.appendChild(bottomRow);
+
+    body.appendChild(panel);
+    // Schließen bei Klick außerhalb (pointerdown in der Capture-Phase - die
+    // Pinnwand selbst verarbeitet Klicks für Verschieben/Auswahl).
+    setTimeout(function () {
+      document.addEventListener('pointerdown', function onDocDown(ev) {
+        if (!panel.isConnected || !panel.contains(ev.target)) {
+          document.removeEventListener('pointerdown', onDocDown, true);
+          if (panel.isConnected && !gearBtnHit(ev.target)) { panel.remove(); }
+        }
+      }, true);
+    }, 0);
+    function gearBtnHit(t) { return !!(t && t.closest && t.closest('.ic-fab-row .ic-fab-biglabel[title="' + S.settings_title + '"]')); }
+  }
+
+  // Hintergrund als eigenes Modal (Farbe, Bilder, Hochladen/PDF, URL,
+  // Helligkeit/Sättigung, Füllart).
   function openBackgroundPanel(body) {
-    var existing = document.getElementById('ic-bg-panel');
+    var existing = document.getElementById('ic-bg-overlay');
     if (existing) { existing.remove(); return; }
 
     function bgLayerEl() {
@@ -10196,7 +10640,11 @@
       }).then(function (res) { state.background = res.background; });
     }
 
-    var panel = el('div', { class: 'ic-bg-panel ic-bg-panel-compact', id: 'ic-bg-panel' });
+    var overlay = el('div', { class: 'ic-modal-overlay', id: 'ic-bg-overlay' });
+    var panel = el('div', { class: 'ic-bg-panel ic-bg-panel-compact ic-bg-modal', id: 'ic-bg-panel' });
+    overlay.appendChild(panel);
+    overlay.addEventListener('click', function (ev) { if (ev.target === overlay) { overlay.remove(); } });
+    panel.remove = function () { overlay.remove(); };
     var colL = el('div', { class: 'ic-bg-col' });
     var colR = el('div', { class: 'ic-bg-col' });
     panel.appendChild(colL);
@@ -10340,23 +10788,6 @@
       });
       fitRow.appendChild(fitBtn);
     });
-    // Wie die Präsentation startet (eigene Wahl, sonst Aktivitäts-Einstellung).
-    var startRow = el('div', { class: 'ic-bg-row' });
-    startRow.appendChild(el('label', {}, [S.startmode]));
-    var curStart = bg().startmode || cfg.startmode || 'overview';
-    [['overview', S.startmode_overview], ['slide', S.startmode_slide]].forEach(function (opt) {
-      var sb = el('button', { class: 'ic-btn ic-mini-btn ' + (curStart === opt[0] ? 'ic-btn-primary' : 'ic-btn-ghost'), type: 'button' }, [opt[1]]);
-      sb.addEventListener('click', function () {
-        var b = bg();
-        callAjax('mod_pinnwand_save_background', {
-          cmid: cfg.cmid, type: b.type || 'color', color: b.color || '#2b2d33', photoid: b.photoid || 0,
-          url: b.type === 'url' ? (b.url || '') : '', brightness: currentBrightness(), saturation: currentSaturation(),
-          fit: currentFit(), startmode: opt[0]
-        }).then(function (res) { state.background = res.background; panel.remove(); openBackgroundPanel(body); });
-      });
-      startRow.appendChild(sb);
-    });
-    colR.appendChild(startRow);
     var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-bg-close', type: 'button' }, [S.draw_done]);
     closeBtn.addEventListener('click', function () { panel.remove(); });
     fitRow.appendChild(closeBtn);
@@ -10376,18 +10807,8 @@
       classSlot.appendChild(classRow);
     }).catch(function () { /* keine Berechtigung - Abschnitt weglassen */ });
 
-    body.appendChild(panel);
-
-    // Schließen bei Klick außerhalb des Panels (nicht im selben Klick, der
-    // es geöffnet hat - siehe setTimeout).
-    setTimeout(function () {
-      document.addEventListener('click', function onDocClick(ev) {
-        if (!panel.contains(ev.target)) {
-          panel.remove();
-          document.removeEventListener('click', onDocClick);
-        }
-      });
-    }, 0);
+    panel.insertBefore(el('div', { class: 'ic-settings-title ic-bg-modal-title' }, [S.slide_bg]), panel.firstChild);
+    body.appendChild(overlay);
   }
 
   function makeMovable(item, container, onMove, onEnd) {
@@ -10487,9 +10908,12 @@
   // Raster-Overlay (nur hier!) und eine editierbare Zeichen-/Schreib-Ebene,
   // die exakt auf das Foto gemappt ist.
   // ==================================================================
-  function openLightbox(index, startDrawing) {
+  // seq (optional): Indizes in state.photos, durch die geblättert wird -
+  // z. B. die auf der Pinnwand ausgewählten Bilder als eigene Folge.
+  function openLightbox(index, startDrawing, seq) {
     closeLightbox();
     state.lightboxIndex = index;
+    var lbSeq = seq && seq.length ? seq.slice() : null;
 
     var zoom = 1, panX = 0, panY = 0;
     var drawing = false;
@@ -10566,7 +10990,9 @@
 
     // Stylus-Knopf unten links: einziger Schalter für die Zeichenwerkzeuge
     // (senkrecht am linken Rand gestapelt, siehe enterDrawing()).
-    var stylusBtn = el('button', { class: 'ic-stylus-btn' }, ['\u270E']);
+    var stylusBar = el('div', { class: 'ic-stylus-bar ic-lb-stylus-bar' });
+    var stylusBtn = el('button', { class: 'ic-fab', type: 'button', title: S.draw_toggle }, [icon('pen')]);
+    stylusBar.appendChild(stylusBtn);
 
     var viewport = el('div', { class: 'ic-lb-viewport' });
     var transform = el('div', { class: 'ic-lb-transform' });
@@ -10586,6 +11012,12 @@
     var zoomReset = el('button', { class: 'ic-btn' }, ['1:1']);
     var zoomIn = el('button', { class: 'ic-btn' }, ['+']);
     var next = el('button', { class: 'ic-btn' }, ['\u203A']);
+    // Position in der Folge (nur bei einer eigenen Auswahl-Folge).
+    var counter = el('span', { class: 'ic-lb-counter' + (lbSeq ? '' : ' ic-hidden') });
+    function updateCounter() {
+      if (lbSeq) { counter.textContent = (lbSeq.indexOf(state.lightboxIndex) + 1) + ' / ' + lbSeq.length; }
+    }
+    updateCounter();
 
     function applyTransform() {
       transform.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
@@ -10714,6 +11146,7 @@
       field('sourceepoch', 'sourceepoch');
       field('sourceplace', 'sourceplace');
       field('sourceorigauthor', 'sourceorigauthor');
+      panel.appendChild(tagEditor(p, true));
 
       var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost', style: 'margin-top:10px' }, [S.draw_done]);
       closeBtn.addEventListener('click', function () { panel.remove(); updateFocusMode(); });
@@ -10778,10 +11211,16 @@
       if (gridPanel) { gridPanel.remove(); }
       var dataPanel = document.getElementById('ic-data-panel');
       if (dataPanel) { dataPanel.remove(); }
-      var n = state.photos.length;
-      state.lightboxIndex = (state.lightboxIndex + dir + n) % n;
+      if (lbSeq) {
+        var pos = lbSeq.indexOf(state.lightboxIndex);
+        state.lightboxIndex = lbSeq[(pos + dir + lbSeq.length) % lbSeq.length];
+      } else {
+        var n = state.photos.length;
+        state.lightboxIndex = (state.lightboxIndex + dir + n) % n;
+      }
       var p = state.photos[state.lightboxIndex];
       img.src = p.url;
+      updateCounter();
       setZoom(1);
       sizeLightboxImage();
       refreshOverlays();
@@ -10827,56 +11266,65 @@
       inkCanvas._icResizeHandler = sizeCanvas;
       window.addEventListener('resize', sizeCanvas);
 
-      var toolbar = el('div', { class: 'ic-ink-dock' });
-      // Scheren- (Bearbeiten) und Info-Button (Bild-Informationen) auch
-      // hier oben im Annotations-Werkzeug sichtbar, nicht nur im
-      // leftDock, der während des Zeichnens ausgeblendet ist (siehe
-      // .ic-lb-focus) - ruft die dortige, bereits vorhandene Logik per
-      // click() auf, statt sie zu duplizieren.
-      var annotTopRow = el('div', { class: 'ic-ink-dock-row' });
-      var annotEditBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.editphoto }, [icon('imageedit')]);
-      annotEditBtn.addEventListener('click', function () { editBtn.click(); });
-      var annotInfoBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.databtn }, [icon('info')]);
-      annotInfoBtn.addEventListener('click', function () { dataBtn.click(); });
-      annotTopRow.appendChild(annotEditBtn); annotTopRow.appendChild(annotInfoBtn);
-      toolbar.appendChild(annotTopRow);
-      var penBtn = el('button', { class: 'ic-btn ic-btn-primary', title: S.draw_pen }, [icon('pen')]);
-      var eraserBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.draw_eraser }, [icon('eraser')]);
-      var textBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.draw_text }, [icon('text')]);
+      // Werkzeuge wie auf der Pinnwand: EINE Spalte über dem Stift-Knopf,
+      // Stärke/Schriftgröße klappen beim Überfahren nach rechts aus, Farben
+      // untereinander, darunter Pinnwand-Sichtbarkeit, Bearbeiten, Info,
+      // Löschen.
+      var toolbar = el('div', { class: 'ic-stylus-tools' });
+      var penBtn = el('button', { class: 'ic-icon-btn active', type: 'button', title: S.draw_pen }, [icon('pen')]);
+      var textBtn = el('button', { class: 'ic-icon-btn', type: 'button', title: S.draw_text }, [el('span', { class: 'ic-stylus-text-icon' }, ['T'])]);
+      var eraserBtn = el('button', { class: 'ic-icon-btn', type: 'button', title: S.draw_eraser }, [icon('eraser')]);
       function selectTool(t, activeBtn) {
         inkTool = t;
-        [penBtn, eraserBtn, textBtn].forEach(function (b) { b.classList.remove('ic-btn-primary'); b.classList.add('ic-btn-ghost'); });
-        activeBtn.classList.remove('ic-btn-ghost'); activeBtn.classList.add('ic-btn-primary');
+        [penBtn, eraserBtn, textBtn].forEach(function (b) { b.classList.remove('active'); });
+        activeBtn.classList.add('active');
       }
       penBtn.addEventListener('click', function () { selectTool('pen', penBtn); });
       eraserBtn.addEventListener('click', function () { selectTool('eraser', eraserBtn); });
       textBtn.addEventListener('click', function () { selectTool('text', textBtn); });
-      toolbar.appendChild(penBtn); toolbar.appendChild(eraserBtn); toolbar.appendChild(textBtn);
+      // Ein Wert für Stärke UND Textgröße (inkSize), daher dieselbe Anzeige
+      // in beiden Ausklapp-Feldern.
+      var sizeFlyouts = [];
+      function sizeFlyout(label) {
+        var fly = el('div', { class: 'ic-stylus-flyout' });
+        var val = el('span', { class: 'ic-stylus-flyout-val' }, [String(inkSize)]);
+        var range = el('input', { type: 'range', min: '2', max: '40', step: '1', value: String(inkSize), class: 'ic-stylus-size', title: label });
+        range.addEventListener('input', function () {
+          inkSize = parseFloat(range.value);
+          sizeFlyouts.forEach(function (f) { f.range.value = range.value; f.val.textContent = range.value; });
+        });
+        fly.appendChild(el('span', { class: 'ic-stylus-flyout-label' }, [label]));
+        fly.appendChild(range);
+        fly.appendChild(val);
+        sizeFlyouts.push({ range: range, val: val });
+        return fly;
+      }
+      function toolWrap(btn, flyout) {
+        var w = el('div', { class: 'ic-stylus-tool' }, [btn]);
+        if (flyout) { w.appendChild(flyout); }
+        toolbar.appendChild(w);
+      }
+      toolWrap(penBtn, sizeFlyout(S.ink_width));
+      toolWrap(textBtn, sizeFlyout(S.ink_fontsize));
+      toolWrap(eraserBtn, null);
+      toolbar.appendChild(el('div', { class: 'ic-stylus-sep' }));
 
-      var colorRow = el('div', { class: 'ic-ink-dock-row' });
-      // Freie Farbwahl zusätzlich zur festen Palette - direkter Zugriff
-      // statt nur per Doppelklick auf ein bestehendes Farbfeld.
-      var customColorInput = el('input', { type: 'color', value: inkColor, class: 'ic-textframe-custom-color' });
-      customColorInput.addEventListener('input', function () {
-        inkColor = customColorInput.value;
-        colorRow.querySelectorAll('.ic-ink-swatch').forEach(function (s) { s.classList.remove('active'); });
-        updateToolColor();
-      });
-      // Stift, Text-Werkzeug und Größen-Punkte übernehmen die gewählte Farbe,
-      // damit auf einen Blick klar ist, mit welcher Farbe gerade gezeichnet wird.
+      // Stift- und Textknopf übernehmen die gewählte Farbe.
       function updateToolColor() {
         penBtn.style.color = inkColor;
         textBtn.style.color = inkColor;
-        toolbar.querySelectorAll('.ic-ink-size span').forEach(function (dot) { dot.style.background = inkColor; });
       }
+      var swatches = [];
       INK_COLORS.forEach(function (c, colorIdx) {
         var sw = el('button', {
-          class: 'ic-ink-swatch' + (sessionColors[colorIdx] === inkColor ? ' active' : ''), style: 'background:' + sessionColors[colorIdx]
+          class: 'ic-color-swatch' + (sessionColors[colorIdx] === inkColor ? ' active' : ''), type: 'button', style: 'background:' + sessionColors[colorIdx]
         });
+        swatches.push(sw);
         sw.addEventListener('click', function () {
           inkColor = sessionColors[colorIdx];
-          colorRow.querySelectorAll('.ic-ink-swatch').forEach(function (s) { s.classList.remove('active'); });
+          swatches.forEach(function (o) { o.classList.remove('active'); });
           sw.classList.add('active');
+          if (inkTool === 'eraser') { selectTool('pen', penBtn); }
           updateToolColor();
         });
         // Doppelklick: diese Palettenfarbe neu definieren - gilt nur für
@@ -10895,24 +11343,42 @@
           sw._icPrevColor = sessionColors[colorIdx];
           picker.click();
         });
-        colorRow.appendChild(sw);
+        toolbar.appendChild(sw);
       });
-      colorRow.appendChild(customColorInput);
-      toolbar.appendChild(colorRow);
-
-      var sizeRow = el('div', { class: 'ic-ink-dock-row' });
-      // Ein Regler statt fester Größen-Stufen - steuert sowohl die
-      // Pinsel-/Radiergummi-Dicke als auch die Größe von Textobjekten
-      // (inkSize wird für beides verwendet, siehe unten bei "text").
-      var sizeSlider = el('input', {
-        type: 'range', min: '2', max: '40', step: '1', value: String(inkSize), class: 'ic-ink-size-slider'
+      // Freie Farbwahl über den nativen Farbwähler.
+      var customColorInput = el('input', { type: 'color', value: inkColor, class: 'ic-textframe-custom-color' });
+      customColorInput.addEventListener('input', function () {
+        inkColor = customColorInput.value;
+        swatches.forEach(function (o) { o.classList.remove('active'); });
+        if (inkTool === 'eraser') { selectTool('pen', penBtn); }
+        updateToolColor();
       });
-      sizeSlider.addEventListener('input', function () { inkSize = parseFloat(sizeSlider.value); });
-      sizeRow.appendChild(sizeSlider);
-      toolbar.appendChild(sizeRow);
+      toolbar.appendChild(customColorInput);
+      toolbar.appendChild(el('div', { class: 'ic-stylus-sep' }));
       updateToolColor();
 
-      var clearBtn = el('button', { class: 'ic-btn ic-btn-ghost', title: S.draw_clear }, [icon('trash')]);
+      // Steuert, ob diese Zeichen-/Schreib-Ebene auch auf der Pinnwand
+      // sichtbar ist (unabhängig von der Galerie-Anzeige).
+      var p0 = state.photos[state.lightboxIndex];
+      var onboardBtn = el('button', {
+        class: 'ic-icon-btn' + (p0.annotationonboard !== false ? ' active' : ''), type: 'button', title: S.overlay_onboard
+      }, [icon('thumbtack')]);
+      onboardBtn.addEventListener('click', function () {
+        var newState = !(p0.annotationonboard !== false);
+        callAjax('mod_pinnwand_set_annotation_onboard', { cmid: cfg.cmid, photoid: p0.id, onboard: newState }).then(function (res) {
+          p0.annotationonboard = res.annotationonboard;
+          onboardBtn.classList.toggle('active', p0.annotationonboard !== false);
+        });
+      });
+      toolbar.appendChild(onboardBtn);
+      // Bearbeiten und Bild-Informationen auch hier erreichbar - der
+      // leftDock ist während des Zeichnens ausgeblendet (.ic-lb-focus).
+      var annotEditBtn = el('button', { class: 'ic-icon-btn', type: 'button', title: S.editphoto }, [icon('imageedit')]);
+      annotEditBtn.addEventListener('click', function () { editBtn.click(); });
+      var annotInfoBtn = el('button', { class: 'ic-icon-btn', type: 'button', title: S.databtn }, [icon('info')]);
+      annotInfoBtn.addEventListener('click', function () { dataBtn.click(); });
+      toolbar.appendChild(annotEditBtn); toolbar.appendChild(annotInfoBtn);
+      var clearBtn = el('button', { class: 'ic-icon-btn', type: 'button', title: S.draw_clear }, [icon('trash')]);
       clearBtn.addEventListener('click', function () {
         if (strokes.length && !confirm(S.confirmdelete)) { return; }
         strokes = [];
@@ -10920,24 +11386,8 @@
       });
       toolbar.appendChild(clearBtn);
 
-      // Steuert, ob diese Zeichen-/Schreib-Ebene auch auf der Pinnwand
-      // sichtbar ist (unabhängig von der Galerie-Anzeige).
-      var p0 = state.photos[state.lightboxIndex];
-      var onboardBtn = el('button', {
-        class: 'ic-btn ' + (p0.annotationonboard !== false ? 'ic-btn-primary' : 'ic-btn-ghost'),
-        title: S.overlay_onboard
-      }, [icon('thumbtack')]);
-      onboardBtn.addEventListener('click', function () {
-        var newState = !(p0.annotationonboard !== false);
-        callAjax('mod_pinnwand_set_annotation_onboard', { cmid: cfg.cmid, photoid: p0.id, onboard: newState }).then(function (res) {
-          p0.annotationonboard = res.annotationonboard;
-          onboardBtn.className = 'ic-btn ' + (p0.annotationonboard !== false ? 'ic-btn-primary' : 'ic-btn-ghost');
-        });
-      });
-      toolbar.appendChild(onboardBtn);
-
       toolbar.id = 'ic-draw-toolbar';
-      lb.appendChild(toolbar);
+      stylusBar.appendChild(toolbar);
 
       function toNorm(ev) {
         var r = inkCanvas.getBoundingClientRect();
@@ -11096,8 +11546,8 @@
     });
 
     nav.appendChild(prev); nav.appendChild(zoomOut); nav.appendChild(zoomReset);
-    nav.appendChild(zoomIn); nav.appendChild(next);
-    lb.appendChild(leftDock); lb.appendChild(close); lb.appendChild(stylusBtn);
+    nav.appendChild(zoomIn); nav.appendChild(counter); nav.appendChild(next);
+    lb.appendChild(leftDock); lb.appendChild(close); lb.appendChild(stylusBar);
     lb.appendChild(viewport); lb.appendChild(caption); lb.appendChild(nav);
     document.body.appendChild(lb);
 
@@ -11107,11 +11557,25 @@
     // gemessen statt fixer vw/vh-Werte, damit das Raster-Overlay exakt am
     // tatsächlich gerenderten Bild ausgerichtet bleibt (imgbox bleibt eng
     // um das Bild geschrumpft).
+    // Die Bedienleisten schweben über dem Bild (kein Rand unten), daher
+    // steht die ganze Fläche zur Verfügung - auch kleinere Bilder werden
+    // bis an den Rand vergrößert.
     function sizeLightboxImage() {
       var r = viewport.getBoundingClientRect();
-      img.style.maxWidth = Math.round(r.width) + 'px';
-      img.style.maxHeight = Math.round(r.height) + 'px';
+      var nw = img.naturalWidth, nh = img.naturalHeight;
+      var availW = Math.max(1, r.width - 16), availH = Math.max(1, r.height - 16);
+      if (!nw || !nh) {
+        img.style.width = img.style.height = '';
+        img.style.maxWidth = Math.round(availW) + 'px';
+        img.style.maxHeight = Math.round(availH) + 'px';
+        return;
+      }
+      var sc = Math.min(availW / nw, availH / nh);
+      img.style.maxWidth = img.style.maxHeight = 'none';
+      img.style.width = Math.round(nw * sc) + 'px';
+      img.style.height = Math.round(nh * sc) + 'px';
     }
+    img.addEventListener('load', function () { sizeLightboxImage(); refreshOverlays(); });
     sizeLightboxImage();
     window.addEventListener('resize', sizeLightboxImage);
     lb._icResizeHandler = sizeLightboxImage;
@@ -11142,6 +11606,24 @@
     var rest = [p.sourceyear, p.sourceepoch, p.sourceplace].filter(Boolean).join(' · ');
     if (rest) { lines.push(rest); }
     return lines.join(' / ') || S.sourcetitle + ': –';
+  }
+
+  // Label auf der Pinnwand: Angaben (bei eigenen Texten keine) und Tags;
+  // leer, wenn nichts eingetragen ist.
+  function boardLabelText(p) {
+    var lines = [];
+    if (showsSourceFields(p)) {
+      var top = [p.sourcetitle, p.sourceauthor].filter(Boolean).join(' \u2014 ');
+      if (p.userfullname && p.userfullname !== p.sourceauthor && p.userfullname !== cfg.currentuserfullname) {
+        top = (top ? top + ' ' : '') + '(' + p.userfullname + ')';
+      }
+      if (top) { lines.push(top); }
+      var rest = [p.sourceyear, p.sourceepoch, p.sourceplace].filter(Boolean).join(' \u00b7 ');
+      if (rest) { lines.push(rest); }
+    }
+    var tags = parseTags(p.tags);
+    if (tags.length) { lines.push(tags.map(function (t) { return '#' + t; }).join(' ')); }
+    return lines.join(' / ');
   }
 
   function closeLightbox() {

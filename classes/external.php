@@ -288,6 +288,8 @@ class mod_pinnwand_external extends external_api {
                 'origurl' => self::photo_area_url($context, 'photoorig', $r->id),
                 'maskurl' => self::photo_area_url($context, 'photomask', $r->id),
                 'editdata' => (string) ($r->editdata ?? ''),
+                'tags' => (string) ($r->tags ?? ''),
+                'isquote' => !empty($r->isquote),
                 'otherboardcount' => $placementcounts[$r->id] ?? 0,
                 'userfullname' => fullname($USER),
             ];
@@ -436,6 +438,8 @@ class mod_pinnwand_external extends external_api {
                 'origurl' => new external_value(PARAM_RAW, 'Originalbild (nicht-destruktive Bearbeitung)', VALUE_DEFAULT, ''),
                 'maskurl' => new external_value(PARAM_RAW, 'Freistellmaske', VALUE_DEFAULT, ''),
                 'editdata' => new external_value(PARAM_RAW, 'Bearbeitungseinstellungen (JSON)', VALUE_DEFAULT, ''),
+                'tags' => new external_value(PARAM_TEXT, 'Schlagwörter, kommagetrennt', VALUE_DEFAULT, ''),
+                'isquote' => new external_value(PARAM_BOOL, 'Text ist ein Zitat', VALUE_DEFAULT, false),
                 'otherboardcount' => new external_value(PARAM_INT, 'Anzahl zusätzlicher aktiver Platzierungen auf anderen Boards'),
                 'userfullname' => new external_value(PARAM_TEXT, 'Name der hochladenden Person (auf dem eigenen Board immer man selbst)'),
             ])),
@@ -1360,16 +1364,17 @@ class mod_pinnwand_external extends external_api {
             'sourceepoch' => new external_value(PARAM_TEXT, 'Epoche', VALUE_DEFAULT, ''),
             'sourceplace' => new external_value(PARAM_TEXT, 'Ort', VALUE_DEFAULT, ''),
             'sourceorigauthor' => new external_value(PARAM_TEXT, 'Autor*in der Vorlage', VALUE_DEFAULT, ''),
+            'isquote' => new external_value(PARAM_INT, 'Zitat: 1/0, -1 = unverändert', VALUE_DEFAULT, -1),
         ]);
     }
 
     public static function update_source($cmid, $photoid, $sourcetitle, $sourceauthor, $sourceyear,
-            $sourceepoch, $sourceplace, $sourceorigauthor) {
+            $sourceepoch, $sourceplace, $sourceorigauthor, $isquote = -1) {
         global $DB, $USER;
         $params = self::validate_parameters(self::update_source_parameters(), [
             'cmid' => $cmid, 'photoid' => $photoid, 'sourcetitle' => $sourcetitle, 'sourceauthor' => $sourceauthor,
             'sourceyear' => $sourceyear, 'sourceepoch' => $sourceepoch, 'sourceplace' => $sourceplace,
-            'sourceorigauthor' => $sourceorigauthor,
+            'sourceorigauthor' => $sourceorigauthor, 'isquote' => $isquote,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
 
@@ -1390,9 +1395,82 @@ class mod_pinnwand_external extends external_api {
         $photo->sourceepoch = clean_param($params['sourceepoch'], PARAM_TEXT);
         $photo->sourceplace = clean_param($params['sourceplace'], PARAM_TEXT);
         $photo->sourceorigauthor = clean_param($params['sourceorigauthor'], PARAM_TEXT);
+        if ($params['isquote'] >= 0) {
+            $photo->isquote = $params['isquote'] ? 1 : 0;
+        }
         $DB->update_record('pinnwand_photos', $photo);
 
         return ['success' => true];
+    }
+
+    // ---------------------------------------------------------------
+    // set_tags: Schlagwörter eines oder mehrerer Objekte setzen ('set')
+    // oder ergänzen ('add', z. B. für eine Auswahl auf der Pinnwand).
+    // Eigene Objekte mit submit-Recht, fremde nur mit manage-Recht.
+    // ---------------------------------------------------------------
+    public static function set_tags_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoids' => new external_multiple_structure(new external_value(PARAM_INT, 'Foto-ID')),
+            'tags' => new external_value(PARAM_TEXT, 'Schlagwörter, kommagetrennt'),
+            'mode' => new external_value(PARAM_ALPHA, 'set oder add', VALUE_DEFAULT, 'set'),
+        ]);
+    }
+
+    /**
+     * Zerlegt eine kommagetrennte Liste in eindeutige, gekürzte Schlagwörter.
+     */
+    protected static function normalise_tags($raw) {
+        $out = [];
+        foreach (explode(',', (string) $raw) as $tag) {
+            $tag = trim(preg_replace('/\s+/u', ' ', $tag));
+            if ($tag === '') {
+                continue;
+            }
+            $tag = core_text::substr($tag, 0, 50);
+            $key = core_text::strtolower($tag);
+            if (!isset($out[$key])) {
+                $out[$key] = $tag;
+            }
+        }
+        return array_slice(array_values($out), 0, 30);
+    }
+
+    public static function set_tags($cmid, $photoids, $tags, $mode = 'set') {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_tags_parameters(), [
+            'cmid' => $cmid, 'photoids' => $photoids, 'tags' => $tags, 'mode' => $mode,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+        $canmanage = has_capability('mod/pinnwand:manage', $context);
+        $cansubmit = has_capability('mod/pinnwand:submit', $context);
+        $newtags = self::normalise_tags($params['tags']);
+        $result = [];
+        foreach (array_unique($params['photoids']) as $photoid) {
+            $photo = $DB->get_record('pinnwand_photos', ['id' => $photoid]);
+            if (!$photo || $photo->pinnwandid != $instance->id) {
+                continue;
+            }
+            if (!$canmanage && !($photo->userid == $USER->id && $cansubmit)) {
+                continue;
+            }
+            $list = $params['mode'] === 'add'
+                ? self::normalise_tags(($photo->tags ?? '') . ',' . implode(',', $newtags))
+                : $newtags;
+            $photo->tags = implode(', ', $list);
+            $DB->update_record('pinnwand_photos', $photo);
+            $result[] = ['id' => (int) $photo->id, 'tags' => $photo->tags];
+        }
+        return ['photos' => $result];
+    }
+
+    public static function set_tags_returns() {
+        return new external_single_structure([
+            'photos' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Foto-ID'),
+                'tags' => new external_value(PARAM_TEXT, 'Gespeicherte Schlagwörter'),
+            ])),
+        ]);
     }
 
     public static function update_source_returns() {
@@ -1626,6 +1704,8 @@ class mod_pinnwand_external extends external_api {
                 'otherboardcount' => $placementcounts[$r->id] ?? 0,
                 'timecreated' => (int) $r->timecreated,
                 'wordfielddata' => (string) ($r->wordfielddata ?? ''),
+                'tags' => (string) ($r->tags ?? ''),
+                'isquote' => !empty($r->isquote),
             ];
         }
         return [
@@ -1655,6 +1735,8 @@ class mod_pinnwand_external extends external_api {
                 'otherboardcount' => new external_value(PARAM_INT, 'Anzahl zusätzlicher aktiver Platzierungen auf anderen Boards'),
                 'timecreated' => new external_value(PARAM_INT, 'Hochgeladen am'),
                 'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON) oder leer', VALUE_DEFAULT, ''),
+                'tags' => new external_value(PARAM_TEXT, 'Schlagwörter, kommagetrennt', VALUE_DEFAULT, ''),
+                'isquote' => new external_value(PARAM_BOOL, 'Text ist ein Zitat', VALUE_DEFAULT, false),
             ])),
         ]);
     }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/pinnwand/db" VERSION="2026083153" COMMENT="XMLDB file for module pinnwand">
+<XMLDB PATH="mod/pinnwand/db" VERSION="2026083155" COMMENT="XMLDB file for module pinnwand">
   <TABLES>
     <TABLE NAME="pinnwand" COMMENT="Instances of the pinnwand activity">
       <FIELDS>
@@ -64,6 +64,8 @@
         <FIELD NAME="wordfielddata" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Falls dieses 'Foto' ein Wortfeld ist: die strukturierten Daten (JSON: Preset, Maße, Texte) für erneutes Bearbeiten als Text statt als Bild"/>
         <FIELD NAME="editdata" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Nicht-destruktive Bildbearbeitung: Ecken, Drehung, Farbe (JSON)"/>
         <FIELD NAME="blendmode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="" SEQUENCE="false" COMMENT="Mischmodus mit dem Hintergrund: leer=Überdecken, multiply, difference (Invertieren), color-burn"/>
+        <FIELD NAME="tags" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Schlagwörter, kommagetrennt"/>
+        <FIELD NAME="isquote" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Text ist ein Zitat (Quellenangaben statt Textvorschau zeigen)"/>
         <FIELD NAME="status" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="active" SEQUENCE="false" COMMENT="active|trash - gelöschte Objekte landen im Trashbin statt sofort endgültig gelöscht zu werden"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>

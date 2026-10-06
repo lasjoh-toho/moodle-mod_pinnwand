@@ -201,9 +201,9 @@
 .ic-btn-icon { flex: 0 0 auto; min-width: 0; width: 46px; height: 46px; padding: 0; display: flex; align-items: center; justify-content: center; }
 .ic-menu-row .ic-btn-icon { width: 52px; height: 52px; }
 .ic-menu-row .ic-btn-icon.active { background: var(--ic-accent); }
-.ic-home-list { display: flex; flex-direction: column; gap: 60px; padding-top: 44px; }
+.ic-home-list { display: flex; flex-direction: column; gap: 26px; padding-top: 40px; }
 @media (min-width: 1100px) {
-  .ic-home-list { display: grid; grid-template-columns: 1fr 1fr; column-gap: 90px; }
+  .ic-home-list { display: grid; grid-template-columns: 1fr 1fr; column-gap: 56px; }
 }
 .ic-home-row { display: flex; align-items: flex-start; gap: 70px; position: relative; }
 .ic-home-row .ic-thumb {
@@ -1046,8 +1046,15 @@ svg.ic-board-ink-layer { overflow: visible; }
 }
 .ic-lb-transform { position: relative; transform-origin: center center; touch-action: none; }
 .ic-lb-transform img { display: block; object-fit: contain; user-select: none; -webkit-user-drag: none; }
-.ic-lightbox .ic-lb-nav { display: flex; gap: 16px; padding: 10px 0 calc(8px + env(safe-area-inset-bottom, 0px)); flex: 0 0 auto; flex-wrap: wrap; justify-content: center; }
-.ic-lightbox .ic-lb-nav .ic-btn { flex: 0 0 auto; min-width: 52px; padding: 10px 14px; }
+.ic-lightbox .ic-lb-nav {
+  /* Schwebt über dem Bild statt einen Rand unten zu belegen. */
+  position: absolute; left: 50%; transform: translateX(-50%); z-index: 14;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 8px; align-items: center; padding: 6px; border-radius: 26px; flex-wrap: nowrap;
+  background: rgba(20,21,24,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0,0,0,.35); max-width: calc(100vw - 140px);
+}
+.ic-lightbox .ic-lb-nav .ic-btn { flex: 0 0 auto; min-width: 44px; padding: 8px 12px; background: rgba(60,62,70,.7); }
 .ic-lightbox.ic-lb-focus .ic-lb-nav,
 .ic-lightbox.ic-lb-focus .ic-caption,
 .ic-lightbox.ic-lb-focus .ic-lb-left-dock {
@@ -1149,8 +1156,8 @@ svg.ic-board-ink-layer { overflow: visible; }
 /* Klassenansicht (Bereinigen) */
 .ic-moderate { padding: 0 14px 14px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .ic-moderate-list { padding-top: 10px; }
-.ic-moderate-group { margin-bottom: 22px; }
-.ic-moderate-usergrid { display: grid; grid-template-columns: 1fr; gap: 19px 48px; }
+.ic-moderate-group { margin-bottom: 14px; }
+.ic-moderate-usergrid { display: grid; grid-template-columns: 1fr; gap: 14px 32px; }
 @media (min-width: 480px) {
   .ic-moderate-usergrid { grid-template-columns: 1fr 1fr; }
 }
@@ -1692,3 +1699,121 @@ input.ic-stepper-value {
 .ic-stylus-svg { display: inline-flex; }
 .ic-anim-row .ic-anim-exit { padding: 2px 5px; display: inline-flex; align-items: center; }
 .ic-anim-row .ic-anim-exit svg { width: 15px; height: 15px; }
+
+/* Phase 150 ------------------------------------------------------------ */
+
+/* Lightbox: Bildunterschrift schwebt über dem Bild, oberhalb der Leiste. */
+.ic-lightbox .ic-caption {
+  position: absolute; left: 50%; transform: translateX(-50%); z-index: 13;
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-width: min(80vw, 720px);
+  padding: 4px 12px; border-radius: 12px; background: rgba(20,21,24,.55); color: #e6e7ea;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); pointer-events: none;
+}
+.ic-lightbox .ic-caption:empty { display: none; }
+.ic-lb-counter { color: #fff; font-size: .8rem; font-variant-numeric: tabular-nums; padding: 0 4px; white-space: nowrap; }
+.ic-lb-viewport { height: 100%; }
+/* Stift-Menü der Lightbox wie auf der Pinnwand. */
+.ic-lightbox .ic-lb-stylus-bar { left: 14px; bottom: 14px; z-index: 15; }
+.ic-lightbox .ic-lb-stylus-bar .ic-stylus-tools { gap: 4px; }
+.ic-lightbox .ic-lb-stylus-bar .ic-stylus-tool:hover .ic-stylus-flyout { display: flex; }
+@media (max-width: 640px) {
+  .ic-lightbox .ic-lb-nav { max-width: calc(100vw - 80px); gap: 4px; }
+  .ic-lightbox .ic-lb-nav .ic-btn { min-width: 36px; padding: 8px 9px; }
+}
+
+/* Folien-Hintergrund: Invertieren als eigene Farbwahl. */
+.ic-slide-bg-invert { display: inline-flex; align-items: center; gap: 5px; }
+.ic-slide-bg-invert-swatch {
+  width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(255,255,255,.5);
+  background: linear-gradient(135deg, #fff 0 50%, #111 50% 100%);
+}
+.ic-slide-bg-invert.active { background: var(--ic-accent); color: #fff; }
+
+/* Farbe/Verlauf: Hinweis, wenn nur ein markierter Teil gefärbt wird. */
+.ic-fill-scope {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 6px;
+  padding: 4px 8px; border-radius: 8px; background: rgba(250,204,21,.14); font-size: .75rem; color: var(--ic-text);
+}
+
+/* Tags (Meine Bilder, Klassenansicht, Lightbox). */
+.ic-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
+.ic-tags-label { font-size: .7rem; color: var(--ic-muted); margin-right: 2px; }
+.ic-tag {
+  display: inline-flex; align-items: center; gap: 2px; padding: 1px 4px 1px 8px; border-radius: 10px;
+  background: rgba(79,140,255,.2); color: var(--ic-text); font-size: .72rem; line-height: 1.5;
+}
+.ic-tag-x { border: none; background: none; color: inherit; opacity: .6; font-size: .65rem; padding: 0 3px; cursor: pointer; }
+.ic-tag-x:hover { opacity: 1; }
+.ic-tag-input {
+  flex: 0 1 110px; min-width: 70px; padding: 2px 6px; font-size: .72rem; border-radius: 10px;
+  border: 1px dashed #3a3d44; background: transparent; color: var(--ic-text);
+}
+
+/* Eigene Texte: Textvorschau statt Quellenangaben; Zitat-Schalter. */
+.ic-home-fields-head { display: flex; justify-content: flex-end; }
+.ic-quote-toggle { font-size: 1.1rem; line-height: 1; padding: 2px 10px; font-family: Georgia, serif; }
+.ic-quote-toggle.active { background: var(--ic-accent); color: #fff; }
+.ic-text-preview {
+  font-size: .82rem; line-height: 1.35; color: var(--ic-text); white-space: pre-line;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* Einstellungen der Pinnwand und Hintergrund-Modal. */
+.ic-settings-panel { width: min(360px, calc(100vw - 24px)); gap: 8px; }
+.ic-settings-title { font-weight: 700; font-size: .9rem; color: var(--ic-text); }
+.ic-settings-options { display: flex; flex-direction: column; gap: 4px; }
+.ic-bg-panel .ic-settings-option { display: flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--ic-text); }
+.ic-settings-delay { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; }
+.ic-settings-delay input { width: 56px; padding: 2px 4px; border-radius: 6px; border: 1px solid #3a3d44; background: rgba(255,255,255,.06); color: var(--ic-text); }
+.ic-bg-panel.ic-bg-modal { position: relative; left: auto; bottom: auto; transform: none; max-height: 85vh; overflow-y: auto; }
+.ic-bg-modal-title { grid-column: 1 / -1; }
+
+/* Labels auf der Pinnwand: als Tooltip erst nach der eingestellten Zeit. */
+.ic-item-caption.ic-caption-tooltip { opacity: 0; transition: opacity .15s ease; }
+.ic-item-caption.ic-caption-tooltip.show { opacity: 1; }
+
+/* Lupe: Kasten aufziehen - Objekte reagieren solange nicht. */
+.ic-canvas-wrap.ic-box-armed { cursor: crosshair; }
+.ic-canvas-wrap.ic-box-armed .ic-arrange-item,
+.ic-canvas-wrap.ic-box-armed .ic-arrange-item *,
+.ic-canvas-wrap.ic-box-armed .ic-thread-frame-onboard,
+.ic-canvas-wrap.ic-box-armed .ic-thread-frame-onboard * { pointer-events: none; }
+.ic-zoom-popup-hint { font-size: .72rem; color: var(--ic-muted); max-width: 260px; }
+
+/* Bilder sortieren. */
+.ic-sort-menu {
+  position: fixed; z-index: 10100; display: flex; flex-direction: column; gap: 4px; min-width: 160px;
+  padding: 8px; border-radius: 12px; background: rgba(20,21,24,.95); box-shadow: 0 6px 20px rgba(0,0,0,.5);
+}
+.ic-sort-menu-title { font-size: .72rem; color: var(--ic-muted); padding: 0 4px 2px; }
+.ic-sort-menu .ic-mini-btn { text-align: left; justify-content: flex-start; }
+
+/* Leiste zur Mehrfachauswahl (Tags, Lightbox-Folge, Sortieren). */
+.ic-selection-bar {
+  position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 31;
+  display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 22px;
+  background: rgba(20,21,24,.8); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+.ic-selection-count {
+  min-width: 24px; height: 24px; border-radius: 12px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ic-thread-color, #4f8cff); color: #fff; font-size: .75rem; font-weight: 700;
+}
+.ic-selection-tag { display: inline-flex; align-items: center; gap: 4px; color: #fff; }
+.ic-selection-tag input {
+  width: 130px; padding: 4px 8px; border-radius: 12px; border: 1px solid #3a3d44;
+  background: rgba(255,255,255,.06); color: #fff; font-size: .78rem;
+}
+
+/* Die Lightbox hängt außerhalb von .pinnwand-app - dieselben Farben und
+   Schrift wie in der App (sonst fehlten z. B. die Akzentfarben aktiver
+   Werkzeuge). */
+.ic-lightbox {
+  --ic-bg: #101114; --ic-panel: #1b1d22; --ic-accent: #4f8cff; --ic-accent-dark: #2f6fe0;
+  --ic-danger: #e0503f; --ic-text: #f2f3f5; --ic-muted: #9aa0ab;
+  color: var(--ic-text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.ic-lightbox, .ic-lightbox * { box-sizing: border-box; }
+/* Farbfelder im Stift-Menü: dunkle Farben bleiben auf dem dunklen Grund sichtbar. */
+.ic-stylus-tools .ic-color-swatch { border-color: rgba(255,255,255,.35); }
+.ic-stylus-tools .ic-color-swatch.active { border-color: #fff; box-shadow: 0 0 0 2px var(--ic-accent); }

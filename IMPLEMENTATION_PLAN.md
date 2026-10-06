@@ -4372,3 +4372,30 @@ Shipped als Version `2026083153` / `0.155.0`.
   liefert (veralteter Sprach-Cache).
 
 Shipped als Version `2026083154` / `0.156.0`.
+
+## Phase 150
+
+- Folien-Editor: Popup „Folie und Animation“ aufgeteilt in „Folie“
+  (`blockSlide`) und „Elemente“ (`blockElems`); Hintergrund-Zeile mit
+  „Invertieren“ (`tf.slideBg.invert`, `slideBgCss` -> `invert(1)`, Export).
+- Textfarbe/Verlauf: ohne Teilauswahl wirkt die Änderung auf den ganzen Text
+  (`partialSelectionInActive`, `applyFillWhole`, `stripInnerFill`);
+  Hinweis `#ic-fill-scope` mit „Ganzer Text“.
+- PDF: `loadPdfJs` holt pdf.js über RequireJS (`pdfjs-dist/build/pdf`), wenn
+  Moodles AMD-Loader aktiv ist; `fonts.loadingdone` rendert nicht neu, solange
+  ein Modal offen ist.
+- Tags: Felder `tags`/`isquote` in `pinnwand_photos`, Webservice
+  `mod_pinnwand_set_tags` (set/add), `update_source` mit `isquote`;
+  `tagEditor()`, `quoteToggle()`; Texte ohne Zitat zeigen den Text statt
+  der Quellenfelder. Engere Abstände in „Meine Bilder“/Klassenansicht.
+- Einstellungen (Zahnrad): `state.labelMode` (show/tooltip/off) und
+  `state.labelDelay` (localStorage `pinnwand_labels_<cmid>`), Startmodus,
+  Hintergrund als eigenes Modal (`#ic-bg-overlay`).
+- Lupe: Kasten erst scharf schalten (`state.boxModeArmed`), zweiter Klick
+  wählt alles; Auswahlleiste `.ic-selection-bar` (Tags, Lightbox-Folge,
+  Sortieren); `sortBoardPhotos(key)` (Titel, Jahr, Autor, Upload, Tag).
+- Lightbox: Folge `lbSeq` mit Zähler, schwebende Navigation ohne Rand,
+  `sizeLightboxImage()` nutzt die Fläche, Annotationsleiste wie auf der
+  Pinnwand (`.ic-stylus-tools`).
+
+Shipped als Version `2026083155` / `0.157.0`.

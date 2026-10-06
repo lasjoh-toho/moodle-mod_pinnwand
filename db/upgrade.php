@@ -441,5 +441,19 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083153, 'pinnwand');
     }
 
+    if ($oldversion < 2026083155) {
+        // Schlagwörter für Bilder und Texte, Kennzeichnung von Zitaten.
+        $table = new xmldb_table('pinnwand_photos');
+        $field = new xmldb_field('tags', XMLDB_TYPE_TEXT, null, null, null, null, null, 'blendmode');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field('isquote', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'tags');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026083155, 'pinnwand');
+    }
+
     return true;
 }
