@@ -9985,12 +9985,19 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       if (window.pdfjsLib) { resolve(window.pdfjsLib); return; }
       var sc = document.createElement('script');
       sc.src = base + 'pdf.min.js';
+      // pdf.js ist ein UMD-Bundle: Moodle lädt RequireJS (window.define.amd),
+      // dann registriert es sich nur als anonymes AMD-Modul und setzt
+      // window.pdfjsLib nie. Darum define während des Ladens ausblenden.
+      var savedDefine = window.define;
+      var restoreDefine = function () { if (savedDefine) { window.define = savedDefine; } };
+      if (savedDefine && savedDefine.amd) { window.define = undefined; }
       sc.onload = function () {
+        restoreDefine();
         if (!window.pdfjsLib) { reject(new Error('pdf.js')); return; }
         window.pdfjsLib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js';
         resolve(window.pdfjsLib);
       };
-      sc.onerror = function () { pdfJsPromise = null; reject(new Error('pdf.js')); };
+      sc.onerror = function () { restoreDefine(); pdfJsPromise = null; reject(new Error('pdf.js')); };
       document.head.appendChild(sc);
     });
     return pdfJsPromise;
