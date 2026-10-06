@@ -456,7 +456,7 @@
         if (p.wordfielddata) {
           openWordfieldEditorDirectly(p, function () { openLightbox(idx); });
         } else {
-          openLightbox(idx);
+          loadPhotoForEditing(p);
         }
       });
       thumb.appendChild(imgWrap);
@@ -11459,7 +11459,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   }
   // Ein Textobjekt gilt als Zitat, sobald irgendeine Quellenangabe befüllt ist.
   function textHasSource(p) {
-    return !!(p.sourcetitle || p.sourceauthor || p.sourceyear || p.sourceepoch || p.sourceplace || p.sourceorigauthor);
+    return !!(p.sourcetitle || p.sourceyear || p.sourceepoch || p.sourceplace || p.sourceorigauthor);
   }
   // Tag-Eingabe für ein Objekt; speichert beim Verlassen des Feldes.
   function buildTagsInput(p, canedit) {

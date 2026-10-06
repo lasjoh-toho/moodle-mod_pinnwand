@@ -201,21 +201,21 @@
 .ic-btn-icon { flex: 0 0 auto; min-width: 0; width: 46px; height: 46px; padding: 0; display: flex; align-items: center; justify-content: center; }
 .ic-menu-row .ic-btn-icon { width: 52px; height: 52px; }
 .ic-menu-row .ic-btn-icon.active { background: var(--ic-accent); }
-.ic-home-list { display: flex; flex-direction: column; gap: 34px; padding-top: 44px; }
+.ic-home-list { display: flex; flex-direction: column; gap: 22px; padding-top: 40px; }
 @media (min-width: 1100px) {
   .ic-home-list { display: grid; grid-template-columns: 1fr 1fr; column-gap: 56px; }
 }
-.ic-home-row { display: flex; align-items: flex-start; gap: 60px; position: relative; }
+.ic-home-row { display: flex; align-items: flex-start; gap: 54px; position: relative; }
 .ic-home-row .ic-thumb {
   position: relative;
-  width: 120px; aspect-ratio: 3/4; flex: 0 0 auto;
+  width: 104px; aspect-ratio: 1/1; flex: 0 0 auto;
   /* Kein eigener Hintergrund und keine Rundung mehr - beides führte zu
      sichtbaren Farb-/Eckenabweichungen zum eigentlichen Bild. Pin und
      Mülleimer liegen jetzt klar AUSSERHALB der Bildfläche (siehe unten),
      nicht mehr in einem reservierten Innenbereich. */
   border-radius: 0;
 }
-.ic-home-fields { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+.ic-home-fields { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding: 2px 0 0 16px; position: relative; z-index: 3; }
 .ic-home-fields-toggle {
   position: absolute; top: 0; right: -14px; width: 30px; height: 30px; border-radius: 50%;
   border: none; background: rgba(20,21,24,.8); color: #fff; align-items: center; justify-content: center; padding: 0;
@@ -235,7 +235,7 @@
 .ic-home-row .ic-thumb.ic-thumb-pinned .ic-thumb-img-wrap-wordfield .ic-wordfield-fit {
   transform: translateY(-18px) scale(1.04); transition: transform .15s ease;
 }
-.ic-home-row .ic-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
+.ic-home-row .ic-thumb img { width: 100%; height: 100%; object-fit: contain; border-radius: 0; }
 .ic-home-row .ic-thumb .ic-del {
   position: absolute; bottom: 0; right: -25px; z-index: 2;
   background: none; color: #e0342a; border: none;
@@ -1733,3 +1733,13 @@ input.ic-stepper-value {
 .ic-add-modal.ic-drop-active { outline: 2px dashed var(--ic-accent, #2a7de1); outline-offset: -6px; }
 .ic-bulk-bar { height: 8px; background: rgba(128,128,128,.25); border-radius: 4px; overflow: hidden; margin-top: 8px; }
 .ic-bulk-bar-fill { height: 100%; width: 0; background: var(--ic-accent, #2a7de1); transition: width .2s; }
+
+/* Meine Dateien: Bild komplett zeigen, Schatten am Bild statt an der Box, Text ungekürzt */
+.ic-home-row .ic-thumb:not(.ic-thumb-pinned) .ic-thumb-img-wrap:not(.ic-thumb-img-wrap-wordfield) { box-shadow: none; }
+.ic-home-row .ic-thumb:not(.ic-thumb-pinned) .ic-thumb-img-wrap img { filter: drop-shadow(0 8px 10px rgba(0,0,0,.6)); }
+.ic-home-row .ic-thumb.ic-thumb-pinned .ic-thumb-img-wrap:not(.ic-thumb-img-wrap-wordfield) { box-shadow: none; }
+.ic-home-row .ic-thumb.ic-thumb-pinned .ic-thumb-img-wrap img { filter: drop-shadow(0 8px 8px rgba(0,0,0,.5)); }
+.ic-home-fields .ic-text-excerpt { max-height: none; display: block; -webkit-line-clamp: unset; overflow: visible; }
+.ic-home-fields .ic-quote-toggle { position: relative; z-index: 4; }
+.ic-tags-input { white-space: nowrap; text-overflow: ellipsis; height: 26px; margin-top: 2px; }
+.ic-home-row .ic-moderate-input { padding: 3px 6px; }
