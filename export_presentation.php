@@ -275,7 +275,7 @@ foreach ($placements as $pl) {
 // Person), daher unabhängig von $boardid.
 function pinnwand_export_background_data($instance, $context, $fs) {
     global $USER, $DB;
-    $result = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'fit' => 'contain'];
+    $result = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'invert' => 0, 'fit' => 'contain'];
     $raw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
     if (!$raw) {
         return $result;
@@ -288,6 +288,7 @@ function pinnwand_export_background_data($instance, $context, $fs) {
     $result['color'] = clean_param($decoded['color'] ?? $result['color'], PARAM_TEXT);
     $result['brightness'] = max(20, min(180, (int) ($decoded['brightness'] ?? 100)));
     $result['saturation'] = max(0, min(200, (int) ($decoded['saturation'] ?? 100)));
+    $result['invert'] = max(0, min(100, (int) ($decoded['invert'] ?? 0)));
     $fitval = $decoded['fit'] ?? 'contain';
     $result['fit'] = in_array($fitval, ['cover', 'contain'], true) ? $fitval : 'contain';
     if ($type === 'image' && !empty($decoded['photoid'])) {
@@ -489,7 +490,8 @@ function pinnwand_export_build_html($title, $json) {
   }
   var bgBrightness = (bg.brightness != null ? bg.brightness : 100);
   var bgSaturation = (bg.saturation != null ? bg.saturation : 100);
-  bgImage.style.filter = 'brightness(' + bgBrightness + '%) saturate(' + bgSaturation + '%)';
+  var bgInvert = (bg.invert != null ? bg.invert : 0);
+  bgImage.style.filter = 'brightness(' + bgBrightness + '%) saturate(' + bgSaturation + '%)' + (bgInvert ? ' invert(' + bgInvert + '%)' : '');
   if (data.thread && data.thread.bgmoves) {
     bgEl.classList.add('moves');
     canvas.appendChild(bgEl);

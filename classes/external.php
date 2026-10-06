@@ -306,7 +306,7 @@ class mod_pinnwand_external extends external_api {
 
     protected static function get_background_data($instance, $context) {
         global $USER;
-        $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'fit' => 'contain',
+        $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'invert' => 0, 'fit' => 'contain',
             'pdfurl' => '', 'pdfspreads' => '', 'pdfdouble' => false, 'photoid' => 0, 'startmode' => ''];
         $raw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
         if (!$raw) {
@@ -325,6 +325,7 @@ class mod_pinnwand_external extends external_api {
         $bg['color'] = clean_param($decoded['color'] ?? $default['color'], PARAM_TEXT);
         $bg['brightness'] = max(20, min(180, (int) ($decoded['brightness'] ?? 100)));
         $bg['saturation'] = max(0, min(200, (int) ($decoded['saturation'] ?? 100)));
+        $bg['invert'] = max(0, min(100, (int) ($decoded['invert'] ?? 0)));
         $fitval = $decoded['fit'] ?? 'contain';
         $bg['fit'] = in_array($fitval, ['cover', 'contain'], true) ? $fitval : 'contain';
         if ($bg['type'] === 'image' && !empty($decoded['photoid'])) {
@@ -399,6 +400,7 @@ class mod_pinnwand_external extends external_api {
                 'url' => new external_value(PARAM_RAW, 'Hintergrundbild-URL', VALUE_DEFAULT, null, NULL_ALLOWED),
                 'brightness' => new external_value(PARAM_INT, 'Helligkeit in %'),
                 'saturation' => new external_value(PARAM_INT, 'Sättigung in %'),
+                'invert' => new external_value(PARAM_INT, 'Invertieren in %', VALUE_DEFAULT, 0),
                 'fit' => new external_value(PARAM_ALPHA, 'contain oder cover'),
                 'pdfurl' => new external_value(PARAM_RAW, 'PDF, aus dem der Hintergrund stammt', VALUE_DEFAULT, ''),
                 'pdfspreads' => new external_value(PARAM_RAW, 'Gewählte (Doppel-)Seiten, kommagetrennt', VALUE_DEFAULT, ''),
@@ -1138,16 +1140,17 @@ class mod_pinnwand_external extends external_api {
             'pdfspreads' => new external_value(PARAM_RAW, 'Gewählte (Doppel-)Seiten, kommagetrennt', VALUE_DEFAULT, ''),
             'pdfdouble' => new external_value(PARAM_INT, 'Doppelseiten (1/0)', VALUE_DEFAULT, 0),
             'startmode' => new external_value(PARAM_ALPHA, 'Präsentationsstart overview|slide (leer = unverändert)', VALUE_DEFAULT, ''),
+            'invert' => new external_value(PARAM_INT, 'Invertieren in % (0-100, -1 = unverändert)', VALUE_DEFAULT, -1),
         ]);
     }
 
     public static function save_background($cmid, $type, $color, $photoid, $url, $imagedata, $brightness, $saturation, $fit = 'contain',
-            $pdfdata = '', $pdfspreads = '', $pdfdouble = 0, $startmode = '') {
+            $pdfdata = '', $pdfspreads = '', $pdfdouble = 0, $startmode = '', $invert = -1) {
         global $USER, $DB;
         $params = self::validate_parameters(self::save_background_parameters(), [
             'cmid' => $cmid, 'type' => $type, 'color' => $color, 'photoid' => $photoid, 'url' => $url,
             'imagedata' => $imagedata, 'brightness' => $brightness, 'saturation' => $saturation, 'fit' => $fit,
-            'pdfdata' => $pdfdata, 'pdfspreads' => $pdfspreads, 'pdfdouble' => $pdfdouble, 'startmode' => $startmode,
+            'pdfdata' => $pdfdata, 'pdfspreads' => $pdfspreads, 'pdfdouble' => $pdfdouble, 'startmode' => $startmode, 'invert' => $invert,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
 
@@ -1236,6 +1239,7 @@ class mod_pinnwand_external extends external_api {
             'url' => clean_param($params['url'], PARAM_URL),
             'brightness' => max(20, min(180, (int) $params['brightness'])),
             'saturation' => max(0, min(200, (int) $params['saturation'])),
+            'invert' => $params['invert'] >= 0 ? min(100, (int) $params['invert']) : max(0, min(100, (int) ($old['invert'] ?? 0))),
             'fit' => in_array($params['fit'], ['cover', 'contain'], true) ? $params['fit'] : 'contain',
         ];
         set_user_preference('mod_pinnwand_bg_' . $instance->id, json_encode($payload), $USER->id);
@@ -1251,6 +1255,7 @@ class mod_pinnwand_external extends external_api {
                 'url' => new external_value(PARAM_RAW, 'Hintergrundbild-URL', VALUE_DEFAULT, null, NULL_ALLOWED),
                 'brightness' => new external_value(PARAM_INT, 'Helligkeit in %'),
                 'saturation' => new external_value(PARAM_INT, 'Sättigung in %'),
+                'invert' => new external_value(PARAM_INT, 'Invertieren in %', VALUE_DEFAULT, 0),
                 'fit' => new external_value(PARAM_ALPHA, 'contain oder cover'),
                 'pdfurl' => new external_value(PARAM_RAW, 'PDF, aus dem der Hintergrund stammt', VALUE_DEFAULT, ''),
                 'pdfspreads' => new external_value(PARAM_RAW, 'Gewählte (Doppel-)Seiten, kommagetrennt', VALUE_DEFAULT, ''),

@@ -10089,7 +10089,8 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     }
     var brightness = (bg.brightness != null ? bg.brightness : 100);
     var saturation = (bg.saturation != null ? bg.saturation : 100);
-    img.style.filter = 'brightness(' + brightness + '%) saturate(' + saturation + '%)';
+    var invert = (bg.invert != null ? bg.invert : 0);
+    img.style.filter = 'brightness(' + brightness + '%) saturate(' + saturation + '%)' + (invert ? ' invert(' + invert + '%)' : '');
   }
 
   // ==================================================================
@@ -10361,6 +10362,45 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       panel.appendChild(delayWrap);
     }
 
+    // Hintergrundfarbe und Präsentationsstart sind Einstellungen, keine
+    // Eigenschaften des Hintergrundbilds.
+    function persistBg(over) {
+      var b = state.background || {};
+      var params = {
+        cmid: cfg.cmid, type: b.type || 'color', color: b.color || '#2b2d33', photoid: b.photoid || 0,
+        url: b.type === 'url' ? (b.url || '') : '', brightness: b.brightness != null ? b.brightness : 100,
+        saturation: b.saturation != null ? b.saturation : 100, fit: b.fit || 'contain'
+      };
+      Object.keys(over || {}).forEach(function (k) { params[k] = over[k]; });
+      return callAjax('mod_pinnwand_save_background', params).then(function (res) { state.background = res.background; });
+    }
+    var colorRow = el('div', { class: 'ic-bg-row' });
+    colorRow.appendChild(el('label', {}, [S.bg_color]));
+    var colorInput = el('input', { type: 'color', value: (state.background && state.background.color) || '#2b2d33' });
+    colorInput.addEventListener('input', function () {
+      state.background = state.background || { type: 'color' };
+      state.background.color = colorInput.value;
+      var wp = document.querySelector('.ic-canvas-wallpaper');
+      if (wp) { applyWallpaperColor(wp); }
+      var bgEl = document.querySelector('.ic-canvas-bg');
+      if (bgEl) { applyBackground(bgEl); }
+    });
+    colorInput.addEventListener('change', function () { persistBg({ color: colorInput.value }); });
+    colorRow.appendChild(colorInput);
+    panel.appendChild(colorRow);
+
+    var startRow = el('div', { class: 'ic-bg-row' });
+    startRow.appendChild(el('label', {}, [S.startmode]));
+    var curStart = (state.background && state.background.startmode) || cfg.startmode || 'overview';
+    [['overview', S.startmode_overview], ['slide', S.startmode_slide]].forEach(function (opt) {
+      var sb = el('button', { class: 'ic-btn ic-mini-btn ' + (curStart === opt[0] ? 'ic-btn-primary' : 'ic-btn-ghost'), type: 'button' }, [opt[1]]);
+      sb.addEventListener('click', function () {
+        persistBg({ startmode: opt[0] }).then(function () { panel.remove(); openOptionsPanel(body); });
+      });
+      startRow.appendChild(sb);
+    });
+    panel.appendChild(startRow);
+
     var bgBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.bg_title]);
     bgBtn.addEventListener('click', function () { panel.remove(); openBackgroundPanel(body); });
     panel.appendChild(bgBtn);
@@ -10416,6 +10456,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     }
     function bg() { return state.background || { type: 'color', color: '#2b2d33', brightness: 100, saturation: 100, fit: 'contain' }; }
     function currentBrightness() { return bg().brightness != null ? bg().brightness : 100; }
+    function currentInvert() { return bg().invert != null ? bg().invert : 0; }
     function currentSaturation() { return bg().saturation != null ? bg().saturation : 100; }
     function currentFit() { return bg().fit || 'contain'; }
     // Speichert die aktuellen Einstellungen, OHNE das Bild zu ändern (Farbe,
@@ -10425,11 +10466,11 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: b.type || 'color', color: b.color || '#2b2d33',
         photoid: b.photoid || 0, url: b.type === 'url' ? (b.url || '') : '',
-        brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
+        brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit()
       }).then(function (res) { state.background = res.background; });
     }
     function chooseImage(p) {
-      state.background = { type: 'image', color: bg().color, url: p.url, photoid: p.id, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
+      state.background = { type: 'image', color: bg().color, url: p.url, photoid: p.id, brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit() };
       applyBackground(bgLayerEl());
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: 'image', color: bg().color, photoid: p.id,
@@ -10451,20 +10492,12 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
 
     // --- Farbe (ändert nur die Farbe, das Bild bleibt) + Bild entfernen.
     var colorRow = el('div', { class: 'ic-bg-row' });
-    colorRow.appendChild(el('label', {}, [S.bg_color]));
-    var colorInput = el('input', { type: 'color', value: bg().color || '#2b2d33' });
-    colorInput.addEventListener('input', function () {
-      state.background = state.background || {};
-      state.background.color = colorInput.value;
-      if (!state.background.type) { state.background.type = 'color'; }
-      applyBackground(bgLayerEl());
-    });
-    colorInput.addEventListener('change', persistKeep);
-    colorRow.appendChild(colorInput);
+    // Die Hintergrundfarbe wird in den Optionen (Zahnrad) eingestellt.
+    var colorInput = { value: bg().color || '#2b2d33' };
     if (bg().type !== 'color') {
       var noImgBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.bg_noimage }, ['✕ ' + S.bg_noimage]);
       noImgBtn.addEventListener('click', function () {
-        state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
+        state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit() };
         applyBackground(bgLayerEl());
         callAjax('mod_pinnwand_save_background', {
           cmid: cfg.cmid, type: 'color', color: colorInput.value, photoid: 0,
@@ -10545,7 +10578,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     urlApply.addEventListener('click', function () {
       var url = urlInput.value.trim();
       if (!url) { return; }
-      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit() };
+      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit() };
       applyBackground(bgLayerEl());
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: 'url', color: colorInput.value, photoid: 0, url: url,
@@ -10569,8 +10602,9 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       wrap.appendChild(input);
       sliders.appendChild(wrap);
     }
-    slider(S.bg_brightness, 20, 180, currentBrightness, function (v) { state.background.brightness = v; });
-    slider(S.bg_saturation, 0, 200, currentSaturation, function (v) { state.background.saturation = v; });
+    slider(S.brightness, 20, 180, currentBrightness, function (v) { state.background.brightness = v; });
+    slider(S.saturation, 0, 200, currentSaturation, function (v) { state.background.saturation = v; });
+    slider(S.slide_bg_invert, 0, 100, currentInvert, function (v) { state.background.invert = v; });
     colR.appendChild(sliders);
 
     var fitRow = el('div', { class: 'ic-bg-row' });
@@ -10587,23 +10621,6 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       });
       fitRow.appendChild(fitBtn);
     });
-    // Wie die Präsentation startet (eigene Wahl, sonst Aktivitäts-Einstellung).
-    var startRow = el('div', { class: 'ic-bg-row' });
-    startRow.appendChild(el('label', {}, [S.startmode]));
-    var curStart = bg().startmode || cfg.startmode || 'overview';
-    [['overview', S.startmode_overview], ['slide', S.startmode_slide]].forEach(function (opt) {
-      var sb = el('button', { class: 'ic-btn ic-mini-btn ' + (curStart === opt[0] ? 'ic-btn-primary' : 'ic-btn-ghost'), type: 'button' }, [opt[1]]);
-      sb.addEventListener('click', function () {
-        var b = bg();
-        callAjax('mod_pinnwand_save_background', {
-          cmid: cfg.cmid, type: b.type || 'color', color: b.color || '#2b2d33', photoid: b.photoid || 0,
-          url: b.type === 'url' ? (b.url || '') : '', brightness: currentBrightness(), saturation: currentSaturation(),
-          fit: currentFit(), startmode: opt[0]
-        }).then(function (res) { state.background = res.background; closeBg(); openBackgroundPanel(body); });
-      });
-      startRow.appendChild(sb);
-    });
-    colR.appendChild(startRow);
     var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-bg-close', type: 'button' }, [S.draw_done]);
     closeBtn.addEventListener('click', function () { closeBg(); });
     fitRow.appendChild(closeBtn);
