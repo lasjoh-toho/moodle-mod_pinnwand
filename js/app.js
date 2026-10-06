@@ -612,17 +612,26 @@
       render();
     }
 
-    var fileInput = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
-    fileInput.addEventListener('change', function (ev) {
-      var file = ev.target.files[0];
-      if (!file) { return; }
+    var fileInput = el('input', { type: 'file', accept: 'image/*', multiple: 'multiple', style: 'display:none' });
+    function handleFiles(list) {
+      var files = Array.prototype.slice.call(list || []).filter(function (f) { return /^image\//.test(f.type); });
+      if (!files.length) { return; }
+      if (files.length > 1) { bulkUploadImages(files, overlay, panel); return; }
       var reader = new FileReader();
       reader.onload = function () {
         var img = new Image();
         img.onload = function () { overlay.remove(); loadCapturedImage(img); };
         img.src = reader.result;
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(files[0]);
+    }
+    fileInput.addEventListener('change', function (ev) { handleFiles(ev.target.files); fileInput.value = ''; });
+    panel.addEventListener('dragover', function (ev) { ev.preventDefault(); panel.classList.add('ic-drop-active'); });
+    panel.addEventListener('dragleave', function (ev) { if (ev.target === panel) { panel.classList.remove('ic-drop-active'); } });
+    panel.addEventListener('drop', function (ev) {
+      ev.preventDefault();
+      panel.classList.remove('ic-drop-active');
+      if (ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files.length) { handleFiles(ev.dataTransfer.files); }
     });
     panel.appendChild(fileInput);
 
@@ -788,6 +797,70 @@
     ctx.scale(-1, 1);
     ctx.drawImage(canvas, 0, 0);
     return mirrored;
+  }
+
+  // Mehrere Bilder auf einmal: jedes wird verkleinert und als eigener Post
+  // gespeichert (3 parallel), danach direkt im Post-Stream angezeigt.
+  function bulkUploadImages(files, overlay, panel) {
+    if (state.maxpictures > 0) {
+      files = files.slice(0, Math.max(0, state.maxpictures - state.photos.length));
+    }
+    if (!files.length) { return; }
+    panel.innerHTML = '';
+    var total = files.length, done = 0, failed = 0, next = 0;
+    var label = el('p', { class: 'ic-hint' }, []);
+    var bar = el('div', { class: 'ic-bulk-bar' }, [el('div', { class: 'ic-bulk-bar-fill' })]);
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.addobject]));
+    panel.appendChild(label);
+    panel.appendChild(bar);
+    function update() {
+      label.textContent = S.bulk_progress.replace('{done}', done).replace('{total}', total);
+      bar.firstChild.style.width = Math.round(100 * (done + failed) / total) + '%';
+    }
+    function shrink(file) {
+      return new Promise(function (resolve, reject) {
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function () {
+          var max = 1800, sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+          var c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(img.naturalWidth * sc));
+          c.height = Math.max(1, Math.round(img.naturalHeight * sc));
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          URL.revokeObjectURL(url);
+          resolve(canvasDataUrl(c, 0.85));
+        };
+        img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('image')); };
+        img.src = url;
+      });
+    }
+    function worker() {
+      if (next >= total) { return Promise.resolve(); }
+      var file = files[next++];
+      return shrink(file).then(function (dataUrl) {
+        return callAjax('mod_pinnwand_save_photo', {
+          cmid: cfg.cmid, imagedata: dataUrl, gridtype: 'none', gridvalue: 0, consent: false,
+          sourcetitle: file.name.replace(/\.[^.]+$/, ''), sourceauthor: '', sourceyear: '', sourceepoch: '',
+          sourceplace: '', sourceorigauthor: '', boardid: state.currentBoard || 0
+        });
+      }).then(function (res) {
+        done++;
+        if (res && res.photoid) {
+          return callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: res.photoid, hidden: false }).catch(function () { return null; });
+        }
+      }).catch(function () { failed++; }).then(function () { update(); return worker(); });
+    }
+    update();
+    Promise.all([worker(), worker(), worker()]).then(function () {
+      return refreshPhotos();
+    }).then(function () {
+      overlay.remove();
+      state.step = 'arrange';
+      state.streamPanelOpen = true;
+      loadStreamPhotos();
+      render();
+      if (failed) { alert(S.bulk_failed.replace('{failed}', failed)); }
+    });
   }
 
   function loadCapturedImage(img) {

@@ -1729,3 +1729,7 @@ input.ic-stepper-value {
   border: none; background: rgba(20,21,24,.85); color: #fff; padding: 0; font-size: .85rem; cursor: pointer; pointer-events: auto;
 }
 .ic-tagsel-modal input { width: 100%; box-sizing: border-box; margin: 8px 0; }
+
+.ic-add-modal.ic-drop-active { outline: 2px dashed var(--ic-accent, #2a7de1); outline-offset: -6px; }
+.ic-bulk-bar { height: 8px; background: rgba(128,128,128,.25); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.ic-bulk-bar-fill { height: 100%; width: 0; background: var(--ic-accent, #2a7de1); transition: width .2s; }
