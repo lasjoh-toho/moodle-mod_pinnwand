@@ -1743,3 +1743,5 @@ input.ic-stepper-value {
 .ic-home-fields .ic-quote-toggle { position: relative; z-index: 4; }
 .ic-tags-input { white-space: nowrap; text-overflow: ellipsis; height: 26px; margin-top: 2px; }
 .ic-home-row .ic-moderate-input { padding: 3px 6px; }
+/* Tag-Feld: in der Spalten-Flexbox darf flex-basis nicht die Höhe bestimmen (war 100px) */
+.ic-tags-input { flex: 0 0 auto; height: 26px; min-height: 0; }

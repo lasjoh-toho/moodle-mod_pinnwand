@@ -7476,7 +7476,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     if (state.boardFilter && state.boardFilter.trim()) {
       var fq = state.boardFilter.trim().toLowerCase();
       visible = visible.filter(function (p) {
-        return [p.sourcetitle, p.sourceyear, p.sourceepoch, p.sourceorigauthor, p.sourceauthor].some(function (v) {
+        return [p.sourcetitle, p.sourceyear, p.sourceepoch, p.sourceorigauthor, p.sourceauthor, p.tags].some(function (v) {
           return (v || '').toLowerCase().indexOf(fq) !== -1;
         });
       });
@@ -7992,7 +7992,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       canvas.querySelectorAll('[data-multikey^="photo:"]').forEach(function (el2) {
         var id = parseInt(el2.getAttribute('data-multikey').split(':')[1], 10);
         var p = state.photos.filter(function (o) { return o.id === id; })[0];
-        var match = !fq || !p || [p.sourcetitle, p.sourceyear, p.sourceepoch, p.sourceorigauthor, p.sourceauthor].some(function (v) {
+        var match = !fq || !p || [p.sourcetitle, p.sourceyear, p.sourceepoch, p.sourceorigauthor, p.sourceauthor, p.tags].some(function (v) {
           return (v || '').toLowerCase().indexOf(fq) !== -1;
         });
         el2.style.display = match ? '' : 'none';
@@ -8775,7 +8775,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       var q = state.streamFilter.trim().toLowerCase();
       var list = state.streamPhotos.filter(function (p) {
         if (!q) { return true; }
-        return (p.userfullname + ' ' + p.sourcetitle).toLowerCase().indexOf(q) !== -1;
+        return (p.userfullname + " " + p.sourcetitle + " " + (p.tags || "")).toLowerCase().indexOf(q) !== -1;
       });
       if (list.length === 0) {
         cardsWrap.appendChild(el('p', { class: 'ic-hint' }, [S.stream_empty]));
