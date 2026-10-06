@@ -141,7 +141,9 @@
     canmoderate: false,    // darf Klassenansicht sehen
     studentcansend: true,  // Aktivitätseinstellung: Lernende dürfen eigene Fotos zur Pinnwand senden/entfernen
     teachercansend: true,  // Aktivitätseinstellung: Lehrkräfte dürfen beliebige Fotos zur Pinnwand senden/entfernen
-    showData: false,       // Anordnung: Metadaten unter jedem Foto ein-/ausblenden
+    showData: false,       // Anordnung: Metadaten unter jedem Foto ein-/ausblenden (labelMode 'always')
+    labelMode: 'tooltip',  // Labels auf der Pinnwand: 'tooltip' (nach labelDelay s), 'always', 'off'
+    labelDelay: 1,         // Sekunden bis das Label als Tooltip erscheint
     editingPhotoId: null,  // falls gesetzt: die Pipeline überschreibt dieses bestehende Foto statt ein neues anzulegen
     sourceInfo: null,
     photos: [],           // vom Server geladene / neu gespeicherte Fotos
@@ -182,6 +184,14 @@
     boardHideMedia: false, // Lupenmenü: alle Medien (Fotos ohne Wortfeld-Daten) ausblenden, nur Texte/Wortfelder zeigen
     trashItems: []
   };
+  try {
+    var labelPrefs = JSON.parse(localStorage.getItem('mod_pinnwand_labels') || 'null');
+    if (labelPrefs && ['tooltip', 'always', 'off'].indexOf(labelPrefs.mode) !== -1) {
+      state.labelMode = labelPrefs.mode;
+      state.showData = labelPrefs.mode === 'always';
+      if (isFinite(labelPrefs.delay)) { state.labelDelay = Math.max(0, Math.min(5, labelPrefs.delay)); }
+    }
+  } catch (e) { /* localStorage nicht verfügbar */ }
 
   // ------------------------------------------------------------------
   // Kleine DOM-Helfer
@@ -7492,6 +7502,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       // Pinnwand ausgeblendet (annotationonboard).
       if (p.annotationonboard !== false) { buildInkDisplay(item, p); }
       if (state.showData) { item.appendChild(el('div', { class: 'ic-item-caption' }, [itemCaptionText(p)])); }
+      attachLabelTooltip(item, p);
 
       // Handles (Größe/Rotation) nur bei Hover (Maus) bzw. nach Antippen
       // (Touch) einblenden - siehe .ic-arrange-item.show-handles in CSS.
@@ -8048,12 +8059,8 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     var fabRow = el('div', { class: 'ic-fab-row' });
 
     var gearBtn = el('button', { class: 'ic-fab ic-tablet-up ic-fab-biglabel', title: S.options }, ['\u2699']);
-    gearBtn.addEventListener('click', function () { openBackgroundPanel(body); });
+    gearBtn.addEventListener('click', function () { openOptionsPanel(body); });
     fabRow.appendChild(gearBtn);
-
-    var dataBtn = el('button', { class: 'ic-fab' + (state.showData ? ' active' : ''), title: state.showData ? S.hidedata : S.showdata }, ['\u{1F3F7}']);
-    dataBtn.addEventListener('click', function () { state.showData = !state.showData; render(); });
-    fabRow.appendChild(dataBtn);
 
     // Lupe: öffnet ein kleines Zoom-Popup (Regler + Plus/Minus + Auswahl-
     // Werkzeuge + Filterleiste) statt mehrerer permanent sichtbarer Buttons.
@@ -10205,9 +10212,87 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     });
   }
 
-  function openBackgroundPanel(body) {
-    var existing = document.getElementById('ic-bg-panel');
+  // Optionen (Zahnrad): Beschriftungen auf der Pinnwand, Zugang zum
+  // Hintergrund-Modal. Einstellung bleibt pro Browser erhalten.
+  function openOptionsPanel(body) {
+    var existing = document.getElementById('ic-options-panel');
     if (existing) { existing.remove(); return; }
+    var panel = el('div', { class: 'ic-bg-panel ic-options-panel', id: 'ic-options-panel' });
+
+    panel.appendChild(el('label', {}, [S.labels_title]));
+    var modeRow = el('div', { class: 'ic-bg-row' });
+    [['tooltip', S.labels_tooltip], ['always', S.labels_always], ['off', S.labels_off]].forEach(function (opt) {
+      var b = el('button', { class: 'ic-btn ic-mini-btn ' + (state.labelMode === opt[0] ? 'ic-btn-primary' : 'ic-btn-ghost'), type: 'button' }, [opt[1]]);
+      b.addEventListener('click', function () {
+        state.labelMode = opt[0];
+        state.showData = opt[0] === 'always';
+        saveLabelPrefs();
+        panel.remove();
+        render();
+      });
+      modeRow.appendChild(b);
+    });
+    panel.appendChild(modeRow);
+
+    if (state.labelMode === 'tooltip') {
+      var delayWrap = el('label', { class: 'ic-bg-slider' }, [S.labels_delay + ': ' + state.labelDelay.toFixed(1) + ' s']);
+      var delayInput = el('input', { type: 'range', min: '0', max: '5', step: '0.1', value: String(state.labelDelay) });
+      delayInput.addEventListener('input', function () {
+        state.labelDelay = parseFloat(delayInput.value) || 0;
+        delayWrap.firstChild.nodeValue = S.labels_delay + ': ' + state.labelDelay.toFixed(1) + ' s';
+      });
+      delayInput.addEventListener('change', saveLabelPrefs);
+      delayWrap.appendChild(delayInput);
+      panel.appendChild(delayWrap);
+    }
+
+    var bgBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.bg_title]);
+    bgBtn.addEventListener('click', function () { panel.remove(); openBackgroundPanel(body); });
+    panel.appendChild(bgBtn);
+
+    body.appendChild(panel);
+    setTimeout(function () {
+      document.addEventListener('click', function onDocClick(ev) {
+        if (!panel.contains(ev.target)) {
+          panel.remove();
+          document.removeEventListener('click', onDocClick);
+        }
+      });
+    }, 0);
+  }
+
+  function saveLabelPrefs() {
+    try { localStorage.setItem('mod_pinnwand_labels', JSON.stringify({ mode: state.labelMode, delay: state.labelDelay })); } catch (e) { /* ignore */ }
+  }
+
+  // Label als Tooltip: erscheint, wenn der Zeiger state.labelDelay Sekunden
+  // über dem Objekt ruht.
+  var labelTipTimer = null;
+  function hideLabelTip() {
+    clearTimeout(labelTipTimer);
+    var t = document.getElementById('ic-label-tip');
+    if (t) { t.remove(); }
+  }
+  function attachLabelTooltip(item, p) {
+    item.addEventListener('mouseenter', function (ev) {
+      if (state.labelMode !== 'tooltip') { return; }
+      hideLabelTip();
+      var x = ev.clientX, y = ev.clientY;
+      item.addEventListener('mousemove', function track(e2) { x = e2.clientX; y = e2.clientY; });
+      labelTipTimer = setTimeout(function () {
+        var tip = el('div', { class: 'ic-label-tip', id: 'ic-label-tip' }, [itemCaptionText(p)]);
+        document.body.appendChild(tip);
+        tip.style.left = Math.max(8, Math.min(x + 12, window.innerWidth - tip.offsetWidth - 8)) + 'px';
+        tip.style.top = Math.max(8, Math.min(y + 16, window.innerHeight - tip.offsetHeight - 8)) + 'px';
+      }, Math.round(state.labelDelay * 1000));
+    });
+    item.addEventListener('mouseleave', hideLabelTip);
+    item.addEventListener('mousedown', hideLabelTip);
+  }
+
+  function openBackgroundPanel(body) {
+    var existingOv = document.getElementById('ic-bg-modal');
+    if (existingOv) { existingOv.remove(); }
 
     function bgLayerEl() {
       var wallpaperEl = document.querySelector('.ic-canvas-wallpaper');
@@ -10237,7 +10322,13 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       }).then(function (res) { state.background = res.background; });
     }
 
-    var panel = el('div', { class: 'ic-bg-panel ic-bg-panel-compact', id: 'ic-bg-panel' });
+    // Eigenes Modal (Overlay) statt Popover; Schließen per Knopf, Kreuz,
+    // Klick auf den Hintergrund oder Escape.
+    var overlay = el('div', { class: 'ic-modal-overlay', id: 'ic-bg-modal' });
+    function closeBg() { overlay.remove(); document.removeEventListener('keydown', onEsc); }
+    function onEsc(ev) { if (ev.key === 'Escape') { closeBg(); } }
+    document.addEventListener('keydown', onEsc);
+    var panel = el('div', { class: 'ic-bg-panel ic-bg-panel-compact ic-bg-panel-modal', id: 'ic-bg-panel' });
     var colL = el('div', { class: 'ic-bg-col' });
     var colR = el('div', { class: 'ic-bg-col' });
     panel.appendChild(colL);
@@ -10263,7 +10354,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         callAjax('mod_pinnwand_save_background', {
           cmid: cfg.cmid, type: 'color', color: colorInput.value, photoid: 0,
           brightness: currentBrightness(), saturation: currentSaturation(), fit: currentFit()
-        }).then(function (res) { state.background = res.background; panel.remove(); openBackgroundPanel(body); });
+        }).then(function (res) { state.background = res.background; closeBg(); openBackgroundPanel(body); });
       });
       colorRow.appendChild(noImgBtn);
     }
@@ -10311,7 +10402,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       if (!file) { return; }
       var reader = new FileReader();
       reader.onload = function () {
-        panel.remove();
+        closeBg();
         openPdfBackgroundDialog({ buffer: reader.result, isNew: true, spreads: '', double: null }, function () { applyBackground(bgLayerEl()); });
       };
       reader.readAsArrayBuffer(file);
@@ -10323,7 +10414,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       pdfPagesBtn.addEventListener('click', function () {
         pdfPagesBtn.disabled = true;
         fetch(bg().pdfurl, { credentials: 'same-origin' }).then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
-          panel.remove();
+          closeBg();
           openPdfBackgroundDialog({ buffer: buf, isNew: false, spreads: bg().pdfspreads || '', double: !!bg().pdfdouble },
             function () { applyBackground(bgLayerEl()); });
         }).catch(function () { pdfPagesBtn.disabled = false; alert(S.pdf_error); });
@@ -10376,7 +10467,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         state.background.fit = opt[0];
         applyBackground(bgLayerEl());
         persistKeep();
-        panel.remove();
+        closeBg();
         openBackgroundPanel(body);
       });
       fitRow.appendChild(fitBtn);
@@ -10393,13 +10484,13 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           cmid: cfg.cmid, type: b.type || 'color', color: b.color || '#2b2d33', photoid: b.photoid || 0,
           url: b.type === 'url' ? (b.url || '') : '', brightness: currentBrightness(), saturation: currentSaturation(),
           fit: currentFit(), startmode: opt[0]
-        }).then(function (res) { state.background = res.background; panel.remove(); openBackgroundPanel(body); });
+        }).then(function (res) { state.background = res.background; closeBg(); openBackgroundPanel(body); });
       });
       startRow.appendChild(sb);
     });
     colR.appendChild(startRow);
     var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn ic-bg-close', type: 'button' }, [S.draw_done]);
-    closeBtn.addEventListener('click', function () { panel.remove(); });
+    closeBtn.addEventListener('click', function () { closeBg(); });
     fitRow.appendChild(closeBtn);
     colR.appendChild(fitRow);
 
@@ -10417,18 +10508,12 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       classSlot.appendChild(classRow);
     }).catch(function () { /* keine Berechtigung - Abschnitt weglassen */ });
 
-    body.appendChild(panel);
-
-    // Schließen bei Klick außerhalb des Panels (nicht im selben Klick, der
-    // es geöffnet hat - siehe setTimeout).
-    setTimeout(function () {
-      document.addEventListener('click', function onDocClick(ev) {
-        if (!panel.contains(ev.target)) {
-          panel.remove();
-          document.removeEventListener('click', onDocClick);
-        }
-      });
-    }, 0);
+    var xBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', type: 'button', title: S.cancel, 'aria-label': S.cancel }, ['\u2715']);
+    xBtn.addEventListener('click', closeBg);
+    panel.appendChild(xBtn);
+    overlay.addEventListener('mousedown', function (ev) { if (ev.target === overlay) { closeBg(); } });
+    overlay.appendChild(panel);
+    body.appendChild(overlay);
   }
 
   function makeMovable(item, container, onMove, onEnd) {

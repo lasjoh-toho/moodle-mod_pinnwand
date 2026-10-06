@@ -1692,3 +1692,12 @@ input.ic-stepper-value {
 .ic-stylus-svg { display: inline-flex; }
 .ic-anim-row .ic-anim-exit { padding: 2px 5px; display: inline-flex; align-items: center; }
 .ic-anim-row .ic-anim-exit svg { width: 15px; height: 15px; }
+
+/* Hintergrund als eigenes Modal, Optionen-Popover, Label-Tooltip */
+.ic-bg-panel.ic-bg-panel-modal { position: relative; left: auto; bottom: auto; transform: none; z-index: auto; padding-top: 38px; max-height: 90vh; overflow-y: auto; }
+.ic-options-panel { gap: 10px; }
+.ic-label-tip {
+  position: fixed; z-index: 300; max-width: 260px; pointer-events: none;
+  background: rgba(0,0,0,.82); color: #fff; font-size: .78rem; line-height: 1.3;
+  padding: 5px 8px; border-radius: 6px;
+}
