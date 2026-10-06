@@ -10094,9 +10094,26 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   // Zoom-Ebene - siehe renderArrange, Bugfix: die Tapete lag vorher
   // fälschlich innerhalb der gezoomten Ebene und wurde bei Zoom < 1
   // (Normalfall) kleiner als das Fenster dargestellt.
+  // Hintergrundfarbe mit denselben Effekten wie das Bild (Helligkeit, Sättigung,
+  // Invertieren, in CSS-Reihenfolge), damit auch die Fläche außerhalb des
+  // Bildbereichs mitwirkt, nicht nur die Bildfläche.
+  function effectBgColor(bg) {
+    var hex = bg.color || '#2b2d33';
+    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+    if (!m) { return hex; }
+    var br = (bg.brightness != null ? bg.brightness : 100) / 100;
+    var sat = (bg.saturation != null ? bg.saturation : 100) / 100;
+    var inv = (bg.invert != null ? bg.invert : 0) / 100;
+    if (br === 1 && sat === 1 && !inv) { return hex; }
+    var c = [parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255].map(function (v) { return Math.min(1, v * br); });
+    var lum = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    c = c.map(function (v) { return Math.max(0, Math.min(1, lum + (v - lum) * sat)); });
+    c = c.map(function (v) { return Math.round(255 * (v * (1 - inv) + (1 - v) * inv)); });
+    return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+  }
   function applyWallpaperColor(wallpaperEl) {
     var bg = state.background || { type: 'color', color: '#2b2d33' };
-    wallpaperEl.style.backgroundColor = bg.color || '#2b2d33';
+    wallpaperEl.style.backgroundColor = effectBgColor(bg);
   }
 
   // ------------------------------------------------------------------
@@ -10105,10 +10122,10 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     // Äußeres Element: reine Farbfläche, füllt die komplette (ggf. größere
     // als 1400x1000) sichtbare Fläche als Tapete.
     bgEl.style.backgroundImage = 'none';
-    bgEl.style.backgroundColor = bg.color || '#2b2d33';
+    bgEl.style.backgroundColor = effectBgColor(bg);
     // Zusätzlich als CSS-Variable bereitstellen - wird für den Glow-Effekt
     // der Sidebar-Umschalter-Buttons verwendet (siehe .ic-sidebar-toggle-bar).
-    root.style.setProperty('--ic-board-bg-color', bg.color || '#2b2d33');
+    root.style.setProperty('--ic-board-bg-color', effectBgColor(bg));
 
     // Inneres 1400x1000-Element trägt das eigentliche Bild - exakt auf die
     // Board-Koordinatenfläche gemappt (NICHT auf die ggf. größere äußere
