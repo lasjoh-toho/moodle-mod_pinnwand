@@ -1004,5 +1004,56 @@
     return out;
   }
 
-  global.PinnwandPresentation = { create: create, expandBuildSteps: expandBuildSteps, shapePoints: shapePoints, SHAPE_KINDS: SHAPE_KINDS, SHAPE_SVG: SHAPE_SVG, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk, inkBounds: inkBounds };
+  // Folien-Hintergrund (Farbe, Verlauf oder "Grainy Gradient Mesh") samt
+  // Effekten als CSS - EINE Stelle für Editor, Pinnwand, Präsentation und
+  // Export. Helligkeit und Invertieren wirken auch auf die Überlagerungsfarben
+  // (sie durchlaufen dieselbe Umrechnung wie das, was dahinter liegt), das
+  // Weichzeichnen und die Helligkeit/Invertierung des Dahinterliegenden laufen
+  // über backdrop-filter. Liefert { background, size, filter } oder null.
+  function slideBgCss(bg) {
+    if (!bg) { return null; }
+    var bright = bg.brightness != null ? bg.brightness : 100;
+    var inv = (bg.invert || 0) / 100, br = bright / 100;
+    if (!bg.opacity && !bg.blur && !bg.invert && bright === 100) { return null; }
+    var op = (bg.opacity || 0) / 100;
+    function rgb(hex) {
+      var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+      var c = m ? [parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255] : [0, 0, 0];
+      return c.map(function (v) { v = Math.min(1, v * br); return Math.round(255 * (v * (1 - inv) + (1 - v) * inv)); });
+    }
+    function rgba(hex, a) { var c = rgb(hex); return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + (Math.round(a * 1000) / 1000) + ')'; }
+    var fill = bg.fill || {};
+    var background, size = '';
+    if (fill.mode === 'gradient' && fill.stops && fill.stops.length >= 2) {
+      var stops = fill.stops.slice().sort(function (x, y) { return x.pos - y.pos; })
+        .map(function (st) { return rgba(st.color, op) + ' ' + Math.round(st.pos * 100) + '%'; }).join(',');
+      background = fill.radial ? 'radial-gradient(circle at 50% 50%,' + stops + ')'
+        : 'linear-gradient(' + ((fill.angle != null ? fill.angle : 135) + 90) + 'deg,' + stops + ')';
+    } else if (fill.mode === 'mesh' && fill.points && fill.points.length) {
+      var layers = fill.points.map(function (pt) {
+        return 'radial-gradient(circle at ' + Math.round(pt.x * 100) + '% ' + Math.round(pt.y * 100) + '%,' + rgba(pt.color, op) + ' 0%,' + rgba(pt.color, 0) + ' 65%)';
+      });
+      var sizes = layers.map(function () { return '100% 100%'; });
+      if (fill.grain) {
+        var k = Math.min(0.6, fill.grain / 100 * 0.6) * (op || 0);
+        var svg = "<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/>" +
+          "<feColorMatrix type='saturate' values='0'/><feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0 " + k.toFixed(3) + "'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>";
+        layers.unshift('url("data:image/svg+xml,' + svg.replace(/</g, '%3C').replace(/>/g, '%3E').replace(/#/g, '%23').replace(/"/g, "'") + '")');
+        sizes.unshift('240px 240px');
+      }
+      layers.push(rgba(fill.points[0].color, op));
+      sizes.push('100% 100%');
+      background = layers.join(',');
+      size = sizes.join(',');
+    } else {
+      background = rgba(bg.color || '#000000', op);
+    }
+    return {
+      background: background, size: size,
+      filter: [bg.blur ? 'blur(' + bg.blur + 'px)' : '', bg.invert ? 'invert(' + bg.invert + '%)' : '',
+        bright !== 100 ? 'brightness(' + bright + '%)' : ''].filter(Boolean).join(' ')
+    };
+  }
+
+  global.PinnwandPresentation = { create: create,slideBgCss: slideBgCss,  expandBuildSteps: expandBuildSteps, shapePoints: shapePoints, SHAPE_KINDS: SHAPE_KINDS, SHAPE_SVG: SHAPE_SVG, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk, inkBounds: inkBounds };
 })(window);

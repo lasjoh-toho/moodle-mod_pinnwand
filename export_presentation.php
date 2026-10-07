@@ -185,12 +185,39 @@ foreach ($items as $it) {
             // Folien-Hintergrund (Farbe/Deckkraft/Weichzeichnen) und mit der
             // Folie verknüpfte Objekte (bleiben trotz höherer Ebene sichtbar).
             $sbg = is_array($ftf['slideBg'] ?? null) ? $ftf['slideBg'] : [];
+            $hexok = function ($c) {
+                return preg_match('/^#[0-9a-fA-F]{6}$/', (string) $c) ? (string) $c : '#000000';
+            };
+            $sfill = is_array($sbg['fill'] ?? null) ? $sbg['fill'] : [];
+            $fmode = in_array($sfill['mode'] ?? '', ['gradient', 'mesh'], true) ? $sfill['mode'] : 'solid';
+            $fstops = [];
+            foreach (array_slice(is_array($sfill['stops'] ?? null) ? $sfill['stops'] : [], 0, 12) as $st) {
+                $fstops[] = ['color' => $hexok($st['color'] ?? ''), 'pos' => max(0, min(1, (float) ($st['pos'] ?? 0)))];
+            }
+            $fpoints = [];
+            foreach (array_slice(is_array($sfill['points'] ?? null) ? $sfill['points'] : [], 0, 8) as $pt) {
+                $fpoints[] = [
+                    'x' => max(0, min(1, (float) ($pt['x'] ?? 0.5))), 'y' => max(0, min(1, (float) ($pt['y'] ?? 0.5))),
+                    'color' => $hexok($pt['color'] ?? ''),
+                ];
+            }
+            if ($fmode === 'gradient' && count($fstops) < 2) {
+                $fmode = 'solid';
+            }
+            if ($fmode === 'mesh' && !$fpoints) {
+                $fmode = 'solid';
+            }
             $entry['slidebg'] = [
-                'color' => preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($sbg['color'] ?? '')) ? $sbg['color'] : '#000000',
+                'color' => $hexok($sbg['color'] ?? ''),
                 'opacity' => max(0, min(100, (int) ($sbg['opacity'] ?? 0))),
                 'blur' => max(0, min(30, (int) ($sbg['blur'] ?? 0))),
                 'invert' => max(0, min(100, (int) ($sbg['invert'] ?? 0))),
                 'brightness' => max(0, min(200, (int) ($sbg['brightness'] ?? 100))),
+                'fill' => [
+                    'mode' => $fmode, 'stops' => $fstops, 'points' => $fpoints,
+                    'angle' => (int) ($sfill['angle'] ?? 135), 'radial' => !empty($sfill['radial']),
+                    'grain' => max(0, min(100, (int) ($sfill['grain'] ?? 0))),
+                ],
             ];
             $entry['bgpersist'] = !empty($ftf['bgPersist']);
             $entry['bgshowbefore'] = !empty($ftf['bgShowBefore']);
@@ -597,17 +624,11 @@ function pinnwand_export_build_html($title, $json) {
         fel.style.transform = 'rotate(' + (it.framerot || 0) + 'deg)';
         fel.style.zIndex = it.framez || 0;
         if (it.blend) { fel.style.mixBlendMode = it.blend; }
-        if (it.slidebg && (it.slidebg.opacity || it.slidebg.blur || it.slidebg.invert || it.slidebg.brightness !== 100)) {
-          var sc = it.slidebg.color || '#000000';
-          // Überlagerungsfarbe durchläuft Helligkeit und Invertieren wie der Hintergrund.
-          var sbr = (it.slidebg.brightness != null ? it.slidebg.brightness : 100) / 100, sinv = (it.slidebg.invert || 0) / 100;
-          var srgb = [1, 3, 5].map(function (o) {
-            var v = Math.min(1, parseInt(sc.substr(o, 2), 16) / 255 * sbr);
-            return Math.round(255 * (v * (1 - sinv) + (1 - v) * sinv));
-          });
-          fel.style.background = 'rgba(' + srgb[0] + ',' + srgb[1] + ',' + srgb[2] + ',' + ((it.slidebg.opacity || 0) / 100) + ')';
-          var sbf = (it.slidebg.blur ? 'blur(' + it.slidebg.blur + 'px) ' : '') + (it.slidebg.invert ? 'invert(' + it.slidebg.invert + '%) ' : '') + (it.slidebg.brightness !== 100 ? 'brightness(' + it.slidebg.brightness + '%)' : '');
-          if (sbf) { fel.style.backdropFilter = fel.style.webkitBackdropFilter = sbf; }
+        var sbcss = it.slidebg ? PinnwandPresentation.slideBgCss(it.slidebg) : null;
+        if (sbcss) {
+          fel.style.background = sbcss.background;
+          if (sbcss.size) { fel.style.backgroundSize = sbcss.size; }
+          if (sbcss.filter) { fel.style.backdropFilter = fel.style.webkitBackdropFilter = sbcss.filter; }
         }
         fel.innerHTML = it.framesvg;
         var fsvg = fel.querySelector('svg');

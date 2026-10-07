@@ -2653,25 +2653,192 @@
   }
   // Folien-Hintergrund: Farbe mit Deckkraft und optionaler Weichzeichnung
   // dessen, was dahinter liegt (Milchglas).
+  // (Die Berechnung liegt in js/presentation-player.js - dieselbe Datei wie im
+  // Export.)
   function slideBgCss(tf) {
-    var bg = tf && tf.slideBg;
-    var bright = bg && bg.brightness != null ? bg.brightness : 100;
-    if (!bg || (!bg.opacity && !bg.blur && !bg.invert && bright === 100)) { return null; }
-    // Die Überlagerungsfarbe durchläuft dieselben Effekte (Helligkeit, Invertieren)
-    // wie das, was dahinter liegt - so wirken sie auf Hintergrund UND Farbe.
-    var rgb = effectBgRgb({ color: bg.color || '#000000', brightness: bright, invert: bg.invert || 0 }) || [0, 0, 0];
-    return {
-      background: 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + ((bg.opacity || 0) / 100) + ')',
-      filter: [bg.blur ? 'blur(' + bg.blur + 'px)' : '', bg.invert ? 'invert(' + bg.invert + '%)' : '',
-        bright !== 100 ? 'brightness(' + bright + '%)' : ''].filter(Boolean).join(' ')
-    };
+    return tf && tf.slideBg ? window.PinnwandPresentation.slideBgCss(tf.slideBg) : null;
   }
   function applySlideBg(elm, tf) {
     var css = slideBgCss(tf);
     elm.style.background = css ? css.background : '';
+    elm.style.backgroundSize = css && css.size ? css.size : '';
     elm.style.backdropFilter = css ? css.filter : '';
     elm.style.webkitBackdropFilter = css ? css.filter : '';
   }
+  // Folien-Hintergrund bearbeiten: Farbe (derselbe Farbwähler wie beim
+  // Pinnwand-Hintergrund), Verlauf oder Grainy Gradient Mesh - mit großer
+  // Live-Vorschau (WYSIWYG, deckend und ohne Effekte). bg = tf.slideBg.
+  function slideFillPreviewCss(bg) {
+    return window.PinnwandPresentation.slideBgCss({ color: bg.color, fill: bg.fill, opacity: 100 }) ||
+      { background: bg.color || '#000000', size: '' };
+  }
+  function openSlideFillModal(bg, onChange, onClose) {
+    var old = document.getElementById('ic-fill-modal');
+    if (old) { old.remove(); }
+    bg.fill = bg.fill || { mode: 'solid' };
+    var fill = bg.fill;
+    fill.stops = fill.stops || [{ color: bg.color || '#4f8cff', pos: 0 }, { color: mixHexColors(bg.color || '#4f8cff', '#ffffff', 0.7), pos: 1 }];
+    fill.angle = fill.angle != null ? fill.angle : 135;
+    fill.points = fill.points || [
+      { x: 0.15, y: 0.2, color: '#4f8cff' }, { x: 0.85, y: 0.15, color: '#e0503f' },
+      { x: 0.2, y: 0.85, color: '#f5c542' }, { x: 0.8, y: 0.8, color: '#9b5de5' }
+    ];
+    fill.grain = fill.grain != null ? fill.grain : 40;
+    var selStop = 0, selPoint = 0;
+    var overlay = el('div', { class: 'ic-modal-overlay', id: 'ic-fill-modal' });
+    var panel = el('div', { class: 'ic-add-modal ic-fill-panel' });
+    function close() { overlay.remove(); document.removeEventListener('keydown', onEsc); if (onClose) { onClose(); } }
+    function onEsc(ev) { if (ev.key === 'Escape') { close(); } }
+    document.addEventListener('keydown', onEsc);
+    overlay.addEventListener('mousedown', function (ev) { if (ev.target === overlay) { close(); } });
+    var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', type: 'button', title: S.cancel }, ['✕']);
+    closeBtn.addEventListener('click', close);
+    panel.appendChild(closeBtn);
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.slide_bg_modal]));
+    var preview = el('div', { class: 'ic-fill-preview' });
+    var preDots = el('div', { class: 'ic-fill-dots' });
+    preview.appendChild(preDots);
+    var tabs = el('div', { class: 'ic-fill-tabs' });
+    var body = el('div', { class: 'ic-fill-body' });
+    function changed() {
+      // Eine Fläche ohne Deckkraft wäre unsichtbar - dann sofort sichtbar machen.
+      if (!bg.opacity) { bg.opacity = 100; }
+      var css = slideFillPreviewCss(bg);
+      preview.style.background = css.background; preview.style.backgroundSize = css.size || '';
+      onChange();
+    }
+    function colorInput(value, onInput) {
+      var inp = el('input', { type: 'color', value: value || '#000000' });
+      inp.addEventListener('input', function () { onInput(inp.value); });
+      return inp;
+    }
+    function build() {
+      tabs.innerHTML = ''; body.innerHTML = ''; preDots.innerHTML = '';
+      [['solid', S.slide_fill_solid], ['gradient', S.slide_fill_gradient], ['mesh', S.slide_fill_mesh]].forEach(function (t) {
+        var b = el('button', { class: 'ic-btn ic-mini-btn ' + (fill.mode === t[0] ? 'ic-btn-primary' : 'ic-btn-ghost'), type: 'button' }, [t[1]]);
+        b.addEventListener('click', function () { fill.mode = t[0]; changed(); build(); });
+        tabs.appendChild(b);
+      });
+      var css0 = slideFillPreviewCss(bg);
+      preview.style.background = css0.background; preview.style.backgroundSize = css0.size || '';
+      if (fill.mode === 'gradient') {
+        var band = el('div', { class: 'ic-gradient-band ic-fill-band', title: S.tf_gradient_hint });
+        function paintBand() {
+          band.style.background = 'linear-gradient(90deg,' + fill.stops.slice().sort(function (a, b2) { return a.pos - b2.pos; })
+            .map(function (st) { return st.color + ' ' + Math.round(st.pos * 100) + '%'; }).join(',') + ')';
+        }
+        paintBand();
+        fill.stops.forEach(function (st, i) {
+          var m = el('div', { class: 'ic-gradient-stop' + (i === selStop ? ' active' : ''), style: 'left:' + (st.pos * 100) + '%;background:' + st.color });
+          var drag = false, moved = false;
+          m.addEventListener('pointerdown', function (ev) { drag = true; moved = false; try { m.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ } ev.preventDefault(); ev.stopPropagation(); });
+          m.addEventListener('pointermove', function (ev) {
+            if (!drag) { return; }
+            moved = true;
+            var r = band.getBoundingClientRect();
+            st.pos = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+            m.style.left = (st.pos * 100) + '%'; paintBand(); changed();
+          });
+          m.addEventListener('pointerup', function () { drag = false; selStop = i; build(); });
+          m.addEventListener('dblclick', function (ev) {
+            ev.stopPropagation();
+            if (fill.stops.length <= 2) { return; }
+            fill.stops.splice(i, 1); selStop = 0; changed(); build();
+          });
+          band.appendChild(m);
+        });
+        band.addEventListener('dblclick', function (ev) {
+          if (ev.target !== band) { return; }
+          var r = band.getBoundingClientRect();
+          var pos = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+          var sorted = fill.stops.slice().sort(function (a, b2) { return a.pos - b2.pos; });
+          var before = sorted.filter(function (x) { return x.pos <= pos; }).pop() || sorted[0];
+          var after = sorted.filter(function (x) { return x.pos >= pos; })[0] || sorted[sorted.length - 1];
+          var t = after.pos > before.pos ? (pos - before.pos) / (after.pos - before.pos) : 0;
+          fill.stops.push({ color: mixHexColors(before.color, after.color, t), pos: pos });
+          selStop = fill.stops.length - 1; changed(); build();
+        });
+        body.appendChild(band);
+        var row = el('div', { class: 'ic-bg-row' });
+        var cur = fill.stops[selStop] || fill.stops[0];
+        row.appendChild(el('label', {}, [S.slide_fill_stopcolor]));
+        row.appendChild(colorInput(cur.color, function (v) { cur.color = v; paintBand(); changed(); var act = band.querySelector('.active'); if (act) { act.style.background = v; } }));
+        var radial = el('label', { class: 'ic-slide-bg-slider' });
+        var rcb = el('input', { type: 'checkbox' }); rcb.checked = !!fill.radial;
+        rcb.addEventListener('change', function () { fill.radial = rcb.checked; changed(); build(); });
+        radial.appendChild(rcb); radial.appendChild(document.createTextNode(' ' + S.tf_gradient_radial));
+        row.appendChild(radial);
+        body.appendChild(row);
+        if (!fill.radial) {
+          var ang = el('label', { class: 'ic-slide-bg-slider' }, [S.tf_gradient_angle]);
+          var ar = el('input', { type: 'range', min: '0', max: '360', value: String(fill.angle) });
+          ar.addEventListener('input', function () { fill.angle = parseInt(ar.value, 10); changed(); });
+          ang.appendChild(ar); body.appendChild(ang);
+        }
+        body.appendChild(el('p', { class: 'ic-hint' }, [S.tf_gradient_hint]));
+      } else if (fill.mode === 'mesh') {
+        fill.points.forEach(function (pt, i) {
+          var d = el('div', { class: 'ic-fill-dot' + (i === selPoint ? ' active' : ''), style: 'left:' + (pt.x * 100) + '%;top:' + (pt.y * 100) + '%;background:' + pt.color });
+          var drag = false;
+          d.addEventListener('pointerdown', function (ev) { drag = true; selPoint = i; try { d.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ } ev.preventDefault(); });
+          d.addEventListener('pointermove', function (ev) {
+            if (!drag) { return; }
+            var r = preview.getBoundingClientRect();
+            pt.x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+            pt.y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+            d.style.left = (pt.x * 100) + '%'; d.style.top = (pt.y * 100) + '%'; changed();
+          });
+          d.addEventListener('pointerup', function () { drag = false; build(); });
+          preDots.appendChild(d);
+        });
+        var prow = el('div', { class: 'ic-bg-row' });
+        var cp = fill.points[selPoint] || fill.points[0];
+        prow.appendChild(el('label', {}, [S.slide_fill_pointcolor]));
+        prow.appendChild(colorInput(cp.color, function (v) { cp.color = v; changed(); var act = preDots.querySelector('.active'); if (act) { act.style.background = v; } }));
+        var addP = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['+ ' + S.slide_fill_addpoint]);
+        addP.disabled = fill.points.length >= 8;
+        addP.addEventListener('click', function () { fill.points.push({ x: Math.random(), y: Math.random(), color: mixHexColors(cp.color, '#ffffff', 0.35) }); selPoint = fill.points.length - 1; changed(); build(); });
+        var rmP = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['− ' + S.slide_fill_rmpoint]);
+        rmP.disabled = fill.points.length <= 2;
+        rmP.addEventListener('click', function () { fill.points.splice(selPoint, 1); selPoint = 0; changed(); build(); });
+        var rnd = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, [S.slide_fill_random]);
+        rnd.addEventListener('click', function () {
+          var hue = Math.random() * 360;
+          fill.points.forEach(function (pt) {
+            pt.x = Math.random(); pt.y = Math.random();
+            var h = (hue + Math.random() * 120) % 360;
+            pt.color = hslToHex(h, 0.65 + Math.random() * 0.3, 0.5 + Math.random() * 0.2);
+          });
+          changed(); build();
+        });
+        prow.appendChild(addP); prow.appendChild(rmP); prow.appendChild(rnd);
+        body.appendChild(prow);
+        var gl = el('label', { class: 'ic-slide-bg-slider' }, [S.slide_fill_grain]);
+        var gr = el('input', { type: 'range', min: '0', max: '100', value: String(fill.grain) });
+        gr.addEventListener('input', function () { fill.grain = parseInt(gr.value, 10); changed(); });
+        gl.appendChild(gr); body.appendChild(gl);
+        body.appendChild(el('p', { class: 'ic-hint' }, [S.slide_fill_mesh_hint]));
+      } else {
+        var srow = el('div', { class: 'ic-bg-row' });
+        srow.appendChild(el('label', {}, [S.bg_color]));
+        srow.appendChild(colorInput(bg.color || '#000000', function (v) { bg.color = v; changed(); }));
+        body.appendChild(srow);
+      }
+    }
+    function hslToHex(h, sat, l) {
+      var a = sat * Math.min(l, 1 - l);
+      function f(n) { var k = (n + h / 30) % 12; var c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); return ('0' + Math.round(255 * c).toString(16)).slice(-2); }
+      return '#' + f(0) + f(8) + f(4);
+    }
+    panel.appendChild(preview); panel.appendChild(tabs); panel.appendChild(body);
+    var doneBtn = el('button', { class: 'ic-btn ic-btn-primary', type: 'button' }, [S.slide_fill_done]);
+    doneBtn.addEventListener('click', close);
+    panel.appendChild(doneBtn);
+    overlay.appendChild(panel);
+    root.appendChild(overlay);
+    build();
+  }
+
   // Höhe eines Objekts auf der Pinnwand: Wortfelder über ihr Seitenverhältnis,
   // Bilder über das beim Anzeigen gemerkte Seitenverhältnis (sonst 4:3).
   function photoBoardHeight(p) {
@@ -2694,7 +2861,7 @@
     state.editingFrameItemId = it.id;
     state.slideScale = tf.w / Math.max(1, it.framew);
     state.slideShift = { dx: 0, dy: 0 };
-    state.tfPan = null;
+    state.tfPan = null; state.tfZoom = null;
     resetTfHistory();
     state.step = 'textframe';
     render();
@@ -4072,6 +4239,8 @@
     }
     if (isSlide) { stage.classList.add('ic-tf-stage-slide'); }
     var hasBoardPos = editingRec && editingRec.canvasw;
+    // Folieneditor: Ansichts-Zoom (Rahmen und alles darin wird skaliert).
+    var tfZ = function () { return (editFrameIt && hasBoardPos && state.tfZoom) || 1; };
     var bgScale = hasBoardPos ? (tf.w / editingRec.canvasw) : 1;
     if (tfShowBg) {
       var bbg = state.background || { type: 'color', color: '#2b2d33' };
@@ -4217,27 +4386,75 @@
     // Ansicht.
     if (editFrameIt && hasBoardPos) {
       var worldK = bgScale;
-      if (!state.tfPan) {
-        state.tfPan = {
-          x: window.innerWidth / 2 - (editingRec.canvasx * worldK + tf.w / 2),
-          y: (window.innerHeight - 60) / 2 - (editingRec.canvasy * worldK + tf.h / 2)
-        };
-      }
+      // Ansicht: tfPan = Bildschirmlage des Pinnwand-Ursprungs, tfZoom = Maßstab.
+      // Beim Öffnen füllt die Folie 90 % der Arbeitsfläche (nach dem Layout
+      // gemessen, siehe unten).
+      var needFit = !state.tfPan || !state.tfZoom;
+      if (needFit) { state.tfZoom = 1; state.tfPan = { x: window.innerWidth / 2 - (editingRec.canvasx * worldK + tf.w / 2), y: (window.innerHeight - 60) / 2 - (editingRec.canvasy * worldK + tf.h / 2) }; }
       frame.classList.add('ic-slide-world-frame');
+      frame.style.transformOrigin = '0 0';
       var placeWorldFrame = function () {
-        frame.style.left = (editingRec.canvasx * worldK + state.tfPan.x) + 'px';
-        frame.style.top = (editingRec.canvasy * worldK + state.tfPan.y) + 'px';
+        var z = state.tfZoom;
+        frame.style.transform = z === 1 ? '' : 'scale(' + z + ')';
+        frame.style.setProperty('--tfz', z);
+        frame.style.left = (editingRec.canvasx * worldK * z + state.tfPan.x) + 'px';
+        frame.style.top = (editingRec.canvasy * worldK * z + state.tfPan.y) + 'px';
       };
       placeWorldFrame();
+      if (needFit) {
+        setTimeout(function () {
+          if (!stage.isConnected) { return; }
+          var sr = stage.getBoundingClientRect();
+          // Platz über dem Menüband/unter der Kopfzeile abziehen.
+          var availW = sr.width, availH = Math.max(120, sr.height);
+          var fz = Math.max(0.2, Math.min(4, 0.9 * Math.min(availW / tf.w, availH / tf.h)));
+          state.tfZoom = fz;
+          state.tfPan = { x: availW / 2 - (editingRec.canvasx * worldK * fz + tf.w * fz / 2), y: availH / 2 - (editingRec.canvasy * worldK * fz + tf.h * fz / 2) };
+          placeWorldFrame();
+        }, 0);
+      }
+      // Zoom um einen Bildschirmpunkt (Mausrad, Pinch).
+      var zoomAt = function (cx, cy, factor) {
+        var sr = stage.getBoundingClientRect();
+        var z0 = state.tfZoom, z1 = Math.max(0.2, Math.min(4, z0 * factor));
+        var px = cx - sr.left, py = cy - sr.top;
+        state.tfPan.x = px - (px - state.tfPan.x) * (z1 / z0);
+        state.tfPan.y = py - (py - state.tfPan.y) * (z1 / z0);
+        state.tfZoom = z1;
+        placeWorldFrame();
+      };
+      stage.addEventListener('wheel', function (ev) {
+        ev.preventDefault();
+        zoomAt(ev.clientX, ev.clientY, Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0015) * (ev.deltaMode === 1 ? 16 : 1)));
+      }, { passive: false });
+      var pinch = null;
+      stage.addEventListener('touchstart', function (ev) {
+        if (ev.touches.length === 2) {
+          var a = ev.touches[0], b = ev.touches[1];
+          pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) };
+          panDrag = null; stage.classList.remove('ic-panning');
+        }
+      }, { passive: true });
+      stage.addEventListener('touchmove', function (ev) {
+        if (!pinch || ev.touches.length !== 2) { return; }
+        var a = ev.touches[0], b = ev.touches[1];
+        var d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        if (pinch.d > 0 && d > 0) { zoomAt((a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2, d / pinch.d); }
+        pinch.d = d;
+        ev.preventDefault();
+      }, { passive: false });
+      var endPinch = function (ev) { if (!ev.touches || ev.touches.length < 2) { pinch = null; } };
+      stage.addEventListener('touchend', endPinch);
+      stage.addEventListener('touchcancel', endPinch);
       var panDrag = null;
       stage.addEventListener('pointerdown', function (ev) {
-        if (ev.target !== stage) { return; }
+        if (ev.target !== stage || pinch) { return; }
         panDrag = { sx: ev.clientX, sy: ev.clientY, px: state.tfPan.x, py: state.tfPan.y };
         try { stage.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
         stage.classList.add('ic-panning');
       });
       stage.addEventListener('pointermove', function (ev) {
-        if (!panDrag) { return; }
+        if (!panDrag || pinch) { return; }
         state.tfPan.x = panDrag.px + ev.clientX - panDrag.sx;
         state.tfPan.y = panDrag.py + ev.clientY - panDrag.sy;
         placeWorldFrame();
@@ -4259,7 +4476,7 @@
     frame.appendChild(frameResizeHandle);
     function attachFrameResizeHandle(handle, cornerX, cornerY, listenerKey) {
       var dragging = false, startX = 0, startY = 0, startW = 0, startH = 0;
-      var startMarginLeft = 0, startMarginTop = 0;
+      var startMarginLeft = 0, startMarginTop = 0, startLayers = [];
       function pt(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
       function down(ev) {
         dragging = true; var p = pt(ev);
@@ -4273,12 +4490,17 @@
         frame.style.marginLeft = startMarginLeft + 'px';
         frame.style.marginTop = startMarginTop + 'px';
         frame.style.marginRight = '0'; frame.style.marginBottom = '0';
+        // Pinnwand-Ebenen (Hintergrund, Nachbarn) hängen am Rahmen: ihre Lage
+        // merken, damit sie beim Ziehen der linken/oberen Kante stehen bleiben.
+        startLayers = Array.prototype.map.call(frame.querySelectorAll('.ic-tf-neighbors-layer'), function (ly) {
+          return { el: ly, left: parseFloat(ly.style.left) || 0, top: parseFloat(ly.style.top) || 0 };
+        });
         ev.stopPropagation(); ev.preventDefault();
       }
       function move(ev) {
         if (!dragging) { return; }
         var p = pt(ev);
-        var dx = (p.x - startX) * cornerX, dy = (p.y - startY) * cornerY;
+        var dx = (p.x - startX) * cornerX / tfZ(), dy = (p.y - startY) * cornerY / tfZ();
         var newW = cornerX ? Math.max(120, startW + dx) : startW;
         var newH = (state.tfAspectLocked && cornerX && cornerY) ? Math.max(80, Math.round(newW * (startH / startW))) : (cornerY ? Math.max(80, startH + dy) : startH);
         tf.w = newW; tf.h = newH;
@@ -4287,8 +4509,15 @@
         // per Margin-Verschiebung visuell von dort aus, wo tatsächlich
         // gezogen wird, statt stur an der oben-links-Position fixiert zu
         // bleiben und nur unten-rechts zu wachsen.
-        if (cornerX < 0) { frame.style.marginLeft = (startMarginLeft - (tf.w - startW)) + 'px'; }
-        if (cornerY < 0) { frame.style.marginTop = (startMarginTop - (tf.h - startH)) + 'px'; }
+        if (cornerX < 0) { frame.style.marginLeft = (startMarginLeft - (tf.w - startW) * tfZ()) + 'px'; }
+        if (cornerY < 0) { frame.style.marginTop = (startMarginTop - (tf.h - startH) * tfZ()) + 'px'; }
+        // Wandert der Rahmen mit der Kante nach links/oben, gleicht die
+        // Ebene das aus - sonst rutscht der Hintergrund kurz mit und springt
+        // erst beim Loslassen zurück.
+        startLayers.forEach(function (ly) {
+          ly.el.style.left = (ly.left + (cornerX < 0 ? tf.w - startW : 0)) + 'px';
+          ly.el.style.top = (ly.top + (cornerY < 0 ? tf.h - startH : 0)) + 'px';
+        });
         ev.preventDefault();
       }
       function up() {
@@ -5807,8 +6036,8 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         if (!isFreeSpot(ev.target) || document.querySelector('.ic-slide-add-menu')) { plusEl.style.display = 'none'; return; }
         var fr = frame.getBoundingClientRect();
         plusPos = { x: (ev.clientX - fr.left) / fr.width, y: (ev.clientY - fr.top) / fr.height };
-        plusEl.style.left = (ev.clientX - fr.left) + 'px';
-        plusEl.style.top = (ev.clientY - fr.top) + 'px';
+        plusEl.style.left = ((ev.clientX - fr.left) / tfZ()) + 'px';
+        plusEl.style.top = ((ev.clientY - fr.top) / tfZ()) + 'px';
         plusEl.style.display = '';
       });
       frame.addEventListener('mouseleave', function () { plusEl.style.display = 'none'; });
@@ -5945,9 +6174,13 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       tf.slideBg = tf.slideBg || { color: '#000000', opacity: 0, blur: 0 };
       var bgRow = el('div', { class: 'ic-slide-bg-row' });
       bgRow.appendChild(el('span', { class: 'ic-anim-blend-label' }, [S.slide_bg]));
-      var bgColor = el('input', { type: 'color', value: tf.slideBg.color || '#000000', title: S.slide_bg });
-      bgColor.addEventListener('input', function () { tf.slideBg.color = bgColor.value; applySlideBg(frameInner, tf); });
-      bgRow.appendChild(bgColor);
+      var bgSwatch = el('button', { class: 'ic-fill-swatch', type: 'button', title: S.slide_bg_modal });
+      var paintSwatch = function () { var c = slideFillPreviewCss(tf.slideBg); bgSwatch.style.background = c.background; bgSwatch.style.backgroundSize = c.size || ''; };
+      paintSwatch();
+      bgSwatch.addEventListener('click', function () {
+        openSlideFillModal(tf.slideBg, function () { applySlideBg(frameInner, tf); paintSwatch(); }, function () { render(); });
+      });
+      bgRow.appendChild(bgSwatch);
       function bgSlider(label, key, max) {
         var lab = el('label', { class: 'ic-slide-bg-slider' }, [label]);
         var r = el('input', { type: 'range', min: '0', max: String(max), value: String(tf.slideBg[key] || 0) });
@@ -6094,7 +6327,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           var r = target.getBoundingClientRect();
           frame.appendChild(el('span', {
             class: 'ic-anim-badge',
-            style: 'left:' + (r.left - fr.left) + 'px;top:' + (r.top - fr.top) + 'px;'
+            style: 'left:' + ((r.left - fr.left) / tfZ()) + 'px;top:' + ((r.top - fr.top) / tfZ()) + 'px;'
           }, [String(animInfo.map[key])]));
         });
       }, 0);
