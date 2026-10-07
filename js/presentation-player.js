@@ -1024,13 +1024,34 @@
     function rgba(hex, a) { var c = rgb(hex); return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + (Math.round(a * 1000) / 1000) + ')'; }
     var fill = bg.fill || {};
     var background, size = '';
+    // box = {w, h, ox, oy}: Verlauf/Mesh hängt an einem Bezugsrechteck (Board
+    // bzw. Bildbereich) und darf weit darüber hinausgehen; ox/oy = Abstand des
+    // Rechtecks von der Ebenen-Ecke (die Ebene muss um das Rechteck zentriert sein).
+    var box = bg.box || null;
     if (fill.mode === 'gradient' && fill.stops && fill.stops.length >= 2) {
-      var stops = fill.stops.slice().sort(function (x, y) { return x.pos - y.pos; })
-        .map(function (st) { return rgba(st.color, op) + ' ' + Math.round(st.pos * 100) + '%'; }).join(',');
-      background = fill.radial ? 'radial-gradient(circle at 50% 50%,' + stops + ')'
-        : 'linear-gradient(' + ((fill.angle != null ? fill.angle : 135) + 90) + 'deg,' + stops + ')';
+      var sorted = fill.stops.slice().sort(function (x, y) { return x.pos - y.pos; });
+      var ang = (fill.angle != null ? fill.angle : 135) + 90;
+      var len = 1;
+      if (box) {
+        var rad = ang * Math.PI / 180;
+        len = fill.radial ? Math.sqrt(box.w * box.w + box.h * box.h) / 2
+          : Math.abs(box.w * Math.sin(rad)) + Math.abs(box.h * Math.cos(rad));
+      }
+      var stops = sorted.map(function (st) {
+        var at = box ? (fill.radial ? Math.round(st.pos * len) + 'px'
+          : 'calc(50% + ' + Math.round((st.pos - 0.5) * len) + 'px)') : Math.round(st.pos * 100) + '%';
+        return rgba(st.color, op) + ' ' + at;
+      }).join(',');
+      background = fill.radial ? 'radial-gradient(circle ' + (box ? Math.round(len) + 'px ' : '') + 'at 50% 50%,' + stops + ')'
+        : 'linear-gradient(' + ang + 'deg,' + stops + ')';
     } else if (fill.mode === 'mesh' && fill.points && fill.points.length) {
       var layers = fill.points.map(function (pt) {
+        if (box) {
+          var cx = pt.x * box.w, cy = pt.y * box.h;
+          var far = Math.max(Math.hypot(cx, cy), Math.hypot(box.w - cx, cy), Math.hypot(cx, box.h - cy), Math.hypot(box.w - cx, box.h - cy));
+          var r = Math.max(60, Math.round(far * 0.65));
+          return 'radial-gradient(circle ' + r + 'px at ' + Math.round(box.ox + cx) + 'px ' + Math.round(box.oy + cy) + 'px,' + rgba(pt.color, op) + ' 0%,' + rgba(pt.color, 0) + ' 100%)';
+        }
         return 'radial-gradient(circle at ' + Math.round(pt.x * 100) + '% ' + Math.round(pt.y * 100) + '%,' + rgba(pt.color, op) + ' 0%,' + rgba(pt.color, 0) + ' 65%)';
       });
       var sizes = layers.map(function () { return '100% 100%'; });
@@ -1055,5 +1076,35 @@
     };
   }
 
-  global.PinnwandPresentation = { create: create,slideBgCss: slideBgCss,  expandBuildSteps: expandBuildSteps, shapePoints: shapePoints, SHAPE_KINDS: SHAPE_KINDS, SHAPE_SVG: SHAPE_SVG, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk, inkBounds: inkBounds };
+  // Verlauf/Mesh als Pinnwand-Hintergrund. anchored = am Board (1400x1000)
+  // verankert und weit über dessen Rand hinaus gemalt (eigene Füllebene, die
+  // das Board in alle Richtungen um FILL_MARGIN überragt); sonst bildschirmfüllend.
+  var FILL_MARGIN = 4000;
+  function applyFxFill(bgEl, bg, fill, filterCss, anchored) {
+    var old = bgEl.querySelector(':scope > .pwp-bgfill');
+    if (old) { old.remove(); }
+    var m = FILL_MARGIN;
+    var css = slideBgCss({ color: bg.color, fill: fill, opacity: 100,
+      box: anchored ? { w: 1400, h: 1000, ox: m, oy: m } : null });
+    if (!css) { return false; }
+    if (anchored) {
+      var f = document.createElement('div');
+      f.className = 'pwp-bgfill';
+      f.style.cssText = 'position:absolute;pointer-events:none;left:-' + m + 'px;top:-' + m + 'px;width:' + (1400 + 2 * m) + 'px;height:' + (1000 + 2 * m) + 'px;';
+      f.style.background = css.background;
+      if (css.size) { f.style.backgroundSize = css.size; }
+      f.style.filter = filterCss;
+      bgEl.insertBefore(f, bgEl.firstChild);
+      bgEl.style.backgroundImage = 'none';
+      bgEl.style.filter = '';
+      bgEl.style.backgroundSize = '';
+    } else {
+      bgEl.style.background = css.background;
+      bgEl.style.backgroundSize = css.size || '';
+      bgEl.style.filter = filterCss;
+    }
+    return true;
+  }
+
+  global.PinnwandPresentation = { create: create,slideBgCss: slideBgCss, applyFxFill: applyFxFill,  expandBuildSteps: expandBuildSteps, shapePoints: shapePoints, SHAPE_KINDS: SHAPE_KINDS, SHAPE_SVG: SHAPE_SVG, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk, inkBounds: inkBounds };
 })(window);

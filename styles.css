@@ -1764,6 +1764,9 @@ input.ic-stepper-value {
 .ic-fill-preview { position: relative; height: 200px; border-radius: 12px; border: 1px solid rgba(255,255,255,.2);
   background-color: #000; touch-action: none; }
 .ic-fill-dots { position: absolute; inset: 0; }
+.ic-fill-preview.ic-fill-preview-ext { height: auto; aspect-ratio: 7 / 5; overflow: hidden; }
+.ic-fill-boardframe { position: absolute; left: 25%; top: 25%; width: 50%; height: 50%; box-sizing: border-box;
+  border: 2px dashed rgba(255,255,255,.85); box-shadow: 0 0 0 1px rgba(0,0,0,.5); pointer-events: none; }
 .ic-fill-dot { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
   border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.6); cursor: grab; touch-action: none; }
 .ic-fill-dot.active { box-shadow: 0 0 0 3px var(--ic-accent), 0 1px 4px rgba(0,0,0,.6); z-index: 2; }

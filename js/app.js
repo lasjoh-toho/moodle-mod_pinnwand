@@ -2668,11 +2668,26 @@
   // Folien-Hintergrund bearbeiten: Farbe (derselbe Farbwähler wie beim
   // Pinnwand-Hintergrund), Verlauf oder Grainy Gradient Mesh - mit großer
   // Live-Vorschau (WYSIWYG, deckend und ohne Effekte). bg = tf.slideBg.
-  function slideFillPreviewCss(bg) {
-    return window.PinnwandPresentation.slideBgCss({ color: bg.color, fill: bg.fill, opacity: 100 }) ||
+  function slideFillPreviewCss(bg, box) {
+    return window.PinnwandPresentation.slideBgCss({ color: bg.color, fill: bg.fill, opacity: 100, box: box || null }) ||
       { background: bg.color || '#000000', size: '' };
   }
-  function openSlideFillModal(bg, onChange, onClose, title) {
+  // opts.extended: Pinnwand-Hintergrund - die Vorschau zeigt das Board (gestrichelt)
+  // samt Umgebung (-50 % .. 150 %), Mesh-Punkte dürfen darüber hinaus liegen und
+  // rasten an den Boardecken ein.
+  function openSlideFillModal(bg, onChange, onClose, title, opts) {
+    var ext = !!(opts && opts.extended);
+    var lo = ext ? -0.5 : 0, hi = ext ? 1.5 : 1;
+    function toPct(v) { return ext ? (v - lo) / (hi - lo) * 100 : v * 100; }
+    function fromFrac(f) { return Math.max(lo, Math.min(hi, ext ? lo + f * (hi - lo) : f)); }
+    function previewCss() {
+      var box = null;
+      if (ext) {
+        var P = preview.clientWidth || 480, Q = preview.clientHeight || 340;
+        box = { w: P / 2, h: Q / 2, ox: P / 4, oy: Q / 4 };
+      }
+      return slideFillPreviewCss(bg, box);
+    }
     var old = document.getElementById('ic-fill-modal');
     if (old) { old.remove(); }
     bg.fill = bg.fill || { mode: 'solid' };
@@ -2695,7 +2710,8 @@
     closeBtn.addEventListener('click', close);
     panel.appendChild(closeBtn);
     panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [title || S.slide_bg_modal]));
-    var preview = el('div', { class: 'ic-fill-preview' });
+    var preview = el('div', { class: 'ic-fill-preview' + (ext ? ' ic-fill-preview-ext' : '') });
+    if (ext) { preview.appendChild(el('div', { class: 'ic-fill-boardframe' })); }
     var preDots = el('div', { class: 'ic-fill-dots' });
     preview.appendChild(preDots);
     var tabs = el('div', { class: 'ic-fill-tabs' });
@@ -2703,7 +2719,7 @@
     function changed() {
       // Eine Fläche ohne Deckkraft wäre unsichtbar - dann sofort sichtbar machen.
       if (!bg.opacity) { bg.opacity = 100; }
-      var css = slideFillPreviewCss(bg);
+      var css = previewCss();
       preview.style.background = css.background; preview.style.backgroundSize = css.size || '';
       onChange();
     }
@@ -2719,7 +2735,7 @@
         b.addEventListener('click', function () { fill.mode = t[0]; changed(); build(); });
         tabs.appendChild(b);
       });
-      var css0 = slideFillPreviewCss(bg);
+      var css0 = previewCss();
       preview.style.background = css0.background; preview.style.backgroundSize = css0.size || '';
       if (fill.mode === 'gradient') {
         var band = el('div', { class: 'ic-gradient-band ic-fill-band', title: S.tf_gradient_hint });
@@ -2778,15 +2794,21 @@
         body.appendChild(el('p', { class: 'ic-hint' }, [S.tf_gradient_hint]));
       } else if (fill.mode === 'mesh') {
         fill.points.forEach(function (pt, i) {
-          var d = el('div', { class: 'ic-fill-dot' + (i === selPoint ? ' active' : ''), style: 'left:' + (pt.x * 100) + '%;top:' + (pt.y * 100) + '%;background:' + pt.color });
+          var d = el('div', { class: 'ic-fill-dot' + (i === selPoint ? ' active' : ''), style: 'left:' + toPct(pt.x) + '%;top:' + toPct(pt.y) + '%;background:' + pt.color });
           var drag = false;
           d.addEventListener('pointerdown', function (ev) { drag = true; selPoint = i; try { d.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ } ev.preventDefault(); });
           d.addEventListener('pointermove', function (ev) {
             if (!drag) { return; }
             var r = preview.getBoundingClientRect();
-            pt.x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
-            pt.y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
-            d.style.left = (pt.x * 100) + '%'; d.style.top = (pt.y * 100) + '%'; changed();
+            pt.x = fromFrac((ev.clientX - r.left) / r.width);
+            pt.y = fromFrac((ev.clientY - r.top) / r.height);
+            if (ext) {
+              // An den Ecken des Bildbereichs einrasten.
+              [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(function (c) {
+                if (Math.abs(pt.x - c[0]) < 0.04 && Math.abs(pt.y - c[1]) < 0.04) { pt.x = c[0]; pt.y = c[1]; }
+              });
+            }
+            d.style.left = toPct(pt.x) + '%'; d.style.top = toPct(pt.y) + '%'; changed();
           });
           d.addEventListener('pointerup', function () { drag = false; build(); });
           preDots.appendChild(d);
@@ -2797,7 +2819,7 @@
         prow.appendChild(colorInput(cp.color, function (v) { cp.color = v; changed(); var act = preDots.querySelector('.active'); if (act) { act.style.background = v; } }));
         var addP = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['+ ' + S.slide_fill_addpoint]);
         addP.disabled = fill.points.length >= 8;
-        addP.addEventListener('click', function () { fill.points.push({ x: Math.random(), y: Math.random(), color: mixHexColors(cp.color, '#ffffff', 0.35) }); selPoint = fill.points.length - 1; changed(); build(); });
+        addP.addEventListener('click', function () { fill.points.push({ x: lo + Math.random() * (hi - lo), y: lo + Math.random() * (hi - lo), color: mixHexColors(cp.color, '#ffffff', 0.35) }); selPoint = fill.points.length - 1; changed(); build(); });
         var rmP = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['− ' + S.slide_fill_rmpoint]);
         rmP.disabled = fill.points.length <= 2;
         rmP.addEventListener('click', function () { fill.points.splice(selPoint, 1); selPoint = 0; changed(); build(); });
@@ -2805,13 +2827,23 @@
         rnd.addEventListener('click', function () {
           var hue = Math.random() * 360;
           fill.points.forEach(function (pt) {
-            pt.x = Math.random(); pt.y = Math.random();
+            pt.x = lo + Math.random() * (hi - lo); pt.y = lo + Math.random() * (hi - lo);
             var h = (hue + Math.random() * 120) % 360;
             pt.color = hslToHex(h, 0.65 + Math.random() * 0.3, 0.5 + Math.random() * 0.2);
           });
           changed(); build();
         });
         prow.appendChild(addP); prow.appendChild(rmP); prow.appendChild(rnd);
+        if (ext) {
+          var corners = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_fill_corners_hint }, [S.slide_fill_corners]);
+          corners.addEventListener('click', function () {
+            var cs = [[0, 0], [1, 0], [1, 1], [0, 1]];
+            while (fill.points.length < 4) { fill.points.push({ x: 0.5, y: 0.5, color: mixHexColors(fill.points[0].color, '#ffffff', 0.35) }); }
+            fill.points.forEach(function (pt, i) { if (i < 4) { pt.x = cs[i][0]; pt.y = cs[i][1]; } });
+            changed(); build();
+          });
+          prow.appendChild(corners);
+        }
         body.appendChild(prow);
         var gl = el('label', { class: 'ic-slide-bg-slider' }, [S.slide_fill_grain]);
         var gr = el('input', { type: 'range', min: '0', max: '100', value: String(fill.grain) });
@@ -10406,17 +10438,18 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     // die Effekte (Helligkeit, Sättigung, Invertieren, Weichzeichnen) wirken
     // dann auf diese gesamte Fläche.
     var fxo = bgFx(bg);
-    var fxCss = fxo && fxo.fill && bg.type === 'color'
-      ? window.PinnwandPresentation.slideBgCss({ color: bg.color, fill: fxo.fill, opacity: 100 }) : null;
+    var oldFill = bgEl.querySelector(':scope > .pwp-bgfill');
+    if (oldFill) { oldFill.remove(); }
     var brightness = (bg.brightness != null ? bg.brightness : 100);
     var saturation = (bg.saturation != null ? bg.saturation : 100);
     var invert = (bg.invert != null ? bg.invert : 0);
     var filterCss = 'brightness(' + brightness + '%) saturate(' + saturation + '%)' + (invert ? ' invert(' + invert + '%)' : '');
-    if (fxCss) {
+    // Bildschirmfüllende Präsentationsebene (Hintergrund bewegt sich nicht mit)
+    // hat keinen Bezug zum Board - nur sonst hängt der Verlauf am Board.
+    var anchored = !bgEl.classList.contains('ic-present-bg') || bgEl.classList.contains('ic-present-bg-moves');
+    if (fxo && fxo.fill && bg.type === 'color' &&
+        window.PinnwandPresentation.applyFxFill(bgEl, bg, fxo.fill, filterCss, anchored)) {
       // (Weichzeichnen gilt nur für Bilder - bei Verlauf/Mesh würden die Ränder verblassen.)
-      bgEl.style.background = fxCss.background;
-      bgEl.style.backgroundSize = fxCss.size || '';
-      bgEl.style.filter = filterCss;
       img.style.background = 'none';
       img.style.filter = '';
     } else {
@@ -10741,7 +10774,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       }, function () {
         colorInput.value = state.background.color || '#2b2d33';
         persistBg({ color: state.background.color, fx: state.background.fx || '' });
-      }, S.bg_title);
+      }, S.bg_title, { extended: true });
     });
     colorRow.appendChild(fxBtn);
     panel.appendChild(colorRow);

@@ -339,8 +339,8 @@ class mod_pinnwand_external extends external_api {
         } else if ($mode === 'mesh') {
             $points = [];
             foreach (array_slice(is_array($fill['points'] ?? null) ? $fill['points'] : [], 0, 8) as $pt) {
-                $points[] = ['x' => round(max(0, min(1, (float) ($pt['x'] ?? 0.5))), 3),
-                    'y' => round(max(0, min(1, (float) ($pt['y'] ?? 0.5))), 3), 'color' => $hex($pt['color'] ?? '')];
+                $points[] = ['x' => round(max(-1, min(2, (float) ($pt['x'] ?? 0.5))), 3),
+                    'y' => round(max(-1, min(2, (float) ($pt['y'] ?? 0.5))), 3), 'color' => $hex($pt['color'] ?? '')];
             }
             if ($points) {
                 $out['fill'] = ['mode' => 'mesh', 'points' => $points, 'grain' => max(0, min(100, (int) ($fill['grain'] ?? 0)))];

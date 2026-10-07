@@ -525,12 +525,11 @@ function pinnwand_export_build_html($title, $json) {
   var bgSaturation = (bg.saturation != null ? bg.saturation : 100);
   var bgInvert = (bg.invert != null ? bg.invert : 0);
   var bgFilter = 'brightness(' + bgBrightness + '%) saturate(' + bgSaturation + '%)' + (bgInvert ? ' invert(' + bgInvert + '%)' : '');
-  var fxCss = (bgFx && bgFx.fill && bg.type === 'color') ? PinnwandPresentation.slideBgCss({ color: bg.color, fill: bgFx.fill, opacity: 100 }) : null;
-  if (fxCss) {
-    // Verlauf/Grainy Mesh liegt auf der ganzen Fläche samt Effekten.
-    bgEl.style.background = fxCss.background;
-    if (fxCss.size) { bgEl.style.backgroundSize = fxCss.size; }
-    bgEl.style.filter = bgFilter;
+  var bgAnchored = !!(data.thread && data.thread.bgmoves);
+  if (bgFx && bgFx.fill && bg.type === 'color' &&
+      PinnwandPresentation.applyFxFill(bgEl, bg, bgFx.fill, bgFilter, bgAnchored)) {
+    // Verlauf/Grainy Mesh liegt auf der ganzen Fläche samt Effekten (am Board
+    // verankert und darüber hinaus, wenn der Hintergrund mitzoomt).
     bgImage.style.background = 'none';
   } else {
     bgImage.style.filter = bgFilter + (bgFx && bgFx.blur ? ' blur(' + bgFx.blur + 'px)' : '');
