@@ -104,6 +104,7 @@ $string['slide_fill_rmpoint'] = 'Punkt';
 $string['slide_fill_random'] = 'Zufällig';
 $string['slide_fill_grain'] = 'Körnung';
 $string['slide_fill_mesh_hint'] = 'Punkte in der Vorschau ziehen, um die Farbflächen zu verschieben.';
+$string['bg_fx_btn'] = 'Verlauf / Mesh …';
 $string['slide_fill_done'] = 'Fertig';
 $string['slide_linked'] = 'Objekte darüber in dieser Folie zeigen';
 $string['ink_select_all'] = 'Alle auswählen';

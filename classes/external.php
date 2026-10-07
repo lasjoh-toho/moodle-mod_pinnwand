@@ -304,10 +304,57 @@ class mod_pinnwand_external extends external_api {
         ];
     }
 
+    /**
+     * Zusätzliche Hintergrund-Eigenschaften (Verlauf, Grainy Mesh, Weichzeichnen) prüfen und
+     * kompakt neu kodieren. Liegt bewusst in einer eigenen Nutzereinstellung
+     * (die Hauptangaben haben nur 1333 Zeichen Platz).
+     *
+     * @param mixed $raw JSON-String oder Array
+     * @return string JSON oder '' (nichts Besonderes)
+     */
+    protected static function sanitize_background_fx($raw) {
+        $data = is_array($raw) ? $raw : json_decode((string) $raw, true);
+        if (!is_array($data)) {
+            return '';
+        }
+        $hex = function ($c) {
+            return preg_match('/^#[0-9a-fA-F]{6}$/', (string) $c) ? strtolower((string) $c) : '#000000';
+        };
+        $out = [];
+        $blur = max(0, min(30, (int) ($data['blur'] ?? 0)));
+        if ($blur) {
+            $out['blur'] = $blur;
+        }
+        $fill = is_array($data['fill'] ?? null) ? $data['fill'] : [];
+        $mode = in_array($fill['mode'] ?? '', ['gradient', 'mesh'], true) ? $fill['mode'] : 'solid';
+        if ($mode === 'gradient') {
+            $stops = [];
+            foreach (array_slice(is_array($fill['stops'] ?? null) ? $fill['stops'] : [], 0, 8) as $st) {
+                $stops[] = ['color' => $hex($st['color'] ?? ''), 'pos' => round(max(0, min(1, (float) ($st['pos'] ?? 0))), 3)];
+            }
+            if (count($stops) >= 2) {
+                $out['fill'] = ['mode' => 'gradient', 'stops' => $stops, 'angle' => (int) ($fill['angle'] ?? 135),
+                    'radial' => !empty($fill['radial'])];
+            }
+        } else if ($mode === 'mesh') {
+            $points = [];
+            foreach (array_slice(is_array($fill['points'] ?? null) ? $fill['points'] : [], 0, 8) as $pt) {
+                $points[] = ['x' => round(max(0, min(1, (float) ($pt['x'] ?? 0.5))), 3),
+                    'y' => round(max(0, min(1, (float) ($pt['y'] ?? 0.5))), 3), 'color' => $hex($pt['color'] ?? '')];
+            }
+            if ($points) {
+                $out['fill'] = ['mode' => 'mesh', 'points' => $points, 'grain' => max(0, min(100, (int) ($fill['grain'] ?? 0)))];
+            }
+        }
+        $json = $out ? json_encode($out) : '';
+        return strlen($json) <= 1300 ? $json : '';
+    }
+
     protected static function get_background_data($instance, $context) {
         global $USER;
         $default = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'invert' => 0, 'fit' => 'contain',
-            'pdfurl' => '', 'pdfspreads' => '', 'pdfdouble' => false, 'photoid' => 0, 'startmode' => ''];
+            'pdfurl' => '', 'pdfspreads' => '', 'pdfdouble' => false, 'photoid' => 0, 'startmode' => '', 'fx' => ''];
+        $default['fx'] = self::sanitize_background_fx(get_user_preferences('mod_pinnwand_bgfx_' . $instance->id, '', $USER->id));
         $raw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
         if (!$raw) {
             return $default;
@@ -407,6 +454,7 @@ class mod_pinnwand_external extends external_api {
                 'pdfdouble' => new external_value(PARAM_BOOL, 'Doppelseiten nebeneinander', VALUE_DEFAULT, false),
                 'photoid' => new external_value(PARAM_INT, 'Foto-ID bei Hintergrund aus eigenem/fremdem Foto', VALUE_DEFAULT, 0),
                 'startmode' => new external_value(PARAM_ALPHA, 'Eigener Präsentationsstart (overview|slide, leer = Aktivität)', VALUE_DEFAULT, ''),
+                'fx' => new external_value(PARAM_RAW, 'Verlauf/Grainy Mesh/Weichzeichnen als JSON', VALUE_DEFAULT, ''),
             ]),
             'photos' => new external_multiple_structure(new external_single_structure([
                 'id' => new external_value(PARAM_INT, 'ID'),
@@ -1141,16 +1189,17 @@ class mod_pinnwand_external extends external_api {
             'pdfdouble' => new external_value(PARAM_INT, 'Doppelseiten (1/0)', VALUE_DEFAULT, 0),
             'startmode' => new external_value(PARAM_ALPHA, 'Präsentationsstart overview|slide (leer = unverändert)', VALUE_DEFAULT, ''),
             'invert' => new external_value(PARAM_INT, 'Invertieren in % (0-100, -1 = unverändert)', VALUE_DEFAULT, -1),
+            'fx' => new external_value(PARAM_RAW, 'Verlauf/Grainy Mesh/Weichzeichnen als JSON (null = unverändert)', VALUE_DEFAULT, null, NULL_ALLOWED),
         ]);
     }
 
     public static function save_background($cmid, $type, $color, $photoid, $url, $imagedata, $brightness, $saturation, $fit = 'contain',
-            $pdfdata = '', $pdfspreads = '', $pdfdouble = 0, $startmode = '', $invert = -1) {
+            $pdfdata = '', $pdfspreads = '', $pdfdouble = 0, $startmode = '', $invert = -1, $fx = null) {
         global $USER, $DB;
         $params = self::validate_parameters(self::save_background_parameters(), [
             'cmid' => $cmid, 'type' => $type, 'color' => $color, 'photoid' => $photoid, 'url' => $url,
             'imagedata' => $imagedata, 'brightness' => $brightness, 'saturation' => $saturation, 'fit' => $fit,
-            'pdfdata' => $pdfdata, 'pdfspreads' => $pdfspreads, 'pdfdouble' => $pdfdouble, 'startmode' => $startmode, 'invert' => $invert,
+            'pdfdata' => $pdfdata, 'pdfspreads' => $pdfspreads, 'pdfdouble' => $pdfdouble, 'startmode' => $startmode, 'invert' => $invert, 'fx' => $fx,
         ]);
         [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
 
@@ -1243,6 +1292,14 @@ class mod_pinnwand_external extends external_api {
             'fit' => in_array($params['fit'], ['cover', 'contain'], true) ? $params['fit'] : 'contain',
         ];
         set_user_preference('mod_pinnwand_bg_' . $instance->id, json_encode($payload), $USER->id);
+        if ($params['fx'] !== null) {
+            $fxjson = self::sanitize_background_fx($params['fx']);
+            if ($fxjson !== '') {
+                set_user_preference('mod_pinnwand_bgfx_' . $instance->id, $fxjson, $USER->id);
+            } else {
+                unset_user_preference('mod_pinnwand_bgfx_' . $instance->id, $USER->id);
+            }
+        }
 
         return ['background' => self::get_background_data($instance, $context)];
     }
@@ -1262,6 +1319,7 @@ class mod_pinnwand_external extends external_api {
                 'pdfdouble' => new external_value(PARAM_BOOL, 'Doppelseiten nebeneinander', VALUE_DEFAULT, false),
                 'photoid' => new external_value(PARAM_INT, 'Foto-ID bei Hintergrund aus eigenem/fremdem Foto', VALUE_DEFAULT, 0),
                 'startmode' => new external_value(PARAM_ALPHA, 'Eigener Präsentationsstart (overview|slide, leer = Aktivität)', VALUE_DEFAULT, ''),
+                'fx' => new external_value(PARAM_RAW, 'Verlauf/Grainy Mesh/Weichzeichnen als JSON', VALUE_DEFAULT, ''),
             ]),
         ]);
     }

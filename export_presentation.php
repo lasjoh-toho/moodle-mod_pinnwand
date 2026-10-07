@@ -304,6 +304,9 @@ foreach ($placements as $pl) {
 function pinnwand_export_background_data($instance, $context, $fs) {
     global $USER, $DB;
     $result = ['type' => 'color', 'color' => '#2b2d33', 'url' => null, 'brightness' => 100, 'saturation' => 100, 'invert' => 0, 'fit' => 'contain'];
+    // Verlauf/Grainy Mesh/Weichzeichnen (beim Speichern bereits geprüft).
+    $fxraw = get_user_preferences('mod_pinnwand_bgfx_' . $instance->id, '', $USER->id);
+    $result['fx'] = is_array(json_decode((string) $fxraw, true)) ? (string) $fxraw : '';
     $raw = get_user_preferences('mod_pinnwand_bg_' . $instance->id, null, $USER->id);
     if (!$raw) {
         return $result;
@@ -516,10 +519,22 @@ function pinnwand_export_build_html($title, $json) {
     bgImage.style.backgroundImage = "url('" + bg.url + "')";
     bgImage.style.backgroundSize = bg.fit === 'cover' ? 'cover' : 'contain';
   }
+  var bgFx = null;
+  try { bgFx = bg.fx ? JSON.parse(bg.fx) : null; } catch (e) { bgFx = null; }
   var bgBrightness = (bg.brightness != null ? bg.brightness : 100);
   var bgSaturation = (bg.saturation != null ? bg.saturation : 100);
   var bgInvert = (bg.invert != null ? bg.invert : 0);
-  bgImage.style.filter = 'brightness(' + bgBrightness + '%) saturate(' + bgSaturation + '%)' + (bgInvert ? ' invert(' + bgInvert + '%)' : '');
+  var bgFilter = 'brightness(' + bgBrightness + '%) saturate(' + bgSaturation + '%)' + (bgInvert ? ' invert(' + bgInvert + '%)' : '');
+  var fxCss = (bgFx && bgFx.fill && bg.type === 'color') ? PinnwandPresentation.slideBgCss({ color: bg.color, fill: bgFx.fill, opacity: 100 }) : null;
+  if (fxCss) {
+    // Verlauf/Grainy Mesh liegt auf der ganzen Fläche samt Effekten.
+    bgEl.style.background = fxCss.background;
+    if (fxCss.size) { bgEl.style.backgroundSize = fxCss.size; }
+    bgEl.style.filter = bgFilter;
+    bgImage.style.background = 'none';
+  } else {
+    bgImage.style.filter = bgFilter + (bgFx && bgFx.blur ? ' blur(' + bgFx.blur + 'px)' : '');
+  }
   if (data.thread && data.thread.bgmoves) {
     bgEl.classList.add('moves');
     canvas.appendChild(bgEl);

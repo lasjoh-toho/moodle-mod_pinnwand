@@ -104,6 +104,7 @@ $string['slide_fill_rmpoint'] = 'Point';
 $string['slide_fill_random'] = 'Random';
 $string['slide_fill_grain'] = 'Grain';
 $string['slide_fill_mesh_hint'] = 'Drag the points in the preview to move the colour areas.';
+$string['bg_fx_btn'] = 'Gradient / mesh …';
 $string['slide_fill_done'] = 'Done';
 $string['slide_linked'] = 'Show objects above in this slide';
 $string['ink_select_all'] = 'Select all';

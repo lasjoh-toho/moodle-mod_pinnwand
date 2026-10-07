@@ -2672,7 +2672,7 @@
     return window.PinnwandPresentation.slideBgCss({ color: bg.color, fill: bg.fill, opacity: 100 }) ||
       { background: bg.color || '#000000', size: '' };
   }
-  function openSlideFillModal(bg, onChange, onClose) {
+  function openSlideFillModal(bg, onChange, onClose, title) {
     var old = document.getElementById('ic-fill-modal');
     if (old) { old.remove(); }
     bg.fill = bg.fill || { mode: 'solid' };
@@ -2694,7 +2694,7 @@
     var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', type: 'button', title: S.cancel }, ['✕']);
     closeBtn.addEventListener('click', close);
     panel.appendChild(closeBtn);
-    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.slide_bg_modal]));
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [title || S.slide_bg_modal]));
     var preview = el('div', { class: 'ic-fill-preview' });
     var preDots = el('div', { class: 'ic-fill-dots' });
     preview.appendChild(preDots);
@@ -10332,8 +10332,21 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   // Hintergrundfarbe mit denselben Effekten wie das Bild (Helligkeit, Sättigung,
   // Invertieren, in CSS-Reihenfolge), damit auch die Fläche außerhalb des
   // Bildbereichs mitwirkt, nicht nur die Bildfläche.
+  // Zusätzliche Hintergrund-Eigenschaften (Verlauf, Grainy Mesh, Weichzeichnen):
+  // der Server liefert sie als JSON-String in background.fx.
+  function bgFx(bg) {
+    if (!bg || !bg.fx) { return null; }
+    if (typeof bg.fx === 'string') { try { return JSON.parse(bg.fx); } catch (e) { return null; } }
+    return bg.fx;
+  }
+  // Grundfarbe außerhalb der Bildfläche: bei Verlauf/Mesh deren erste Farbe.
+  function bgBaseColor(bg) {
+    var fx = bg.type === 'color' ? bgFx(bg) : null, fl = fx && fx.fill;
+    var first = fl && (fl.mode === 'mesh' ? (fl.points || [])[0] : (fl.mode === 'gradient' ? (fl.stops || [])[0] : null));
+    return first && first.color ? first.color : (bg.color || '#2b2d33');
+  }
   function effectBgRgb(bg) {
-    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg.color || '#2b2d33');
+    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bgBaseColor(bg));
     if (!m) { return null; }
     var br = (bg.brightness != null ? bg.brightness : 100) / 100;
     var sat = (bg.saturation != null ? bg.saturation : 100) / 100;
@@ -10385,12 +10398,32 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       img.style.backgroundPosition = 'center';
     } else {
       img.style.backgroundImage = 'none';
+      img.style.backgroundSize = '';
       img.style.backgroundColor = bg.color || '#2b2d33';
     }
+    // Verlauf / Grainy Mesh statt einfarbiger Fläche (nur ohne Bild): liegt auf
+    // der ganzen äußeren Fläche (kein Rand zwischen Bildbereich und Tapete),
+    // die Effekte (Helligkeit, Sättigung, Invertieren, Weichzeichnen) wirken
+    // dann auf diese gesamte Fläche.
+    var fxo = bgFx(bg);
+    var fxCss = fxo && fxo.fill && bg.type === 'color'
+      ? window.PinnwandPresentation.slideBgCss({ color: bg.color, fill: fxo.fill, opacity: 100 }) : null;
     var brightness = (bg.brightness != null ? bg.brightness : 100);
     var saturation = (bg.saturation != null ? bg.saturation : 100);
     var invert = (bg.invert != null ? bg.invert : 0);
-    img.style.filter = 'brightness(' + brightness + '%) saturate(' + saturation + '%)' + (invert ? ' invert(' + invert + '%)' : '');
+    var filterCss = 'brightness(' + brightness + '%) saturate(' + saturation + '%)' + (invert ? ' invert(' + invert + '%)' : '');
+    if (fxCss) {
+      // (Weichzeichnen gilt nur für Bilder - bei Verlauf/Mesh würden die Ränder verblassen.)
+      bgEl.style.background = fxCss.background;
+      bgEl.style.backgroundSize = fxCss.size || '';
+      bgEl.style.filter = filterCss;
+      img.style.background = 'none';
+      img.style.filter = '';
+    } else {
+      bgEl.style.backgroundSize = '';
+      bgEl.style.filter = '';
+      img.style.filter = filterCss + (fxo && fxo.blur ? ' blur(' + fxo.blur + 'px)' : '');
+    }
   }
 
   // ==================================================================
@@ -10687,6 +10720,30 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     });
     colorInput.addEventListener('change', function () { persistBg({ color: colorInput.value }); });
     colorRow.appendChild(colorInput);
+    // Mehr als eine Farbe: Verlauf und Grainy Gradient Mesh im selben Modal
+    // wie bei den Folien.
+    var fxBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.bg_fx_btn }, [S.bg_fx_btn]);
+    fxBtn.addEventListener('click', function () {
+      state.background = state.background || { type: 'color', color: '#2b2d33' };
+      var fxo = bgFx(state.background) || {};
+      var adapter = { color: state.background.color || '#2b2d33', fill: fxo.fill || { mode: 'solid' }, opacity: 100 };
+      openSlideFillModal(adapter, function () {
+        if (adapter.fill.mode !== 'solid') {
+          state.background.type = 'color'; state.background.url = null; state.background.photoid = 0;
+        }
+        state.background.color = adapter.color;
+        fxo.fill = adapter.fill;
+        state.background.fx = JSON.stringify(fxo);
+        var wp2 = document.querySelector('.ic-canvas-wallpaper');
+        if (wp2) { applyWallpaperColor(wp2); }
+        var bgEl2 = document.querySelector('.ic-canvas-bg');
+        if (bgEl2) { applyBackground(bgEl2); }
+      }, function () {
+        colorInput.value = state.background.color || '#2b2d33';
+        persistBg({ color: state.background.color, fx: state.background.fx || '' });
+      }, S.bg_title);
+    });
+    colorRow.appendChild(fxBtn);
     panel.appendChild(colorRow);
 
     var startRow = el('div', { class: 'ic-bg-row' });
@@ -10766,11 +10823,12 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: b.type || 'color', color: b.color || '#2b2d33',
         photoid: b.photoid || 0, url: b.type === 'url' ? (b.url || '') : '',
-        brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit()
+        brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit(),
+        fx: bg().fx ? (typeof bg().fx === 'string' ? bg().fx : JSON.stringify(bg().fx)) : ''
       }).then(function (res) { state.background = res.background; });
     }
     function chooseImage(p) {
-      state.background = { type: 'image', color: bg().color, url: p.url, photoid: p.id, brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit() };
+      state.background = { type: 'image', color: bg().color, url: p.url, photoid: p.id, brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit(), fx: bg().fx || '' };
       applyBackground(bgLayerEl());
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: 'image', color: bg().color, photoid: p.id,
@@ -10797,7 +10855,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     if (bg().type !== 'color') {
       var noImgBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.bg_noimage }, ['✕ ' + S.bg_noimage]);
       noImgBtn.addEventListener('click', function () {
-        state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit() };
+        state.background = { type: 'color', color: colorInput.value, url: null, brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit(), fx: bg().fx || '' };
         applyBackground(bgLayerEl());
         callAjax('mod_pinnwand_save_background', {
           cmid: cfg.cmid, type: 'color', color: colorInput.value, photoid: 0,
@@ -10878,7 +10936,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     urlApply.addEventListener('click', function () {
       var url = urlInput.value.trim();
       if (!url) { return; }
-      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit() };
+      state.background = { type: 'url', color: colorInput.value, url: url, brightness: currentBrightness(), saturation: currentSaturation(), invert: currentInvert(), fit: currentFit(), fx: bg().fx || '' };
       applyBackground(bgLayerEl());
       callAjax('mod_pinnwand_save_background', {
         cmid: cfg.cmid, type: 'url', color: colorInput.value, photoid: 0, url: url,
@@ -10905,6 +10963,11 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     slider(S.brightness, 20, 180, currentBrightness, function (v) { state.background.brightness = v; });
     slider(S.saturation, 0, 200, currentSaturation, function (v) { state.background.saturation = v; });
     slider(S.slide_bg_invert, 0, 100, currentInvert, function (v) { state.background.invert = v; });
+    slider(S.slide_bg_blur, 0, 30, function () { return (bgFx(bg()) || {}).blur || 0; }, function (v) {
+      var fo = bgFx(state.background) || {};
+      fo.blur = v;
+      state.background.fx = JSON.stringify(fo);
+    });
     colR.appendChild(sliders);
 
     var fitRow = el('div', { class: 'ic-bg-row' });

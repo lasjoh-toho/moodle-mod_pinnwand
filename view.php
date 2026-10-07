@@ -258,6 +258,7 @@ $config = [
         'slide_fill_random' => get_string('slide_fill_random', 'pinnwand'),
         'slide_fill_grain' => get_string('slide_fill_grain', 'pinnwand'),
         'slide_fill_mesh_hint' => get_string('slide_fill_mesh_hint', 'pinnwand'),
+        'bg_fx_btn' => get_string('bg_fx_btn', 'pinnwand'),
         'slide_fill_done' => get_string('slide_fill_done', 'pinnwand'),
         'slide_linked' => get_string('slide_linked', 'pinnwand'),
         'ink_select_all' => get_string('ink_select_all', 'pinnwand'),
