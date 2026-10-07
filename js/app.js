@@ -10447,11 +10447,19 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     // Bildschirmfüllende Präsentationsebene (Hintergrund bewegt sich nicht mit)
     // hat keinen Bezug zum Board - nur sonst hängt der Verlauf am Board.
     var anchored = !bgEl.classList.contains('ic-present-bg') || bgEl.classList.contains('ic-present-bg-moves');
-    if (fxo && fxo.fill && bg.type === 'color' &&
+    var hasImg = (bg.type === 'image' || bg.type === 'url' || bg.type === 'upload') && bg.url;
+    if (fxo && fxo.fill &&
         window.PinnwandPresentation.applyFxFill(bgEl, bg, fxo.fill, filterCss, anchored)) {
-      // (Weichzeichnen gilt nur für Bilder - bei Verlauf/Mesh würden die Ränder verblassen.)
-      img.style.background = 'none';
-      img.style.filter = '';
+      // Verlauf/Mesh liegt unter dem (optionalen) Bild; das Bild bekommt seine
+      // eigenen Effekte und lässt den Verlauf in den "Füllen"-Rändern durchscheinen.
+      if (hasImg) {
+        img.style.backgroundColor = 'transparent';
+        img.style.filter = filterCss + (fxo.blur ? ' blur(' + fxo.blur + 'px)' : '');
+      } else {
+        // (Weichzeichnen gilt nur für Bilder - bei Verlauf/Mesh würden die Ränder verblassen.)
+        img.style.background = 'none';
+        img.style.filter = '';
+      }
     } else {
       bgEl.style.backgroundSize = '';
       bgEl.style.filter = '';
@@ -10762,7 +10770,6 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       var adapter = { color: state.background.color || '#2b2d33', fill: fxo.fill || { mode: 'solid' }, opacity: 100 };
       openSlideFillModal(adapter, function () {
         if (adapter.fill.mode !== 'solid') {
-          state.background.type = 'color'; state.background.url = null; state.background.photoid = 0;
         }
         state.background.color = adapter.color;
         fxo.fill = adapter.fill;
