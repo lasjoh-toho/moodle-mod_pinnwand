@@ -2845,6 +2845,38 @@
           prow.appendChild(corners);
         }
         body.appendChild(prow);
+        // Untergrund: Farbe der ersten Punkte (auto), eigene Farbe oder Verlauf.
+        var baseMode = !fill.base ? 'auto' : fill.base.mode;
+        var brow = el('div', { class: 'ic-bg-row' });
+        brow.appendChild(el('label', {}, [S.slide_fill_base]));
+        [['auto', S.slide_fill_base_auto], ['solid', S.slide_fill_solid], ['gradient', S.slide_fill_gradient]].forEach(function (t) {
+          var bb = el('button', { class: 'ic-btn ic-mini-btn ' + (baseMode === t[0] ? 'ic-btn-primary' : 'ic-btn-ghost'), type: 'button' }, [t[1]]);
+          bb.addEventListener('click', function () {
+            if (t[0] === 'auto') { delete fill.base; }
+            else if (t[0] === 'solid') { fill.base = { mode: 'solid', color: (fill.base && fill.base.color) || bg.color || '#ffffff' }; }
+            else {
+              var c1 = (fill.base && fill.base.stops && fill.base.stops[0].color) || bg.color || '#4f8cff';
+              fill.base = fill.base && fill.base.mode === 'gradient' ? fill.base
+                : { mode: 'gradient', angle: 135, stops: [{ color: c1, pos: 0 }, { color: mixHexColors(c1, '#ffffff', 0.7), pos: 1 }] };
+            }
+            changed(); build();
+          });
+          brow.appendChild(bb);
+        });
+        body.appendChild(brow);
+        if (fill.base && fill.base.mode === 'solid') {
+          var b1 = el('div', { class: 'ic-bg-row' });
+          b1.appendChild(colorInput(fill.base.color, function (v) { fill.base.color = v; changed(); }));
+          body.appendChild(b1);
+        } else if (fill.base && fill.base.mode === 'gradient') {
+          var b2 = el('div', { class: 'ic-bg-row' });
+          b2.appendChild(colorInput(fill.base.stops[0].color, function (v) { fill.base.stops[0].color = v; changed(); }));
+          b2.appendChild(colorInput(fill.base.stops[1].color, function (v) { fill.base.stops[1].color = v; changed(); }));
+          var bar = el('input', { type: 'range', min: '0', max: '360', value: String(fill.base.angle != null ? fill.base.angle : 135) });
+          bar.addEventListener('input', function () { fill.base.angle = parseInt(bar.value, 10); changed(); });
+          b2.appendChild(bar);
+          body.appendChild(b2);
+        }
         var gl = el('label', { class: 'ic-slide-bg-slider' }, [S.slide_fill_grain]);
         var gr = el('input', { type: 'range', min: '0', max: '100', value: String(fill.grain) });
         gr.addEventListener('input', function () { fill.grain = parseInt(gr.value, 10); changed(); });
@@ -10374,7 +10406,9 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   // Grundfarbe außerhalb der Bildfläche: bei Verlauf/Mesh deren erste Farbe.
   function bgBaseColor(bg) {
     var fx = bg.type === 'color' ? bgFx(bg) : null, fl = fx && fx.fill;
-    var first = fl && (fl.mode === 'mesh' ? (fl.points || [])[0] : (fl.mode === 'gradient' ? (fl.stops || [])[0] : null));
+    var mb = fl && fl.mode === 'mesh' && fl.base;
+    var first = mb ? (mb.mode === 'solid' ? { color: mb.color } : (mb.stops || [])[0]) :
+      fl && (fl.mode === 'mesh' ? (fl.points || [])[0] : (fl.mode === 'gradient' ? (fl.stops || [])[0] : null));
     return first && first.color ? first.color : (bg.color || '#2b2d33');
   }
   function effectBgRgb(bg) {

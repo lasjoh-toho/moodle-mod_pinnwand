@@ -1028,22 +1028,25 @@
     // bzw. Bildbereich) und darf weit darüber hinausgehen; ox/oy = Abstand des
     // Rechtecks von der Ebenen-Ecke (die Ebene muss um das Rechteck zentriert sein).
     var box = bg.box || null;
-    if (fill.mode === 'gradient' && fill.stops && fill.stops.length >= 2) {
-      var sorted = fill.stops.slice().sort(function (x, y) { return x.pos - y.pos; });
-      var ang = (fill.angle != null ? fill.angle : 135) + 90;
+    function gradCss(f) {
+      var sorted = f.stops.slice().sort(function (x, y) { return x.pos - y.pos; });
+      var ang = (f.angle != null ? f.angle : 135) + 90;
       var len = 1;
       if (box) {
         var rad = ang * Math.PI / 180;
-        len = fill.radial ? Math.sqrt(box.w * box.w + box.h * box.h) / 2
+        len = f.radial ? Math.sqrt(box.w * box.w + box.h * box.h) / 2
           : Math.abs(box.w * Math.sin(rad)) + Math.abs(box.h * Math.cos(rad));
       }
       var stops = sorted.map(function (st) {
-        var at = box ? (fill.radial ? Math.round(st.pos * len) + 'px'
+        var at = box ? (f.radial ? Math.round(st.pos * len) + 'px'
           : 'calc(50% + ' + Math.round((st.pos - 0.5) * len) + 'px)') : Math.round(st.pos * 100) + '%';
         return rgba(st.color, op) + ' ' + at;
       }).join(',');
-      background = fill.radial ? 'radial-gradient(circle ' + (box ? Math.round(len) + 'px ' : '') + 'at 50% 50%,' + stops + ')'
+      return f.radial ? 'radial-gradient(circle ' + (box ? Math.round(len) + 'px ' : '') + 'at 50% 50%,' + stops + ')'
         : 'linear-gradient(' + ang + 'deg,' + stops + ')';
+    }
+    if (fill.mode === 'gradient' && fill.stops && fill.stops.length >= 2) {
+      background = gradCss(fill);
     } else if (fill.mode === 'mesh' && fill.points && fill.points.length) {
       var layers = fill.points.map(function (pt) {
         if (box) {
@@ -1062,7 +1065,10 @@
         layers.unshift('url("data:image/svg+xml,' + svg.replace(/</g, '%3C').replace(/>/g, '%3E').replace(/#/g, '%23').replace(/"/g, "'") + '")');
         sizes.unshift('240px 240px');
       }
-      layers.push(rgba(fill.points[0].color, op));
+      // Untergrund des Mesh: eigene Farbe, eigener Verlauf oder (Standard) Farbe des ersten Punkts.
+      var base = fill.base;
+      layers.push(base && base.mode === 'gradient' && base.stops && base.stops.length >= 2 ? gradCss(base)
+        : rgba(base && base.mode === 'solid' && base.color ? base.color : fill.points[0].color, op));
       sizes.push('100% 100%');
       background = layers.join(',');
       size = sizes.join(',');

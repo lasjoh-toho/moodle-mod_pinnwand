@@ -344,6 +344,20 @@ class mod_pinnwand_external extends external_api {
             }
             if ($points) {
                 $out['fill'] = ['mode' => 'mesh', 'points' => $points, 'grain' => max(0, min(100, (int) ($fill['grain'] ?? 0)))];
+                // Untergrund des Mesh: eigene Farbe oder Verlauf (sonst Farbe des ersten Punkts).
+                $base = is_array($fill['base'] ?? null) ? $fill['base'] : [];
+                if (($base['mode'] ?? '') === 'solid') {
+                    $out['fill']['base'] = ['mode' => 'solid', 'color' => $hex($base['color'] ?? '')];
+                } else if (($base['mode'] ?? '') === 'gradient') {
+                    $bs = [];
+                    foreach (array_slice(is_array($base['stops'] ?? null) ? $base['stops'] : [], 0, 4) as $st) {
+                        $bs[] = ['color' => $hex($st['color'] ?? ''), 'pos' => round(max(0, min(1, (float) ($st['pos'] ?? 0))), 3)];
+                    }
+                    if (count($bs) >= 2) {
+                        $out['fill']['base'] = ['mode' => 'gradient', 'stops' => $bs, 'angle' => (int) ($base['angle'] ?? 135),
+                            'radial' => !empty($base['radial'])];
+                    }
+                }
             }
         }
         $json = $out ? json_encode($out) : '';
