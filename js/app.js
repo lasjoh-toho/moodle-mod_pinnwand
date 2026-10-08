@@ -2699,7 +2699,7 @@
       { x: 0.2, y: 0.85, color: '#f5c542' }, { x: 0.8, y: 0.8, color: '#9b5de5' }
     ];
     fill.grain = fill.grain != null ? fill.grain : 40;
-    var selStop = 0, selPoint = 0;
+    var selStop = 0, selPoint = 0, lastStopTap = null;
     var overlay = el('div', { class: 'ic-modal-overlay', id: 'ic-fill-modal' });
     var panel = el('div', { class: 'ic-add-modal ic-fill-panel' });
     function close() { overlay.remove(); document.removeEventListener('keydown', onEsc); if (onClose) { onClose(); } }
@@ -2755,11 +2755,17 @@
             st.pos = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
             m.style.left = (st.pos * 100) + '%'; paintBand(); changed();
           });
-          m.addEventListener('pointerup', function () { drag = false; selStop = i; build(); });
-          m.addEventListener('dblclick', function (ev) {
-            ev.stopPropagation();
-            if (fill.stops.length <= 2) { return; }
-            fill.stops.splice(i, 1); selStop = 0; changed(); build();
+          m.addEventListener('pointerup', function () {
+            drag = false;
+            // Doppeltipp = Marker entfernen (nativer dblclick kommt nach dem Neuaufbau nie an).
+            var nowT = Date.now(), lt = lastStopTap;
+            lastStopTap = moved ? null : { i: i, t: nowT };
+            if (!moved && lt && lt.i === i && nowT - lt.t < 450 && fill.stops.length > 2) {
+              lastStopTap = null;
+              fill.stops.splice(i, 1); selStop = 0; changed(); build();
+              return;
+            }
+            selStop = i; build();
           });
           band.appendChild(m);
         });
@@ -5624,21 +5630,24 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
                 commitStops(stops); applyShapeOrTextChange();
                 if (!isShapeTarget) { refreshControls(); }
               } else {
+                // Doppeltipp = Marker entfernen. Ein nativer dblclick kommt nie an,
+                // weil der erste Tipp die Marker neu aufbaut - daher hier erkennen.
+                var nowT = Date.now(), lt = state.gradientMarkerTap;
+                state.gradientMarkerTap = { sid: stop.sid, t: nowT };
+                if (lt && lt.sid === stop.sid && nowT - lt.t < 450 && stops.length > 2) { // mindestens 2 Stufen bleiben erhalten
+                  state.gradientMarkerTap = null;
+                  commitStops(stops.filter(function (s2) { return s2 !== stop; }));
+                  state.gradientStopSid = null;
+                  applyShapeOrTextChange();
+                  if (!isShapeTarget) { refreshControls(); }
+                  return;
+                }
                 state.gradientStopSid = stop.sid;
                 refreshControls();
               }
             }
             marker.addEventListener('pointerup', markerEnd);
             marker.addEventListener('pointercancel', markerEnd);
-            marker.addEventListener('dblclick', function (ev) {
-              ev.stopPropagation();
-              if (stops.length <= 2) { return; } // mindestens 2 Stufen bleiben erhalten
-              var without = stops.filter(function (s2) { return s2 !== stop; });
-              commitStops(without);
-              state.gradientStopSid = null;
-              applyShapeOrTextChange();
-              if (!isShapeTarget) { refreshControls(); }
-            });
             band.appendChild(marker);
           });
           band.addEventListener('dblclick', function (ev) {

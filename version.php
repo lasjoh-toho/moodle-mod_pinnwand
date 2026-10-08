@@ -3,7 +3,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_pinnwand';
-$plugin->version   = 2026100668;
+$plugin->version   = 2026100669;
 $plugin->requires  = 2022041900; // Moodle 4.0+
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.161.3';
+$plugin->release   = '0.161.4';
