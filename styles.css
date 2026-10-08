@@ -881,6 +881,14 @@ svg.ic-board-ink-layer { overflow: visible; }
   display: flex; justify-content: space-between; pointer-events: none;
 }
 .ic-tf-header-group { display: flex; gap: 6px; pointer-events: auto; }
+/* Obere Leiste im Editor: kleinere Knöpfe, dunkler Chip mit weißem Symbol -
+   hebt sich von jedem Hintergrund (hell, dunkel, Bild) deutlich ab. */
+.ic-tf-header .ic-btn-icon { width: 36px; height: 36px; border-radius: 10px; color: #fff;
+  background: rgba(20,21,24,.82); border: 1px solid rgba(255,255,255,.4); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.ic-tf-header .ic-btn-icon svg { width: 18px; height: 18px; stroke-width: 2.4; }
+.ic-tf-header .ic-btn-icon.active { background: var(--ic-accent); border-color: #fff; }
+.ic-tf-header .ic-btn-primary.ic-btn-icon { background: var(--ic-accent); border-color: #fff; }
+.ic-tf-header .ic-btn-icon.disabled { opacity: .7; }
 .ic-textframe-fmt-btn[title="Kursiv"], .ic-textframe-fmt-btn[title="Italic"] { font-style: italic; }
 .ic-textframe-fmt-btn[title="Unterstrichen"], .ic-textframe-fmt-btn[title="Underline"] { text-decoration: underline; }
 .ic-textframe-fmt-btn[title="Durchgestrichen"], .ic-textframe-fmt-btn[title="Strikethrough"] { text-decoration: line-through; }
