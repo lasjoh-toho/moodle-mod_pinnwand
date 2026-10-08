@@ -1077,8 +1077,9 @@
     }
     return {
       background: background, size: size,
-      filter: [bg.blur ? 'blur(' + bg.blur + 'px)' : '', bg.invert ? 'invert(' + bg.invert + '%)' : '',
-        bright !== 100 ? 'brightness(' + bright + '%)' : ''].filter(Boolean).join(' ')
+      // Reihenfolge wie bei der Farbumrechnung oben: erst Helligkeit, dann Invertieren.
+      filter: [bg.blur ? 'blur(' + bg.blur + 'px)' : '', bright !== 100 ? 'brightness(' + bright + '%)' : '',
+        bg.invert ? 'invert(' + bg.invert + '%)' : ''].filter(Boolean).join(' ')
     };
   }
 

@@ -4314,7 +4314,7 @@
     var bgScale = hasBoardPos ? (tf.w / editingRec.canvasw) : 1;
     if (tfShowBg) {
       var bbg = state.background || { type: 'color', color: '#2b2d33' };
-      stage.style.backgroundColor = bbg.color || '#2b2d33';
+      stage.style.backgroundColor = effectBgColor(bbg);
       if ((bbg.type === 'image' || bbg.type === 'url' || bbg.type === 'upload') && bbg.url && !hasBoardPos) {
         // Keine Board-Position bekannt (neues, noch nicht platziertes
         // Objekt) - einfache Vollbild-Notlösung ohne genauen Bezug.
@@ -4342,18 +4342,14 @@
             // Gedrehter Rahmen: die Pinnwand dreht sich im Editor entgegen,
             // die Folie selbst steht gerade (wie die Kamera der Präsentation).
             (edRot ? 'transform-origin:' + (editingRec.rotCx != null ? editingRec.rotCx * bgScale : nOffX + tf.w / 2) + 'px ' +
-              (editingRec.rotCy != null ? editingRec.rotCy * bgScale : nOffY + tf.h / 2) + 'px;transform:rotate(' + (-edRot) + 'deg);' : '') +
-            (((bbg.type === 'image' || bbg.type === 'url' || bbg.type === 'upload') && bbg.url)
-            // Hintergrundbild an der TATSÄCHLICH richtigen Stelle: das Bild
-            // wird so groß wie das ganze Board dargestellt (BOARD_W/H
-            // skaliert), dann so verschoben, dass genau der Ausschnitt an
-            // der Kartenposition zu sehen ist - statt einer beliebigen
-            // "cover/zentriert"-Notlösung ohne Bezug zur echten Position.
-            ? ('background-image:url(' + bbg.url + ');background-repeat:no-repeat;' +
-              'background-size:' + (BOARD_W * bgScale) + 'px ' + (BOARD_H * bgScale) + 'px;' +
-              'background-position:' + (-editingRec.canvasx * bgScale + nOffX) + 'px ' + (-editingRec.canvasy * bgScale + nOffY) + 'px;')
-            : '')
+              (editingRec.rotCy != null ? editingRec.rotCy * bgScale : nOffY + tf.h / 2) + 'px;transform:rotate(' + (-edRot) + 'deg);' : '')
         });
+        // Pinnwand-Hintergrund exakt wie auf der Pinnwand (Bild mit Füllart,
+        // Verlauf/Mesh, Helligkeit/Invertieren ...), im Boardmaßstab - damit
+        // Folieneffekte wie Invertieren denselben Untergrund sehen.
+        var edBg = el('div', { class: 'ic-tf-editor-bg', style: 'position:absolute;left:0;top:0;width:' + BOARD_W + 'px;height:' + BOARD_H + 'px;transform-origin:0 0;transform:scale(' + bgScale + ');pointer-events:none;' });
+        applyBackground(edBg);
+        neighborsLayer.appendChild(edBg);
         state.photos.filter(function (p) {
           return p.id !== editingRec.id && !p.hiddenfromboard && p.boardplaced &&
             (p.boardid || 0) === (editingRec.boardid || 0) && (p.canvasz || 0) <= thisZ;
