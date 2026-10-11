@@ -3713,6 +3713,9 @@
       // (nicht im Editor - dort würde ein Neuaufbau den Cursor verlieren).
       clearTimeout(fontRerenderTimer);
       fontRerenderTimer = setTimeout(function () {
+        // Offene Dialoge (z.B. PDF-Seitenauswahl, die beim Rendern selbst
+        // Schriften nachlädt) nicht durch einen Neuaufbau schließen.
+        if (root.querySelector('.ic-modal-overlay')) { return; }
         if (state.step === 'arrange' || state.step === 'home' || state.step === 'moderate') { render(); }
       }, 120);
     });
@@ -6953,6 +6956,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     eraser: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H8l-6-6a2 2 0 0 1 0-2.8l8-8a2 2 0 0 1 2.8 0l7 7a2 2 0 0 1 0 2.8L13 20"/><path d="M6 13l6 6"/></svg>',
     clone: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
     search: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    sortgrid: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17.5 13v8M14.5 18l3 3 3-3"/></svg>',
     boxselect: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 3"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
     move: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>',
     filter: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="4 4 20 4 14 12.5 14 19 10 21 10 12.5 4 4"/></svg>',
@@ -8522,6 +8526,73 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     }
 
     var longPressTimer = null, longPressStartX = 0, longPressStartY = 0;
+
+    // Bilder sortieren: die Auswahl (ab zwei Objekten) bzw. alle Bilder des
+    // Boards werden nach Titel/Jahr/Autor*in/Upload/Tag in einem Raster
+    // angeordnet - ab der oberen linken Ecke der bisherigen Gruppe.
+    // Rückgängig machen stellt alle Positionen wieder her.
+    function selectedPhotos() {
+      return state.multiSelect.filter(function (k) { return k.indexOf('photo:') === 0; }).map(function (k) {
+        var id = parseInt(k.slice(6), 10);
+        return state.photos.filter(function (o) { return o.id === id; })[0];
+      }).filter(Boolean);
+    }
+    function sortBoardPhotos(key) {
+      var sel = selectedPhotos();
+      var targets = sel.length >= 2 ? sel : visible.filter(function (p) { return !p.wordfielddata; });
+      if (targets.length < 2) { return; }
+      var val = {
+        title: function (p) { return p.sourcetitle || ''; },
+        year: function (p) { return p.sourceyear || ''; },
+        author: function (p) { return p.sourceauthor || p.userfullname || ''; },
+        upload: function (p) { return p.timecreated || 0; },
+        tag: function (p) { return (p.tags || '').split(/\s*,\s*/).filter(Boolean)[0] || ''; }
+      }[key];
+      var sorted = targets.slice().sort(function (a, b) {
+        var va = val(a), vb = val(b);
+        if (key === 'upload') { return va - vb; }
+        if (!va !== !vb) { return va ? -1 : 1; } // ohne Angabe ans Ende
+        return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' });
+      });
+      var gap = 24;
+      var minX = Math.min.apply(null, targets.map(function (p) { return p.canvasx; }));
+      var minY = Math.min.apply(null, targets.map(function (p) { return p.canvasy; }));
+      var cellW = Math.max.apply(null, targets.map(function (p) { return p.canvasw; })) + gap;
+      var cellH = Math.max.apply(null, targets.map(function (p) { return photoBoardHeight(p); })) + gap;
+      var cols = Math.max(1, Math.round(Math.sqrt(sorted.length * (BOARD_W / BOARD_H) * cellH / cellW)));
+      var before = targets.map(function (p) { return { p: p, x: p.canvasx, y: p.canvasy }; });
+      sorted.forEach(function (p, i) {
+        p.canvasx = minX + (i % cols) * cellW + (cellW - gap - p.canvasw) / 2;
+        p.canvasy = minY + Math.floor(i / cols) * cellH;
+      });
+      var after = targets.map(function (p) { return { p: p, x: p.canvasx, y: p.canvasy }; });
+      function apply(list) { list.forEach(function (e) { e.p.canvasx = e.x; e.p.canvasy = e.y; persistLayout(e.p); }); }
+      apply(after);
+      pushUndo({ undo: function () { apply(before); }, redo: function () { apply(after); } });
+      render();
+    }
+    function openSortMenu(anchor) {
+      var old = document.getElementById('ic-sort-menu');
+      if (old) { old.remove(); return; }
+      var menu = el('div', { class: 'ic-sort-menu', id: 'ic-sort-menu' });
+      menu.appendChild(el('div', { class: 'ic-sort-menu-title' }, [S.sort_board]));
+      [['title', S.sort_by_title], ['year', S.sort_year], ['author', S.sort_by_author], ['upload', S.sort_upload], ['tag', S.sort_by_tag]].forEach(function (o) {
+        var b = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, [o[1]]);
+        b.addEventListener('click', function () { menu.remove(); sortBoardPhotos(o[0]); });
+        menu.appendChild(b);
+      });
+      var r = anchor.getBoundingClientRect();
+      menu.style.left = Math.max(8, Math.min(window.innerWidth - 200, r.left)) + 'px';
+      menu.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+      document.body.appendChild(menu);
+      setTimeout(function () {
+        document.addEventListener('click', function closeSort(ev) {
+          if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', closeSort); }
+        });
+      }, 0);
+    }
+
+
     var boxModeArmed = false; // per Lupen-Popup aktiviert - nächster Klick auf leere Fläche startet die Box sofort
     var selectionBoxEl = null, selBoxStartWorld = null, selBoxAdd = false;
 
@@ -8777,7 +8848,9 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         render();
       });
       var row2 = el('div', { class: 'ic-zoom-popup-row' });
-      row2.appendChild(boxSelBtn); row2.appendChild(addSelBtn); row2.appendChild(fitSelBtn); row2.appendChild(hideMediaBtn);
+      var sortBtn = el('button', { class: 'ic-icon-btn', title: S.sort_board + ': ' + S.sort_board_hint }, [icon('sortgrid')]);
+      sortBtn.addEventListener('click', function () { var r = sortBtn; openSortMenu(r); popup.remove(); });
+      row2.appendChild(boxSelBtn); row2.appendChild(addSelBtn); row2.appendChild(fitSelBtn); row2.appendChild(sortBtn); row2.appendChild(hideMediaBtn);
 
       // Filterleiste (Titel/Jahr/Epoche/Autor der Vorlage/Autor) direkt
       // hier statt eines eigenen Buttons.
@@ -9145,6 +9218,10 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
             openLightbox(state.photos.indexOf(state.photos.filter(function (ph) { return ph.id === ordered[0]; })[0]), false, ordered);
           });
           selOverlay.appendChild(selSeqBtn);
+          var selSortBtn = el('button', { class: 'ic-selection-add-btn ic-selection-sort-btn', title: S.sort_board }, [icon('sortgrid')]);
+          selSortBtn.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); });
+          selSortBtn.addEventListener('click', function (ev) { ev.stopPropagation(); openSortMenu(selSortBtn); });
+          selOverlay.appendChild(selSortBtn);
         }
 
         // Mittelpunkt-Griff: zieht man daran, bewegt sich die ganze Gruppe -
