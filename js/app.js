@@ -3043,6 +3043,141 @@
     t.size = best;
   }
 
+  // ------------------------------------------------------------------
+  // Formeln: KaTeX und der Formeleditor liegen als lokale Dateien im
+  // Plugin und werden erst geladen, wenn sie gebraucht werden - der Editor
+  // beim Öffnen des Formel-Dialogs, KaTeX sobald eine Karte eine Formel
+  // enthält. Gespeichert wird nur <span class="ic-math" data-tex="LaTeX">;
+  // das gerenderte KaTeX-Markup entsteht bei jeder Darstellung neu.
+  // ------------------------------------------------------------------
+  var mathBase = cfg.wwwroot + '/mod/pinnwand/js/';
+  var mathPromises = {};
+  var mathRerenderPending = false;
+  function loadMathStyle(file) {
+    return new Promise(function (resolve, reject) {
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = mathBase + file;
+      link.onload = function () { resolve(); };
+      link.onerror = function () { reject(new Error(file)); };
+      document.head.appendChild(link);
+    });
+  }
+  function loadMathScript(file, isLoaded) {
+    return new Promise(function (resolve, reject) {
+      if (isLoaded()) { resolve(); return; }
+      var sc = document.createElement('script');
+      sc.src = mathBase + file;
+      // UMD-Bundle (KaTeX): mit RequireJS in Moodle würde es sich nur als
+      // anonymes AMD-Modul registrieren. Darum define beim Laden ausblenden.
+      var savedDefine = window.define;
+      var restoreDefine = function () { if (savedDefine) { window.define = savedDefine; } };
+      if (savedDefine && savedDefine.amd) { window.define = undefined; }
+      sc.onload = function () { restoreDefine(); if (isLoaded()) { resolve(); } else { reject(new Error(file)); } };
+      sc.onerror = function () { restoreDefine(); reject(new Error(file)); };
+      document.head.appendChild(sc);
+    });
+  }
+  function loadMathOnce(key, loader) {
+    if (!mathPromises[key]) {
+      mathPromises[key] = loader().catch(function (e) { mathPromises[key] = null; throw e; });
+    }
+    return mathPromises[key];
+  }
+  function loadKatex() {
+    return loadMathOnce('katex', function () {
+      return Promise.all([
+        loadMathStyle('vendor/katex/katex.min.css'),
+        loadMathScript('vendor/katex/katex.min.js', function () { return !!window.katex; })
+      ]);
+    });
+  }
+  function loadFormelEditor() {
+    return loadMathOnce('editor', function () {
+      return loadKatex().then(function () {
+        return loadMathStyle('formeleditor/formeleditor.css');
+      }).then(function () {
+        return loadMathScript('formeleditor/formeleditor-logik.js', function () { return !!window.FormelLogik; });
+      }).then(function () {
+        return loadMathScript('formeleditor/formeleditor.js', function () { return !!window.FormelEditor; });
+      });
+    });
+  }
+  function mathChipHtml(tex) {
+    return '<span class="ic-math" contenteditable="false" data-tex="' + escapeXml(tex) + '"></span>';
+  }
+  function fillMathChip(chip) {
+    var tex = chip.getAttribute('data-tex') || '';
+    try {
+      chip.innerHTML = window.katex.renderToString(tex, { throwOnError: false, displayMode: false, strict: 'ignore', output: 'html' });
+    } catch (e) { chip.textContent = tex; }
+  }
+  // Ersetzt die leeren Formel-Chips im HTML durch gerendertes KaTeX. Ist
+  // KaTeX noch nicht da, wird es nachgeladen und danach einmal neu gezeichnet.
+  function renderMathHtml(html) {
+    if (!html || html.indexOf('ic-math') < 0) { return html; }
+    if (!window.katex) {
+      if (!mathRerenderPending) {
+        mathRerenderPending = true;
+        loadKatex().then(function () { mathRerenderPending = false; render(); }, function () { mathRerenderPending = false; });
+      }
+      return html;
+    }
+    var d = document.createElement('div');
+    d.innerHTML = html;
+    [].slice.call(d.querySelectorAll('.ic-math')).forEach(fillMathChip);
+    return d.innerHTML;
+  }
+
+  // Betten die für ein gespeichertes SVG nötigen KaTeX-Regeln und die
+  // tatsächlich verwendeten Schriften ein (ein <img>-SVG sieht die
+  // Dokument-Schriften nicht).
+  var mathEmbedCache = {};
+  var MATH_INLINE_CSS = '.ic-math{display:inline}.ic-math .katex{white-space:normal;font-size:1.1em}';
+  function embedMathInSVG(svgString) {
+    if (svgString.indexOf('class="katex"') < 0) { return Promise.resolve(svgString); }
+    var use = function (re) { return re.test(svgString); };
+    var bold = use(/mathbf|textbf|boldsymbol/), italic = use(/textit|mathit/);
+    var families = {
+      KaTeX_Main: true, KaTeX_Math: true,
+      KaTeX_AMS: use(/mathbb|amsrm/), KaTeX_Caligraphic: use(/mathcal|mathscr/), KaTeX_Fraktur: use(/mathfrak/),
+      KaTeX_SansSerif: use(/mathsf|textsf/), KaTeX_Script: use(/mathscr/), KaTeX_Typewriter: use(/mathtt|texttt/)
+    };
+    var sizes = use(/delimsizing|op-symbol|delim-size/);
+    var base = mathBase + 'vendor/katex/';
+    return fetch(base + 'katex.min.css').then(function (r) { return r.text(); }).then(function (css) {
+      var faces = (css.match(/@font-face\{[^}]*\}/g) || []).filter(function (f) {
+        var fam = f.match(/font-family:"?(\w+)"?/)[1];
+        var isBold = /font-weight:700/.test(f), isItalic = /font-style:italic/.test(f);
+        if (/^KaTeX_Size/.test(fam)) { return sizes; }
+        if (!families[fam]) { return false; }
+        if (fam === 'KaTeX_Math') { return isBold ? bold : true; }
+        if (fam === 'KaTeX_Main') { return (!isBold || bold) && (!isItalic || italic || (isBold && bold)); }
+        return !isBold || bold;
+      });
+      var rules = css.replace(/@font-face\{[^}]*\}/g, '');
+      return Promise.all(faces.map(function (f) {
+        var url = f.match(/url\(([^)]+\.woff2)\)/)[1];
+        if (!mathEmbedCache[url]) {
+          mathEmbedCache[url] = fetch(base + url).then(function (r) { return r.blob(); }).then(function (blob) {
+            return new Promise(function (resolve) {
+              var reader = new FileReader();
+              reader.onload = function () { resolve(reader.result); };
+              reader.onerror = function () { resolve(null); };
+              reader.readAsDataURL(blob);
+            });
+          }).catch(function () { return null; });
+        }
+        return mathEmbedCache[url].then(function (data) {
+          return data ? f.replace(/url\([^)]+\.woff2\)/, 'url(' + data + ')') : '';
+        });
+      })).then(function (faceRules) {
+        var style = '<style>' + rules + MATH_INLINE_CSS + faceRules.join('') + '</style>';
+        return svgString.replace(/(<svg[^>]*>)/, '$1' + style);
+      });
+    }).catch(function () { return svgString; });
+  }
+
   // Teilformatierungen speichern Schriftgröße/Laufweite als feste Pixel
   // (<span style="font-size:40px">). Auf der Pinnwand wird die Karte aber
   // verkleinert/vergrößert dargestellt und der Haupttext ggf. eingepasst -
@@ -3052,7 +3187,7 @@
     if (!html || !baseSize) { return html; }
     // Früher mitgespeicherte Editor-Griffe entfernen.
     html = String(html).replace(/<div[^>]*ic-textframe-(size|move|width)-handle[^>]*>[^<]*<\/div>/g, '');
-    return String(html).replace(/(font-size|letter-spacing)\s*:\s*(-?[\d.]+)px/gi, function (m, prop, num) {
+    return renderMathHtml(String(html)).replace(/(font-size|letter-spacing)\s*:\s*(-?[\d.]+)px/gi, function (m, prop, num) {
       return prop + ': ' + (Math.round(parseFloat(num) / baseSize * 1000) / 1000) + 'em';
     });
   }
@@ -4043,6 +4178,9 @@
   // als Rückfall) statt das Speichern zu blockieren.
   var fontEmbedCache = {};
   function embedFontsInSVG(svgString, tf) {
+    return embedWebFontsInSVG(svgString, tf).then(embedMathInSVG);
+  }
+  function embedWebFontsInSVG(svgString, tf) {
     var usedFontIds = {};
     tf.texts.forEach(function (t) { if (t.html || t.text) { usedFontIds[t.font] = true; } });
     // Feste 4-Font-Liste (webfont-Eigenschaft = fester Google-Fonts-
@@ -4770,6 +4908,10 @@
       if (t.html) { el2.innerHTML = relativizeTextHtml(t.html, t.size); } else if (t.text) { el2.textContent = t.text; }
       if (!t.html && !t.text) { el2.setAttribute('data-placeholder', S.textframe_placeholder); el2.classList.add('ic-tf-empty'); }
       el2.addEventListener('input', function () { el2.classList.toggle('ic-tf-empty', !objTextWithoutHandles(el2).trim()); });
+      el2.addEventListener('click', function (ev) {
+        var chip = ev.target.closest ? ev.target.closest('.ic-math') : null;
+        if (chip && el2.contains(chip)) { ev.preventDefault(); editFormulaIn(el2, t, chip, null); }
+      });
       // Wichtig: hier KEIN render() aufrufen - das würde das gerade fokussierte
       // contenteditable-Element sofort zerstören und den Cursor verlieren,
       // noch bevor überhaupt etwas eingegeben werden kann. Stattdessen wird
@@ -4804,7 +4946,7 @@
         // an (2D-Fit: Breite + Höhe), statt eines kleinen, frei
         // positionierten einzeiligen Labels.
         el2.addEventListener('input', function () {
-          t.html = el2.innerHTML; t.text = el2.textContent;
+          t.html = objHtmlWithoutHandles(el2); t.text = objTextWithoutHandles(el2);
           autoFitPrimaryText(el2, t, edBox.h);
         });
       } else {
@@ -5925,6 +6067,16 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           document.execCommand('insertHTML', false, html);
         });
         formulaRow.appendChild(fracBtn);
+        var mathBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_formula }, ['\u2211x']);
+        mathBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        mathBtn.addEventListener('click', function () {
+          var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
+          if (!objEl) { return; }
+          var sel = window.getSelection();
+          var range = sel.rangeCount && objEl.contains(sel.getRangeAt(0).startContainer) ? sel.getRangeAt(0).cloneRange() : null;
+          editFormulaIn(objEl, active, null, range);
+        });
+        formulaRow.appendChild(mathBtn);
         formBox.appendChild(formulaRow);
 
         var symbolRow = el('div', { class: 'ic-textframe-symbol-row' });
@@ -6588,14 +6740,90 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   }
 
   // Handles im contenteditable-Feld gehören nicht zum gespeicherten Text.
+  // Formel-Dialog: lädt den Formeleditor erst beim Öffnen und übergibt
+  // das LaTeX beim Bestätigen an onDone.
+  function openFormulaDialog(initialTex, onDone) {
+    var overlay = el('div', { class: 'ic-modal-overlay' });
+    var panel = el('div', { class: 'ic-add-modal ic-formula-modal' });
+    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.formula_title]));
+    var host = el('div', { class: 'ic-formula-host' }, [el('p', { class: 'ic-hint' }, [S.formula_loading])]);
+    panel.appendChild(host);
+    var bar = el('div', { class: 'ic-formula-bar' });
+    var cancelBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.cancel]);
+    var okBtn = el('button', { class: 'ic-btn ic-btn-primary', type: 'button' }, [initialTex ? S.formula_apply : S.formula_insert]);
+    okBtn.disabled = true;
+    bar.appendChild(cancelBtn); bar.appendChild(okBtn);
+    panel.appendChild(bar);
+    overlay.appendChild(panel);
+    root.appendChild(overlay);
+    var editor = null, value = initialTex || '';
+    function close() { if (editor && editor.destroy) { editor.destroy(); } overlay.remove(); }
+    cancelBtn.addEventListener('click', close);
+    overlay.addEventListener('mousedown', function (ev) { if (ev.target === overlay) { close(); } });
+    okBtn.addEventListener('click', function () {
+      var tex = (editor ? editor.getValue() : value).trim();
+      close();
+      if (tex) { onDone(tex); }
+    });
+    loadFormelEditor().then(function () {
+      host.textContent = '';
+      editor = window.FormelEditor.mount(host, { value: value, transform: true, calculate: true, onChange: function (v) { value = v; } });
+      okBtn.disabled = !editor;
+    }).catch(function () {
+      host.textContent = '';
+      host.appendChild(el('p', { class: 'ic-hint' }, [S.formula_loaderror]));
+    });
+  }
+
+  // Fügt eine Formel an der gemerkten Cursorposition ein bzw. ändert die
+  // angeklickte; danach t.html/t.text synchronisieren.
+  function editFormulaIn(objEl, t, chip, range) {
+    openFormulaDialog(chip ? chip.getAttribute('data-tex') : '', function (tex) {
+      loadKatex().then(function () {
+        if (chip && chip.isConnected) {
+          chip.setAttribute('data-tex', tex);
+          fillMathChip(chip);
+        } else {
+          objEl.focus();
+          var sel = window.getSelection();
+          if (!range || !objEl.contains(range.startContainer)) {
+            range = document.createRange();
+            range.selectNodeContents(objEl);
+            range.collapse(false);
+          }
+          sel.removeAllRanges(); sel.addRange(range);
+          var tmp = document.createElement('div');
+          tmp.innerHTML = mathChipHtml(tex);
+          var newChip = tmp.firstChild;
+          fillMathChip(newChip);
+          // Per Range einfügen (statt execCommand), damit der Cursor
+          // hinter der Formel landet und weitergetippt werden kann.
+          var after = document.createTextNode('\u00a0');
+          range.deleteContents();
+          range.insertNode(after);
+          range.insertNode(newChip);
+          var caret = document.createRange();
+          caret.setStartAfter(after);
+          caret.collapse(true);
+          sel.removeAllRanges(); sel.addRange(caret);
+        }
+        t.html = objHtmlWithoutHandles(objEl); t.text = objTextWithoutHandles(objEl);
+        objEl.classList.remove('ic-tf-empty');
+        objEl.dispatchEvent(new Event('input', { bubbles: true }));
+      }).catch(function () { alert(S.formula_loaderror); });
+    });
+  }
+
   function objHtmlWithoutHandles(el2) {
     var c = el2.cloneNode(true);
     [].slice.call(c.querySelectorAll('.ic-tf-handle')).forEach(function (h) { h.remove(); });
+    [].slice.call(c.querySelectorAll('.ic-math')).forEach(function (m) { m.innerHTML = ''; });
     return c.innerHTML;
   }
   function objTextWithoutHandles(el2) {
     var c = el2.cloneNode(true);
     [].slice.call(c.querySelectorAll('.ic-tf-handle')).forEach(function (h) { h.remove(); });
+    [].slice.call(c.querySelectorAll('.ic-math')).forEach(function (m) { m.textContent = m.getAttribute('data-tex') || ''; });
     return c.textContent;
   }
 

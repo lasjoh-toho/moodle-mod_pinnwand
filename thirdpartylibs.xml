@@ -9,4 +9,12 @@
     <licenseversion>2.0</licenseversion>
     <repository>https://github.com/mozilla/pdf.js</repository>
   </library>
+  <library>
+    <location>js/vendor/katex</location>
+    <name>KaTeX</name>
+    <description>Renders formulas in text cards; loaded only when a card contains a formula.</description>
+    <version>0.16.47</version>
+    <license>MIT</license>
+    <repository>https://github.com/KaTeX/KaTeX</repository>
+  </library>
 </libraries>
