@@ -451,5 +451,19 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026083159, 'pinnwand');
     }
 
+    if ($oldversion < 2026101702) {
+        // Formeleditor: Umformen und Rechnen je Aktivität ein-/ausschaltbar.
+        $table = new xmldb_table('pinnwand');
+        $field = new xmldb_field('formulatransform', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'studentlayers');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field2 = new xmldb_field('formulacalc', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'formulatransform');
+        if (!$dbman->field_exists($table, $field2)) {
+            $dbman->add_field($table, $field2);
+        }
+        upgrade_mod_savepoint(true, 2026101702, 'pinnwand');
+    }
+
     return true;
 }

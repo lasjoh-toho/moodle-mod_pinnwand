@@ -23,6 +23,8 @@
         <FIELD NAME="studentthreads" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Lernende dürfen eigene Rote Fäden über die Pinnwand legen"/>
         <FIELD NAME="studentpoststream" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Lernende dürfen den Post-Stream (eigenen Warteraum) nutzen"/>
         <FIELD NAME="studentlayers" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Lernende dürfen das Schichtung-Panel (Z-Reihenfolge) nutzen"/>
+        <FIELD NAME="formulatransform" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Formeleditor: Umformen-Menü verfügbar"/>
+        <FIELD NAME="formulacalc" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Formeleditor: Rechnen-Menü verfügbar"/>
         <FIELD NAME="consenttext" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>

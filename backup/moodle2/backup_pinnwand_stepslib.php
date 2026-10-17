@@ -17,7 +17,7 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
             'name', 'intro', 'introformat', 'maxpictures', 'allowconsent',
             'boarddefault', 'studentcansend', 'teachercansend', 'studentclassview',
             'boardpannable', 'sidebaropacity', 'studentboardclone', 'studentthreads',
-            'studentpoststream', 'studentlayers', 'consenttext', 'timecreated', 'timemodified',
+            'studentpoststream', 'studentlayers', 'formulatransform', 'formulacalc', 'consenttext', 'timecreated', 'timemodified',
         ]);
 
         // Fotos - personenbezogen, daher nur mit "userinfo" gesichert.

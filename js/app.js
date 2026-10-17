@@ -6767,7 +6767,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     });
     loadFormelEditor().then(function () {
       host.textContent = '';
-      editor = window.FormelEditor.mount(host, { value: value, transform: true, calculate: true, onChange: function (v) { value = v; } });
+      editor = window.FormelEditor.mount(host, { value: value, transform: cfg.formulatransform !== false, calculate: cfg.formulacalc !== false, onChange: function (v) { value = v; } });
       okBtn.disabled = !editor;
     }).catch(function () {
       host.textContent = '';
