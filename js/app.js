@@ -423,6 +423,10 @@
     }
   }
 
+  function homeFilterPrefs() {
+    try { return JSON.parse(localStorage.getItem('mod_pinnwand_homefilter_' + cfg.cmid) || '{}') || {}; } catch (e) { return {}; }
+  }
+
   function renderHome(body) {
     var wrap = el('div', { class: 'ic-home' });
     var maxreached = state.maxpictures > 0 && state.photos.length >= state.maxpictures;
@@ -431,8 +435,36 @@
       wrap.appendChild(el('p', { class: 'ic-hint' }, [S.maxreached]));
     }
 
+    // Filter: welche Elemente hier gezeigt werden (Bilder/Texte, auf der
+    // Pinnwand/nicht auf der Pinnwand). Umschalt-Buttons statt Checkboxen,
+    // aktive leuchten; die Wahl bleibt pro Gerät gespeichert.
+    var hf = homeFilterPrefs();
+    var filterBar = el('div', { class: 'ic-home-filter', role: 'group', 'aria-label': S.home_filter });
+    var filterGroups = [[['image', S.home_filter_images], ['text', S.home_filter_texts]]];
+    if (state.studentcansend) { filterGroups.push([['onboard', S.home_filter_onboard], ['offboard', S.home_filter_offboard]]); }
+    filterGroups.forEach(function (group, gi) {
+      if (gi > 0) { filterBar.appendChild(el('span', { class: 'ic-home-filter-sep' })); }
+      group.forEach(function (opt) {
+        var on = hf[opt[0]] !== false;
+        var b = el('button', { type: 'button', class: 'ic-filter-chip' + (on ? ' active' : ''), 'aria-pressed': on ? 'true' : 'false' }, [opt[1]]);
+        b.addEventListener('click', function () {
+          hf[opt[0]] = !on;
+          try { localStorage.setItem('mod_pinnwand_homefilter_' + cfg.cmid, JSON.stringify(hf)); } catch (e) { /* ignore */ }
+          render();
+        });
+        filterBar.appendChild(b);
+      });
+    });
+    wrap.appendChild(filterBar);
+    function homeFilterMatch(p) {
+      if (hf[p.wordfielddata ? 'text' : 'image'] === false) { return false; }
+      if (state.studentcansend && hf[p.hiddenfromboard ? 'offboard' : 'onboard'] === false) { return false; }
+      return true;
+    }
+
     var list = el('div', { class: 'ic-home-list' });
     state.photos.forEach(function (p, idx) {
+      if (!homeFilterMatch(p)) { return; }
       var row = el('div', { class: 'ic-home-row' + rowStateClass(p) });
       var thumb = el('div', { class: 'ic-thumb' + (p.otherboardcount > 0 ? ' ic-thumb-pinned' : '') });
       // Wortfelder (Zettel/WordArt) laufen über dieselbe Live-Darstellung
@@ -582,6 +614,9 @@
 
       list.appendChild(row);
     });
+    if (!list.children.length && state.photos.length) {
+      list.appendChild(el('p', { class: 'ic-hint' }, [S.home_filter_empty]));
+    }
     wrap.appendChild(list);
     body.appendChild(wrap);
 
@@ -12208,6 +12243,11 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     } catch (e) { return ''; }
   }
   // Ein Textobjekt gilt als Zitat, sobald irgendeine Quellenangabe befüllt ist.
+  function textSourceLine(p) {
+    var top = [p.sourceorigauthor || p.sourceauthor, p.sourcetitle].filter(Boolean).join(': ');
+    var rest = [p.sourceyear, p.sourceepoch, p.sourceplace].filter(Boolean).join(', ');
+    return '\u2014 ' + [top, rest].filter(Boolean).join(', ');
+  }
   function textHasSource(p) {
     return !!(p.sourcetitle || p.sourceyear || p.sourceepoch || p.sourceplace || p.sourceorigauthor);
   }
@@ -12232,22 +12272,29 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   function buildTextOrSource(p, canedit, sourceBox) {
     var host = el('div', { class: 'ic-textsource' });
     if (!p.wordfielddata) { host.appendChild(sourceBox); return host; }
+    // Texte sind standardmäßig kein Zitat: der Text selbst steht im
+    // Vordergrund. Wurden im Zitat-Modus Angaben eingetragen, erscheinen
+    // sie als Zeile unter dem Text; der Haken öffnet die Eingabefelder.
     var textBox = el('div', { class: 'ic-text-excerpt' }, [wordfieldPlainText(p) || '\u2013']);
-    var quote = textHasSource(p);
+    var srcLine = el('div', { class: 'ic-text-source-line' });
     var toggleLabel = el('label', { class: 'ic-quote-toggle' });
     var toggle = el('input', { type: 'checkbox' });
-    toggle.checked = quote;
-    toggle.disabled = !canedit && !quote;
+    toggle.checked = false;
+    toggle.disabled = !canedit;
     toggleLabel.appendChild(toggle);
     toggleLabel.appendChild(el('span', {}, [S.text_is_quote]));
     function sync() {
+      var line = textHasSource(p) ? textSourceLine(p) : '';
+      srcLine.textContent = line;
+      srcLine.style.display = (!toggle.checked && line) ? '' : 'none';
       sourceBox.style.display = toggle.checked ? '' : 'none';
-      textBox.style.display = toggle.checked ? 'none' : '';
     }
     toggle.addEventListener('change', sync);
+    sourceBox.addEventListener('change', sync);
     sync();
     host.appendChild(textBox);
-    host.appendChild(toggleLabel);
+    host.appendChild(srcLine);
+    if (canedit) { host.appendChild(toggleLabel); }
     host.appendChild(sourceBox);
     return host;
   }

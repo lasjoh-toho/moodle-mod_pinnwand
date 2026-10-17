@@ -1801,3 +1801,19 @@ input.ic-stepper-value {
 }
 .ic-sort-menu-title { font-size: .72rem; color: var(--ic-muted, #9aa0a6); padding: 0 4px 2px; }
 .ic-sort-menu .ic-mini-btn { text-align: left; justify-content: flex-start; }
+
+/* Meine Elemente: Filter-Buttons (leuchten, wenn aktiv) und Quellenzeile bei Texten. */
+.ic-home-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 0; }
+.ic-home-filter-sep { width: 1px; height: 22px; background: rgba(255,255,255,.15); margin: 0 4px; }
+.ic-filter-chip {
+  border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.04); color: var(--ic-muted, #9aa0ab);
+  border-radius: 999px; padding: 6px 14px; font: inherit; font-size: .85rem; cursor: pointer;
+  transition: box-shadow .15s, background .15s, color .15s, border-color .15s;
+}
+.ic-filter-chip:hover { color: var(--ic-text, #f2f3f5); border-color: rgba(255,255,255,.3); }
+.ic-filter-chip.active {
+  color: #fff; background: rgba(79,140,255,.22); border-color: var(--ic-accent, #4f8cff);
+  box-shadow: 0 0 0 1px rgba(79,140,255,.35), 0 0 14px rgba(79,140,255,.55);
+}
+.ic-home-filter + .ic-home-list { padding-top: 24px; }
+.ic-text-source-line { font-size: .8rem; color: var(--ic-muted, #9aa0ab); font-style: italic; margin: 4px 0 6px; }
