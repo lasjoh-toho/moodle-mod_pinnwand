@@ -1787,6 +1787,8 @@ input.ic-stepper-value {
 /* Formeln (KaTeX) in Textkarten */
 .ic-math { display: inline; cursor: pointer; user-select: all; -webkit-user-select: all; }
 .ic-math .katex { white-space: normal; font-size: 1.1em; }
-.ic-formula-modal { width: min(680px, 100%); }
+.ic-formula-overlay { position: fixed; inset: 0; z-index: 200; pointer-events: none; }
+.ic-formula-modal { position: fixed; pointer-events: auto; max-width: calc(100vw - 16px); min-width: 300px; min-height: 260px; max-height: 92vh; overflow: auto; resize: both; }
+.ic-formula-head { display: flex; align-items: center; gap: 8px; margin: -6px -6px 6px; padding: 6px; font-weight: 700; cursor: move; touch-action: none; user-select: none; -webkit-user-select: none; }
 .ic-formula-modal .fe { margin: 10px 0 14px; }
 .ic-formula-bar { display: flex; justify-content: flex-end; gap: 8px; }

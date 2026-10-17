@@ -92,11 +92,11 @@ class mod_pinnwand_mod_form extends moodleform_mod {
         $mform->addHelpButton('studentlayers', 'studentlayers', 'pinnwand');
 
         $mform->addElement('advcheckbox', 'formulatransform', get_string('formulatransform', 'pinnwand'));
-        $mform->setDefault('formulatransform', 1);
+        $mform->setDefault('formulatransform', 0);
         $mform->addHelpButton('formulatransform', 'formulatransform', 'pinnwand');
 
         $mform->addElement('advcheckbox', 'formulacalc', get_string('formulacalc', 'pinnwand'));
-        $mform->setDefault('formulacalc', 1);
+        $mform->setDefault('formulacalc', 0);
         $mform->addHelpButton('formulacalc', 'formulacalc', 'pinnwand');
 
         $this->standard_coursemodule_elements();

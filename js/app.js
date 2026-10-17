@@ -234,6 +234,9 @@
   // ==================================================================
   function render() {
     stopStream();
+    // Merkt die letzte Ansicht außerhalb des Hinzufügen-/Editor-Assistenten,
+    // damit Schließen/Speichern dorthin zurückführt (Pinnwand statt Meine Dateien).
+    if (!ADD_WIZARD_STEPS[state.step]) { state.lastNonWizardStep = state.step; }
     root.innerHTML = '';
     var body = el('div', { class: 'ic-body' });
     root.appendChild(body);
@@ -1066,7 +1069,7 @@
   function imgDock(body, current, onSave) {
     var dock = el('div', { class: 'ic-img-dock' });
     var cancelBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-img-dock-btn', type: 'button', title: S.cancel }, ['✕', el('span', {}, [S.cancel])]);
-    cancelBtn.addEventListener('click', function () { resetCaptureState(); state.step = 'home'; render(); });
+    cancelBtn.addEventListener('click', function () { var back = wizardReturnStep(); resetCaptureState(); state.step = back; render(); });
     var hist = state.imgHistory || [];
     var backBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-img-dock-btn', type: 'button', title: S.back }, [icon('arrowleft'), el('span', {}, [S.back])]);
     backBtn.disabled = !hist.length && IMG_STEPS.indexOf(current) <= 0;
@@ -1982,13 +1985,17 @@
   // Assistenten ab (keine Zwischenspeicherung) und kehrt zu "Meine Bilder"
   // zurück - das Speichern selbst passiert ausschließlich über den
   // Haken-Button am jeweils letzten Schritt.
+  function wizardReturnStep() {
+    return (state.editingFrameItemId || state.lastNonWizardStep === 'arrange') ? 'arrange' : 'home';
+  }
+
   function cancelWizardBtn() {
     var b = el('button', {
       class: 'ic-btn ic-btn-ghost ic-btn-icon ic-cancel-btn', title: S.cancel, 'aria-label': S.cancel
     }, ['\u2715']);
     b.addEventListener('click', function () {
       // Folien werden aus der Pinnwand heraus bearbeitet - dorthin zurück.
-      var back = state.editingFrameItemId ? 'arrange' : 'home';
+      var back = wizardReturnStep();
       resetCaptureState();
       state.step = back;
       render();
@@ -4310,7 +4317,7 @@
               state.streamPanelOpen = true;
               loadStreamPhotos();
             } else {
-              state.step = isEditingExisting ? 'arrange' : (maxreached ? 'arrange' : 'home');
+              state.step = isEditingExisting || maxreached ? 'arrange' : wizardReturnStep();
             }
             render();
           });
@@ -5065,7 +5072,7 @@
       contentEl.style.left = x + 'px'; contentEl.style.top = y + 'px';
       contentEl.style.bottom = 'auto'; contentEl.style.transform = 'none';
     }
-    function makeAccordionBlock(titleText) {
+    function makeAccordionBlock(titleText, onTabClick) {
       var blockEl = el('div', { class: 'ic-textframe-block' + (state.tfOpenBlocks[titleText] ? ' ic-tf-open' : '') });
       var titleEl = el('button', { class: 'ic-textframe-block-title ic-tf-tab', type: 'button' },
         [icon(BLOCK_ICONS[titleText] || 'grid'), el('span', {}, [titleText])]);
@@ -5097,7 +5104,10 @@
       popHead.addEventListener('pointerup', function () { pdrag = null; });
       popHead.addEventListener('pointercancel', function () { pdrag = null; });
       titleEl.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-      titleEl.addEventListener('click', function () { setOpen(!blockEl.classList.contains('ic-tf-open')); });
+      titleEl.addEventListener('click', function () {
+        if (onTabClick) { onTabClick(); return; }
+        setOpen(!blockEl.classList.contains('ic-tf-open'));
+      });
       blockEl.appendChild(titleEl);
       blockEl.appendChild(contentEl);
       blockEl.content = contentEl;
@@ -5106,7 +5116,15 @@
     var blockTemplates = makeAccordionBlock(S.tfblock_colors);
     var blockShapes = makeAccordionBlock(S.tfblock_shapes);
     var blockFonts = makeAccordionBlock(S.tfblock_fonts);
-    var blockForm = makeAccordionBlock(state.wordArtMode && !tf.isSlide ? S.tfblock_form : S.tfblock_formulas);
+    var formulaTab = !state.wordArtMode || tf.isSlide;
+    var blockForm = makeAccordionBlock(formulaTab ? S.tfblock_formulas : S.tfblock_form, formulaTab ? function () {
+      var cur = tf.texts.filter(function (x) { return x.id === activeId; })[0] || tf.texts[0];
+      var objEl = cur && frame.querySelector('[data-textid="' + cur.id + '"]');
+      if (!objEl) { return; }
+      var sel = window.getSelection();
+      var range = sel.rangeCount && objEl.contains(sel.getRangeAt(0).startContainer) ? sel.getRangeAt(0).cloneRange() : null;
+      editFormulaIn(objEl, cur, null, range);
+    } : null);
     blocksWrap.appendChild(blockShapes);
     blocksWrap.appendChild(blockTemplates);
     blocksWrap.appendChild(blockFonts);
@@ -6035,60 +6053,8 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         if (isActivePrimary && !state.wordArtMode) { autoFitPrimaryText(objEl, active, tf.h); }
       }
 
-      // Formeleditor: Hoch-/Tiefstellen, Bruch, Symbol-Palette - nur im
-      // Zettel-Modus. Bewusst als reines HTML (sup/sub, verschachtelte
-      // Zeichen umgesetzt statt mit einer externen Formel-Bibliothek wie
-      // KaTeX. Grund: der Zettel wird am Ende als statisches SVG-Bild
-      // exportiert (siehe buildTextFrameSVG/embedFontsInSVG) - externe
-      // Web-Fonts müssten dafür aufwendig als Base64 eingebettet werden
-      // und liefen Gefahr, im exportierten Bild nicht zu erscheinen.
-      // Hoch-/tiefgestellter Text und Unicode-Symbole nutzen dagegen
-      // einfach die bereits vorhandene Schriftart weiter.
-      if (!state.wordArtMode || tf.isSlide) {
-        var formulaRow = el('div', { class: 'ic-textframe-formatgrid' });
-        var supBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_superscript }, ['x\u00b2']);
-        supBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-        supBtn.addEventListener('click', function () { document.execCommand('superscript', false, null); });
-        formulaRow.appendChild(supBtn);
-        var subBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_subscript }, ['x\u2082']);
-        subBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-        subBtn.addEventListener('click', function () { document.execCommand('subscript', false, null); });
-        formulaRow.appendChild(subBtn);
-        var fracBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_fraction }, ['a/b']);
-        fracBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-        fracBtn.addEventListener('click', function () {
-          // Fügt eine einfache, direkt editierbare Bruch-Struktur ein
-          // (zwei übereinanderliegende Spans mit Trennlinie) - Zähler/
-          // Nenner lassen sich danach ganz normal antippen und bearbeiten,
-          // da sie Teil desselben contenteditable-Bereichs sind.
-          var html = '<span class="ic-frac" contenteditable="false">' +
-            '<span class="ic-frac-num" contenteditable="true">a</span>' +
-            '<span class="ic-frac-den" contenteditable="true">b</span></span>&nbsp;';
-          document.execCommand('insertHTML', false, html);
-        });
-        formulaRow.appendChild(fracBtn);
-        var mathBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-textframe-fmt-btn', title: S.format_formula }, ['\u2211x']);
-        mathBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-        mathBtn.addEventListener('click', function () {
-          var objEl = frame.querySelector('[data-textid="' + active.id + '"]');
-          if (!objEl) { return; }
-          var sel = window.getSelection();
-          var range = sel.rangeCount && objEl.contains(sel.getRangeAt(0).startContainer) ? sel.getRangeAt(0).cloneRange() : null;
-          editFormulaIn(objEl, active, null, range);
-        });
-        formulaRow.appendChild(mathBtn);
-        formBox.appendChild(formulaRow);
-
-        var symbolRow = el('div', { class: 'ic-textframe-symbol-row' });
-        ['±', '×', '÷', '√', 'π', '∞', '≤', '≥', '≠', '≈', '∑', '∫', '∂', '∆',
-          'α', 'β', 'γ', 'θ', 'λ', 'μ', 'σ', 'φ', 'Ω', '→', '°', '‰'].forEach(function (sym) {
-          var sb = el('button', { class: 'ic-textframe-symbol-btn' }, [sym]);
-          sb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
-          sb.addEventListener('click', function () { document.execCommand('insertText', false, sym); });
-          symbolRow.appendChild(sb);
-        });
-        formBox.appendChild(symbolRow);
-      }
+      // Formeln: im Zettel-/Folien-Modus öffnet der Reiter "Formeln" direkt
+      // den Formeleditor (siehe makeAccordionBlock/blockForm).
 
       // WordArt-Vorlagen (Fläche/Rand/Extrusion) - nur im WordArt-Modus.
       // Jeder Button zeigt seinen eigenen Namen bereits im jeweiligen Stil -
@@ -6743,9 +6709,10 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   // Formel-Dialog: lädt den Formeleditor erst beim Öffnen und übergibt
   // das LaTeX beim Bestätigen an onDone.
   function openFormulaDialog(initialTex, onDone) {
-    var overlay = el('div', { class: 'ic-modal-overlay' });
+    var overlay = el('div', { class: 'ic-formula-overlay' });
     var panel = el('div', { class: 'ic-add-modal ic-formula-modal' });
-    panel.appendChild(el('h2', { class: 'ic-thread-panel-title' }, [S.formula_title]));
+    var head = el('div', { class: 'ic-formula-head' }, [el('span', { class: 'ic-float-grip' }, ['\u2630']), el('span', {}, [S.formula_title])]);
+    panel.appendChild(head);
     var host = el('div', { class: 'ic-formula-host' }, [el('p', { class: 'ic-hint' }, [S.formula_loading])]);
     panel.appendChild(host);
     var bar = el('div', { class: 'ic-formula-bar' });
@@ -6756,10 +6723,29 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     panel.appendChild(bar);
     overlay.appendChild(panel);
     root.appendChild(overlay);
+    var pw = Math.min(680, window.innerWidth - 16);
+    panel.style.width = pw + 'px';
+    panel.style.left = Math.max(8, (window.innerWidth - pw) / 2) + 'px';
+    panel.style.top = Math.max(8, window.innerHeight * 0.12) + 'px';
     var editor = null, value = initialTex || '';
     function close() { if (editor && editor.destroy) { editor.destroy(); } overlay.remove(); }
     cancelBtn.addEventListener('click', close);
-    overlay.addEventListener('mousedown', function (ev) { if (ev.target === overlay) { close(); } });
+    // Verschiebbar über die Titelleiste, skalierbar über die Ecke unten rechts (CSS resize).
+    var drag = null;
+    head.addEventListener('pointerdown', function (ev) {
+      var r = panel.getBoundingClientRect();
+      drag = { sx: ev.clientX, sy: ev.clientY, x: r.left, y: r.top };
+      try { head.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+      ev.preventDefault();
+    });
+    head.addEventListener('pointermove', function (ev) {
+      if (!drag) { return; }
+      var nx = drag.x + ev.clientX - drag.sx, ny = drag.y + ev.clientY - drag.sy;
+      panel.style.left = Math.max(0, Math.min(window.innerWidth - 80, nx)) + 'px';
+      panel.style.top = Math.max(0, Math.min(window.innerHeight - 40, ny)) + 'px';
+    });
+    head.addEventListener('pointerup', function () { drag = null; });
+    head.addEventListener('pointercancel', function () { drag = null; });
     okBtn.addEventListener('click', function () {
       var tex = (editor ? editor.getValue() : value).trim();
       close();
@@ -6767,7 +6753,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     });
     loadFormelEditor().then(function () {
       host.textContent = '';
-      editor = window.FormelEditor.mount(host, { value: value, transform: cfg.formulatransform !== false, calculate: cfg.formulacalc !== false, onChange: function (v) { value = v; } });
+      editor = window.FormelEditor.mount(host, { value: value, transform: state.canmoderate || !!cfg.formulatransform, calculate: state.canmoderate || !!cfg.formulacalc, onChange: function (v) { value = v; } });
       okBtn.disabled = !editor;
     }).catch(function () {
       host.textContent = '';

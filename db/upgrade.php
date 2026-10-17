@@ -454,15 +454,22 @@ function xmldb_pinnwand_upgrade($oldversion) {
     if ($oldversion < 2026101702) {
         // Formeleditor: Umformen und Rechnen je Aktivität ein-/ausschaltbar.
         $table = new xmldb_table('pinnwand');
-        $field = new xmldb_field('formulatransform', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'studentlayers');
+        $field = new xmldb_field('formulatransform', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'studentlayers');
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }
-        $field2 = new xmldb_field('formulacalc', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'formulatransform');
+        $field2 = new xmldb_field('formulacalc', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'formulatransform');
         if (!$dbman->field_exists($table, $field2)) {
             $dbman->add_field($table, $field2);
         }
         upgrade_mod_savepoint(true, 2026101702, 'pinnwand');
+    }
+
+    if ($oldversion < 2026101703) {
+        // Hilfsfunktionen des Formeleditors sind für Lernende standardmäßig aus.
+        $DB->set_field('pinnwand', 'formulatransform', 0);
+        $DB->set_field('pinnwand', 'formulacalc', 0);
+        upgrade_mod_savepoint(true, 2026101703, 'pinnwand');
     }
 
     return true;
