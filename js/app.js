@@ -5078,13 +5078,9 @@
     // als Popup darüber (state.tfOpenBlock übersteht das Neu-Rendern). Der
     // Einklapp-Schalter sitzt direkt über dem Band.
     var blocksWrap = el('div', { class: 'ic-textframe-blocks ic-tf-ribbon' });
-    var tfDock = el('div', { class: 'ic-tf-dock' + (state.tfPanelsCollapsed ? ' ic-tf-collapsed' : '') });
-    var dockToggle = el('button', {
-      class: 'ic-tf-dock-toggle', type: 'button',
-      title: state.tfPanelsCollapsed ? S.tf_panels_expand : S.tf_panels_collapse
-    }, [icon(state.tfPanelsCollapsed ? 'chevronup' : 'chevrondown')]);
-    dockToggle.addEventListener('click', function () { state.tfPanelsCollapsed = !state.tfPanelsCollapsed; render(); });
-    tfDock.appendChild(dockToggle);
+    // Das Band schwebt direkt über dem unteren Rand der Arbeitsfläche -
+    // ohne eigene Leiste darunter und ohne Einklapp-Schalter.
+    var tfDock = el('div', { class: 'ic-tf-dock' });
     tfDock.appendChild(blocksWrap);
     var BLOCK_ICONS = {};
     BLOCK_ICONS[S.tfblock_colors] = 'fillicon';
