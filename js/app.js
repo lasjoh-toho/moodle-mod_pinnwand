@@ -2024,13 +2024,14 @@
     return (state.editingFrameItemId || state.lastNonWizardStep === 'arrange') ? 'arrange' : 'home';
   }
 
-  function cancelWizardBtn() {
+  function cancelWizardBtn(toBoard) {
     var b = el('button', {
       class: 'ic-btn ic-btn-ghost ic-btn-icon ic-cancel-btn', title: S.cancel, 'aria-label': S.cancel
     }, ['\u2715']);
     b.addEventListener('click', function () {
       // Folien werden aus der Pinnwand heraus bearbeitet - dorthin zurück.
-      var back = wizardReturnStep();
+      // Der Texteditor kehrt immer in die Pinnwand-Ansicht zurück.
+      var back = toBoard ? 'arrange' : wizardReturnStep();
       resetCaptureState();
       state.step = back;
       render();
@@ -2598,6 +2599,14 @@
     ).replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/'/g, '%27');
   }
 
+  // Vorschau-Kachel blass, bis ihre Schrift tatsächlich geladen ist.
+  function markFontLoading(sampleEl, name) {
+    if (WORDART_WEBSAFE_FONTS[name] || !document.fonts || !document.fonts.load) { return; }
+    sampleEl.classList.add('ic-font-loading');
+    document.fonts.load("1em '" + name + "'", 'Aa Bb').then(function () {
+      sampleEl.classList.remove('ic-font-loading');
+    }, function () { sampleEl.classList.remove('ic-font-loading'); });
+  }
   function openWordartFontBrowser(active, frame) {
     var overlay = el('div', { class: 'ic-modal-overlay' });
     overlay.addEventListener('click', function (ev) { if (ev.target === overlay) { overlay.remove(); } });
@@ -2624,10 +2633,11 @@
         var fonts = WORDART_FONT_CATEGORIES[cat];
         var sampleFont = fonts[Math.floor(fonts.length / 2)] || fonts[0];
         var catBtn = el('button', { class: 'ic-wordart-cat-tile' }, [
-          el('div', { class: 'ic-wordart-cat-tile-sample', style: 'font-family:' + resolveFontCss(sampleFont) }, [S.wordart_sample_word]),
+          el('div', { class: 'ic-wordart-cat-tile-sample', style: 'font-family:' + wordartFontCss(sampleFont) }, [S.wordart_sample_word]),
           el('div', { class: 'ic-wordart-cat-tile-label' }, [(WORDART_CATEGORY_LABELS[cat] || cat) + ' (' + fonts.length + ')'])
         ]);
         catBtn.addEventListener('click', function () { showFonts(cat); });
+        markFontLoading(catBtn.firstChild, sampleFont);
         catGrid.appendChild(catBtn);
       });
       body2.appendChild(catGrid);
@@ -2640,10 +2650,11 @@
       var grid = el('div', { class: 'ic-wordart-font-grid' });
       WORDART_FONT_CATEGORIES[cat].forEach(function (name) {
         var fb = el('button', { class: 'ic-wordart-font-tile' }, [
-          el('div', { class: 'ic-wordart-font-tile-sample', style: 'font-family:' + resolveFontCss(name) }, [S.wordart_sample_word]),
+          el('div', { class: 'ic-wordart-font-tile-sample', style: 'font-family:' + wordartFontCss(name) }, [S.wordart_sample_word]),
           el('div', { class: 'ic-wordart-font-tile-label' }, [name])
         ]);
         fb.addEventListener('click', function () { applyFont(name); });
+        markFontLoading(fb.firstChild, name);
         grid.appendChild(fb);
       });
       body2.appendChild(grid);
@@ -4355,7 +4366,7 @@
               state.streamPanelOpen = true;
               loadStreamPhotos();
             } else {
-              state.step = isEditingExisting || maxreached ? 'arrange' : wizardReturnStep();
+              state.step = 'arrange';
             }
             render();
           });
@@ -6607,7 +6618,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     // Beschneiden bei schräger WordArt) konkret nachvollziehen zu können,
     // statt zu mutmaßen. Im neuen Tab lässt sich per Rechtsklick →
     // "Element untersuchen" die genaue viewBox/Breite/Höhe ablesen.
-    tfHeaderRight.appendChild(cancelWizardBtn());
+    tfHeaderRight.appendChild(cancelWizardBtn(true));
     // Direkt senden: speichert UND schickt das Objekt sofort in den
     // Post-Stream der Masterpinnwand (hiddenfromboard=0), statt erst über
     // "Meine Bilder" gesendet werden zu müssen. Nur sichtbar, wenn Senden
@@ -6867,12 +6878,32 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       if (!viaHandle && totalDelta < 6) { return; }
       // Relativ zur Startlage (kein Springen der Textmitte zum Zeiger).
       var rect = frame.getBoundingClientRect();
-      t.x = Math.max(0, Math.min(1, startTx + (p.x - startX) / rect.width));
-      t.y = Math.max(0, Math.min(1, startTy + (p.y - startY) / rect.height));
+      var nx = Math.max(0, Math.min(1, startTx + (p.x - startX) / rect.width));
+      var ny = Math.max(0, Math.min(1, startTy + (p.y - startY) / rect.height));
+      // Einrasten an der Rahmenmitte (8 px Fangbereich), mit Hilfslinie -
+      // so lässt sich der Text leicht mittig im Rahmen platzieren.
+      var snapX = Math.abs(nx - 0.5) * rect.width < 8, snapY = Math.abs(ny - 0.5) * rect.height < 8;
+      if (snapX) { nx = 0.5; }
+      if (snapY) { ny = 0.5; }
+      t.x = nx; t.y = ny;
       el2.style.left = (t.x * 100) + '%'; el2.style.top = (t.y * 100) + '%';
+      showGuides(snapX, snapY);
       ev.preventDefault();
     }
-    function up() { dragging = false; }
+    var guideV = null, guideH = null;
+    function showGuides(v, h) {
+      if (!guideV) {
+        guideV = el('div', { class: 'ic-tf-guide ic-tf-guide-v' });
+        guideH = el('div', { class: 'ic-tf-guide ic-tf-guide-h' });
+        frame.appendChild(guideV); frame.appendChild(guideH);
+      }
+      guideV.style.display = v ? '' : 'none';
+      guideH.style.display = h ? '' : 'none';
+    }
+    function up() {
+      dragging = false;
+      if (guideV) { guideV.remove(); guideH.remove(); guideV = guideH = null; }
+    }
     el2.addEventListener('mousedown', down);
     el2.addEventListener('touchstart', down, { passive: false });
     window.addEventListener('mousemove', move);
@@ -10825,6 +10856,19 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       bgEl.style.backgroundSize = '';
       bgEl.style.filter = '';
       img.style.filter = filterCss + (fxo && fxo.blur ? ' blur(' + fxo.blur + 'px)' : '');
+    }
+    // Objekte mit Mischmodus (z. B. Invertieren) mischen nur mit dem, was in
+    // der gezoomten Ebene liegt - die Tapete außerhalb gehört nicht dazu.
+    // Darum liegt die Hintergrundfarbe zusätzlich als große Fläche in dieser
+    // Ebene, damit Objekte auch außerhalb der Bildfläche invertiert werden.
+    if (bgEl.classList.contains('ic-canvas-bg') && cfg.boardpannable) {
+      var ext = bgEl.querySelector(':scope > .ic-canvas-bg-ext');
+      if (!ext) {
+        ext = document.createElement('div');
+        ext.className = 'ic-canvas-bg-ext';
+      }
+      bgEl.insertBefore(ext, bgEl.firstChild); // immer zuunterst, auch unter Verlauf/Mesh
+      ext.style.backgroundColor = effectBgColor(bg);
     }
   }
 
