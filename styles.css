@@ -1849,3 +1849,8 @@ input.ic-stepper-value {
 .ic-canvas-bg-ext { position: absolute; left: -20000px; top: -20000px; width: 41400px; height: 41000px; pointer-events: none; }
 
 .ic-font-loading { opacity: .3; transition: opacity .2s; }
+.ic-tf-convert { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; height: 36px; padding: 0 12px; box-sizing: border-box; }
+@media (max-width: 640px) { .ic-tf-convert span { display: none; } }
+/* Verlaufsfüllung (background-clip:text) erreicht die verschachtelten,
+   positionierten KaTeX-Spans nicht von selbst - jeder erbt sie einzeln. */
+.ic-textframe-obj .ic-math, .ic-textframe-obj .ic-math *, .ic-tf-live-text .ic-math, .ic-tf-live-text .ic-math * { background-image: inherit; -webkit-background-clip: text; background-clip: text; }

@@ -3381,6 +3381,9 @@
     if (!t.wordartStyle || t.wordartStyle === 'none') { return null; }
     var style = WORDART_STYLES.filter(function (w) { return w.id === t.wordartStyle; })[0];
     if (!style || !style.fillGradient) { return null; }
+    // Formeln gibt es nur im HTML - die reine SVG-Textzeile würde sie als
+    // Rohtext zeigen; dann bleibt es beim CSS-Verlauf auf dem HTML-Text.
+    if (t.html && t.html.indexOf('ic-math') !== -1) { return null; }
     var extrudeSteps = t.extrudeSteps != null ? t.extrudeSteps : (style.extrudeSteps || 0);
     var extrudeColor = t.extrudeColor || style.extrudeColor || '#000';
     var scaleY = t.scaleY != null ? t.scaleY : (style.scaleY || 1);
@@ -3484,9 +3487,22 @@
     if (style.fillGradient) {
       css += 'background-image:' + style.fillGradient + ';-webkit-background-clip:text;background-clip:text;color:transparent;';
     } else {
-      css += 'color:' + (style.fillColor || fallbackColor) + ';';
+      css += 'color:' + (style.fillColor || fallbackColor) + ';background-image:none;filter:none;';
     }
     if (style.stroke) { css += '-webkit-text-stroke:' + unit(style.strokeWidth || 1) + ' ' + style.stroke + ';paint-order:stroke fill;'; }
+    if (style.fillGradient) {
+      // text-shadow läge über dem per background-clip ausgeschnittenen
+      // Verlauf und verdeckte ihn - drop-shadow-Kette malt darunter
+      // (jeder Schritt verschiebt das bisherige Ergebnis um eine Stufe).
+      var drops = [];
+      // Ganze Pixel je Schritt (Bruchteile rundet der Browser weg), gleiche
+      // Gesamttiefe wie die text-shadow-Variante.
+      var dropSteps = Math.round(extrudeSteps * 0.8);
+      for (var j = 0; j < dropSteps; j++) { drops.push('drop-shadow(' + unit(1) + ' ' + unit(1) + ' 0 ' + extrudeColor + ')'); }
+      if (t.wordartGlow) { drops.push('drop-shadow(0 0 ' + unit(t.wordartGlow / 2) + ' ' + (t.wordartGlowColor || '#fff') + ')'); }
+      if (drops.length) { css += 'filter:' + drops.join(' ') + ';'; }
+      return css;
+    }
     var shadows = [];
     for (var i = extrudeSteps; i >= 1; i--) { shadows.push(unit(i * 0.8) + ' ' + unit(i * 0.8) + ' 0 ' + extrudeColor); }
     if (t.wordartGlow) { shadows.push('0 0 ' + unit(t.wordartGlow) + ' ' + (t.wordartGlowColor || '#fff'), '0 0 ' + unit(t.wordartGlow / 2) + ' ' + (t.wordartGlowColor || '#fff')); }
@@ -4414,6 +4430,9 @@
   function renderTextFrame(body) {
     if (!state.textFrame) { state.textFrame = newTextFrame(state.wordArtMode); }
     var tf = state.textFrame;
+    // Modus folgt dem Objekt selbst - so greift auch Rückgängig nach einem
+    // Umwandeln Textfeld <-> WordArt.
+    if (tf.isWordArt != null && !tf.isSlide) { state.wordArtMode = !!tf.isWordArt; }
     TEXTFRAME_FONTS.forEach(function (f) { if (f.webfont) { ensureWebfont(f.webfont); } });
 
     // Zurückgenommen (Wunsch des Nutzers, Phase 130): der automatische
@@ -5162,18 +5181,22 @@
     var blockShapes = makeAccordionBlock(S.tfblock_shapes);
     var blockFonts = makeAccordionBlock(S.tfblock_fonts);
     var formulaTab = !state.wordArtMode || tf.isSlide;
-    var blockForm = makeAccordionBlock(formulaTab ? S.tfblock_formulas : S.tfblock_form, formulaTab ? function () {
+    function openFormulaEditor() {
       var cur = tf.texts.filter(function (x) { return x.id === activeId; })[0] || tf.texts[0];
       var objEl = cur && frame.querySelector('[data-textid="' + cur.id + '"]');
       if (!objEl) { return; }
       var sel = window.getSelection();
       var range = sel.rangeCount && objEl.contains(sel.getRangeAt(0).startContainer) ? sel.getRangeAt(0).cloneRange() : null;
       editFormulaIn(objEl, cur, null, range);
-    } : null);
+    }
+    var blockForm = makeAccordionBlock(formulaTab ? S.tfblock_formulas : S.tfblock_form, formulaTab ? openFormulaEditor : null);
     blocksWrap.appendChild(blockShapes);
     blocksWrap.appendChild(blockTemplates);
     blocksWrap.appendChild(blockFonts);
     blocksWrap.appendChild(blockForm);
+    // WordArt behält den Formeln-Reiter, damit Formeln aus einem
+    // umgewandelten Textfeld weiter bearbeitbar bleiben.
+    if (!formulaTab) { blocksWrap.appendChild(makeAccordionBlock(S.tfblock_formulas, openFormulaEditor)); }
     layout.appendChild(tfDock);
 
     // Block 1 "Farben und Formen" - identisch in beiden Editoren (Zettel
@@ -6613,6 +6636,32 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     }, [icon('eye')]);
     boardBgBtn.addEventListener('click', function () { state.tfShowBoardBg = state.tfShowBoardBg === false ? true : false; render(); });
     tfHeaderRight.appendChild(boardBgBtn);
+    // Textfeld <-> WordArt umwandeln: Inhalt, Formeln und Position bleiben,
+    // nur Editor-Modus und Kartenhintergrund wechseln.
+    if (!tf.isSlide) {
+      var toWordArt = !state.wordArtMode;
+      var convertBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-tf-convert', type: 'button', title: toWordArt ? S.tf_convert_wordart : S.tf_convert_card },
+        [icon(toWordArt ? 'wand' : 'fonts'), el('span', {}, [toWordArt ? S.tf_convert_wordart : S.tf_convert_card])]);
+      convertBtn.addEventListener('click', function () {
+        if (toWordArt) {
+          // Papier entfällt (Formen bleiben), der Text behält seine
+          // zuletzt automatisch angepasste Größe.
+          tf.preset = 'none';
+        } else {
+          // Textfeld: WordArt-Effekte entfallen (Rückgängig holt sie zurück),
+          // sonst kollidieren sie mit dem Einpassen in die Karte.
+          if (tf.preset === 'none') { tf.preset = 'paper'; }
+          tf.texts.forEach(function (t) {
+            t.wordartStyle = 'none'; t.arcStyle = 'none';
+            t.extrudeSteps = t.extrudeColor = t.scaleY = t.skewY = t.rotate = t.rotY = null;
+          });
+        }
+        tf.isWordArt = toWordArt;
+        state.wordArtMode = toWordArt;
+        render();
+      });
+      tfHeaderRight.appendChild(convertBtn);
+    }
     // Diagnose: öffnet das tatsächlich erzeugte SVG (inkl. viewBox/Maßen)
     // in einem neuen Tab - Werkzeug, um Darstellungsprobleme (z.B.
     // Beschneiden bei schräger WordArt) konkret nachvollziehen zu können,
