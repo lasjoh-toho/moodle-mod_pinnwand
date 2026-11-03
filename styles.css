@@ -1854,3 +1854,8 @@ input.ic-stepper-value {
 /* Verlaufsfüllung (background-clip:text) erreicht die verschachtelten,
    positionierten KaTeX-Spans nicht von selbst - jeder erbt sie einzeln. */
 .ic-textframe-obj .ic-math, .ic-textframe-obj .ic-math *, .ic-tf-live-text .ic-math, .ic-tf-live-text .ic-math * { background-image: inherit; -webkit-background-clip: text; background-clip: text; }
+.ic-slide-draw-row { flex-wrap: wrap; align-items: center; gap: 6px; }
+.ic-slide-ink-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); padding: 0; cursor: pointer; }
+.ic-slide-ink-swatch.active { border-color: var(--ic-accent, #4f8cff); box-shadow: 0 0 0 2px rgba(79,140,255,.35); }
+.ic-slide-ink-width { width: 90px; }
+.ic-slide-draw-pad { position: absolute; inset: 0; z-index: 45; cursor: crosshair; touch-action: none; }

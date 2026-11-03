@@ -37,6 +37,7 @@
     '.pwp-exit-hidden{opacity:0 !important;pointer-events:none !important;}',
     '.pwp-bg-off{background:transparent !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}',
     '.pwp-build-hidden{opacity:0 !important;pointer-events:none !important;}',
+    '[data-pwp-build].pwp-draw{transition:none;}',
     '.pwp-hint{position:fixed;top:16px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(0,0,0,.55);',
     'padding:6px 16px;border-radius:20px;font-size:.85rem;z-index:20;pointer-events:none;transition:opacity 1s;',
     'white-space:nowrap;max-width:calc(100vw - 140px);overflow:hidden;text-overflow:ellipsis;}',
@@ -752,9 +753,49 @@
           level = idx > last ? Infinity : 0;
         }
         var kids = bel.querySelectorAll('[data-pwp-build]');
+        var drawQueue = [];
         for (var ki = 0; ki < kids.length; ki++) {
-          kids[ki].classList.toggle('pwp-build-hidden', parseInt(kids[ki].getAttribute('data-pwp-build'), 10) > level);
+          var kLevel = parseInt(kids[ki].getAttribute('data-pwp-build'), 10);
+          var kHide = kLevel > level;
+          // Folien-Zeichnungen: werden sie genau in diesem Schritt sichtbar,
+          // zeichnen sie sich nach; sonst (zurückblättern, Überblick)
+          // erscheinen sie sofort vollständig.
+          if (kids[ki].classList.contains('pwp-draw')) {
+            if (kHide) { resetDraw(kids[ki]); }
+            else if (kids[ki]._pwpDrawn !== true) {
+              if (active && active.buildEl === bel && kLevel === level) { drawQueue.push(kids[ki]); } else { resetDraw(kids[ki]); }
+            }
+            kids[ki]._pwpDrawn = !kHide;
+          }
+          kids[ki].classList.toggle('pwp-build-hidden', kHide);
         }
+        playDraw(drawQueue);
+      });
+    }
+
+    function resetDraw(path) {
+      path.style.transition = 'none';
+      path.style.strokeDasharray = '';
+      path.style.strokeDashoffset = '';
+    }
+    // Striche nacheinander (Dokument- = Erstellungsreihenfolge) vom
+    // Ansatz- zum Endpunkt nachzeichnen.
+    function playDraw(paths) {
+      var delay = 0;
+      paths.forEach(function (path) {
+        var len = 0;
+        try { len = path.getTotalLength(); } catch (e) { len = 0; }
+        if (!len) { resetDraw(path); return; }
+        var vb = path.ownerSVGElement && path.ownerSVGElement.viewBox && path.ownerSVGElement.viewBox.baseVal;
+        var ref = vb && vb.width ? vb.width : 640;
+        var dur = Math.max(0.25, Math.min(2.5, len / ref * 1.2));
+        path.style.transition = 'none';
+        path.style.strokeDasharray = len + ' ' + len;
+        path.style.strokeDashoffset = String(len);
+        path.getBoundingClientRect();
+        path.style.transition = 'stroke-dashoffset ' + dur.toFixed(2) + 's linear ' + delay.toFixed(2) + 's';
+        path.style.strokeDashoffset = '0';
+        delay += dur;
       });
     }
 
