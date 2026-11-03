@@ -1825,3 +1825,32 @@ input.ic-stepper-value {
   padding: 0; max-width: calc(100% - 24px);
 }
 .ic-textframe-layout > .ic-tf-dock .ic-tf-ribbon { box-shadow: 0 6px 20px rgba(0,0,0,.45); }
+
+/* Texteditor: leere Textfelder (v.a. WordArt) gut sichtbar - Platzhalter,
+   Mindestbreite, gestrichelter Rahmen und deutlich sichtbare Schreibmarke;
+   größerer Verschiebegriff und Mittel-Hilfslinien beim Ziehen. */
+.ic-textframe-obj { caret-color: var(--ic-accent, #4f8cff); }
+.ic-tf-stage:not(.ic-tf-stage-slide) .ic-textframe-obj.ic-tf-empty { min-width: 9em; min-height: 1.3em; outline: 1px dashed rgba(255,255,255,.5); outline-offset: 2px; }
+.ic-textframe-obj.ic-tf-empty::before {
+  content: attr(data-placeholder); position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
+  text-align: center; opacity: .45; pointer-events: none; white-space: nowrap;
+  -webkit-text-fill-color: currentColor; color: inherit;
+}
+.ic-textframe-obj.ic-tf-empty:focus::before { opacity: .25; }
+.ic-textframe-obj:focus, .ic-textframe-obj.active { outline: 1px solid var(--ic-accent, #4f8cff); outline-offset: 2px; }
+.ic-textframe-move-handle { width: 26px; height: 26px; left: -15px; top: -15px; font: 15px/22px sans-serif; }
+.ic-textframe-obj.ic-tf-empty .ic-tf-handle, .ic-textframe-obj:focus .ic-tf-handle { opacity: 1; }
+.ic-tf-guide { position: absolute; pointer-events: none; z-index: 40; background: #ff3cac; }
+.ic-tf-guide-v { left: 50%; top: 0; bottom: 0; width: 1px; }
+.ic-tf-guide-h { top: 50%; left: 0; right: 0; height: 1px; }
+
+/* Hintergrundfarbe auch weit außerhalb der Board-Fläche in der gezoomten
+   Ebene, damit Objekte mit Mischmodus (Invertieren) überall mit ihr mischen. */
+.ic-canvas-bg-ext { position: absolute; left: -20000px; top: -20000px; width: 41400px; height: 41000px; pointer-events: none; }
+
+.ic-font-loading { opacity: .3; transition: opacity .2s; }
+.ic-tf-convert { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; height: 36px; padding: 0 12px; box-sizing: border-box; }
+@media (max-width: 640px) { .ic-tf-convert span { display: none; } }
+/* Verlaufsfüllung (background-clip:text) erreicht die verschachtelten,
+   positionierten KaTeX-Spans nicht von selbst - jeder erbt sie einzeln. */
+.ic-textframe-obj .ic-math, .ic-textframe-obj .ic-math *, .ic-tf-live-text .ic-math, .ic-tf-live-text .ic-math * { background-image: inherit; -webkit-background-clip: text; background-clip: text; }
