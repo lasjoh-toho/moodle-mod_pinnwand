@@ -2979,6 +2979,7 @@
     }
     tf.isSlide = true; tf.isWordArt = true;
     state.textFrame = tf;
+    state.slideDraw = false;
     state.wordArtMode = true;
     state.editingPhotoId = null;
     state.editingFrameItemId = it.id;
@@ -3041,14 +3042,49 @@
     };
   }
 
+  // Zeichnungen einer Folie (tf.ink: Striche mit 0..1-Punkten, Breite
+  // relativ zur Höhe) als SVG über dem Inhalt. Animierte Striche tragen
+  // ihre Schrittnummer und class pwp-draw - der Player zeichnet sie dann
+  // vom Ansatz- zum Endpunkt nach.
+  function slideInkSvg(tf, animMap) {
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'ic-slide-ink');
+    svg.setAttribute('viewBox', '0 0 ' + tf.w + ' ' + tf.h);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('style', 'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:3;');
+    (tf.ink || []).forEach(function (st) {
+      if (!st.points || !st.points.length) { return; }
+      var d = '';
+      st.points.forEach(function (pt, i) { d += (i ? ' L' : 'M') + (Math.round(pt.x * tf.w * 10) / 10) + ' ' + (Math.round(pt.y * tf.h * 10) / 10); });
+      if (st.points.length === 1) { d += ' l0.01 0'; }
+      var path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', st.color || '#ef4444');
+      path.setAttribute('stroke-width', String(Math.max(0.5, (st.width || 0.008) * tf.h)));
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      path.setAttribute('data-inkid', String(st.id));
+      if (animMap && animMap['i' + st.id]) {
+        path.setAttribute('data-pwp-build', String(animMap['i' + st.id]));
+        path.setAttribute('class', 'pwp-draw');
+      }
+      if (tf.exit && tf.exit['i' + st.id]) { path.setAttribute('data-pwp-exit', '1'); }
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
   // Animationsschritte einer Folie: tf.anim ist die Reihenfolge
-  // [{key:'t<id>'|'s<id>', withPrev}] - jedes Objekt erscheint in seinem
+  // [{key:'t<id>'|'s<id>'|'i<id>', withPrev}] - jedes Objekt erscheint in seinem
   // Schritt (withPrev = zusammen mit dem vorherigen). Nicht aufgeführte
   // Objekte sind von Anfang an sichtbar.
   function slideAnimMap(tf) {
     var exists = {};
     (tf.texts || []).forEach(function (t) { exists['t' + t.id] = true; });
     (tf.shapes || []).forEach(function (sh) { if (!sh.main) { exists['s' + sh.id] = true; } });
+    (tf.ink || []).forEach(function (st) { exists['i' + st.id] = true; });
     var map = {}, step = 0;
     (tf.anim || []).forEach(function (a) {
       if (!a || !exists[a.key] || map[a.key]) { return; }
@@ -3722,6 +3758,7 @@
       outer.appendChild(textEl2);
       textElByIdx[idx] = textEl2;
     });
+    if (tf.isSlide && tf.ink && tf.ink.length) { outer.appendChild(slideInkSvg(tf, animMap)); }
     applyTextWrapLive(tf, textElByIdx, inner);
     return outer;
   }
@@ -6401,6 +6438,41 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         im.src = url;
       });
       slideColR.appendChild(el('div', { class: 'ic-anim-toprow' }, [addTextBtn, upBtnImg, upInput]));
+      // Zeichnen auf der Folie (Stift wie beim Annotations-Werkzeug): die
+      // Striche einer Zeichen-Runde bilden zusammen EINEN Animationsschritt
+      // und zeichnen sich dort nacheinander in Erstellungsreihenfolge.
+      tf.ink = tf.ink || [];
+      var drawBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn' + (state.slideDraw ? ' active' : ''), type: 'button', title: S.slide_draw_hint },
+        [icon('pen'), ' ' + S.slide_draw]);
+      drawBtn.addEventListener('click', function () {
+        state.slideDraw = !state.slideDraw;
+        state.slideDrawSession = false;
+        render();
+      });
+      var drawRow = el('div', { class: 'ic-anim-toprow ic-slide-draw-row' }, [drawBtn]);
+      if (state.slideDraw) {
+        state.slideInkColor = state.slideInkColor || '#ef4444';
+        state.slideInkWidth = state.slideInkWidth || 4;
+        ['#ef4444', '#111111', '#2563eb', '#22c55e', '#facc15', '#ffffff'].forEach(function (c) {
+          var sw = el('button', { class: 'ic-slide-ink-swatch' + (state.slideInkColor === c ? ' active' : ''), type: 'button', title: c, style: 'background:' + c + ';' });
+          sw.addEventListener('click', function () { state.slideInkColor = c; render(); });
+          drawRow.appendChild(sw);
+        });
+        var widthIn = el('input', { type: 'range', min: '1', max: '24', value: String(state.slideInkWidth), title: S.slide_draw_width, class: 'ic-slide-ink-width' });
+        widthIn.addEventListener('input', function () { state.slideInkWidth = parseInt(widthIn.value, 10) || 4; });
+        drawRow.appendChild(widthIn);
+      }
+      if (tf.ink.length) {
+        var clearInkBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_draw_clear }, [icon('trash')]);
+        clearInkBtn.addEventListener('click', function () {
+          tf.ink = [];
+          tf.anim = tf.anim.filter(function (a) { return a.key.charAt(0) !== 'i'; });
+          state.slideDrawSession = false;
+          render();
+        });
+        drawRow.appendChild(clearInkBtn);
+      }
+      slideColR.appendChild(drawRow);
       // Mischmodus der ganzen Folie mit dem Hintergrund - im Editor direkt
       // als Vorschau über dem abgebildeten Pinnwand-Ausschnitt.
       var slidePhoto = state.editingPhotoId ? state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0] : null;
@@ -6514,12 +6586,14 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           var txt = tt ? String(tt.text || '').replace(/\s+/g, ' ').trim() : '';
           return txt ? (txt.length > 28 ? txt.slice(0, 27) + '\u2026' : txt) : S.slide_obj_text + ' ' + id;
         }
+        if (key.charAt(0) === 'i') { return S.slide_obj_drawing + ' ' + (tf.ink.map(function (st) { return st.id; }).indexOf(id) + 1); }
         var sh = (tf.shapes || []).filter(function (x) { return x.id === id; })[0];
         return S.slide_obj_shape + ' ' + (sh ? (sh.type || '') : id);
       };
       var selectKey = function (key) {
         var id = parseInt(key.slice(1), 10);
         if (key.charAt(0) === 't') { state.activeShapeId = null; selectText(id); }
+        else if (key.charAt(0) === 'i') { return; }
         else { state.activeShapeId = id; state.styleTargetMode = 'shape'; render(); }
       };
       // "Abgang": Objekt verschwindet beim Wechsel zur nächsten Folie.
@@ -6557,6 +6631,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       });
       var staticKeys = tf.texts.map(function (t) { return 't' + t.id; })
         .concat((tf.shapes || []).filter(function (x) { return !x.main; }).map(function (x) { return 's' + x.id; }))
+        .concat(tf.ink.map(function (st) { return 'i' + st.id; }))
         .filter(function (k) { return !animInfo.map[k]; });
       if (staticKeys.length) {
         animList.appendChild(el('div', { class: 'ic-anim-sep' }, [S.slide_anim_static]));
@@ -6571,12 +6646,51 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         });
       }
       slideColR.appendChild(animList);
+      var inkSvgEl = slideInkSvg(tf, null);
+      frame.appendChild(inkSvgEl);
+      if (state.slideDraw) {
+        // Zeichenfläche über der Folie: Punkte 0..1 relativ zum Rahmen.
+        var drawPad = el('div', { class: 'ic-slide-draw-pad' });
+        frame.appendChild(drawPad);
+        var curInk = null, curPath = null;
+        var inkPt = function (ev) {
+          var r = frame.getBoundingClientRect();
+          return { x: Math.round((ev.clientX - r.left) / r.width * 10000) / 10000, y: Math.round((ev.clientY - r.top) / r.height * 10000) / 10000 };
+        };
+        drawPad.addEventListener('pointerdown', function (ev) {
+          if (ev.button !== 0) { return; }
+          ev.preventDefault(); ev.stopPropagation();
+          try { drawPad.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+          var nid = Math.max.apply(null, [0].concat(tf.ink.map(function (st) { return st.id; }))) + 1;
+          curInk = { id: nid, points: [inkPt(ev)], color: state.slideInkColor, width: Math.round(state.slideInkWidth / tf.h * 10000) / 10000 };
+          curPath = slideInkSvg({ w: tf.w, h: tf.h, ink: [curInk] }, null).firstChild;
+          inkSvgEl.appendChild(curPath);
+        });
+        drawPad.addEventListener('pointermove', function (ev) {
+          if (!curInk) { return; }
+          var p = inkPt(ev), last = curInk.points[curInk.points.length - 1];
+          if (Math.abs(p.x - last.x) * tf.w + Math.abs(p.y - last.y) * tf.h < 1.5) { return; }
+          curInk.points.push(p);
+          var fresh = slideInkSvg({ w: tf.w, h: tf.h, ink: [curInk] }, null).firstChild;
+          curPath.setAttribute('d', fresh.getAttribute('d'));
+        });
+        var endInk = function () {
+          if (!curInk) { return; }
+          tf.ink.push(curInk);
+          tf.anim.push({ key: 'i' + curInk.id, withPrev: !!state.slideDrawSession });
+          state.slideDrawSession = true;
+          curInk = null; curPath = null;
+          render();
+        };
+        drawPad.addEventListener('pointerup', endInk);
+        drawPad.addEventListener('pointercancel', endInk);
+      }
       // Schrittmarken an den Objekten im Rahmen (nach dem Layout messen).
       setTimeout(function () {
         if (!frame.isConnected) { return; }
         var fr = frame.getBoundingClientRect();
         Object.keys(animInfo.map).forEach(function (key) {
-          var sel = key.charAt(0) === 't' ? '[data-textid="' + key.slice(1) + '"]' : '[data-shapeid="' + key.slice(1) + '"]';
+          var sel = key.charAt(0) === 't' ? '[data-textid="' + key.slice(1) + '"]' : key.charAt(0) === 'i' ? '[data-inkid="' + key.slice(1) + '"]' : '[data-shapeid="' + key.slice(1) + '"]';
           var target = frame.querySelector(sel);
           if (!target) { return; }
           var r = target.getBoundingClientRect();
