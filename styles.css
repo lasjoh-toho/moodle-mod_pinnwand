@@ -1859,3 +1859,7 @@ input.ic-stepper-value {
 .ic-slide-ink-swatch.active { border-color: var(--ic-accent, #4f8cff); box-shadow: 0 0 0 2px rgba(79,140,255,.35); }
 .ic-slide-ink-width { width: 90px; }
 .ic-slide-draw-pad { position: absolute; inset: 0; z-index: 45; cursor: crosshair; touch-action: none; }
+.ic-slide-erase-pad { cursor: cell; }
+.ic-slide-ink-custom { width: 28px; height: 24px; padding: 0; border: none; background: none; cursor: pointer; }
+.ic-slide-ink-width-val { min-width: 2em; font-size: .85em; opacity: .8; }
+.ic-slide-text-pad { cursor: text; }

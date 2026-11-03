@@ -3054,6 +3054,22 @@
     svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('style', 'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:3;');
     (tf.ink || []).forEach(function (st) {
+      if (st.type === 'text') {
+        if (!st.text) { return; }
+        var txt = document.createElementNS(NS, 'text');
+        txt.setAttribute('x', String(st.x * tf.w));
+        txt.setAttribute('y', String(st.y * tf.h));
+        txt.setAttribute('font-size', String(st.size || 24));
+        txt.setAttribute('font-family', 'sans-serif');
+        txt.setAttribute('fill', st.color || '#ef4444');
+        txt.setAttribute('dominant-baseline', 'text-before-edge');
+        txt.setAttribute('data-inkid', String(st.id));
+        txt.textContent = st.text;
+        if (animMap && animMap['i' + st.id]) { txt.setAttribute('data-pwp-build', String(animMap['i' + st.id])); }
+        if (tf.exit && tf.exit['i' + st.id]) { txt.setAttribute('data-pwp-exit', '1'); }
+        svg.appendChild(txt);
+        return;
+      }
       if (!st.points || !st.points.length) { return; }
       var d = '';
       st.points.forEach(function (pt, i) { d += (i ? ' L' : 'M') + (Math.round(pt.x * tf.w * 10) / 10) + ' ' + (Math.round(pt.y * tf.h * 10) / 10); });
@@ -6438,41 +6454,89 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         im.src = url;
       });
       slideColR.appendChild(el('div', { class: 'ic-anim-toprow' }, [addTextBtn, upBtnImg, upInput]));
-      // Zeichnen auf der Folie (Stift wie beim Annotations-Werkzeug): die
-      // Striche einer Zeichen-Runde bilden zusammen EINEN Animationsschritt
-      // und zeichnen sich dort nacheinander in Erstellungsreihenfolge.
+      // Zeichnen wie auf der Leinwand: runder Stift-Knopf unten links, die
+      // Werkzeuge (Stift mit Stärke, Radierer, Farben, Löschen) in einer
+      // Spalte darüber. Die Striche einer Zeichen-Runde bilden zusammen
+      // EINEN Animationsschritt und zeichnen sich dort nacheinander in
+      // Erstellungsreihenfolge.
       tf.ink = tf.ink || [];
-      var drawBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn' + (state.slideDraw ? ' active' : ''), type: 'button', title: S.slide_draw_hint },
-        [icon('pen'), ' ' + S.slide_draw]);
-      drawBtn.addEventListener('click', function () {
-        state.slideDraw = !state.slideDraw;
+      state.slideInkColor = state.slideInkColor || INK_COLORS[0];
+      state.slideInkWidth = state.slideInkWidth || 4;
+      var slideStylusBar = el('div', { class: 'ic-stylus-bar ic-slide-stylus-bar' });
+      var slideStylusBtn = el('button', { class: 'ic-fab' + (state.slideDraw ? ' active' : ''), type: 'button', title: S.slide_draw_hint }, [icon('pen')]);
+      slideStylusBtn.addEventListener('click', function () {
+        state.slideDraw = state.slideDraw ? null : 'pen';
         state.slideDrawSession = false;
         render();
       });
-      var drawRow = el('div', { class: 'ic-anim-toprow ic-slide-draw-row' }, [drawBtn]);
+      slideStylusBar.appendChild(slideStylusBtn);
       if (state.slideDraw) {
-        state.slideInkColor = state.slideInkColor || '#ef4444';
-        state.slideInkWidth = state.slideInkWidth || 4;
-        ['#ef4444', '#111111', '#2563eb', '#22c55e', '#facc15', '#ffffff'].forEach(function (c) {
-          var sw = el('button', { class: 'ic-slide-ink-swatch' + (state.slideInkColor === c ? ' active' : ''), type: 'button', title: c, style: 'background:' + c + ';' });
-          sw.addEventListener('click', function () { state.slideInkColor = c; render(); });
-          drawRow.appendChild(sw);
-        });
-        var widthIn = el('input', { type: 'range', min: '1', max: '24', value: String(state.slideInkWidth), title: S.slide_draw_width, class: 'ic-slide-ink-width' });
-        widthIn.addEventListener('input', function () { state.slideInkWidth = parseInt(widthIn.value, 10) || 4; });
-        drawRow.appendChild(widthIn);
-      }
-      if (tf.ink.length) {
-        var clearInkBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_draw_clear }, [icon('trash')]);
-        clearInkBtn.addEventListener('click', function () {
-          tf.ink = [];
-          tf.anim = tf.anim.filter(function (a) { return a.key.charAt(0) !== 'i'; });
-          state.slideDrawSession = false;
+        var slideTools = el('div', { class: 'ic-stylus-tools' });
+        var setDrawTool = function (t) {
+          state.slideDraw = t;
           render();
+        };
+        var slideToolBtn = function (t, iconEl, title, flyout) {
+          var wrapT = el('div', { class: 'ic-stylus-tool' });
+          var b = el('button', { class: 'ic-icon-btn' + (state.slideDraw === t ? ' active' : ''), type: 'button', title: title }, [iconEl]);
+          b.addEventListener('click', function () { setDrawTool(t); });
+          wrapT.appendChild(b);
+          if (flyout) { wrapT.appendChild(flyout); }
+          slideTools.appendChild(wrapT);
+        };
+        var widthFly = el('div', { class: 'ic-stylus-flyout' });
+        var widthVal = el('span', { class: 'ic-stylus-flyout-val' }, [String(state.slideInkWidth)]);
+        var widthIn = el('input', { type: 'range', min: '1', max: '24', step: '1', value: String(state.slideInkWidth), class: 'ic-stylus-size', title: S.slide_draw_width });
+        widthIn.addEventListener('input', function () { state.slideInkWidth = parseInt(widthIn.value, 10) || 4; widthVal.textContent = widthIn.value; });
+        widthFly.appendChild(el('span', { class: 'ic-stylus-flyout-label' }, [S.slide_draw_width]));
+        widthFly.appendChild(widthIn);
+        widthFly.appendChild(widthVal);
+        slideToolBtn('pen', icon('pen'), S.slide_draw, widthFly);
+        var textFly = el('div', { class: 'ic-stylus-flyout' });
+        var textVal = el('span', { class: 'ic-stylus-flyout-val' }, [String(state.slideTextPx || 24)]);
+        var textIn = el('input', { type: 'range', min: '10', max: '96', step: '1', value: String(state.slideTextPx || 24), class: 'ic-stylus-size', title: S.ink_fontsize });
+        textIn.addEventListener('input', function () { state.slideTextPx = parseInt(textIn.value, 10) || 24; textVal.textContent = textIn.value; });
+        textFly.appendChild(el('span', { class: 'ic-stylus-flyout-label' }, [S.ink_fontsize]));
+        textFly.appendChild(textIn);
+        textFly.appendChild(textVal);
+        slideToolBtn('text', el('span', { class: 'ic-stylus-text-icon' }, ['T']), S.ink_tool_text, textFly);
+        var SPT = window.PinnwandPresentation;
+        var slideShapeFly = el('div', { class: 'ic-stylus-flyout ic-stylus-shape-fly' });
+        var slideShapeLabels = { rect: S.ink_shape_rect, ellipse: S.ink_shape_ellipse, line: S.ink_shape_line, poly: S.ink_shape_poly, curve: S.ink_shape_curve };
+        SPT.SHAPE_KINDS.forEach(function (k) {
+          var kb = el('button', {
+            class: 'ic-icon-btn' + (state.slideDraw === 'shape' && (state.slideShapeKind || 'rect') === k ? ' active' : ''),
+            type: 'button', title: slideShapeLabels[k], html: SPT.SHAPE_SVG[k]
+          });
+          kb.addEventListener('click', function () { state.slideShapeKind = k; setDrawTool('shape'); render(); });
+          slideShapeFly.appendChild(kb);
         });
-        drawRow.appendChild(clearInkBtn);
+        slideToolBtn('shape', el('span', { class: 'ic-stylus-svg', html: SPT.SHAPE_SVG[state.slideShapeKind || 'shapes'] }), S.ink_tool_shapes, slideShapeFly);
+        slideToolBtn('eraser', icon('eraser'), S.slide_draw_erase, null);
+        slideTools.appendChild(el('div', { class: 'ic-stylus-sep' }));
+        INK_COLORS.forEach(function (c) {
+          var sw = el('button', { class: 'ic-color-swatch' + (state.slideInkColor === c && state.slideDraw !== 'eraser' ? ' active' : ''), type: 'button', style: 'background:' + c });
+          sw.addEventListener('click', function () { state.slideInkColor = c; if (state.slideDraw === 'eraser') { setDrawTool('pen'); } render(); });
+          slideTools.appendChild(sw);
+        });
+        var slideCustomColor = el('input', { type: 'color', value: state.slideInkColor, class: 'ic-textframe-custom-color', title: S.slide_draw_color });
+        slideCustomColor.addEventListener('change', function () { state.slideInkColor = slideCustomColor.value; if (state.slideDraw === 'eraser') { setDrawTool('pen'); } render(); });
+        slideTools.appendChild(slideCustomColor);
+        if (tf.ink.length) {
+          slideTools.appendChild(el('div', { class: 'ic-stylus-sep' }));
+          var clearInkBtn = el('button', { class: 'ic-icon-btn', type: 'button', title: S.slide_draw_clear }, [icon('trash')]);
+          clearInkBtn.addEventListener('click', function () {
+            if (!confirm(S.slide_draw_clear + '?')) { return; }
+            tf.ink = [];
+            tf.anim = tf.anim.filter(function (a) { return a.key.charAt(0) !== 'i'; });
+            state.slideDrawSession = false;
+            render();
+          });
+          slideTools.appendChild(clearInkBtn);
+        }
+        slideStylusBar.appendChild(slideTools);
       }
-      slideColR.appendChild(drawRow);
+      body.appendChild(slideStylusBar);
       // Mischmodus der ganzen Folie mit dem Hintergrund - im Editor direkt
       // als Vorschau über dem abgebildeten Pinnwand-Ausschnitt.
       var slidePhoto = state.editingPhotoId ? state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0] : null;
@@ -6586,7 +6650,11 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           var txt = tt ? String(tt.text || '').replace(/\s+/g, ' ').trim() : '';
           return txt ? (txt.length > 28 ? txt.slice(0, 27) + '\u2026' : txt) : S.slide_obj_text + ' ' + id;
         }
-        if (key.charAt(0) === 'i') { return S.slide_obj_drawing + ' ' + (tf.ink.map(function (st) { return st.id; }).indexOf(id) + 1); }
+        if (key.charAt(0) === 'i') {
+          var ist = tf.ink.filter(function (st) { return st.id === id; })[0];
+          if (ist && ist.type === 'text') { return 'T ' + (ist.text.length > 26 ? ist.text.slice(0, 25) + '\u2026' : ist.text); }
+          return S.slide_obj_drawing + ' ' + (tf.ink.map(function (st) { return st.id; }).indexOf(id) + 1);
+        }
         var sh = (tf.shapes || []).filter(function (x) { return x.id === id; })[0];
         return S.slide_obj_shape + ' ' + (sh ? (sh.type || '') : id);
       };
@@ -6649,38 +6717,162 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       var inkSvgEl = slideInkSvg(tf, null);
       frame.appendChild(inkSvgEl);
       if (state.slideDraw) {
-        // Zeichenfläche über der Folie: Punkte 0..1 relativ zum Rahmen.
-        var drawPad = el('div', { class: 'ic-slide-draw-pad' });
+        // Zeichenfläche über der Folie: Punkte 0..1 relativ zum Rahmen. Wie
+        // auf der Leinwand: Stift, Text, Formen (Rechteck, Kreis, Linie:
+        // ziehen; Linienzug, Kurve: Punkte klicken, Doppelklick/Enter
+        // beendet, Esc bricht ab) und Radierer.
+        var drawPad = el('div', { class: 'ic-slide-draw-pad' + (state.slideDraw === 'eraser' ? ' ic-slide-erase-pad' : state.slideDraw === 'text' ? ' ic-slide-text-pad' : '') });
         frame.appendChild(drawPad);
-        var curInk = null, curPath = null;
+        var SPS = window.PinnwandPresentation;
+        var slideAspect = tf.w / tf.h;
+        var curInk = null, curPath = null, shapeDraft = null;
         var inkPt = function (ev) {
           var r = frame.getBoundingClientRect();
           return { x: Math.round((ev.clientX - r.left) / r.width * 10000) / 10000, y: Math.round((ev.clientY - r.top) / r.height * 10000) / 10000 };
         };
+        var nextInkId = function () { return Math.max.apply(null, [0].concat(tf.ink.map(function (st) { return st.id; }))) + 1; };
+        var newInk = function (pt) {
+          return { id: nextInkId(), points: [pt], color: state.slideInkColor, width: Math.round(state.slideInkWidth / tf.h * 10000) / 10000 };
+        };
+        var showInk = function (st) {
+          var fresh = slideInkSvg({ w: tf.w, h: tf.h, ink: [st] }, null).firstChild;
+          if (!fresh) { return; }
+          if (curPath && curPath.parentNode) { curPath.parentNode.replaceChild(fresh, curPath); } else { inkSvgEl.appendChild(fresh); }
+          curPath = fresh;
+        };
+        // Neuer Strich/Text: eigener Eintrag in der Animationsliste - innerhalb
+        // einer Zeichen-Runde mit dem vorherigen verknüpft (ein Schritt).
+        var commitInk = function (st) {
+          tf.ink.push(st);
+          tf.anim.push({ key: 'i' + st.id, withPrev: !!state.slideDrawSession });
+          state.slideDrawSession = true;
+          curInk = null; curPath = null;
+          render();
+        };
+        // Radierer: entfernt jeweils die ganze getroffene Linie (samt ihrem
+        // Animationsschritt-Eintrag); ein Schritt, den sie begonnen hat,
+        // geht an die nächste verknüpfte Linie über.
+        var erasing = false, erased = false;
+        var inkHit = function (st, px, py, tol) {
+          if (st.type === 'text') {
+            var tx = st.x * tf.w, ty = st.y * tf.h, fs = st.size || 24;
+            return px >= tx - tol && px <= tx + fs * 0.6 * String(st.text || '').length + tol && py >= ty - tol && py <= ty + fs * 1.2 + tol;
+          }
+          var pts = st.points || [], reach = tol + (st.width || 0) * tf.h / 2;
+          for (var pi = 0; pi < pts.length; pi++) {
+            var ax = pts[pi].x * tf.w, ay = pts[pi].y * tf.h;
+            var b = pts[pi + 1] || pts[pi], bx = b.x * tf.w, by = b.y * tf.h;
+            var dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+            var tt = l2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2)) : 0;
+            var qx = ax + tt * dx - px, qy = ay + tt * dy - py;
+            if (qx * qx + qy * qy <= reach * reach) { return true; }
+          }
+          return false;
+        };
+        var eraseAt = function (ev) {
+          var p = inkPt(ev), px = p.x * tf.w, py = p.y * tf.h;
+          var tol = 8 / Math.max(0.05, tfZ());
+          for (var ei = tf.ink.length - 1; ei >= 0; ei--) {
+            var st = tf.ink[ei];
+            if (!inkHit(st, px, py, tol)) { continue; }
+            var key = 'i' + st.id, ai = -1;
+            tf.anim.forEach(function (a, k) { if (a.key === key) { ai = k; } });
+            if (ai !== -1) {
+              var startedStep = !tf.anim[ai].withPrev;
+              tf.anim.splice(ai, 1);
+              if (startedStep && tf.anim[ai]) { tf.anim[ai].withPrev = false; }
+            }
+            tf.ink.splice(ei, 1);
+            var gone = inkSvgEl.querySelector('[data-inkid="' + st.id + '"]');
+            if (gone) { gone.remove(); }
+            erased = true;
+          }
+        };
+        var openSlideInkText = function (ev, pt) {
+          var fontPx = state.slideTextPx || 24;
+          var inp = el('input', { type: 'text', class: 'ic-ink-text-input ic-ink-text-live' });
+          inp.style.left = ev.clientX + 'px'; inp.style.top = ev.clientY + 'px';
+          inp.style.fontSize = (fontPx * tfZ() * frame.getBoundingClientRect().width / tf.w / tfZ()) + 'px';
+          inp.style.caretColor = state.slideInkColor;
+          document.body.appendChild(inp);
+          setTimeout(function () { inp.focus(); }, 0);
+          var live = { id: nextInkId(), type: 'text', text: '', x: pt.x, y: pt.y, color: state.slideInkColor, size: fontPx };
+          inp.addEventListener('input', function () { live.text = inp.value; showInk(live); });
+          var done = false;
+          var finish = function (keep) {
+            if (done) { return; }
+            done = true;
+            inp.remove();
+            if (keep && live.text) { commitInk(live); return; }
+            if (curPath) { curPath.remove(); curPath = null; }
+          };
+          inp.addEventListener('keydown', function (e2) {
+            e2.stopPropagation();
+            if (e2.key === 'Enter') { finish(true); } else if (e2.key === 'Escape') { finish(false); }
+          });
+          inp.addEventListener('blur', function () { finish(true); });
+        };
+        var shapeKindNow = state.slideShapeKind || 'rect';
+        var finishShape = function (cancel) {
+          if (!shapeDraft) { return; }
+          var d = shapeDraft;
+          shapeDraft = null;
+          var pts = [];
+          d.pts.forEach(function (q) {
+            var last = pts[pts.length - 1];
+            if (!last || Math.abs(last.x - q.x) * tf.w > 2 || Math.abs(last.y - q.y) * tf.h > 2) { pts.push(q); }
+          });
+          if (cancel || pts.length < 2) { if (curPath) { curPath.remove(); curPath = null; } return; }
+          if (d.drag) { pts = [pts[0], pts[pts.length - 1]]; }
+          d.stroke.points = SPS.shapePoints(shapeKindNow, pts, slideAspect, d.square);
+          commitInk(d.stroke);
+        };
+        drawPad.addEventListener('dblclick', function () { if (shapeDraft && !shapeDraft.drag) { finishShape(false); } });
+        if (state.slideShapeKeyHandler) { document.removeEventListener('keydown', state.slideShapeKeyHandler); }
+        state.slideShapeKeyHandler = function (kev) {
+          if (!shapeDraft || shapeDraft.drag || !drawPad.isConnected) { return; }
+          if (kev.key === 'Enter') { kev.preventDefault(); finishShape(false); } else if (kev.key === 'Escape') { kev.preventDefault(); finishShape(true); }
+        };
+        document.addEventListener('keydown', state.slideShapeKeyHandler);
         drawPad.addEventListener('pointerdown', function (ev) {
           if (ev.button !== 0) { return; }
           ev.preventDefault(); ev.stopPropagation();
+          var pt = inkPt(ev);
+          if (state.slideDraw === 'text') { openSlideInkText(ev, pt); return; }
+          if (state.slideDraw === 'shape' && (shapeKindNow === 'poly' || shapeKindNow === 'curve')) {
+            if (!shapeDraft) { shapeDraft = { pts: [pt], stroke: newInk(pt) }; } else { shapeDraft.pts.push(pt); }
+            shapeDraft.stroke.points = SPS.shapePoints(shapeKindNow, shapeDraft.pts.concat([pt]), slideAspect, false);
+            showInk(shapeDraft.stroke);
+            return;
+          }
           try { drawPad.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
-          var nid = Math.max.apply(null, [0].concat(tf.ink.map(function (st) { return st.id; }))) + 1;
-          curInk = { id: nid, points: [inkPt(ev)], color: state.slideInkColor, width: Math.round(state.slideInkWidth / tf.h * 10000) / 10000 };
-          curPath = slideInkSvg({ w: tf.w, h: tf.h, ink: [curInk] }, null).firstChild;
-          inkSvgEl.appendChild(curPath);
+          if (state.slideDraw === 'eraser') { erasing = true; eraseAt(ev); return; }
+          if (state.slideDraw === 'shape') { shapeDraft = { pts: [pt], drag: true, stroke: newInk(pt) }; return; }
+          curInk = newInk(pt);
+          showInk(curInk);
         });
         drawPad.addEventListener('pointermove', function (ev) {
+          if (erasing) { eraseAt(ev); return; }
+          if (shapeDraft) {
+            var sp = inkPt(ev);
+            if (shapeDraft.drag) { shapeDraft.square = ev.shiftKey; shapeDraft.pts = [shapeDraft.pts[0], sp]; }
+            shapeDraft.stroke.points = shapeDraft.drag
+              ? SPS.shapePoints(shapeKindNow, shapeDraft.pts, slideAspect, ev.shiftKey)
+              : SPS.shapePoints(shapeKindNow, shapeDraft.pts.concat([sp]), slideAspect, false);
+            showInk(shapeDraft.stroke);
+            return;
+          }
           if (!curInk) { return; }
           var p = inkPt(ev), last = curInk.points[curInk.points.length - 1];
           if (Math.abs(p.x - last.x) * tf.w + Math.abs(p.y - last.y) * tf.h < 1.5) { return; }
           curInk.points.push(p);
-          var fresh = slideInkSvg({ w: tf.w, h: tf.h, ink: [curInk] }, null).firstChild;
-          curPath.setAttribute('d', fresh.getAttribute('d'));
+          showInk(curInk);
         });
         var endInk = function () {
+          if (erasing) { erasing = false; if (erased) { erased = false; render(); } return; }
+          if (shapeDraft && shapeDraft.drag) { finishShape(false); return; }
           if (!curInk) { return; }
-          tf.ink.push(curInk);
-          tf.anim.push({ key: 'i' + curInk.id, withPrev: !!state.slideDrawSession });
-          state.slideDrawSession = true;
-          curInk = null; curPath = null;
-          render();
+          commitInk(curInk);
         };
         drawPad.addEventListener('pointerup', endInk);
         drawPad.addEventListener('pointercancel', endInk);
