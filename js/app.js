@@ -3099,12 +3099,37 @@
   // Medien auf Folien (tf.media): Bild, Video, Audio per URL bzw.
   // YouTube/Vimeo als Einbettung. x/y = Mitte, w/h relativ zur Folie.
   function slideMediaLabel(md) {
-    var name = String(md.url || '').replace(/[?#].*$/, '').split('/').filter(Boolean).pop() || md.url;
+    var name = md.name || (md.kind === 'embed' ? (/vimeo/i.test(md.url || '') ? 'Vimeo' : 'YouTube') : '') ||
+      String(md.url || '').replace(/[?#].*$/, '').split('/').filter(Boolean).pop() || md.url || '';
     var kindLabel = { image: S.slide_media_image, video: S.slide_media_video, audio: S.slide_media_audio, embed: S.slide_media_video }[md.kind] || '';
     name = decodeURIComponentSafe(name);
     return kindLabel + ': ' + (name.length > 24 ? name.slice(0, 23) + '\u2026' : name);
   }
   function decodeURIComponentSafe(x) { try { return decodeURIComponent(x); } catch (e) { return x; } }
+  // Quelle eines Mediums: eingefügte Datei (in der Pinnwand gespeichert,
+  // nur über den Dateinamen referenziert) oder verlinkte Adresse.
+  function slideMediaSrc(m) {
+    if (m.file) { return String(cfg.slidemediabase || '') + encodeURIComponent(m.file); }
+    return /^https?:\/\//i.test(m.url || '') ? m.url : '';
+  }
+  function slideMediaKindFromMime(mime, fallback) {
+    var mt = /^(image|audio|video)\//.exec(String(mime || ''));
+    return mt ? mt[1] : fallback;
+  }
+  var SLIDE_AUDIO_EMBED_MAX = 5 * 1024 * 1024;
+  // Datei hochladen bzw. von einer Adresse übernehmen (slidemedia.php).
+  function slideMediaRequest(fields) {
+    var fd = new FormData();
+    fd.append('cmid', cfg.cmid);
+    fd.append('sesskey', cfg.sesskey);
+    Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
+    return fetch(String(cfg.wwwroot || '') + '/mod/pinnwand/slidemedia.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(function (r) { return r.json(); });
+  }
+  function slideMediaMaxMb(res) {
+    var b = (res && res.maxbytes) || cfg.slidemediamax || 0;
+    return b ? String(Math.round(b / 1048576 * 10) / 10).replace('.', ',') : '?';
+  }
   function slideMediaKind(url) {
     if (/(youtube\.com\/(watch|embed|shorts)|youtu\.be\/|vimeo\.com\/)/i.test(url)) { return 'embed'; }
     if (/\.(mp4|webm|ogv|mov|m4v)(\?|#|$)/i.test(url)) { return 'video'; }
@@ -3172,7 +3197,7 @@
       style: 'position:absolute;left:' + (m.x * 100) + '%;top:' + (m.y * 100) + '%;width:' + (m.w * 100) + '%;' +
         (m.kind === 'audio' ? '' : 'height:' + (m.h * 100) + '%;') + 'transform:translate(-50%,-50%);z-index:2;box-sizing:border-box;'
     });
-    var url = /^https?:\/\//i.test(m.url || '') ? m.url : '';
+    var url = slideMediaSrc(m);
     var avUrl = url && (m.start || m.end) ? url.replace(/#.*$/, '') + '#t=' + (m.start || 0) + (m.end ? ',' + m.end : '') : url;
     var inner;
     if (m.kind === 'video') {
@@ -3181,7 +3206,10 @@
       inner = el('audio', { src: avUrl, controls: 'controls', preload: 'metadata', style: 'width:100%;display:block;' });
     } else if (m.kind === 'embed') {
       var eu = slideEmbedUrl(url, m.start, m.end);
+      // Ohne Referrer verweigert YouTube das Abspielen im Player und zeigt
+      // nur einen Link zur Seite (Fehler 153) - daher Herkunft mitsenden.
       inner = el('iframe', { src: eu, 'data-src': eu, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: 'allowfullscreen',
+        referrerpolicy: 'strict-origin-when-cross-origin',
         frameborder: '0', style: 'width:100%;height:100%;border:0;display:block;background:#000;' });
     } else {
       inner = el('img', { src: url, alt: '', draggable: 'false', style: 'width:100%;height:100%;object-fit:contain;display:block;' });
@@ -6482,13 +6510,24 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           [S.slide_add_title, function () { addText(40, 700, '', 0); }],
           [S.slide_add_text, function () { addText(24, 400, '', 0.4); }],
           [S.slide_add_list, function () { addText(24, 400, '<ul><li><br></li></ul>', 0.4); }],
-          [S.slide_add_shape, function () { menu.remove(); state.tfOpenBlocks = state.tfOpenBlocks || {}; state.tfOpenBlocks[S.tfblock_shapes] = true; render(); }]
+          [S.slide_add_shape, function () { menu.remove(); state.tfOpenBlocks = state.tfOpenBlocks || {}; state.tfOpenBlocks[S.tfblock_shapes] = true; render(); }],
+          null,
+          // Medien: genau an dieser Stelle einfügen.
+          [S.slide_add_board, function () { menu.remove(); state.slideMediaAt = at; openBoardPicker(); }, 'board'],
+          [S.slide_add_file, function () { menu.remove(); state.slideMediaAt = at; upInput.click(); }, 'file'],
+          [S.slide_add_camera, function () { menu.remove(); camBtnSlide.click(); }, 'camera'],
+          [S.slide_add_link, function () { menu.remove(); state.slideMediaAt = at; openUrlDialog(); }, 'link']
         ].forEach(function (o) {
-          var b = el('button', { class: 'ic-slide-add-item', type: 'button' }, [o[0]]);
+          if (!o) { menu.appendChild(el('div', { class: 'ic-slide-add-sep' })); return; }
+          var b = el('button', { class: 'ic-slide-add-item', type: 'button', 'data-add': o[2] || null }, [o[0]]);
           b.addEventListener('click', o[1]);
           menu.appendChild(b);
         });
         root.appendChild(menu);
+        // Menü ganz im sichtbaren Bereich halten (z. B. Plus am unteren Rand).
+        var mr = menu.getBoundingClientRect();
+        if (mr.bottom > window.innerHeight - 8) { menu.style.top = Math.max(8, window.innerHeight - 8 - mr.height) + 'px'; }
+        if (mr.right > window.innerWidth - 8) { menu.style.left = Math.max(8, window.innerWidth - 8 - mr.width) + 'px'; }
         setTimeout(function () {
           document.addEventListener('mousedown', function closeMenu(e2) {
             if (!menu.contains(e2.target)) { menu.remove(); document.removeEventListener('mousedown', closeMenu); }
@@ -6529,12 +6568,30 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       blockElems.content.appendChild(slideColR);
       var slideTopRow = el('div', { class: 'ic-anim-toprow' });
       var upBtnImg = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['+ ' + S.slide_upload_image]);
-      var upInput = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+      var upInput = el('input', { type: 'file', accept: 'image/*,audio/*,video/*', style: 'display:none' });
       upBtnImg.addEventListener('click', function () { upInput.click(); });
       upInput.addEventListener('change', function () {
         var f = upInput.files && upInput.files[0];
         upInput.value = '';
-        if (!f || !/^image\//.test(f.type) || !editingRec || !editingRec.canvasw) { return; }
+        if (!f) { return; }
+        // Audio/Video: als Datei in der Pinnwand speichern und einfügen.
+        if (/^(audio|video)\//.test(f.type)) {
+          if (cfg.slidemediamax && f.size > cfg.slidemediamax) {
+            alert(S.slide_media_toolarge.replace('{max}', slideMediaMaxMb(null)));
+            return;
+          }
+          state.slideMediaBusy = true; render();
+          slideMediaRequest({ action: 'upload', file: f }).then(function (res) {
+            state.slideMediaBusy = false;
+            if (!res || !res.file) {
+              alert(res && res.error === 'toolarge' ? S.slide_media_toolarge.replace('{max}', slideMediaMaxMb(res)) : S.slide_media_failed);
+              render(); return;
+            }
+            addSlideMedia({ kind: slideMediaKindFromMime(res.mimetype, f.type.split('/')[0]), file: res.file, name: f.name });
+          }).catch(function () { state.slideMediaBusy = false; alert(S.slide_media_failed); render(); });
+          return;
+        }
+        if (!/^image\//.test(f.type) || !editingRec || !editingRec.canvasw) { return; }
         upBtnImg.disabled = true;
         var url = URL.createObjectURL(f);
         var im = new Image();
@@ -6585,7 +6642,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         var camCancel = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.cancel]);
         camOverlay.appendChild(camVideo);
         camOverlay.appendChild(el('div', { class: 'ic-slide-cam-bar' }, [camCancel, camTake]));
-        document.body.appendChild(camOverlay);
+        root.appendChild(camOverlay);
         var camStream = null;
         var closeCam = function () {
           if (camStream) { camStream.getTracks().forEach(function (tr) { tr.stop(); }); }
@@ -6607,38 +6664,151 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           uploadSlideCanvas(c, S.slide_add_camera, camBtnSlide);
         });
       });
-      // URL: Bild, Video, Audio (Dateiadresse) oder YouTube/Vimeo.
+      // Medium (Bild/Video/Audio/Einbettung) mittig auf die Folie legen.
       tf.media = tf.media || [];
-      var urlBtnSlide = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_add_url_hint }, ['+ ' + S.slide_add_url]);
-      urlBtnSlide.addEventListener('click', function () {
-        var u = (window.prompt(S.slide_add_url_prompt, 'https://') || '').trim();
-        if (!u || u === 'https://') { return; }
-        if (!/^https?:\/\/[^\s]+$/i.test(u)) { alert(S.slide_url_invalid); return; }
-        var kind = slideMediaKind(u);
-        if (kind === 'embed' && !slideEmbedUrl(u)) { alert(S.slide_url_invalid); return; }
+      var addSlideMedia = function (entry) {
         var mid = Math.max.apply(null, [0].concat(tf.media.map(function (x) { return x.id; }))) + 1;
+        var kind = entry.kind;
         var mw = kind === 'audio' ? 0.5 : 0.45;
         var mh = kind === 'audio' ? 0.12 : mw * tf.w / tf.h * 9 / 16;
-        tf.media.push({ id: mid, kind: kind, url: u, x: 0.5, y: 0.55, w: mw, h: mh, autoplay: false });
-        if (kind === 'image') {
-          // Seitenverhältnis des Bildes übernehmen, sobald es geladen ist.
-          var probe = new Image();
-          probe.onload = function () {
-            var md = tf.media.filter(function (x) { return x.id === mid; })[0];
-            if (md && probe.naturalWidth) { md.h = Math.min(0.9, md.w * tf.w / tf.h * probe.naturalHeight / probe.naturalWidth); render(); }
+        var at = state.slideMediaAt || { x: 0.5, y: 0.55 };
+        state.slideMediaAt = null;
+        var md = { id: mid, kind: kind, x: at.x, y: at.y, w: mw, h: mh, autoplay: false };
+        ['url', 'file', 'name', 'photoid'].forEach(function (k) { if (entry[k]) { md[k] = entry[k]; } });
+        tf.media.push(md);
+        if (kind === 'image' || kind === 'video') {
+          // Seitenverhältnis übernehmen, sobald Bild bzw. Video geladen ist.
+          var src = slideMediaSrc(md);
+          var fit = function (nw, nh) {
+            if (!nw || !nh) { return; }
+            md.h = Math.min(0.9, md.w * tf.w / tf.h * nh / nw);
+            if (md.h === 0.9) { md.w = Math.min(0.9, md.h * tf.h / tf.w * nw / nh); }
+            render();
           };
-          probe.src = u;
+          if (kind === 'image') {
+            var probe = new Image();
+            probe.onload = function () { fit(probe.naturalWidth, probe.naturalHeight); };
+            probe.src = src;
+          } else {
+            var vprobe = document.createElement('video');
+            vprobe.preload = 'metadata';
+            vprobe.muted = true;
+            vprobe.onloadedmetadata = function () { fit(vprobe.videoWidth, vprobe.videoHeight); vprobe.removeAttribute('src'); };
+            vprobe.src = src;
+          }
         }
         render();
-      });
-      slideColR.appendChild(el('div', { class: 'ic-anim-toprow' }, [addTextBtn, upBtnImg, upInput, camBtnSlide, urlBtnSlide]));
+      };
+      // Über Link einfügen: Adresse eingeben, dann einfügen (Datei wird in
+      // der Pinnwand gespeichert) oder verlinkt lassen. Vorgabe: Bilder und
+      // Audio bis 5 MB werden eingefügt, Videos bleiben verlinkt,
+      // YouTube/Vimeo sind immer verlinkt.
+      var openUrlDialog = function () {
+        var dlg = el('div', { class: 'ic-slide-pick ic-slide-urldlg', role: 'dialog', 'aria-label': S.slide_add_link });
+        var box = el('div', { class: 'ic-slide-pick-box' });
+        var urlIn = el('input', { type: 'url', class: 'ic-slide-url-input', placeholder: 'https://', 'aria-label': S.slide_add_url_prompt });
+        var rEmbed = el('input', { type: 'radio', name: 'ic-slide-urlmode', value: 'embed' });
+        var rLink = el('input', { type: 'radio', name: 'ic-slide-urlmode', value: 'link' });
+        var userChose = false;
+        rEmbed.addEventListener('change', function () { userChose = true; });
+        rLink.addEventListener('change', function () { userChose = true; });
+        var info = el('p', { class: 'ic-hint' }, [S.slide_url_mode_hint]);
+        var okBtn = el('button', { class: 'ic-btn ic-btn-primary', type: 'button' }, [S.slide_insert]);
+        var cancelBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.cancel]);
+        var updateDefault = function () {
+          var u = urlIn.value.trim();
+          var kind = slideMediaKind(u);
+          rEmbed.disabled = kind === 'embed';
+          if (kind === 'embed') { rLink.checked = true; return; }
+          if (!userChose) { (kind === 'video' ? rLink : rEmbed).checked = true; }
+        };
+        urlIn.addEventListener('input', updateDefault);
+        urlIn.addEventListener('keydown', function (ev) {
+          ev.stopPropagation();
+          if (ev.key === 'Enter') { okBtn.click(); } else if (ev.key === 'Escape') { dlg.remove(); }
+        });
+        box.appendChild(el('h3', { class: 'ic-slide-pick-title' }, [S.slide_add_link]));
+        box.appendChild(urlIn);
+        box.appendChild(el('label', { class: 'ic-slide-url-mode' }, [rEmbed, ' ' + S.slide_url_mode_embed]));
+        box.appendChild(el('label', { class: 'ic-slide-url-mode' }, [rLink, ' ' + S.slide_url_mode_link]));
+        box.appendChild(info);
+        box.appendChild(el('div', { class: 'ic-slide-cam-bar' }, [cancelBtn, okBtn]));
+        dlg.appendChild(box);
+        dlg.addEventListener('pointerdown', function (ev) { if (ev.target === dlg) { dlg.remove(); } });
+        cancelBtn.addEventListener('click', function () { dlg.remove(); });
+        okBtn.addEventListener('click', function () {
+          var u = urlIn.value.trim();
+          if (!/^https?:\/\/[^\s]+$/i.test(u)) { alert(S.slide_url_invalid); urlIn.focus(); return; }
+          var kind = slideMediaKind(u);
+          if (kind === 'embed' && !slideEmbedUrl(u)) { alert(S.slide_url_invalid); return; }
+          dlg.remove();
+          if (kind === 'embed' || !rEmbed.checked) { addSlideMedia({ kind: kind, url: u }); return; }
+          var autoAudio = kind === 'audio' && !userChose;
+          state.slideMediaBusy = true; render();
+          slideMediaRequest({ action: 'url', url: u, limit: autoAudio ? SLIDE_AUDIO_EMBED_MAX : 0 }).then(function (res) {
+            state.slideMediaBusy = false;
+            if (res && res.file) {
+              addSlideMedia({ kind: slideMediaKindFromMime(res.mimetype, kind), file: res.file, url: u });
+              return;
+            }
+            // Audio über 5 MB bleibt (wie vorgesehen) verlinkt.
+            if (autoAudio && res && res.error === 'toolarge') { addSlideMedia({ kind: kind, url: u }); return; }
+            var msg = res && res.error === 'toolarge' ? S.slide_media_embed_toolarge.replace('{max}', slideMediaMaxMb(res)) : S.slide_media_embed_failed;
+            if (window.confirm(msg)) { addSlideMedia({ kind: kind, url: u }); } else { render(); }
+          }).catch(function () {
+            state.slideMediaBusy = false;
+            if (window.confirm(S.slide_media_embed_failed)) { addSlideMedia({ kind: kind, url: u }); } else { render(); }
+          });
+        });
+        root.appendChild(dlg);
+        updateDefault();
+        urlIn.focus();
+      };
+      // Von der Pinnwand: ein vorhandenes Objekt als Bild auf die Folie legen.
+      var openBoardPicker = function () {
+        var dlg = el('div', { class: 'ic-slide-pick', role: 'dialog', 'aria-label': S.slide_add_board });
+        var box = el('div', { class: 'ic-slide-pick-box ic-slide-pick-wide' });
+        var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon', type: 'button', title: S.cancel, 'aria-label': S.cancel }, ['\u2715']);
+        box.appendChild(el('div', { class: 'ic-slide-pick-head' }, [el('h3', { class: 'ic-slide-pick-title' }, [S.slide_add_board]), closeBtn]));
+        var cands = state.photos.filter(function (p) { return p.url && !p.deleted; });
+        var curBoard = editingRec ? (editingRec.boardid || 0) : (state.currentBoard || 0);
+        cands.sort(function (a, b) { return ((b.boardid || 0) === curBoard) - ((a.boardid || 0) === curBoard); });
+        var grid = el('div', { class: 'ic-slide-pick-grid' });
+        cands.forEach(function (p) {
+          var cap = itemCaptionText(p);
+          var item = el('button', { class: 'ic-slide-pick-item', type: 'button', title: cap }, [el('img', { src: p.url, alt: cap, loading: 'lazy' })]);
+          item.addEventListener('click', function () {
+            dlg.remove();
+            var abs = p.url;
+            try { abs = new URL(p.url, window.location.href).href; } catch (e) { /* bleibt */ }
+            addSlideMedia({ kind: 'image', url: abs, name: cap || S.slide_media_image, photoid: p.id });
+          });
+          grid.appendChild(item);
+        });
+        box.appendChild(cands.length ? grid : el('p', { class: 'ic-hint' }, [S.slide_add_board_empty]));
+        dlg.appendChild(box);
+        closeBtn.addEventListener('click', function () { dlg.remove(); });
+        dlg.addEventListener('pointerdown', function (ev) { if (ev.target === dlg) { dlg.remove(); } });
+        root.appendChild(dlg);
+      };
+      var urlBtnSlide = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_add_url_hint }, ['+ ' + S.slide_add_url]);
+      urlBtnSlide.addEventListener('click', openUrlDialog);
+      var boardBtnSlide = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['+ ' + S.slide_add_board]);
+      boardBtnSlide.addEventListener('click', function () { openBoardPicker(); });
+      upBtnImg.textContent = '+ ' + S.slide_add_file;
+      urlBtnSlide.textContent = '+ ' + S.slide_add_link;
+      slideColR.appendChild(el('div', { class: 'ic-anim-toprow' }, [addTextBtn, boardBtnSlide, upBtnImg, upInput, camBtnSlide, urlBtnSlide]));
       // Medienliste: Autoplay (Video/Audio/Einbettung) und Entfernen.
       if (tf.media.length) {
         var mediaList = el('div', { class: 'ic-anim-list ic-slide-media-list' });
         mediaList.appendChild(el('div', { class: 'ic-anim-sep' }, [S.slide_media]));
         tf.media.forEach(function (md) {
           var mrow = el('div', { class: 'ic-anim-row' });
-          mrow.appendChild(el('span', { class: 'ic-anim-label', title: md.url }, [slideMediaLabel(md)]));
+          mrow.appendChild(el('span', { class: 'ic-anim-label', title: md.url || md.name || '' }, [slideMediaLabel(md)]));
+          if (md.kind !== 'embed') {
+            mrow.appendChild(el('span', { class: 'ic-slide-media-src' + (md.file ? ' ic-embedded' : '') },
+              [md.file ? S.slide_media_embedded : (md.photoid ? S.slide_media_fromboard : S.slide_media_linked)]));
+          }
           if (md.kind !== 'image') {
             var apLab = el('label', { class: 'ic-slide-media-ap', title: S.slide_media_autoplay_hint });
             var apCb = el('input', { type: 'checkbox' });

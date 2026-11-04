@@ -362,18 +362,19 @@
   z-index: 15; display: flex; gap: 10px;
 }
 .ic-undo-bar {
-  position: absolute; bottom: 14px; left: 70px; z-index: 15; display: flex; gap: 8px;
+  position: absolute; bottom: 14px; left: 60px; z-index: 15; display: flex; gap: 8px;
 }
 .ic-undo-bar .ic-fab.disabled { opacity: .35; pointer-events: none; }
 .ic-fab {
-  width: 46px; height: 46px; border-radius: 50%;
-  border: none; background: rgba(20,21,24,.55); color: #fff; font-size: 1.15rem;
+  width: 40px; height: 40px; border-radius: 50%;
+  border: none; background: rgba(20,21,24,.55); color: #fff; font-size: 1.05rem;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   display: flex; align-items: center; justify-content: center; padding: 0;
 }
 .ic-fab.active { background: var(--ic-accent); }
 .ic-fab-primary { background: var(--ic-accent); }
-.ic-fab-biglabel { font-size: 1.7rem; }
+.ic-fab-biglabel { font-size: 1.5rem; }
+.ic-fab svg { width: 20px; height: 20px; }
 .ic-tablet-up { display: none; }
 @media (min-width: 600px) { .ic-tablet-up { display: flex; } }
 .ic-home-add-fab {
@@ -389,10 +390,10 @@
   display: flex; flex-direction: row; gap: 6px;
 }
 .ic-sidebar-toggle-bar .ic-icon-btn {
-  width: 46px; height: 46px;
+  width: 40px; height: 40px;
   box-shadow: 0 0 10px 2px var(--ic-board-bg-color, rgba(79,140,255,.5));
 }
-.ic-sidebar-toggle-bar .ic-icon-btn svg { width: 22px; height: 22px; }
+.ic-sidebar-toggle-bar .ic-icon-btn svg { width: 20px; height: 20px; }
 .ic-stylus-bar {
   position: absolute; bottom: 14px; left: 8px; z-index: 30;
   display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px;
@@ -1501,6 +1502,7 @@ input.ic-stepper-value {
 }
 .ic-slide-add-item { text-align: left; border: 0; background: transparent; color: var(--ic-text); padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: .85rem; }
 .ic-slide-add-item:hover { background: rgba(79,140,255,.25); }
+.ic-slide-add-sep { height: 1px; margin: 4px 6px; background: rgba(255,255,255,.12); }
 
 /* Folien = Faden-Rahmen mit Inhalt. */
 .ic-frame-slide { pointer-events: auto; }
@@ -1883,6 +1885,24 @@ input.ic-stepper-value {
 .ic-slide-media-time.ic-invalid { border-color: #e0503f; }
 .ic-slide-media-range + .ic-slide-media-ap { margin-left: 8px; }
 .ic-slide-media-ap { display: inline-flex; align-items: center; gap: 4px; font-size: .85em; margin-left: auto; white-space: nowrap; }
+/* Dialoge: Von der Pinnwand / Über Link */
+.ic-slide-pick { position: fixed; inset: 0; z-index: 10050; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+.ic-slide-pick-box { background: #1f2024; color: #f2f3f5; border-radius: 14px; padding: 16px 18px; width: min(460px, 100%); max-height: 100%;
+  overflow: auto; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+.ic-slide-pick-box.ic-slide-pick-wide { width: min(760px, 100%); }
+.ic-slide-pick-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ic-slide-pick-title { margin: 0; font-size: 1.05rem; font-weight: 600; }
+.ic-slide-pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.ic-slide-pick-item { aspect-ratio: 1; padding: 4px; border: 2px solid transparent; border-radius: 8px; background: rgba(255,255,255,.06); cursor: pointer; }
+.ic-slide-pick-item:hover, .ic-slide-pick-item:focus { border-color: #4f8cff; outline: none; }
+.ic-slide-pick-item img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ic-slide-url-input { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.25);
+  background: rgba(255,255,255,.08); color: inherit; font-size: 1rem; }
+.ic-slide-url-mode { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.ic-slide-url-mode input:disabled + * , .ic-slide-url-mode:has(input:disabled) { opacity: .5; cursor: default; }
+.ic-slide-urldlg .ic-slide-cam-bar { justify-content: flex-end; }
+.ic-slide-media-src { font-size: .75em; padding: 1px 6px; border-radius: 8px; background: rgba(255,255,255,.1); opacity: .8; white-space: nowrap; }
+.ic-slide-media-src.ic-embedded { background: rgba(79,140,255,.25); }
 /* Kamera-Aufnahme */
 .ic-slide-cam { position: fixed; inset: 0; z-index: 10050; background: rgba(0,0,0,.85); display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 14px; padding: 16px; box-sizing: border-box; }
