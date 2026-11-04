@@ -46,7 +46,7 @@
     /* Bedienelemente (Zurück/Vorwärts) OHNE grauen Kasten/Rand - nur ein
        kleiner Weichzeichner des Hintergrunds dahinter plus eine
        kontrastreiche Symbolfarbe heben sie hervor, egal was dahinter liegt. */
-    '.pwp-progress{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;',
+    '.pwp-progress{position:fixed;left:50%;bottom:4px;transform:translateX(-50%);z-index:20;',
     'display:flex;flex-direction:column;align-items:center;}',
     '.pwp-progresshint{color:rgba(255,255,255,.55);font-size:.7rem;text-align:center;margin-bottom:4px;',
     'text-shadow:0 1px 3px rgba(0,0,0,.7);pointer-events:none;}',
@@ -683,7 +683,8 @@
       previewEl.classList.add('pwp-visible');
     }
     function hidePreview() { previewEl.classList.remove('pwp-visible'); }
-    counter.addEventListener('mouseenter', function () { progressEl.classList.add('pwp-open'); });
+    // Folienstapel öffnet sich erst per Klick auf die Zähler-Anzeige (nicht
+    // schon beim Darüberfahren); Verlassen des Bereichs schließt ihn wieder.
     progressEl.addEventListener('mouseleave', function () { progressEl.classList.remove('pwp-open'); hidePreview(); });
 
     function renderStack() {
@@ -888,7 +889,8 @@
     zoneNext.addEventListener('click', function () { step(1); });
     prevBtn.addEventListener('click', function () { step(-1); });
     nextBtn.addEventListener('click', function () { step(1); });
-    counter.addEventListener('click', function () { goToStep(overviewIndex()); });
+    counter.addEventListener('click', function () { progressEl.classList.toggle('pwp-open'); if (!progressEl.classList.contains('pwp-open')) { hidePreview(); } });
+    counter.addEventListener('dblclick', function () { progressEl.classList.remove('pwp-open'); hidePreview(); goToStep(overviewIndex()); });
 
     // Manuelles Verschieben/Zoomen zwischen den Stationen (Ziehen auf der
     // Fläche, Mausrad, Pinch) - aktualisiert currentTransform direkt, damit

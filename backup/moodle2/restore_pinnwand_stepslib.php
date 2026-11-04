@@ -102,6 +102,10 @@ class restore_pinnwand_activity_structure_step extends restore_activity_structur
         // Editor-Dateien der Aktivitätsbeschreibung.
         $this->add_related_files('mod_pinnwand', 'intro', null);
 
+        // Medien der Folien (Dateiname bleibt gleich, die Folien verweisen
+        // nur über den Namen darauf).
+        $this->add_related_files('mod_pinnwand', 'slidemedia', null);
+
         // Persönliche Hintergrundbilder: itemid bleibt die ursprüngliche
         // Nutzer-ID. Bekannte Einschränkung (siehe backup_pinnwand_stepslib.php
         // und IMPLEMENTATION_PLAN.md): funktioniert nur korrekt, solange sich

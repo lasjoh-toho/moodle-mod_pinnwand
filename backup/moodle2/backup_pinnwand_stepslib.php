@@ -95,6 +95,9 @@ class backup_pinnwand_activity_structure_step extends backup_activity_structure_
         $photo->annotate_files('mod_pinnwand', 'photoorig', 'id');
         $photo->annotate_files('mod_pinnwand', 'photomask', 'id');
 
+        // Medien der Folien (Bild/Audio/Video), itemid immer 0.
+        $pinnwand->annotate_files('mod_pinnwand', 'slidemedia', null);
+
         if ($userinfo) {
             // Persönliche Hintergrundbilder (Anordnungs-Leinwand) - itemid ist
             // dort die Nutzer-ID, nicht an eine Zeile dieser Struktur gebunden.

@@ -73,6 +73,22 @@ function pinnwand_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
         return;
     }
 
+    if ($filearea === 'slidemedia') {
+        // Medien von Folien (Bild/Audio/Video): wer die Aktivität sehen
+        // darf, darf sie abspielen (Präsentation).
+        require_capability('mod/pinnwand:view', $context);
+        $itemid = (int) array_shift($args);
+        $filename = array_pop($args);
+        $filepath = $args ? '/' . implode('/', $args) . '/' : '/';
+        $fs = get_file_storage();
+        $file = $fs->get_file($context->id, 'mod_pinnwand', 'slidemedia', $itemid, $filepath, $filename);
+        if (!$file || $file->is_directory()) {
+            return false;
+        }
+        send_stored_file($file, 86400, 0, $forcedownload, $options);
+        return;
+    }
+
     if ($filearea !== 'photo' && $filearea !== 'photoorig' && $filearea !== 'photomask') {
         return false;
     }
