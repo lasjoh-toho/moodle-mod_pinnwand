@@ -2980,6 +2980,10 @@
     tf.isSlide = true; tf.isWordArt = true;
     state.textFrame = tf;
     state.slideDraw = false;
+    // Titel: eigener (von Hand gesetzter) Titel bleibt; sonst folgt er der
+    // ersten Textzeile (tf.titleAuto merkt sich, dass er automatisch war).
+    state.slideTitleManual = !!it.framelabel && !tf.titleAuto;
+    state.slideTitle = state.slideTitleManual ? it.framelabel : '';
     state.wordArtMode = true;
     state.editingPhotoId = null;
     state.editingFrameItemId = it.id;
@@ -3092,6 +3096,105 @@
     return svg;
   }
 
+  // Medien auf Folien (tf.media): Bild, Video, Audio per URL bzw.
+  // YouTube/Vimeo als Einbettung. x/y = Mitte, w/h relativ zur Folie.
+  function slideMediaLabel(md) {
+    var name = String(md.url || '').replace(/[?#].*$/, '').split('/').filter(Boolean).pop() || md.url;
+    var kindLabel = { image: S.slide_media_image, video: S.slide_media_video, audio: S.slide_media_audio, embed: S.slide_media_video }[md.kind] || '';
+    name = decodeURIComponentSafe(name);
+    return kindLabel + ': ' + (name.length > 24 ? name.slice(0, 23) + '\u2026' : name);
+  }
+  function decodeURIComponentSafe(x) { try { return decodeURIComponent(x); } catch (e) { return x; } }
+  function slideMediaKind(url) {
+    if (/(youtube\.com\/(watch|embed|shorts)|youtu\.be\/|vimeo\.com\/)/i.test(url)) { return 'embed'; }
+    if (/\.(mp4|webm|ogv|mov|m4v)(\?|#|$)/i.test(url)) { return 'video'; }
+    if (/\.(mp3|wav|oga|ogg|m4a|aac|flac|opus)(\?|#|$)/i.test(url)) { return 'audio'; }
+    return 'image';
+  }
+  function slideEmbedUrl(url, start, end) {
+    var m = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{6,})/i.exec(url);
+    if (m) {
+      return 'https://www.youtube-nocookie.com/embed/' + m[1] + '?rel=0' +
+        (start ? '&start=' + Math.floor(start) : '') + (end ? '&end=' + Math.ceil(end) : '');
+    }
+    var v = /vimeo\.com\/(?:video\/)?(\d+)/i.exec(url);
+    if (v) { return 'https://player.vimeo.com/video/' + v[1] + '?' + (start ? '#t=' + Math.floor(start) + 's' : ''); }
+    return '';
+  }
+  // Zeitangaben "von/bis": 90, 1:30 oder 1:02:03 -> Sekunden (null = leer).
+  function parseMediaTime(str) {
+    str = String(str || '').trim().replace(',', '.');
+    if (!str) { return null; }
+    if (!/^\d+(?::\d{1,2}){0,2}(?:\.\d+)?$/.test(str)) { return NaN; }
+    return str.split(':').reduce(function (acc, part) { return acc * 60 + parseFloat(part); }, 0);
+  }
+  function formatMediaTime(sec) {
+    if (sec === null || sec === undefined || isNaN(sec)) { return ''; }
+    var h = Math.floor(sec / 3600), mi = Math.floor((sec % 3600) / 60), se = sec % 60;
+    var ss = (Math.round(se * 10) / 10).toString();
+    if (se < 10) { ss = '0' + ss; }
+    return (h ? h + ':' + (mi < 10 ? '0' : '') : '') + mi + ':' + ss;
+  }
+  // Video/Audio nur im Abschnitt von/bis abspielen: Start springt auf
+  // "von", bei "bis" hält es an; erneutes Abspielen beginnt wieder bei "von".
+  // Die Zeiten stehen als data-Attribute am Element, ein Listener auf dem
+  // Dokument gilt so auch für Kopien (z. B. in der Präsentation).
+  function applyMediaRange(av, start, end) {
+    if (start) { av.setAttribute('data-pwp-start', String(start)); }
+    if (end) { av.setAttribute('data-pwp-end', String(end)); }
+    if (applyMediaRange.installed) { return; }
+    applyMediaRange.installed = true;
+    var onEv = function (ev) {
+      var t = ev.target;
+      if (!t || (t.tagName !== 'VIDEO' && t.tagName !== 'AUDIO')) { return; }
+      var st = parseFloat(t.getAttribute('data-pwp-start')) || 0;
+      var en = parseFloat(t.getAttribute('data-pwp-end')) || 0;
+      if (!st && !en) { return; }
+      if (ev.type === 'loadedmetadata') {
+        if (st && t.currentTime < st) { t.currentTime = st; }
+      } else if (ev.type === 'play') {
+        if (t.currentTime < st - 0.3 || (en && t.currentTime >= en - 0.05)) { t.currentTime = st; }
+      } else if (en && t.currentTime >= en && !t.paused) {
+        t.pause();
+      }
+    };
+    document.addEventListener('loadedmetadata', onEv, true);
+    document.addEventListener('play', onEv, true);
+    document.addEventListener('timeupdate', onEv, true);
+  }
+  // Ein Medien-Objekt als Element (Pinnwand, Präsentation, Editor). Die
+  // Präsentation (presentation-player.js) startet Elemente mit
+  // data-pwp-autoplay, sobald sie sichtbar werden, und hält sie beim
+  // Verlassen an; ein von Hand gestartetes Video füllt die ganze Folie.
+  function buildSlideMediaEl(m, animMap, tf, editor) {
+    var box = el('div', {
+      class: 'ic-slide-media pwp-media ic-slide-media-' + m.kind, 'data-mediaid': String(m.id),
+      style: 'position:absolute;left:' + (m.x * 100) + '%;top:' + (m.y * 100) + '%;width:' + (m.w * 100) + '%;' +
+        (m.kind === 'audio' ? '' : 'height:' + (m.h * 100) + '%;') + 'transform:translate(-50%,-50%);z-index:2;box-sizing:border-box;'
+    });
+    var url = /^https?:\/\//i.test(m.url || '') ? m.url : '';
+    var avUrl = url && (m.start || m.end) ? url.replace(/#.*$/, '') + '#t=' + (m.start || 0) + (m.end ? ',' + m.end : '') : url;
+    var inner;
+    if (m.kind === 'video') {
+      inner = el('video', { src: avUrl, controls: 'controls', playsinline: 'playsinline', preload: 'metadata', style: 'width:100%;height:100%;object-fit:contain;background:#000;display:block;' });
+    } else if (m.kind === 'audio') {
+      inner = el('audio', { src: avUrl, controls: 'controls', preload: 'metadata', style: 'width:100%;display:block;' });
+    } else if (m.kind === 'embed') {
+      var eu = slideEmbedUrl(url, m.start, m.end);
+      inner = el('iframe', { src: eu, 'data-src': eu, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: 'allowfullscreen',
+        frameborder: '0', style: 'width:100%;height:100%;border:0;display:block;background:#000;' });
+    } else {
+      inner = el('img', { src: url, alt: '', draggable: 'false', style: 'width:100%;height:100%;object-fit:contain;display:block;' });
+    }
+    if (m.kind === 'video' || m.kind === 'audio') { applyMediaRange(inner, m.start, m.end); }
+    if (editor && inner.tagName !== 'IMG') { inner.style.pointerEvents = 'none'; }
+    box.appendChild(inner);
+    if (m.autoplay && m.kind !== 'image') { box.setAttribute('data-pwp-autoplay', '1'); }
+    if (animMap && animMap['m' + m.id]) { box.setAttribute('data-pwp-build', String(animMap['m' + m.id])); }
+    if (tf && tf.exit && tf.exit['m' + m.id]) { box.setAttribute('data-pwp-exit', '1'); }
+    return box;
+  }
+
   // Animationsschritte einer Folie: tf.anim ist die Reihenfolge
   // [{key:'t<id>'|'s<id>'|'i<id>', withPrev}] - jedes Objekt erscheint in seinem
   // Schritt (withPrev = zusammen mit dem vorherigen). Nicht aufgeführte
@@ -3101,6 +3204,7 @@
     (tf.texts || []).forEach(function (t) { exists['t' + t.id] = true; });
     (tf.shapes || []).forEach(function (sh) { if (!sh.main) { exists['s' + sh.id] = true; } });
     (tf.ink || []).forEach(function (st) { exists['i' + st.id] = true; });
+    (tf.media || []).forEach(function (md) { exists['m' + md.id] = true; });
     var map = {}, step = 0;
     (tf.anim || []).forEach(function (a) {
       if (!a || !exists[a.key] || map[a.key]) { return; }
@@ -3774,6 +3878,9 @@
       outer.appendChild(textEl2);
       textElByIdx[idx] = textEl2;
     });
+    if (tf.isSlide) {
+      (tf.media || []).forEach(function (md) { outer.appendChild(buildSlideMediaEl(md, animMap, tf, false)); });
+    }
     if (tf.isSlide && tf.ink && tf.ink.length) { outer.appendChild(slideInkSvg(tf, animMap)); }
     applyTextWrapLive(tf, textElByIdx, inner);
     return outer;
@@ -4370,11 +4477,17 @@
     var svg;
     try { svg = buildTextFrameSVG(tf); } catch (e) { alert(S.error_save + ' (' + e.message + ')'); saveBtn.disabled = false; return; }
     var fg = currentFrameGeom(it, tf);
+    var newLabel = state.slideTitleManual ? String(state.slideTitle || '').trim() : slideAutoTitle(tf);
+    tf.titleAuto = !state.slideTitleManual;
     var data = JSON.stringify(tf);
     embedFontsInSVG(svg, tf).then(function (finalSvg) {
       return callAjax('mod_pinnwand_set_frame_content', { cmid: cfg.cmid, itemid: it.id, framedata: data, framesvg: finalSvg });
     }).then(function () {
       it.framedata = data;
+      if (newLabel !== (it.framelabel || '')) {
+        it.framelabel = newLabel;
+        callAjax('mod_pinnwand_set_frame_label', { cmid: cfg.cmid, itemid: it.id, framelabel: newLabel }).catch(function () { /* Titel bleibt lokal */ });
+      }
       var moved = Math.abs(fg.x - it.framex) > 0.01 || Math.abs(fg.y - it.framey) > 0.01 ||
         Math.abs(fg.w - it.framew) > 0.01 || Math.abs(fg.h - it.frameh) > 0.01;
       if (!moved) { return null; }
@@ -6432,13 +6545,23 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           c.width = Math.max(1, Math.round(im.naturalWidth * sc)); c.height = Math.max(1, Math.round(im.naturalHeight * sc));
           c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
           URL.revokeObjectURL(url);
+          uploadSlideCanvas(c, f.name.replace(/\.[^.]+$/, ''), upBtnImg);
+        };
+        im.src = url;
+      });
+      // Bild (Datei oder Kamera) als verknüpftes Pinnwand-Objekt über der
+      // Folie ablegen.
+      var uploadSlideCanvas = function (c, title, btn) {
+        if (!editingRec || !editingRec.canvasw) { return; }
+        btn.disabled = true;
+        (function () {
           var w = Math.max(60, editingRec.canvasw * 0.4), h = w * c.height / c.width;
           var fh = editingRec.canvasw * tf.h / tf.w;
           var nx = (editingRec.fg ? editingRec.fg.x : editingRec.canvasx) + editingRec.canvasw / 2 - w / 2;
           var ny = (editingRec.fg ? editingRec.fg.y : editingRec.canvasy) + fh / 2 - h / 2;
           callAjax('mod_pinnwand_save_photo', {
             cmid: cfg.cmid, imagedata: canvasDataUrl(c, 0.85), gridtype: 'none', gridvalue: 0, consent: false,
-            sourcetitle: f.name.replace(/\.[^.]+$/, ''), sourceauthor: '', sourceyear: '', sourceepoch: '',
+            sourcetitle: title, sourceauthor: '', sourceyear: '', sourceepoch: '',
             sourceplace: '', sourceorigauthor: '', boardid: state.currentBoard || 0
           }).then(function (res) {
             if (!res || !res.photoid) { throw new Error('save'); }
@@ -6449,11 +6572,110 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
                   z: (editingRec.canvasz || 0) + 1, boardid: state.currentBoard || 0
                 });
               }).then(function () { tf.linked = tf.linked || []; tf.linked.push(res.photoid); return refreshPhotos(); });
-          }).then(function () { render(); }).catch(function () { upBtnImg.disabled = false; alert(S.bulk_failed.replace('{failed}', 1)); });
+          }).then(function () { render(); }).catch(function () { btn.disabled = false; alert(S.bulk_failed.replace('{failed}', 1)); });
+        })();
+      };
+      // Kamera: Livebild, "Aufnehmen" legt das Foto wie ein hochgeladenes Bild ab.
+      var camBtnSlide = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['+ ' + S.slide_add_camera]);
+      camBtnSlide.addEventListener('click', function () {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert(S.camera_error); return; }
+        var camOverlay = el('div', { class: 'ic-slide-cam' });
+        var camVideo = el('video', { autoplay: 'autoplay', playsinline: 'playsinline', muted: 'muted' });
+        var camTake = el('button', { class: 'ic-btn ic-btn-primary', type: 'button' }, [icon('camera'), ' ' + S.slide_camera_take]);
+        var camCancel = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.cancel]);
+        camOverlay.appendChild(camVideo);
+        camOverlay.appendChild(el('div', { class: 'ic-slide-cam-bar' }, [camCancel, camTake]));
+        document.body.appendChild(camOverlay);
+        var camStream = null;
+        var closeCam = function () {
+          if (camStream) { camStream.getTracks().forEach(function (tr) { tr.stop(); }); }
+          camOverlay.remove();
         };
-        im.src = url;
+        camCancel.addEventListener('click', closeCam);
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).then(function (stream) {
+          camStream = stream;
+          camVideo.muted = true;
+          camVideo.srcObject = stream;
+        }).catch(function () { closeCam(); alert(S.camera_error); });
+        camTake.addEventListener('click', function () {
+          if (!camVideo.videoWidth) { return; }
+          var sc = Math.min(1, 1800 / Math.max(camVideo.videoWidth, camVideo.videoHeight));
+          var c = document.createElement('canvas');
+          c.width = Math.round(camVideo.videoWidth * sc); c.height = Math.round(camVideo.videoHeight * sc);
+          c.getContext('2d').drawImage(camVideo, 0, 0, c.width, c.height);
+          closeCam();
+          uploadSlideCanvas(c, S.slide_add_camera, camBtnSlide);
+        });
       });
-      slideColR.appendChild(el('div', { class: 'ic-anim-toprow' }, [addTextBtn, upBtnImg, upInput]));
+      // URL: Bild, Video, Audio (Dateiadresse) oder YouTube/Vimeo.
+      tf.media = tf.media || [];
+      var urlBtnSlide = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_add_url_hint }, ['+ ' + S.slide_add_url]);
+      urlBtnSlide.addEventListener('click', function () {
+        var u = (window.prompt(S.slide_add_url_prompt, 'https://') || '').trim();
+        if (!u || u === 'https://') { return; }
+        if (!/^https?:\/\/[^\s]+$/i.test(u)) { alert(S.slide_url_invalid); return; }
+        var kind = slideMediaKind(u);
+        if (kind === 'embed' && !slideEmbedUrl(u)) { alert(S.slide_url_invalid); return; }
+        var mid = Math.max.apply(null, [0].concat(tf.media.map(function (x) { return x.id; }))) + 1;
+        var mw = kind === 'audio' ? 0.5 : 0.45;
+        var mh = kind === 'audio' ? 0.12 : mw * tf.w / tf.h * 9 / 16;
+        tf.media.push({ id: mid, kind: kind, url: u, x: 0.5, y: 0.55, w: mw, h: mh, autoplay: false });
+        if (kind === 'image') {
+          // Seitenverhältnis des Bildes übernehmen, sobald es geladen ist.
+          var probe = new Image();
+          probe.onload = function () {
+            var md = tf.media.filter(function (x) { return x.id === mid; })[0];
+            if (md && probe.naturalWidth) { md.h = Math.min(0.9, md.w * tf.w / tf.h * probe.naturalHeight / probe.naturalWidth); render(); }
+          };
+          probe.src = u;
+        }
+        render();
+      });
+      slideColR.appendChild(el('div', { class: 'ic-anim-toprow' }, [addTextBtn, upBtnImg, upInput, camBtnSlide, urlBtnSlide]));
+      // Medienliste: Autoplay (Video/Audio/Einbettung) und Entfernen.
+      if (tf.media.length) {
+        var mediaList = el('div', { class: 'ic-anim-list ic-slide-media-list' });
+        mediaList.appendChild(el('div', { class: 'ic-anim-sep' }, [S.slide_media]));
+        tf.media.forEach(function (md) {
+          var mrow = el('div', { class: 'ic-anim-row' });
+          mrow.appendChild(el('span', { class: 'ic-anim-label', title: md.url }, [slideMediaLabel(md)]));
+          if (md.kind !== 'image') {
+            var apLab = el('label', { class: 'ic-slide-media-ap', title: S.slide_media_autoplay_hint });
+            var apCb = el('input', { type: 'checkbox' });
+            apCb.checked = !!md.autoplay;
+            apCb.addEventListener('change', function () { md.autoplay = apCb.checked; render(); });
+            apLab.appendChild(apCb);
+            apLab.appendChild(document.createTextNode(' ' + S.slide_media_autoplay));
+            // Abschnitt von/bis (leer = Anfang bzw. Ende).
+            var rangeWrap = el('span', { class: 'ic-slide-media-range', title: S.slide_media_range_hint });
+            [['start', S.slide_media_from], ['end', S.slide_media_to]].forEach(function (def) {
+              var tin = el('input', { type: 'text', class: 'ic-slide-media-time', placeholder: def[0] === 'start' ? '0:00' : '\u2013',
+                'aria-label': def[1], value: formatMediaTime(md[def[0]]) });
+              tin.addEventListener('keydown', function (ev) { ev.stopPropagation(); if (ev.key === 'Enter') { tin.blur(); } });
+              tin.addEventListener('change', function () {
+                var v = parseMediaTime(tin.value);
+                if (v !== null && (isNaN(v) || v < 0)) { tin.classList.add('ic-invalid'); return; }
+                tin.classList.remove('ic-invalid');
+                if (v === null || (def[0] === 'start' && v === 0)) { delete md[def[0]]; } else { md[def[0]] = v; }
+                render();
+              });
+              rangeWrap.appendChild(el('span', { class: 'ic-slide-media-time-lab' }, [def[1]]));
+              rangeWrap.appendChild(tin);
+            });
+            mrow.appendChild(rangeWrap);
+            mrow.appendChild(apLab);
+          }
+          var mDel = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button', title: S.slide_media_remove }, ['\u2715']);
+          mDel.addEventListener('click', function () {
+            tf.media = tf.media.filter(function (x) { return x !== md; });
+            tf.anim = tf.anim.filter(function (a) { return a.key !== 'm' + md.id; });
+            render();
+          });
+          mrow.appendChild(mDel);
+          mediaList.appendChild(mrow);
+        });
+        slideColR.appendChild(mediaList);
+      }
       // Zeichnen wie auf der Leinwand: runder Stift-Knopf unten links, die
       // Werkzeuge (Stift mit Stärke, Radierer, Farben, Löschen) in einer
       // Spalte darüber. Die Striche einer Zeichen-Runde bilden zusammen
@@ -6650,6 +6872,10 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           var txt = tt ? String(tt.text || '').replace(/\s+/g, ' ').trim() : '';
           return txt ? (txt.length > 28 ? txt.slice(0, 27) + '\u2026' : txt) : S.slide_obj_text + ' ' + id;
         }
+        if (key.charAt(0) === 'm') {
+          var mdl = (tf.media || []).filter(function (x) { return x.id === id; })[0];
+          return mdl ? slideMediaLabel(mdl) : S.slide_media;
+        }
         if (key.charAt(0) === 'i') {
           var ist = tf.ink.filter(function (st) { return st.id === id; })[0];
           if (ist && ist.type === 'text') { return 'T ' + (ist.text.length > 26 ? ist.text.slice(0, 25) + '\u2026' : ist.text); }
@@ -6661,7 +6887,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       var selectKey = function (key) {
         var id = parseInt(key.slice(1), 10);
         if (key.charAt(0) === 't') { state.activeShapeId = null; selectText(id); }
-        else if (key.charAt(0) === 'i') { return; }
+        else if (key.charAt(0) === 'i' || key.charAt(0) === 'm') { return; }
         else { state.activeShapeId = id; state.styleTargetMode = 'shape'; render(); }
       };
       // "Abgang": Objekt verschwindet beim Wechsel zur nächsten Folie.
@@ -6700,6 +6926,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       var staticKeys = tf.texts.map(function (t) { return 't' + t.id; })
         .concat((tf.shapes || []).filter(function (x) { return !x.main; }).map(function (x) { return 's' + x.id; }))
         .concat(tf.ink.map(function (st) { return 'i' + st.id; }))
+        .concat(tf.media.map(function (md) { return 'm' + md.id; }))
         .filter(function (k) { return !animInfo.map[k]; });
       if (staticKeys.length) {
         animList.appendChild(el('div', { class: 'ic-anim-sep' }, [S.slide_anim_static]));
@@ -6714,8 +6941,69 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         });
       }
       slideColR.appendChild(animList);
+      tf.media.forEach(function (md) {
+        var mbox = buildSlideMediaEl(md, null, null, true);
+        mbox.classList.add('ic-slide-media-edit');
+        var mgrip = el('div', { class: 'ic-slide-media-grip' });
+        var msize = el('div', { class: 'ic-slide-media-size' });
+        mbox.appendChild(mgrip);
+        mbox.appendChild(msize);
+        var mdrag = null;
+        var mDown = function (ev, mode) {
+          if (state.slideDraw) { return; }
+          ev.preventDefault(); ev.stopPropagation();
+          var r = frame.getBoundingClientRect();
+          mdrag = { mode: mode, sx: ev.clientX, sy: ev.clientY, x: md.x, y: md.y, w: md.w, h: md.h, fw: r.width, fh: r.height, ar: md.h / md.w };
+          try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+        };
+        var mMove = function (ev) {
+          if (!mdrag) { return; }
+          var dx = (ev.clientX - mdrag.sx) / mdrag.fw, dy = (ev.clientY - mdrag.sy) / mdrag.fh;
+          if (mdrag.mode === 'move') {
+            md.x = Math.max(0, Math.min(1, mdrag.x + dx)); md.y = Math.max(0, Math.min(1, mdrag.y + dy));
+            mbox.style.left = (md.x * 100) + '%'; mbox.style.top = (md.y * 100) + '%';
+          } else {
+            md.w = Math.max(0.05, Math.min(1.5, mdrag.w + dx * 2));
+            md.h = md.kind === 'audio' ? md.h : (ev.shiftKey ? Math.max(0.05, mdrag.h + dy * 2) : md.w * mdrag.ar);
+            mbox.style.width = (md.w * 100) + '%';
+            if (md.kind !== 'audio') { mbox.style.height = (md.h * 100) + '%'; }
+          }
+        };
+        var mUp = function () { if (mdrag) { mdrag = null; render(); } };
+        [[mgrip, 'move'], [msize, 'size']].forEach(function (pair) {
+          pair[0].addEventListener('pointerdown', function (ev) { mDown(ev, pair[1]); });
+          pair[0].addEventListener('pointermove', mMove);
+          pair[0].addEventListener('pointerup', mUp);
+          pair[0].addEventListener('pointercancel', mUp);
+        });
+        frame.appendChild(mbox);
+      });
       var inkSvgEl = slideInkSvg(tf, null);
       frame.appendChild(inkSvgEl);
+      // Titelzeile über der Folie: leer gelassen folgt sie der ersten
+      // Textzeile; erscheint auch in der Seitenleiste.
+      if (editingFrameItem()) {
+        var titleIn = el('input', {
+          class: 'ic-slide-title', type: 'text', placeholder: S.slide_title_placeholder, 'aria-label': S.slide_title,
+          value: state.slideTitleManual ? (state.slideTitle || '') : slideAutoTitle(tf)
+        });
+        titleIn.classList.toggle('ic-slide-title-auto', !state.slideTitleManual);
+        titleIn.addEventListener('input', function () {
+          state.slideTitle = titleIn.value;
+          state.slideTitleManual = titleIn.value.trim() !== '';
+          titleIn.classList.toggle('ic-slide-title-auto', !state.slideTitleManual);
+        });
+        titleIn.addEventListener('blur', function () {
+          if (!state.slideTitleManual) { titleIn.value = slideAutoTitle(tf); }
+        });
+        titleIn.addEventListener('keydown', function (ev) { ev.stopPropagation(); if (ev.key === 'Enter') { titleIn.blur(); } });
+        titleIn.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+        frame.appendChild(titleIn);
+        frame.addEventListener('input', function (ev) {
+          if (ev.target === titleIn || state.slideTitleManual) { return; }
+          titleIn.value = slideAutoTitle(tf);
+        });
+      }
       if (state.slideDraw) {
         // Zeichenfläche über der Folie: Punkte 0..1 relativ zum Rahmen. Wie
         // auf der Leinwand: Stift, Text, Formen (Rechteck, Kreis, Linie:
@@ -6882,7 +7170,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         if (!frame.isConnected) { return; }
         var fr = frame.getBoundingClientRect();
         Object.keys(animInfo.map).forEach(function (key) {
-          var sel = key.charAt(0) === 't' ? '[data-textid="' + key.slice(1) + '"]' : key.charAt(0) === 'i' ? '[data-inkid="' + key.slice(1) + '"]' : '[data-shapeid="' + key.slice(1) + '"]';
+          var sel = key.charAt(0) === 't' ? '[data-textid="' + key.slice(1) + '"]' : key.charAt(0) === 'i' ? '[data-inkid="' + key.slice(1) + '"]' : key.charAt(0) === 'm' ? '[data-mediaid="' + key.slice(1) + '"]' : '[data-shapeid="' + key.slice(1) + '"]';
           var target = frame.querySelector(sel);
           if (!target) { return; }
           var r = target.getBoundingClientRect();
@@ -6973,6 +7261,19 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     // Beschneiden bei schräger WordArt) konkret nachvollziehen zu können,
     // statt zu mutmaßen. Im neuen Tab lässt sich per Rechtsklick →
     // "Element untersuchen" die genaue viewBox/Breite/Höhe ablesen.
+    // Folie abspielen: Präsentation ab dieser Folie mit dem aktuellen
+    // (noch nicht gespeicherten) Inhalt; danach zurück in den Editor.
+    var playFrameIt = tf.isSlide ? editingFrameItem() : null;
+    if (playFrameIt) {
+      var slidePlayBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon', type: 'button', title: S.slide_play, 'aria-label': S.slide_play }, [icon('play')]);
+      slidePlayBtn.addEventListener('click', function () {
+        var savedData = playFrameIt.framedata;
+        playFrameIt.framedata = JSON.stringify(tf);
+        var opened = openPresentationAtItem('frame', playFrameIt.id, function () { playFrameIt.framedata = savedData; });
+        if (!opened) { playFrameIt.framedata = savedData; }
+      });
+      tfHeaderRight.appendChild(slidePlayBtn);
+    }
     tfHeaderRight.appendChild(cancelWizardBtn(true));
     // Direkt senden: speichert UND schickt das Objekt sofort in den
     // Post-Stream der Masterpinnwand (hiddenfromboard=0), statt erst über
@@ -9994,7 +10295,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         }
         var frameLabelEl = el('span', {
           class: 'ic-thread-item-label ic-thread-item-label-editable', contenteditable: 'true'
-        }, [entry.ref.framelabel || S.emptyframe]);
+        }, [frameDisplayLabel(entry.ref)]);
         var layerLabelEditing = false;
         frameLabelEl.addEventListener('mousedown', function (ev) { if (!layerLabelEditing) { ev.preventDefault(); } });
         frameLabelEl.addEventListener('dblclick', function (ev) {
@@ -10014,7 +10315,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           layerLabelEditing = false;
           var text = frameLabelEl.textContent.trim();
           entry.ref.framelabel = text;
-          if (!text) { frameLabelEl.textContent = S.emptyframe; }
+          if (!text) { frameLabelEl.textContent = frameDisplayLabel(entry.ref); }
           callAjax('mod_pinnwand_set_frame_label', { cmid: cfg.cmid, itemid: entry.ref.id, framelabel: text });
         });
         row.appendChild(frameLabelEl);
@@ -10101,7 +10402,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   // Öffnet die Präsentation direkt an der Station eines bestimmten Objekts
   // (Doppelklick auf ein Foto/Rahmen im Layer- oder Faden-Modus) - nur
   // möglich, wenn das Objekt tatsächlich Teil des eigenen Fadens ist.
-  function openPresentationAtItem(kind, id) {
+  function openPresentationAtItem(kind, id, onClose) {
     var own = ownThread();
     if (!own || !own.items.length) { return false; }
     // Index bezieht sich auf die nach dem aktuellen Board gefilterte Liste
@@ -10115,7 +10416,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       if (kind === 'frame' && it.itemtype === 'frame' && it.id === id) { idx = i; break; }
     }
     if (idx === -1) { return false; }
-    return openPresentation(own, idx);
+    return openPresentation(own, idx, onClose);
   }
 
   function ownThread() {
@@ -10140,9 +10441,29 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     });
   }
 
+  // Name eines Rahmens: eigener Titel, sonst "Folie" (mit Inhalt) bzw.
+  // "Rahmen" (leer).
+  function frameDisplayLabel(item) {
+    if (item.framelabel) { return item.framelabel; }
+    var ftf = frameSlideTf(item);
+    var hasContent = ftf && ((ftf.texts || []).some(function (t) { return String(t.text || '').trim(); }) ||
+      (ftf.shapes || []).some(function (sh) { return !sh.main; }) || (ftf.ink || []).length || (ftf.media || []).length);
+    return hasContent ? S.slide_label : S.emptyframe;
+  }
+  // Automatischer Folientitel: erste nicht leere Textzeile der Folie.
+  function slideAutoTitle(tf) {
+    var line = '';
+    (tf.texts || []).some(function (t) {
+      var first = String(t.text || '').split(/\n/).map(function (x) { return x.trim(); }).filter(Boolean)[0];
+      if (first) { line = first; return true; }
+      return false;
+    });
+    return line.length > 80 ? line.slice(0, 79) + '\u2026' : line;
+  }
+
   function threadItemLabel(item) {
     if (item.itemtype === 'overview') { return S.addoverview; }
-    if (item.itemtype === 'frame') { return item.framelabel || (item.framedata ? S.slide_label : S.emptyframe); }
+    if (item.itemtype === 'frame') { return frameDisplayLabel(item); }
     var p = null;
     for (var i = 0; i < state.photos.length; i++) { if (state.photos[i].id === item.photoid) { p = state.photos[i]; break; } }
     return p ? (p.sourcetitle || itemCaptionText(p)) : '';
@@ -10191,7 +10512,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       if (editable && item.itemtype === 'frame') {
         var frameLabelEl2 = el('span', {
           class: 'ic-thread-item-label ic-thread-item-label-editable', contenteditable: 'true'
-        }, [item.framelabel || String(idx + 1)]);
+        }, [frameDisplayLabel(item)]);
         // Bearbeiten per Doppelklick (nicht einfacher Klick) - ein
         // einfacher Klick auf den Text soll normal zur Zeile durchgereicht
         // werden und in die Präsentation springen (siehe row-Klick-Handler
@@ -10215,7 +10536,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           frameLabelEditing = false;
           var text = frameLabelEl2.textContent.trim();
           item.framelabel = text;
-          if (!text) { frameLabelEl2.textContent = String(idx + 1); }
+          if (!text) { frameLabelEl2.textContent = frameDisplayLabel(item); }
           callAjax('mod_pinnwand_set_frame_label', { cmid: cfg.cmid, itemid: item.id, framelabel: text });
         });
         row.appendChild(frameLabelEl2);
@@ -10550,7 +10871,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   // Zähler + Stapel, Ziehen, Mausrad, Pinch). Hier kommen nur die
   // Moodle-spezifischen Teile dazu: Schließen-Knopf/Escape, Stylus-Ebene
   // und das Anhängen noch nicht enthaltener Objekte per Klick.
-  function openPresentation(thread, startIndex) {
+  function openPresentation(thread, startIndex, onClose) {
     if (window.innerWidth < 900) { alert(S.present_smallscreen); return false; }
     if (!window.PinnwandPresentation) { return false; }
     // Start über den Play-Knopf (ganze Präsentation, kein Direkt-Sprung zu
@@ -10772,6 +11093,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     closeBtn.addEventListener('click', function () {
       player.destroy();
       overlay.remove();
+      if (onClose) { onClose(); }
       if (enteredFullscreen && document.fullscreenElement && document.exitFullscreen) {
         document.exitFullscreen().catch(function () { /* bereits verlassen */ });
       }

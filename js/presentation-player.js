@@ -38,6 +38,8 @@
     '.pwp-bg-off{background:transparent !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}',
     '.pwp-build-hidden{opacity:0 !important;pointer-events:none !important;}',
     '[data-pwp-build].pwp-draw{transition:none;}',
+    '.pwp-media{transition:left .35s ease,top .35s ease,width .35s ease,height .35s ease,opacity .45s ease;}',
+    '.pwp-media.pwp-media-full{left:50% !important;top:50% !important;width:100% !important;height:100% !important;z-index:6 !important;}',
     '.pwp-hint{position:fixed;top:16px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(0,0,0,.55);',
     'padding:6px 16px;border-radius:20px;font-size:.85rem;z-index:20;pointer-events:none;transition:opacity 1s;',
     'white-space:nowrap;max-width:calc(100vw - 140px);overflow:hidden;text-overflow:ellipsis;}',
@@ -771,7 +773,63 @@
         }
         playDraw(drawQueue);
       });
+      syncMedia(slides, active);
     }
+
+    // Medien auf Folien: beim Verlassen der Folie anhalten (Einbettungen
+    // werden neu geladen), mit "Autoplay" starten sie, sobald die Folie aktiv
+    // und das Element sichtbar ist; sonst bleiben sie pausiert.
+    function syncMedia(slides, active) {
+      slides.forEach(function (sel) {
+        var isActive = !!active && active.slideEl === sel && !active.overview;
+        var boxes = sel.querySelectorAll('.pwp-media');
+        for (var i = 0; i < boxes.length; i++) {
+          var box = boxes[i];
+          var auto = box.hasAttribute('data-pwp-autoplay');
+          var visible = isActive && !box.classList.contains('pwp-build-hidden') && !box.classList.contains('pwp-exit-hidden');
+          var av = box.querySelector('video, audio');
+          var ifr = box.querySelector('iframe');
+          if (av) {
+            if (!visible) {
+              if (!av.paused) { try { av.pause(); } catch (e) { /* egal */ } }
+              box.classList.remove('pwp-media-full');
+              box._pwpAutoDone = false;
+            } else if (auto && !box._pwpAutoDone) {
+              box._pwpAutoDone = true;
+              av._pwpAuto = true;
+              var pr = av.play();
+              if (pr && pr.catch) { pr.catch(function () { /* Browser blockiert Autoplay */ }); }
+            }
+          } else if (ifr) {
+            var base = ifr.getAttribute('data-src') || '';
+            if (!base) { continue; }
+            var hashAt = base.indexOf('#');
+            var bq = hashAt === -1 ? base : base.slice(0, hashAt), bh = hashAt === -1 ? '' : base.slice(hashAt);
+            var want = (visible && auto) ? bq + (bq.indexOf('?') === -1 ? '?' : (/[?&]$/.test(bq) ? '' : '&')) + 'autoplay=1' + bh : base;
+            if (!visible && box._pwpWasVisible) { ifr.setAttribute('src', 'about:blank'); }
+            if (ifr.getAttribute('src') !== want) { ifr.setAttribute('src', want); }
+          }
+          box._pwpWasVisible = visible;
+        }
+      });
+    }
+    // Von Hand gestartete Videos füllen die Folie (100 %); Pause/Ende
+    // bringt sie auf ihre Größe zurück. Autoplay bleibt in Originalgröße.
+    function onMediaPlay(ev) {
+      var v = ev.target;
+      if (!v || v.tagName !== 'VIDEO' || !root.contains(v)) { return; }
+      var box = v.closest('.pwp-media');
+      if (!box) { return; }
+      if (ev.type === 'play') {
+        if (v._pwpAuto) { v._pwpAuto = false; return; }
+        box.classList.add('pwp-media-full');
+      } else {
+        box.classList.remove('pwp-media-full');
+      }
+    }
+    document.addEventListener('play', onMediaPlay, true);
+    document.addEventListener('pause', onMediaPlay, true);
+    document.addEventListener('ended', onMediaPlay, true);
 
     function resetDraw(path) {
       path.style.transition = 'none';
@@ -851,6 +909,7 @@
     var dragging = false, dragStartX = 0, dragStartY = 0, dragStartCx = 0, dragStartCy = 0;
     stage.addEventListener('pointerdown', function (ev) {
       if (!currentTransform || drawingActive()) { return; }
+      if (ev.target && ev.target.closest && ev.target.closest('.pwp-media')) { return; }
       if (cameraFrame) { cancelAnimationFrame(cameraFrame); cameraFrame = null; }
       dragging = true; stage.classList.add('pwp-dragging');
       dragStartX = ev.clientX; dragStartY = ev.clientY;
@@ -946,6 +1005,11 @@
       if (destroyed) { return; }
       destroyed = true;
       document.removeEventListener('keydown', onKey);
+      document.removeEventListener('play', onMediaPlay, true);
+      document.removeEventListener('pause', onMediaPlay, true);
+      document.removeEventListener('ended', onMediaPlay, true);
+      var allMedia = root.querySelectorAll('.pwp-media video, .pwp-media audio');
+      for (var mi = 0; mi < allMedia.length; mi++) { try { allMedia[mi].pause(); } catch (e) { /* egal */ } }
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointermove', onPenMove);

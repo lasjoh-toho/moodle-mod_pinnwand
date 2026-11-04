@@ -1863,3 +1863,28 @@ input.ic-stepper-value {
 .ic-slide-ink-custom { width: 28px; height: 24px; padding: 0; border: none; background: none; cursor: pointer; }
 .ic-slide-ink-width-val { min-width: 2em; font-size: .85em; opacity: .8; }
 .ic-slide-text-pad { cursor: text; }
+/* Folientitel über der Folie im Editor */
+.ic-slide-title { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(100% + 10px); z-index: 6; box-sizing: border-box;
+  width: min(60%, 640px); min-width: 220px; padding: 6px 12px; font-size: 1.15rem; text-align: center; font-weight: 600; border: 1px solid transparent; border-radius: 8px;
+  background: rgba(255,255,255,.85); color: #1f2937; outline: none; }
+.ic-slide-title:hover { border-color: rgba(0,0,0,.15); }
+.ic-slide-title:focus { border-color: #0f6cbf; background: #fff; }
+.ic-slide-title.ic-slide-title-auto { font-style: italic; color: #6b7280; }
+/* Medien (Bild/Video/Audio per URL) im Folien-Editor */
+.ic-slide-media-edit { outline: 1px dashed rgba(15,108,191,.6); outline-offset: 1px; }
+.ic-slide-media-edit:hover { outline: 2px solid #0f6cbf; }
+.ic-slide-media-grip { position: absolute; inset: 0; cursor: move; touch-action: none; z-index: 1; }
+.ic-slide-media-size { position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; border-radius: 3px;
+  background: #fff; border: 2px solid #0f6cbf; cursor: nwse-resize; touch-action: none; z-index: 2; }
+.ic-slide-media-audio.ic-slide-media-edit { min-height: 40px; }
+.ic-slide-media-range { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: .85em; white-space: nowrap; }
+.ic-slide-media-time { width: 4.2em; padding: 2px 4px; font-size: .95em; border-radius: 4px; border: 1px solid rgba(255,255,255,.25);
+  background: rgba(255,255,255,.08); color: inherit; text-align: center; }
+.ic-slide-media-time.ic-invalid { border-color: #e0503f; }
+.ic-slide-media-range + .ic-slide-media-ap { margin-left: 8px; }
+.ic-slide-media-ap { display: inline-flex; align-items: center; gap: 4px; font-size: .85em; margin-left: auto; white-space: nowrap; }
+/* Kamera-Aufnahme */
+.ic-slide-cam { position: fixed; inset: 0; z-index: 10050; background: rgba(0,0,0,.85); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px; padding: 16px; box-sizing: border-box; }
+.ic-slide-cam video { max-width: 100%; max-height: calc(100% - 70px); border-radius: 8px; background: #000; }
+.ic-slide-cam-bar { display: flex; gap: 10px; }
