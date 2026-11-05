@@ -638,6 +638,7 @@
     var existingOverlay = document.getElementById('ic-add-modal-overlay');
     if (existingOverlay) { existingOverlay.remove(); return; }
 
+    state.slideImport = null;
     var overlay = el('div', { class: 'ic-modal-overlay', id: 'ic-add-modal-overlay' });
     overlay.addEventListener('click', function (ev) { if (ev.target === overlay) { overlay.remove(); } });
     var panel = el('div', { class: 'ic-add-modal' });
@@ -746,6 +747,52 @@
     if (state.canusethreads) { gridText.appendChild(slideBtn); }
     panel.appendChild(gridText);
 
+    // Audio & Video: wird als Rahmen (Folie) angelegt, den das Medium
+    // ausfüllt - so spielt es auf der Pinnwand und in der Präsentation.
+    if (state.canusethreads) {
+      panel.appendChild(el('div', { class: 'ic-add-modal-category' }, [S.category_media]));
+      var gridMedia = el('div', { class: 'ic-add-modal-grid' });
+      var avInput = el('input', { type: 'file', accept: 'audio/*,video/*', style: 'display:none' });
+      avInput.addEventListener('change', function () {
+        var f = avInput.files && avInput.files[0];
+        avInput.value = '';
+        if (!f || !/^(audio|video)\//.test(f.type)) { return; }
+        if (cfg.slidemediamax && f.size > cfg.slidemediamax) { alert(S.slide_media_toolarge.replace('{max}', slideMediaMaxMb(null))); return; }
+        overlay.remove();
+        mediaBusy(true);
+        slideMediaRequest({ action: 'upload', file: f }).then(function (res) {
+          mediaBusy(false);
+          if (!res || !res.file) {
+            alert(res && res.error === 'toolarge' ? S.slide_media_toolarge.replace('{max}', slideMediaMaxMb(res)) : S.slide_media_failed);
+            return;
+          }
+          createMediaFrame({ kind: slideMediaKindFromMime(res.mimetype, f.type.split('/')[0]), file: res.file, name: f.name });
+        }).catch(function () { mediaBusy(false); alert(S.slide_media_failed); });
+      });
+      panel.appendChild(avInput);
+      var avFileBtn = el('button', { class: 'ic-choice-btn' }, [icon('upload'), el('span', {}, [S.add_media_file])]);
+      avFileBtn.addEventListener('click', function () { avInput.click(); });
+      var avLinkBtn = el('button', { class: 'ic-choice-btn' }, [icon('link'), el('span', {}, [S.add_media_link])]);
+      avLinkBtn.addEventListener('click', function () {
+        overlay.remove();
+        openMediaUrlDialog(function (entry) {
+          if (entry.kind === 'image') {
+            // Bild: wie gewohnt über Zuschnitt/Metadaten.
+            var bimg = new Image();
+            if (!entry.file) { bimg.crossOrigin = 'anonymous'; }
+            bimg.onload = function () { loadCapturedImage(bimg); };
+            bimg.onerror = function () { alert(S.url_load_error); };
+            bimg.src = slideMediaSrc(entry);
+            return;
+          }
+          createMediaFrame(entry);
+        });
+      });
+      gridMedia.appendChild(avFileBtn);
+      gridMedia.appendChild(avLinkBtn);
+      panel.appendChild(gridMedia);
+    }
+
     var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel, 'aria-label': S.cancel }, ['\u2715']);
     closeBtn.addEventListener('click', function () { overlay.remove(); });
     panel.appendChild(closeBtn);
@@ -776,6 +823,7 @@
     cancelBtn.addEventListener('click', function () {
       stopStream();
       state.captureMode = null;
+      if (state.slideImport) { reopenSlideImport(null); return; }
       state.step = 'home';
       render();
     });
@@ -1104,7 +1152,10 @@
   function imgDock(body, current, onSave) {
     var dock = el('div', { class: 'ic-img-dock' });
     var cancelBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-img-dock-btn', type: 'button', title: S.cancel }, ['✕', el('span', {}, [S.cancel])]);
-    cancelBtn.addEventListener('click', function () { var back = wizardReturnStep(); resetCaptureState(); state.step = back; render(); });
+    cancelBtn.addEventListener('click', function () {
+      if (state.slideImport) { reopenSlideImport(null); return; }
+      var back = wizardReturnStep(); resetCaptureState(); state.step = back; render();
+    });
     var hist = state.imgHistory || [];
     var backBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-img-dock-btn', type: 'button', title: S.back }, [icon('arrowleft'), el('span', {}, [S.back])]);
     backBtn.disabled = !hist.length && IMG_STEPS.indexOf(current) <= 0;
@@ -1902,6 +1953,9 @@
 
     var form = el('div', { class: 'ic-source-form' });
     form.appendChild(el('p', { class: 'ic-hint', style: 'padding:0 0 8px' }, [S.source_hint]));
+    if (state.slideImport) {
+      form.appendChild(el('p', { class: 'ic-slide-import-note' }, [S.slide_import_tag.replace('{slide}', state.slideImport.name)]));
+    }
     function field(key, labelKey) {
       var wrap = el('div', { class: 'ic-field' });
       wrap.appendChild(el('label', {}, [S[labelKey]]));
@@ -1979,6 +2033,7 @@
         sourceorigauthor: info.sourceorigauthor,
         boardid: state.currentBoard || 0
       }).then(function (res) {
+        if (state.slideImport && res && res.photoid) { finishSlideImport(res.photoid, finalCanvas.width, finalCanvas.height); return; }
         var maxreached = !!res.maxreached;
         refreshPhotos().then(function () {
           resetCaptureState();
@@ -1990,6 +2045,48 @@
         saveBtn.disabled = false;
       });
     });
+  }
+
+  // Bild für eine Folie (siehe startSlideImport): nach dem Speichern über
+  // den Folienrahmen legen, sichtbar machen, "in Folie …" als Schlagwort
+  // setzen und mit der Folie verknüpfen; dann zurück in den Folien-Editor.
+  function finishSlideImport(photoid, cw, ch) {
+    var imp = state.slideImport;
+    var f = imp.frame;
+    var w = Math.max(60, f.w * 0.4), h = w * ch / Math.max(1, cw);
+    var cx = f.x + (imp.at ? imp.at.x : 0.5) * f.w, cy = f.y + (imp.at ? imp.at.y : 0.5) * f.h;
+    return callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: photoid, hidden: false }).catch(function () { return null; })
+      .then(function () {
+        return callAjax('mod_pinnwand_update_layout', {
+          cmid: cfg.cmid, photoid: photoid, x: cx - w / 2, y: cy - h / 2, w: w, rot: 0, z: f.z + 1, boardid: f.boardid
+        });
+      }).then(function () {
+        return callAjax('mod_pinnwand_set_photo_tags', {
+          cmid: cfg.cmid, photoids: [photoid], tags: S.slide_import_tag.replace('{slide}', imp.name), mode: 'add'
+        }).catch(function () { return null; });
+      }).then(function () { return refreshPhotos(); })
+      .then(function () { reopenSlideImport(photoid); }, function () { reopenSlideImport(photoid); });
+  }
+  function reopenSlideImport(newPhotoId) {
+    var imp = state.slideImport;
+    state.slideImport = null;
+    stopStream();
+    resetCaptureState();
+    var th = ownThread();
+    var it = imp && th ? th.items.filter(function (o) { return o.id === imp.itemId; })[0] : null;
+    if (!it) { state.step = 'arrange'; render(); return; }
+    var t = null;
+    try { t = JSON.parse(imp.tfJson); } catch (e) { t = null; }
+    if (t && newPhotoId) { t.linked = t.linked || []; t.linked.push(newPhotoId); }
+    var orig = it.framedata;
+    if (t) { it.framedata = JSON.stringify(t); }
+    openFrameSlideEditor(it);
+    it.framedata = orig;
+    state.slideTitle = imp.slideTitle;
+    state.slideTitleManual = imp.slideTitleManual;
+    if (imp.slideScale) { state.slideScale = imp.slideScale; }
+    if (imp.slideShift) { state.slideShift = imp.slideShift; }
+    render();
   }
 
   function resetCaptureState() {
@@ -2031,6 +2128,7 @@
     b.addEventListener('click', function () {
       // Folien werden aus der Pinnwand heraus bearbeitet - dorthin zurück.
       // Der Texteditor kehrt immer in die Pinnwand-Ansicht zurück.
+      if (state.slideImport && state.step !== 'textframe') { reopenSlideImport(null); return; }
       var back = toBoard ? 'arrange' : wizardReturnStep();
       resetCaptureState();
       state.step = back;
@@ -3094,6 +3192,155 @@
       svg.appendChild(path);
     });
     return svg;
+  }
+
+  // Audio/Video über das Plus der Pinnwand: neuer Rahmen an der sichtbaren
+  // Stelle, ausgefüllt vom Medium, direkt gespeichert.
+  function createMediaFrame(entry) {
+    var placement = currentSlidePlacement() || { canvasx: 400, canvasy: 300, canvasw: 600, canvasz: 1, boardid: state.currentBoard || 0 };
+    var isAudio = entry.kind === 'audio';
+    var tf = newSlideFrame();
+    tf.texts = [];
+    tf.h = isAudio ? 120 : 360;
+    var md = { id: 1, kind: entry.kind, x: 0.5, y: 0.5, w: isAudio ? 0.94 : 1, h: isAudio ? 0.5 : 1, autoplay: false };
+    ['url', 'file', 'name'].forEach(function (k) { if (entry[k]) { md[k] = entry[k]; } });
+    tf.media = [md];
+    tf.titleAuto = false;
+    var fw = placement.canvasw, fh = Math.round(placement.canvasw * tf.h / tf.w);
+    var label = slideMediaLabel(md);
+    mediaBusy(true);
+    callAjax('mod_pinnwand_add_thread_item', {
+      cmid: cfg.cmid, itemtype: 'frame', boardid: placement.boardid,
+      framex: placement.canvasx, framey: placement.canvasy, framew: fw, frameh: fh, framelabel: label
+    }).then(function (res) {
+      replaceOwnThread(res);
+      var it = res.items[res.items.length - 1];
+      it.framez = placement.canvasz;
+      var data = JSON.stringify(tf);
+      callAjax('mod_pinnwand_update_thread_frame', {
+        cmid: cfg.cmid, itemid: it.id, framex: it.framex, framey: it.framey, framew: it.framew, frameh: it.frameh,
+        framerot: 0, framez: it.framez
+      });
+      return embedFontsInSVG(buildTextFrameSVG(tf), tf).then(function (svg) {
+        return callAjax('mod_pinnwand_set_frame_content', { cmid: cfg.cmid, itemid: it.id, framedata: data, framesvg: svg });
+      }).then(function () {
+        it.framedata = data;
+        it.framelabel = label;
+      });
+    }).then(function () {
+      mediaBusy(false);
+      state.step = 'arrange';
+      render();
+    }).catch(function (e) { mediaBusy(false); alert(S.error_save + ' (' + e.message + ')'); render(); });
+  }
+  // Hinweis "Wird geladen …" während Upload/Übernahme von Medien (liegt
+  // außerhalb des neu gerenderten Bereichs, übersteht also render()).
+  function mediaBusy(on) {
+    var b = document.getElementById('ic-media-busy');
+    if (on && !b) {
+      b = el('div', { id: 'ic-media-busy', class: 'ic-media-busy', role: 'status' }, [S.slide_media_loading]);
+      document.body.appendChild(b);
+    } else if (!on && b) { b.remove(); }
+  }
+  // Über Link einfügen: Adresse eingeben, dann einfügen (Datei wird in
+  // der Pinnwand gespeichert) oder verlinkt lassen. Vorgabe: Bilder und
+  // Audio bis 5 MB werden eingefügt, Videos bleiben verlinkt,
+  // YouTube/Vimeo sind immer verlinkt. onDone({kind, url, file?}).
+  function openMediaUrlDialog(onDone) {
+    var dlg = el('div', { class: 'ic-slide-pick ic-slide-urldlg', role: 'dialog', 'aria-label': S.slide_add_link });
+    var box = el('div', { class: 'ic-slide-pick-box' });
+    var urlIn = el('input', { type: 'url', class: 'ic-slide-url-input', placeholder: 'https://', 'aria-label': S.slide_add_url_prompt });
+    var rEmbed = el('input', { type: 'radio', name: 'ic-slide-urlmode', value: 'embed' });
+    var rLink = el('input', { type: 'radio', name: 'ic-slide-urlmode', value: 'link' });
+    var userChose = false;
+    rEmbed.addEventListener('change', function () { userChose = true; });
+    rLink.addEventListener('change', function () { userChose = true; });
+    var info = el('p', { class: 'ic-hint' }, [S.slide_url_mode_hint]);
+    var okBtn = el('button', { class: 'ic-btn ic-btn-primary', type: 'button' }, [S.slide_insert]);
+    var cancelBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.cancel]);
+    var updateDefault = function () {
+      var u = urlIn.value.trim();
+      var kind = slideMediaKind(u);
+      rEmbed.disabled = kind === 'embed';
+      if (kind === 'embed') { rLink.checked = true; return; }
+      if (!userChose) { (kind === 'video' ? rLink : rEmbed).checked = true; }
+    };
+    urlIn.addEventListener('input', updateDefault);
+    urlIn.addEventListener('keydown', function (ev) {
+      ev.stopPropagation();
+      if (ev.key === 'Enter') { okBtn.click(); } else if (ev.key === 'Escape') { dlg.remove(); }
+    });
+    box.appendChild(el('h3', { class: 'ic-slide-pick-title' }, [S.slide_add_link]));
+    box.appendChild(urlIn);
+    box.appendChild(el('label', { class: 'ic-slide-url-mode' }, [rEmbed, ' ' + S.slide_url_mode_embed]));
+    box.appendChild(el('label', { class: 'ic-slide-url-mode' }, [rLink, ' ' + S.slide_url_mode_link]));
+    box.appendChild(info);
+    box.appendChild(el('div', { class: 'ic-slide-cam-bar' }, [cancelBtn, okBtn]));
+    dlg.appendChild(box);
+    dlg.addEventListener('pointerdown', function (ev) { if (ev.target === dlg) { dlg.remove(); } });
+    cancelBtn.addEventListener('click', function () { dlg.remove(); });
+    okBtn.addEventListener('click', function () {
+      var u = urlIn.value.trim();
+      if (!/^https?:\/\/[^\s]+$/i.test(u)) { alert(S.slide_url_invalid); urlIn.focus(); return; }
+      var kind = slideMediaKind(u);
+      if (kind === 'embed' && !slideEmbedUrl(u)) { alert(S.slide_url_invalid); return; }
+      dlg.remove();
+      if (kind === 'embed' || !rEmbed.checked) { onDone({ kind: kind, url: u }); return; }
+      var autoAudio = kind === 'audio' && !userChose;
+      mediaBusy(true);
+      slideMediaRequest({ action: 'url', url: u, limit: autoAudio ? SLIDE_AUDIO_EMBED_MAX : 0 }).then(function (res) {
+        mediaBusy(false);
+        if (res && res.file) {
+          onDone({ kind: slideMediaKindFromMime(res.mimetype, kind), file: res.file, url: u });
+          return;
+        }
+        // Audio über 5 MB bleibt (wie vorgesehen) verlinkt.
+        if (autoAudio && res && res.error === 'toolarge') { onDone({ kind: kind, url: u }); return; }
+        var msg = res && res.error === 'toolarge' ? S.slide_media_embed_toolarge.replace('{max}', slideMediaMaxMb(res)) : S.slide_media_embed_failed;
+        if (window.confirm(msg)) { onDone({ kind: kind, url: u }); }
+      }).catch(function () {
+        mediaBusy(false);
+        if (window.confirm(S.slide_media_embed_failed)) { onDone({ kind: kind, url: u }); }
+      });
+    });
+    root.appendChild(dlg);
+    updateDefault();
+    urlIn.focus();
+  }
+
+  // Suche (Lupe): jedes eingegebene Wort muss irgendwo vorkommen (Titel,
+  // Metadaten, Schlagwörter, Text), nicht zwingend direkt hintereinander.
+  function searchWords(q) {
+    return String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+  }
+  function tfSearchText(tf) {
+    if (!tf) { return ''; }
+    var parts = [];
+    (tf.texts || []).forEach(function (t) { parts.push(t.text || '', String(t.html || '').replace(/<[^>]*>/g, ' ')); });
+    (tf.media || []).forEach(function (m) { parts.push(m.name || '', m.url || ''); });
+    (tf.ink || []).forEach(function (st) { if (st.type === 'text') { parts.push(st.text || ''); } });
+    return parts.join(' ');
+  }
+  function photoSearchText(p) {
+    var parts = [p.sourcetitle, p.sourceyear, p.sourceepoch, p.sourceplace, p.sourceorigauthor, p.sourceauthor, p.tags];
+    if (p.wordfielddata) {
+      if (p._searchTfSrc !== p.wordfielddata) {
+        var wtf = null;
+        try { wtf = JSON.parse(p.wordfielddata); } catch (e) { wtf = null; }
+        p._searchTfSrc = p.wordfielddata;
+        p._searchTf = tfSearchText(wtf);
+      }
+      parts.push(p._searchTf);
+    }
+    return parts.map(function (v) { return v || ''; }).join(' ').toLowerCase();
+  }
+  function frameSearchText(it) {
+    var ftf = null;
+    if (it.framedata) { try { ftf = JSON.parse(it.framedata); } catch (e) { ftf = null; } }
+    return [it.framelabel || '', tfSearchText(ftf)].join(' ').toLowerCase();
+  }
+  function matchesSearch(text, words) {
+    return words.every(function (w) { return text.indexOf(w) !== -1; });
   }
 
   // Medien auf Folien (tf.media): Bild, Video, Audio per URL bzw.
@@ -6580,15 +6827,15 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
             alert(S.slide_media_toolarge.replace('{max}', slideMediaMaxMb(null)));
             return;
           }
-          state.slideMediaBusy = true; render();
+          mediaBusy(true);
           slideMediaRequest({ action: 'upload', file: f }).then(function (res) {
-            state.slideMediaBusy = false;
+            mediaBusy(false);
             if (!res || !res.file) {
               alert(res && res.error === 'toolarge' ? S.slide_media_toolarge.replace('{max}', slideMediaMaxMb(res)) : S.slide_media_failed);
-              render(); return;
+              return;
             }
             addSlideMedia({ kind: slideMediaKindFromMime(res.mimetype, f.type.split('/')[0]), file: res.file, name: f.name });
-          }).catch(function () { state.slideMediaBusy = false; alert(S.slide_media_failed); render(); });
+          }).catch(function () { mediaBusy(false); alert(S.slide_media_failed); });
           return;
         }
         if (!/^image\//.test(f.type) || !editingRec || !editingRec.canvasw) { return; }
@@ -6602,6 +6849,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           c.width = Math.max(1, Math.round(im.naturalWidth * sc)); c.height = Math.max(1, Math.round(im.naturalHeight * sc));
           c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
           URL.revokeObjectURL(url);
+          if (startSlideImport()) { loadCapturedImage(c); return; }
           uploadSlideCanvas(c, f.name.replace(/\.[^.]+$/, ''), upBtnImg);
         };
         im.src = url;
@@ -6636,6 +6884,9 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       var camBtnSlide = el('button', { class: 'ic-btn ic-btn-ghost ic-mini-btn', type: 'button' }, ['+ ' + S.slide_add_camera]);
       camBtnSlide.addEventListener('click', function () {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert(S.camera_error); return; }
+        // Wie "Kamera" über das Plus der Pinnwand (Aufnahme, Zuschnitt,
+        // Metadaten); danach geht es zurück in diese Folie.
+        if (startSlideImport()) { state.captureMode = 'camera'; state.step = 'capture'; render(); return; }
         var camOverlay = el('div', { class: 'ic-slide-cam' });
         var camVideo = el('video', { autoplay: 'autoplay', playsinline: 'playsinline', muted: 'muted' });
         var camTake = el('button', { class: 'ic-btn ic-btn-primary', type: 'button' }, [icon('camera'), ' ' + S.slide_camera_take]);
@@ -6664,6 +6915,27 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           uploadSlideCanvas(c, S.slide_add_camera, camBtnSlide);
         });
       });
+      // Bild über den Ablauf der Pinnwand anlegen: Editor-Zustand merken,
+      // nach dem Speichern kommt das neue Objekt verknüpft auf die Folie.
+      var startSlideImport = function () {
+        var fit = editingFrameItem();
+        if (!fit || !editingRec || !editingRec.canvasw) { return false; }
+        var fth = ownThread();
+        var fnum = fth ? fth.items.filter(function (o) { return o.itemtype === 'frame'; }).indexOf(fit) + 1 : 0;
+        var fname = (state.slideTitleManual ? String(state.slideTitle || '').trim() : slideAutoTitle(tf)) ||
+          (S.slide_label + (fnum > 0 ? ' ' + fnum : ''));
+        state.slideImport = {
+          itemId: fit.id, tfJson: JSON.stringify(tf), slideTitle: state.slideTitle, slideTitleManual: state.slideTitleManual,
+          slideScale: state.slideScale, slideShift: state.slideShift ? { dx: state.slideShift.dx, dy: state.slideShift.dy } : null,
+          at: state.slideMediaAt || null, name: fname,
+          frame: {
+            x: editingRec.fg ? editingRec.fg.x : editingRec.canvasx, y: editingRec.fg ? editingRec.fg.y : editingRec.canvasy,
+            w: editingRec.canvasw, h: editingRec.canvasw * tf.h / tf.w, z: editingRec.canvasz || 0, boardid: editingRec.boardid || 0
+          }
+        };
+        state.slideMediaAt = null;
+        return true;
+      };
       // Medium (Bild/Video/Audio/Einbettung) mittig auf die Folie legen.
       tf.media = tf.media || [];
       var addSlideMedia = function (entry) {
@@ -6704,65 +6976,18 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       // Audio bis 5 MB werden eingefügt, Videos bleiben verlinkt,
       // YouTube/Vimeo sind immer verlinkt.
       var openUrlDialog = function () {
-        var dlg = el('div', { class: 'ic-slide-pick ic-slide-urldlg', role: 'dialog', 'aria-label': S.slide_add_link });
-        var box = el('div', { class: 'ic-slide-pick-box' });
-        var urlIn = el('input', { type: 'url', class: 'ic-slide-url-input', placeholder: 'https://', 'aria-label': S.slide_add_url_prompt });
-        var rEmbed = el('input', { type: 'radio', name: 'ic-slide-urlmode', value: 'embed' });
-        var rLink = el('input', { type: 'radio', name: 'ic-slide-urlmode', value: 'link' });
-        var userChose = false;
-        rEmbed.addEventListener('change', function () { userChose = true; });
-        rLink.addEventListener('change', function () { userChose = true; });
-        var info = el('p', { class: 'ic-hint' }, [S.slide_url_mode_hint]);
-        var okBtn = el('button', { class: 'ic-btn ic-btn-primary', type: 'button' }, [S.slide_insert]);
-        var cancelBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.cancel]);
-        var updateDefault = function () {
-          var u = urlIn.value.trim();
-          var kind = slideMediaKind(u);
-          rEmbed.disabled = kind === 'embed';
-          if (kind === 'embed') { rLink.checked = true; return; }
-          if (!userChose) { (kind === 'video' ? rLink : rEmbed).checked = true; }
-        };
-        urlIn.addEventListener('input', updateDefault);
-        urlIn.addEventListener('keydown', function (ev) {
-          ev.stopPropagation();
-          if (ev.key === 'Enter') { okBtn.click(); } else if (ev.key === 'Escape') { dlg.remove(); }
+        openMediaUrlDialog(function (entry) {
+          // Eingefügte Bilder laufen wie über das Plus der Pinnwand durch
+          // Zuschnitt/Bearbeitung/Metadaten und werden Pinnwand-Objekte.
+          if (entry.kind === 'image' && entry.file && editingFrameItem()) {
+            var uimg = new Image();
+            uimg.onload = function () { if (startSlideImport()) { loadCapturedImage(uimg); } };
+            uimg.onerror = function () { addSlideMedia(entry); };
+            uimg.src = slideMediaSrc(entry);
+            return;
+          }
+          addSlideMedia(entry);
         });
-        box.appendChild(el('h3', { class: 'ic-slide-pick-title' }, [S.slide_add_link]));
-        box.appendChild(urlIn);
-        box.appendChild(el('label', { class: 'ic-slide-url-mode' }, [rEmbed, ' ' + S.slide_url_mode_embed]));
-        box.appendChild(el('label', { class: 'ic-slide-url-mode' }, [rLink, ' ' + S.slide_url_mode_link]));
-        box.appendChild(info);
-        box.appendChild(el('div', { class: 'ic-slide-cam-bar' }, [cancelBtn, okBtn]));
-        dlg.appendChild(box);
-        dlg.addEventListener('pointerdown', function (ev) { if (ev.target === dlg) { dlg.remove(); } });
-        cancelBtn.addEventListener('click', function () { dlg.remove(); });
-        okBtn.addEventListener('click', function () {
-          var u = urlIn.value.trim();
-          if (!/^https?:\/\/[^\s]+$/i.test(u)) { alert(S.slide_url_invalid); urlIn.focus(); return; }
-          var kind = slideMediaKind(u);
-          if (kind === 'embed' && !slideEmbedUrl(u)) { alert(S.slide_url_invalid); return; }
-          dlg.remove();
-          if (kind === 'embed' || !rEmbed.checked) { addSlideMedia({ kind: kind, url: u }); return; }
-          var autoAudio = kind === 'audio' && !userChose;
-          state.slideMediaBusy = true; render();
-          slideMediaRequest({ action: 'url', url: u, limit: autoAudio ? SLIDE_AUDIO_EMBED_MAX : 0 }).then(function (res) {
-            state.slideMediaBusy = false;
-            if (res && res.file) {
-              addSlideMedia({ kind: slideMediaKindFromMime(res.mimetype, kind), file: res.file, url: u });
-              return;
-            }
-            // Audio über 5 MB bleibt (wie vorgesehen) verlinkt.
-            if (autoAudio && res && res.error === 'toolarge') { addSlideMedia({ kind: kind, url: u }); return; }
-            var msg = res && res.error === 'toolarge' ? S.slide_media_embed_toolarge.replace('{max}', slideMediaMaxMb(res)) : S.slide_media_embed_failed;
-            if (window.confirm(msg)) { addSlideMedia({ kind: kind, url: u }); } else { render(); }
-          }).catch(function () {
-            state.slideMediaBusy = false;
-            if (window.confirm(S.slide_media_embed_failed)) { addSlideMedia({ kind: kind, url: u }); } else { render(); }
-          });
-        });
-        root.appendChild(dlg);
-        updateDefault();
-        urlIn.focus();
       };
       // Von der Pinnwand: ein vorhandenes Objekt als Bild auf die Folie legen.
       var openBoardPicker = function () {
@@ -7404,8 +7629,10 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     // nur Editor-Modus und Kartenhintergrund wechseln.
     if (!tf.isSlide) {
       var toWordArt = !state.wordArtMode;
-      var convertBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-tf-convert', type: 'button', title: toWordArt ? S.tf_convert_wordart : S.tf_convert_card },
-        [icon(toWordArt ? 'wand' : 'fonts'), el('span', {}, [toWordArt ? S.tf_convert_wordart : S.tf_convert_card])]);
+      var convertBtn = el('button', {
+        class: 'ic-btn ic-btn-ghost ic-btn-icon ic-tf-convert', type: 'button',
+        title: toWordArt ? S.tf_convert_wordart : S.tf_convert_card, 'aria-label': toWordArt ? S.tf_convert_wordart : S.tf_convert_card
+      }, [el('span', { class: 'ic-tf-convert-letter' }, [toWordArt ? 'W' : 'T'])]);
       convertBtn.addEventListener('click', function () {
         if (toWordArt) {
           // Papier entfällt (Formen bleiben), der Text behält seine
@@ -7444,6 +7671,36 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       });
       tfHeaderRight.appendChild(slidePlayBtn);
     }
+    // Papierkorb: bearbeitetes Objekt bzw. Folie löschen (neu angelegte,
+    // noch nicht gespeicherte Objekte werden einfach verworfen).
+    var tfTrashBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon', type: 'button', title: S.tf_delete, 'aria-label': S.tf_delete }, [icon('trash')]);
+    tfTrashBtn.addEventListener('click', function () {
+      var frameIt = state.editingFrameItemId ? editingFrameItem() : null;
+      var photoId = state.editingPhotoId;
+      var leave = function () { resetCaptureState(); state.step = 'arrange'; render(); };
+      if (frameIt) {
+        if (!confirm(S.tf_delete_slide_confirm)) { return; }
+        tfTrashBtn.disabled = true;
+        callAjax('mod_pinnwand_remove_thread_item', { cmid: cfg.cmid, itemid: frameIt.id }).then(function () {
+          var th = ownThread();
+          if (th) { th.items = th.items.filter(function (o) { return o.id !== frameIt.id; }); }
+          leave();
+        }).catch(function (e) { tfTrashBtn.disabled = false; alert(S.error_save + ' (' + e.message + ')'); });
+        return;
+      }
+      if (photoId) {
+        if (!confirm(S.confirmdelete)) { return; }
+        tfTrashBtn.disabled = true;
+        callAjax('mod_pinnwand_delete_photo', { cmid: cfg.cmid, photoid: photoId }).then(function () {
+          state.photos = state.photos.filter(function (o) { return o.id !== photoId; });
+          leave();
+        }).catch(function (e) { tfTrashBtn.disabled = false; alert(S.error_save + ' (' + e.message + ')'); });
+        return;
+      }
+      if (!confirm(S.tf_discard_confirm)) { return; }
+      leave();
+    });
+    tfHeaderRight.appendChild(tfTrashBtn);
     tfHeaderRight.appendChild(cancelWizardBtn(true));
     // Direkt senden: speichert UND schickt das Objekt sofort in den
     // Post-Stream der Masterpinnwand (hiddenfromboard=0), statt erst über
@@ -8883,13 +9140,9 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     var visible = state.photos.filter(function (p) {
       return !p.hiddenfromboard && p.boardplaced && (p.boardid || 0) === state.currentBoard && !backsideIds[p.id];
     });
-    if (state.boardFilter && state.boardFilter.trim()) {
-      var fq = state.boardFilter.trim().toLowerCase();
-      visible = visible.filter(function (p) {
-        return [p.sourcetitle, p.sourceyear, p.sourceepoch, p.sourceorigauthor, p.sourceauthor, p.tags].some(function (v) {
-          return (v || '').toLowerCase().indexOf(fq) !== -1;
-        });
-      });
+    var filterWords = searchWords(state.boardFilter);
+    if (filterWords.length) {
+      visible = visible.filter(function (p) { return matchesSearch(photoSearchText(p), filterWords); });
     }
     if (state.boardHideMedia) {
       // Lupenmenü "Medien ausblenden": nur Texte/Wortfelder bleiben
@@ -9125,6 +9378,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       var slideEl = buildFrameSlideEl(it, stf, 'ic-frame-slide');
       if (layerPeekHides(it.framez || 0)) { slideEl.classList.add('ic-layer-peek-hidden'); }
       slideEl.title = S.slide_edit;
+      slideEl.setAttribute('data-frameslide', String(it.id));
       slideEl.addEventListener('dblclick', function (ev) { ev.preventDefault(); ev.stopPropagation(); openFrameSlideEditor(it); });
       canvas.appendChild(slideEl);
       frameSlideEls[it.id] = slideEl;
@@ -9398,16 +9652,28 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     // (kein render(), sonst würde das Eingabefeld bei jedem Tastendruck
     // mitten in der Eingabe zerstört und den Fokus verlieren).
     function applyBoardFilterVisibility() {
-      var fq = (state.boardFilter || '').trim().toLowerCase();
+      var words = searchWords(state.boardFilter);
       canvas.querySelectorAll('[data-multikey^="photo:"]').forEach(function (el2) {
         var id = parseInt(el2.getAttribute('data-multikey').split(':')[1], 10);
         var p = state.photos.filter(function (o) { return o.id === id; })[0];
-        var match = !fq || !p || [p.sourcetitle, p.sourceyear, p.sourceepoch, p.sourceorigauthor, p.sourceauthor, p.tags].some(function (v) {
-          return (v || '').toLowerCase().indexOf(fq) !== -1;
+        var match = !words.length || !p || matchesSearch(photoSearchText(p), words);
+        el2.style.display = match ? '' : 'none';
+      });
+      // Rahmen/Folien (auch mit Video/Audio darin) werden ebenfalls gefiltert.
+      var ft = ownThread();
+      canvas.querySelectorAll('[data-multikey^="frame:"], [data-frameslide]').forEach(function (el2) {
+        var fid = parseInt(el2.getAttribute('data-frameslide') || el2.getAttribute('data-multikey').split(':')[1], 10);
+        var fit = null;
+        (state.threads || []).some(function (th) {
+          fit = (th.items || []).filter(function (o) { return o.id === fid; })[0] || null;
+          return !!fit;
         });
+        if (!fit && ft) { fit = ft.items.filter(function (o) { return o.id === fid; })[0] || null; }
+        var match = !words.length || !fit || matchesSearch(frameSearchText(fit), words);
         el2.style.display = match ? '' : 'none';
       });
     }
+    if (searchWords(state.boardFilter).length) { applyBoardFilterVisibility(); }
 
     function isEmptyAreaTarget(target) {
       return !target.closest('.ic-arrange-item, .ic-thread-frame-onboard, button, input, a, .ic-board-ink-capture');

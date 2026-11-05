@@ -1908,3 +1908,11 @@ input.ic-stepper-value {
   align-items: center; justify-content: center; gap: 14px; padding: 16px; box-sizing: border-box; }
 .ic-slide-cam video { max-width: 100%; max-height: calc(100% - 70px); border-radius: 8px; background: #000; }
 .ic-slide-cam-bar { display: flex; gap: 10px; }
+
+/* Upload/Übernahme von Medien läuft */
+.ic-media-busy { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); z-index: 10060; padding: 8px 18px; border-radius: 20px;
+  background: rgba(20,21,24,.9); color: #fff; font: 500 .9rem/1.2 -apple-system, Roboto, Arial, sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+/* Metadaten beim Einfügen eines Bildes in eine Folie */
+.ic-slide-import-note { margin: 0 0 10px; padding: 6px 10px; border-radius: 8px; background: rgba(79,140,255,.18); font-size: .9rem; }
+/* Textfeld <-> WordArt: nur ein Buchstabe */
+.ic-tf-convert-letter { font: 700 1.15rem/1 Georgia, 'Times New Roman', serif; }
