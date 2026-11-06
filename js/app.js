@@ -2784,7 +2784,7 @@
         'transform:rotate(' + (it.framerot || 0) + 'deg);'
     });
     wrap.style.zIndex = it.framez || 0;
-    if (tf.blend) { wrap.style.mixBlendMode = tf.blend; }
+    applyBlendMode(wrap, tf.blend);
     // Auf der Pinnwand gilt "vorher unsichtbar": die Effekte (Farbe, Weichzeichnen,
     // Invertieren, Helligkeit) sind dann nur im Folieneditor zu sehen.
     if (cls !== 'ic-frame-slide' || tf.bgShowBefore) { applySlideBg(wrap, tf); }
@@ -5019,7 +5019,7 @@
           var nWrap = el('div', {
             style: 'position:absolute;left:' + nx + 'px;top:' + ny + 'px;width:' + nw + 'px;' +
               'transform:rotate(' + (p.canvasrot || 0) + 'deg);pointer-events:none;' +
-              (p.blendmode ? 'mix-blend-mode:' + p.blendmode + ';' : '')
+              blendModeCss(p.blendmode)
           }, [nEl || el('img', { src: p.url, alt: '', style: 'width:100%;display:block;' })]);
           neighborsLayer.appendChild(nWrap);
         });
@@ -5077,7 +5077,7 @@
         if (p.wordfielddata) { try { lEl = buildTextFrameLiveDom(JSON.parse(p.wordfielddata), { noGuide: true }); } catch (eL) { lEl = null; } }
         aboveLayer.appendChild(el('div', {
           style: 'position:absolute;left:' + (p.canvasx * bgScale) + 'px;top:' + (p.canvasy * bgScale) + 'px;width:' + (p.canvasw * bgScale) + 'px;' +
-            'transform:rotate(' + (p.canvasrot || 0) + 'deg);pointer-events:none;' + (p.blendmode ? 'mix-blend-mode:' + p.blendmode + ';' : '')
+            'transform:rotate(' + (p.canvasrot || 0) + 'deg);pointer-events:none;' + blendModeCss(p.blendmode)
         }, [lEl || el('img', { src: p.url, alt: '', style: 'width:100%;display:block;' })]));
       });
       frame.appendChild(aboveLayer);
@@ -7159,7 +7159,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       var slidePhoto = state.editingPhotoId ? state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0] : null;
       var curBlend = state.editingFrameItemId ? (tf.blend || '') : slidePhoto ? (slidePhoto.blendmode || '') : (state.slideBlendPending || '');
       var applyEditorBlend = function (mode) {
-        frame.querySelectorAll('.ic-textframe-obj, .ic-textframe-shapeobj').forEach(function (o) { o.style.mixBlendMode = mode || ''; });
+        frame.querySelectorAll('.ic-textframe-obj, .ic-textframe-shapeobj').forEach(function (o) { applyBlendMode(o, mode); });
       };
       slideTopRow.appendChild(el('span', { class: 'ic-anim-blend-label' }, [S.blend_mode]));
       slideTopRow.appendChild(iconDropdown(BLEND_MODES(), curBlend, S.blend_mode, function (mode) {
@@ -8304,10 +8304,21 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     return dd;
   }
 
+  // Mischmodus anwenden. "invert" ist kein Mischmodus mit dem Untergrund,
+  // sondern kehrt die Farben des Objekts selbst um (CSS-Filter).
+  function applyBlendMode(elem, mode) {
+    elem.style.mixBlendMode = mode && mode !== 'invert' ? mode : '';
+    elem.style.filter = mode === 'invert' ? 'invert(1)' : '';
+  }
+  function blendModeCss(mode) {
+    if (!mode) { return ''; }
+    return mode === 'invert' ? 'filter:invert(1);' : 'mix-blend-mode:' + mode + ';';
+  }
   function BLEND_MODES() {
     return [
       { value: '', text: '\u25A0', label: S.blend_normal },
       { value: 'multiply', text: '\u00D7', label: S.blend_multiply },
+      { value: 'invert', text: '\u25D0', label: S.blend_invert },
       { value: 'difference', text: '\u25D1', label: S.blend_difference },
       { value: 'color-burn', text: '\u2600', label: S.blend_burn }
     ];
@@ -9171,7 +9182,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
       item.style.zIndex = p.canvasz || 0;
-      if (p.blendmode) { item.style.mixBlendMode = p.blendmode; }
+      applyBlendMode(item, p.blendmode);
       if (layerPeekHides(p.canvasz || 0)) { item.classList.add('ic-layer-peek-hidden'); }
       var backPhoto = p.backphotoid ? state.photos.filter(function (o) { return o.id === p.backphotoid; })[0] : null;
       if (p.wordfielddata && !p.showingback) {
@@ -11392,7 +11403,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           'transform:rotate(' + (p.canvasrot || 0) + 'deg)'
       });
       pEl.style.zIndex = p.canvasz || 0;
-      if (p.blendmode) { pEl.style.mixBlendMode = p.blendmode; }
+      applyBlendMode(pEl, p.blendmode);
       var live = null;
       if (tf) {
         try { live = buildTextFrameLiveDom(tf, { noGuide: true }); } catch (e2) { live = null; tf = null; }

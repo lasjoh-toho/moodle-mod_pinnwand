@@ -1906,7 +1906,7 @@ class mod_pinnwand_external extends external_api {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
             'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
-            'mode' => new external_value(PARAM_ALPHAEXT, 'leer, multiply, difference oder color-burn'),
+            'mode' => new external_value(PARAM_ALPHAEXT, 'leer, multiply, difference, color-burn oder invert'),
         ]);
     }
 
@@ -1921,7 +1921,7 @@ class mod_pinnwand_external extends external_api {
                 || ($photo->userid != $USER->id && !has_capability('mod/pinnwand:manage', $context))) {
             throw new moodle_exception('nopermissions', 'error', '', 'set_blendmode');
         }
-        $allowed = ['', 'multiply', 'difference', 'color-burn'];
+        $allowed = ['', 'multiply', 'difference', 'color-burn', 'invert'];
         $photo->blendmode = in_array($params['mode'], $allowed, true) ? $params['mode'] : '';
         $DB->update_record('pinnwand_photos', $photo);
         return ['success' => true, 'blendmode' => $photo->blendmode];
