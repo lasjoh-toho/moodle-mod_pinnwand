@@ -380,6 +380,7 @@ $config = [
         'blend_normal' => get_string('blend_normal', 'pinnwand'),
         'blend_multiply' => get_string('blend_multiply', 'pinnwand'),
         'blend_difference' => get_string('blend_difference', 'pinnwand'),
+        'blend_invert' => get_string('blend_invert', 'pinnwand'),
         'blend_burn' => get_string('blend_burn', 'pinnwand'),
         'layer_peek' => get_string('layer_peek', 'pinnwand'),
         'layer_peek_off' => get_string('layer_peek_off', 'pinnwand'),

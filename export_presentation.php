@@ -181,7 +181,7 @@ foreach ($items as $it) {
         if (is_array($ftf)) {
             $entry['framesvg'] = (string) $it->framesvg;
             $entry['animsteps'] = pinnwand_export_anim_steps($ftf);
-            $entry['blend'] = in_array($ftf['blend'] ?? '', ['multiply', 'difference', 'color-burn'], true) ? $ftf['blend'] : '';
+            $entry['blend'] = in_array($ftf['blend'] ?? '', ['multiply', 'difference', 'color-burn', 'invert'], true) ? $ftf['blend'] : '';
             // Folien-Hintergrund (Farbe/Deckkraft/Weichzeichnen) und mit der
             // Folie verknüpfte Objekte (bleiben trotz höherer Ebene sichtbar).
             $sbg = is_array($ftf['slideBg'] ?? null) ? $ftf['slideBg'] : [];
@@ -561,7 +561,7 @@ function pinnwand_export_build_html($title, $json) {
     pel.style.width = p.canvasw + 'px';
     pel.style.transform = 'rotate(' + (p.canvasrot || 0) + 'deg)';
     pel.style.zIndex = p.canvasz || 0;
-    if (p.blendmode) { pel.style.mixBlendMode = p.blendmode; }
+    if (p.blendmode === 'invert') { pel.style.filter = 'invert(1)'; } else if (p.blendmode) { pel.style.mixBlendMode = p.blendmode; }
     var img = document.createElement('img');
     img.src = p.url; img.alt = '';
     // Folie mit Animationsschritten: SVG direkt einbetten statt als Bild,
@@ -642,7 +642,7 @@ function pinnwand_export_build_html($title, $json) {
         fel.style.height = it.frameh + 'px';
         fel.style.transform = 'rotate(' + (it.framerot || 0) + 'deg)';
         fel.style.zIndex = it.framez || 0;
-        if (it.blend) { fel.style.mixBlendMode = it.blend; }
+        if (it.blend === 'invert') { fel.style.filter = 'invert(1)'; } else if (it.blend) { fel.style.mixBlendMode = it.blend; }
         var sbcss = it.slidebg ? PinnwandPresentation.slideBgCss(it.slidebg) : null;
         if (sbcss) {
           fel.style.background = sbcss.background;
