@@ -64,6 +64,7 @@
 .fe-sec:last-child .fe-group:last-child { border-right: 0; }
 .fe-ribbon.is-panning { cursor: grabbing; scroll-snap-type: none; user-select: none; }
 .fe-ribbon.is-panning * { pointer-events: none; }
+.fe-ribbon.is-wheeling { scroll-snap-type: none; }
 .fe-grid { display: grid; grid-template-rows: repeat(2, var(--fe-tap)); grid-auto-flow: column; grid-auto-columns: minmax(var(--fe-tap), auto); gap: 3px; }
 .fe-rb { min-width: var(--fe-tap); height: var(--fe-tap); padding: 0 6px; border: 1px solid transparent; border-radius: 8px; background: transparent;
   display: grid; place-items: center; font-size: 15px; }
