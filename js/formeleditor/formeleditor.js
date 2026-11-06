@@ -4,6 +4,93 @@
   const L = global.FormelLogik;
   let counter = 0;
 
+  /* ---------- Algebra (Compute Engine, MIT) ----------
+     Liegt als compute-engine.min.js neben dieser Datei und wird erst geladen,
+     wenn jemand "Umformen" öffnet. Andere Ablage: mount(..., { casUrl }) oder
+     global.FormelEditorCasUrl. */
+  const SELF_SRC = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) || '';
+  let casPromise = null;
+  function loadCas(url) {
+    if (global.ComputeEngine && global.ComputeEngine.ComputeEngine) return Promise.resolve(casEngine());
+    url = url || global.FormelEditorCasUrl || (SELF_SRC ? SELF_SRC.replace(/[^/?#]*([?#].*)?$/, 'compute-engine.min.js') : '');
+    if (!url) return Promise.reject(new Error('cas'));
+    if (!casPromise) {
+      casPromise = new Promise((resolve, reject) => {
+        const sc = document.createElement('script');
+        sc.src = url;
+        // In Moodle (RequireJS) kein AMD-Modul anmelden, sondern global setzen.
+        const savedDefine = global.define;
+        if (savedDefine && savedDefine.amd) global.define = undefined;
+        const done = () => { if (savedDefine) global.define = savedDefine; };
+        sc.onload = () => { done(); if (global.ComputeEngine && global.ComputeEngine.ComputeEngine) resolve(casEngine()); else reject(new Error('cas')); };
+        sc.onerror = () => { done(); reject(new Error('cas')); };
+        document.head.appendChild(sc);
+      }).catch((e) => { casPromise = null; throw e; });
+    }
+    return casPromise;
+  }
+  let ceInst = null;
+  function casEngine() {
+    if (!ceInst) ceInst = new global.ComputeEngine.ComputeEngine();
+    return ceInst;
+  }
+  const casNorm = (t) => String(t).replace(/\\left|\\right|\\cdot|\\,|\\;|\s+/g, '');
+  const CAS_RELS = { Equal: '=', Less: '<', Greater: '>', LessEqual: '\\le', GreaterEqual: '\\ge', NotEqual: '\\ne' };
+  /* Umformungen mit echtem Rechnen: Ausmultiplizieren, Faktorisieren
+     (z. B. binomische Formeln), Vereinfachen und Lösen. Wirkt auf die
+     Auswahl, sonst auf die ganze Formel (bei Gleichungen auf beide Seiten). */
+  function casTransformations(ce, src, sel) {
+    const items = [];
+    if (/\\square|\\htmlClass|\\htmlData/.test(src)) return items;
+    const part = sel && sel.e > sel.s ? { s: sel.s, e: sel.e } : null;
+    const text = part ? src.slice(part.s, part.e) : src;
+    if (!text.trim()) return items;
+    let e;
+    try { e = ce.parse(text); } catch (_) { return items; }
+    if (!e || !e.isValid) return items;
+    const rel = !part && CAS_RELS[e.operator] && e.nops === 2 ? e.operator : null;
+    const apply = (x, op) => (op === 'Simplify' ? x.simplify() : ce.box([op, x]).evaluate());
+    // Nur echte Änderungen anbieten, nicht bloß eine andere Reihenfolge.
+    const same = (a, b) => { try { return a.isSame(b); } catch (_) { return false; } };
+    const run = (op) => {
+      if (rel) {
+        const l = apply(e.op1, op), r = apply(e.op2, op);
+        return same(l, e.op1) && same(r, e.op2) ? null : l.latex + ' ' + CAS_RELS[rel] + ' ' + r.latex;
+      }
+      const x = apply(e, op);
+      return same(x, e) ? null : x.latex;
+    };
+    const place = (res) => {
+      if (!part) return { src: res, select: null };
+      const before = src.slice(0, part.s).trim(), after = src.slice(part.e).trim();
+      const open = before === '' || /[+\-=({]$|\\left\($/.test(before);
+      const close = after === '' || /^[+\-=)}]|^\\right\)/.test(after);
+      const needs = !(open && close) && /.[+\-]/.test(res.replace(/\{[^{}]*\}/g, '{}'));
+      const ins = needs ? '\\left(' + res + '\\right)' : res;
+      return { src: src.slice(0, part.s) + ins + src.slice(part.e), select: { s: part.s, e: part.s + ins.length } };
+    };
+    const seen = new Set([casNorm(text)]);
+    [['Expand', 'Ausmultiplizieren'], ['Factor', 'Faktorisieren (z. B. binomische Formel)'], ['Simplify', 'Vereinfachen']].forEach(([op, title]) => {
+      let res;
+      try { res = run(op); } catch (_) { return; }
+      if (!res || seen.has(casNorm(res))) return;
+      seen.add(casNorm(res));
+      const pl = place(res);
+      items.push({ group: part ? 'Algebra mit der Auswahl' : 'Algebra', title, src: pl.src, select: pl.select });
+    });
+    if (rel === 'Equal') {
+      (e.unknowns || []).slice(0, 3).forEach((v) => {
+        let sols;
+        try { sols = e.solve(v); } catch (_) { return; }
+        if (!sols || !sols.length || sols.length > 6) return;
+        const vt = ce.box(v).latex;
+        const res = sols.map((x) => vt + ' = ' + x.latex).join(' \\;\\text{oder}\\; ');
+        items.push({ group: 'Algebra', title: 'Lösen nach ' + vt, src: res, select: null });
+      });
+    }
+    return items;
+  }
+
   const KOPT = {
     throwOnError: true, displayMode: true, strict: 'ignore',
     trust: (c) => c.command === '\\htmlData' || (c.command === '\\htmlClass' && /^(sel|ph)$/.test(c.class))
@@ -1198,6 +1285,26 @@
         pop.appendChild(foot);
       }
       pop._items = items;
+      if (o.transform && !cache.err && src.trim()) {
+        const wait = h('p', { class: 'fe-pop-empty fe-pop-cas-wait' }, 'Rechnen wird geladen …');
+        pop.insertBefore(wait, list.nextSibling);
+        loadCas(o.casUrl).then((ce) => {
+          wait.remove();
+          if (pop.hidden || ta.value !== src) return;
+          const more = casTransformations(ce, src, curSel);
+          if (!more.length) return;
+          const empty = pop.querySelector('.fe-pop-empty');
+          if (empty) empty.remove();
+          let g = '';
+          more.forEach((it) => {
+            const n = pop._items.length;
+            pop._items.push(it);
+            if (it.group !== g) { list.appendChild(h('div', { class: 'fe-pop-group' }, esc(it.group))); g = it.group; }
+            list.appendChild(h('button', { type: 'button', class: 'fe-pop-item', 'data-n': n },
+              '<span class="fe-pop-title"><span>' + esc(it.title) + '</span></span><span class="fe-pop-res">' + mini(it.src) + '</span>'));
+          });
+        }).catch(() => { wait.remove(); });
+      }
       pop.hidden = false;
       btnTransform.setAttribute('aria-expanded', 'true');
       document.addEventListener('pointerdown', outside, true);
