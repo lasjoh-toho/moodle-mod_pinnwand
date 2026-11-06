@@ -17,4 +17,12 @@
     <license>MIT</license>
     <repository>https://github.com/KaTeX/KaTeX</repository>
   </library>
+  <library>
+    <location>js/formeleditor/compute-engine.min.js</location>
+    <name>Compute Engine (CortexJS)</name>
+    <description>Algebra for the formula editor (expand, factor, simplify, solve); loaded only when "Umformen" is opened.</description>
+    <version>0.173.0</version>
+    <license>MIT</license>
+    <repository>https://github.com/cortex-js/compute-engine</repository>
+  </library>
 </libraries>
