@@ -382,6 +382,22 @@
     ribbon.addEventListener('pointerup', bandEnd);
     ribbon.addEventListener('pointercancel', bandEnd);
     ribbon.addEventListener('click', (e) => { if (bandDragged) { e.stopPropagation(); e.preventDefault(); } }, true);
+    /* Mausrad über dem Band: senkrechtes Drehen scrollt das Band waagerecht.
+       Am Anfang/Ende des Bands scrollt wieder die Seite. */
+    let wheelTimer = 0;
+    ribbon.addEventListener('wheel', (e) => {
+      if (e.ctrlKey || ribbon.scrollWidth <= ribbon.clientWidth + 1) return;
+      let d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      if (!d) return;
+      if (e.deltaMode === 1) d *= 32; else if (e.deltaMode === 2) d *= ribbon.clientWidth;
+      const max = ribbon.scrollWidth - ribbon.clientWidth;
+      if ((d < 0 && ribbon.scrollLeft <= 0) || (d > 0 && ribbon.scrollLeft >= max - 1)) return;
+      e.preventDefault();
+      ribbon.classList.add('is-wheeling');
+      ribbon.scrollLeft = Math.max(0, Math.min(max, ribbon.scrollLeft + d));
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(() => ribbon.classList.remove('is-wheeling'), 250);
+    }, { passive: false });
     let tabDrag = null, tabJustDragged = false;
     const tabStart = (x) => {
       const d = tabDrag; if (!d || d.started) return;
