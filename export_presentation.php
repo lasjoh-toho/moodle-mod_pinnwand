@@ -69,6 +69,12 @@ function pinnwand_export_anim_steps(array $tf): int {
             $exists['s' . ($sh['id'] ?? '')] = true;
         }
     }
+    foreach (($tf['ink'] ?? []) as $st) {
+        $exists['i' . ($st['id'] ?? '')] = true;
+    }
+    foreach (($tf['media'] ?? []) as $md) {
+        $exists['m' . ($md['id'] ?? '')] = true;
+    }
     $steps = 0;
     $seen = [];
     foreach (($tf['anim'] ?? []) as $a) {
@@ -219,6 +225,18 @@ foreach ($items as $it) {
                     'grain' => max(0, min(100, (int) ($sfill['grain'] ?? 0))),
                 ],
             ];
+            // Bild als Folien-Hintergrund: Datei aus der Pinnwand oder Link.
+            $simg = is_array($sbg['image'] ?? null) ? $sbg['image'] : [];
+            if (!empty($simg['file']) && is_string($simg['file'])) {
+                $entry['slidebg']['image'] = moodle_url::make_pluginfile_url($context->id, 'mod_pinnwand', 'slidemedia', 0, '/',
+                    clean_param($simg['file'], PARAM_FILE))->out(false);
+            } else if (!empty($simg['url']) && preg_match('~^https?://~i', (string) $simg['url'])) {
+                $entry['slidebg']['image'] = clean_param((string) $simg['url'], PARAM_URL);
+            }
+            // Präsentation: Hintergrund bildschirmfüllend (Standard an).
+            $entry['bgfull'] = !array_key_exists('full', $sbg) || !empty($sbg['full']);
+            $entry['elemhidebefore'] = !empty($ftf['elemHideBefore']);
+            $entry['elemhideafter'] = !empty($ftf['elemHideAfter']);
             $entry['bgpersist'] = !empty($ftf['bgPersist']);
             $entry['bgshowbefore'] = !empty($ftf['bgShowBefore']);
             $entry['linked'] = array_values(array_map('intval', is_array($ftf['linked'] ?? null) ? $ftf['linked'] : []));
@@ -643,13 +661,8 @@ function pinnwand_export_build_html($title, $json) {
         fel.style.transform = 'rotate(' + (it.framerot || 0) + 'deg)';
         fel.style.zIndex = it.framez || 0;
         if (it.blend === 'invert') { fel.style.filter = 'invert(1)'; } else if (it.blend) { fel.style.mixBlendMode = it.blend; }
-        var sbcss = it.slidebg ? PinnwandPresentation.slideBgCss(it.slidebg) : null;
-        if (sbcss) {
-          fel.style.background = sbcss.background;
-          if (sbcss.size) { fel.style.backgroundSize = sbcss.size; }
-          if (sbcss.filter) { fel.style.backdropFilter = fel.style.webkitBackdropFilter = sbcss.filter; }
-        }
         fel.innerHTML = it.framesvg;
+        var sbcss = it.slidebg ? PinnwandPresentation.paintSlideBg(fel, it.slidebg) : null;
         var fsvg = fel.querySelector('svg');
         if (fsvg) { fsvg.style.width = '100%'; fsvg.style.height = '100%'; fsvg.style.display = 'block'; }
         canvas.appendChild(fel);
@@ -660,6 +673,9 @@ function pinnwand_export_build_html($title, $json) {
         fstep.slideEl = fel;
         fstep.slideBgHideBefore = !it.bgshowbefore;
         fstep.slideBgHideAfter = !it.bgpersist;
+        fstep.slideElemHideBefore = !!it.elemhidebefore;
+        fstep.slideElemHideAfter = !!it.elemhideafter;
+        fstep.slideBgFull = sbcss && it.bgfull !== false ? it.slidebg : null;
       }
       return fstep;
     }
