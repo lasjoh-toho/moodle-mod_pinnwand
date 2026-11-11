@@ -650,6 +650,16 @@
       state.step = step;
       render();
     }
+    // Platzieren-Modus: Gesamtansicht der Pinnwand, Plus mit Beschriftung
+    // am Zeiger; der Klick legt die Stelle fest, danach öffnet der Editor
+    // (siehe setupPlacementMode in renderArrange).
+    function startPlacement(label, wordArt, prep) {
+      overlay.remove();
+      resetCaptureState();
+      state.placePending = { label: label, wordArt: wordArt, prep: prep };
+      state.step = 'arrange';
+      render();
+    }
 
     var fileInput = el('input', { type: 'file', accept: 'image/*', multiple: 'multiple', style: 'display:none' });
     function handleFiles(list) {
@@ -710,11 +720,11 @@
     var gridText = el('div', { class: 'ic-add-modal-grid' });
     var textFrameBtn = el('button', { class: 'ic-choice-btn' }, [icon('text'), el('span', {}, [S.addtextframe])]);
     textFrameBtn.addEventListener('click', function () {
-      closeAndGo('textframe', function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = false; state.slidePlacement = null; });
+      startPlacement(S.addtextframe, false, function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = false; });
     });
     var wordArtBtn = el('button', { class: 'ic-choice-btn' }, [icon('text'), el('span', {}, [S.addwordart])]);
     wordArtBtn.addEventListener('click', function () {
-      closeAndGo('textframe', function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = true; state.slidePlacement = null; });
+      startPlacement(S.addwordart, true, function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = true; });
     });
     // Folie: durchsichtiger Rahmen mit mehreren Textfeldern/Objekten über
     // dem sichtbaren Pinnwand-Hintergrund, mit Animationsschritten für die
@@ -746,7 +756,7 @@
     // (siehe state.tfAutoFormula in renderTextFrame).
     var formulaBtn = el('button', { class: 'ic-choice-btn' }, [icon('formula'), el('span', {}, [S.addformula])]);
     formulaBtn.addEventListener('click', function () {
-      closeAndGo('textframe', function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = false; state.slidePlacement = null; state.tfAutoFormula = true; });
+      startPlacement(S.addformula, false, function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = false; state.tfAutoFormula = true; });
     });
     gridText.appendChild(textFrameBtn);
     gridText.appendChild(wordArtBtn);
@@ -2110,6 +2120,7 @@
     state.editingPhotoId = null;
     state.textFrame = null;
     state.slidePlacement = null;
+    state.tfBoardRect = null;
     state.slideBlendPending = '';
     state.editingFrameItemId = null;
     state.slideScale = null;
@@ -4859,7 +4870,7 @@
             render();
           });
         };
-        var slidePlace = !isEditingExisting && tf.isSlide ? state.slidePlacement : null;
+        var slidePlace = !isEditingExisting ? state.slidePlacement : null;
         if (slidePlace && photoid && !sendDirect) {
           // Neue Folie: gleich an der geplanten Stelle auf die Pinnwand legen
           // und danach dorthin zurückkehren.
@@ -4879,6 +4890,13 @@
               render();
             });
           });
+        } else if (isEditingExisting && state.tfBoardRect && !tf.isSlide && photoid) {
+          // Im Editor skaliert: neue Größe (um die Mitte) auf der Pinnwand übernehmen.
+          var er = state.photos.filter(function (p) { return p.id === photoid; })[0] || {};
+          callAjax('mod_pinnwand_update_layout', {
+            cmid: cfg.cmid, photoid: photoid, x: state.tfBoardRect.canvasx, y: state.tfBoardRect.canvasy, w: state.tfBoardRect.canvasw,
+            rot: er.canvasrot || 0, z: er.canvasz || 0, boardid: er.boardid || 0
+          }).then(afterSave).catch(afterSave);
         } else if (sendDirect && photoid) {
           callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: photoid, hidden: false })
             .then(afterSave).catch(afterSave);
@@ -4971,10 +4989,15 @@
     var stage = el('div', { class: 'ic-stage ic-tf-stage' + (tfShowBg ? ' ic-tf-stage-boardbg' : '') });
     var editingRec = state.editingPhotoId ? state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0] : null;
     var isSlide = !!tf.isSlide;
+    // Im Editor skaliertes, bereits platziertes Objekt: neue Lage/Größe
+    // (state.tfBoardRect) gilt schon für die Darstellung des Hintergrunds.
+    if (editingRec && state.tfBoardRect && !isSlide) {
+      editingRec = Object.assign({}, editingRec, state.tfBoardRect);
+    }
     // Neue Folie: geplante Board-Position (siehe currentSlidePlacement) -
     // so zeigt auch der Editor einer noch nicht gespeicherten Folie den
     // Hintergrund genau an der Stelle, an der sie auf der Pinnwand landet.
-    if (!editingRec && isSlide && state.slidePlacement) {
+    if (!editingRec && state.slidePlacement) {
       editingRec = { id: -1, canvasx: state.slidePlacement.canvasx, canvasy: state.slidePlacement.canvasy, canvasw: state.slidePlacement.canvasw,
         canvasz: state.slidePlacement.canvasz, boardid: state.slidePlacement.boardid };
     }
@@ -4996,6 +5019,11 @@
     }
     if (isSlide) { stage.classList.add('ic-tf-stage-slide'); }
     var hasBoardPos = editingRec && editingRec.canvasw;
+    // Reiter "Größe und Position" offen: Editor zoomt etwas heraus, der
+    // Pinnwand-Hintergrund ist immer sichtbar, das Objekt lässt sich
+    // verschieben (siehe unten).
+    var tfScaleMode = !!(hasBoardPos && !isSlide && state.tfOpenBlocks && state.tfOpenBlocks[S.tfblock_scale]);
+    if (tfScaleMode && !tfShowBg) { tfShowBg = true; stage.classList.add('ic-tf-stage-boardbg'); }
     // Folieneditor: Ansichts-Zoom (Rahmen und alles darin wird skaliert).
     var tfZ = function () { return (editFrameIt && hasBoardPos && state.tfZoom) || 1; };
     var bgScale = hasBoardPos ? (tf.w / editingRec.canvasw) : 1;
@@ -5594,6 +5622,7 @@
     BLOCK_ICONS[S.tfblock_formulas] = 'code';
     BLOCK_ICONS[S.tfblock_slide] = 'frameicon';
     BLOCK_ICONS[S.tfblock_elements] = 'grid';
+    BLOCK_ICONS[S.tfblock_scale] = 'fullscreen';
     // Akkordeon: Überschrift antippen klappt den jeweiligen Block ein/aus -
     // auf dem Handy starten alle Blöcke eingeklappt (siehe CSS), auf
     // größeren Bildschirmen bleiben sie offen.
@@ -5609,12 +5638,13 @@
       if (!pos || window.matchMedia('(max-width: 640px)').matches) { contentEl.style.translate = ''; return; }
       contentEl.style.translate = pos.dx + 'px ' + pos.dy + 'px';
     }
-    function makeAccordionBlock(titleText, onTabClick) {
+    function makeAccordionBlock(titleText, onTabClick, opts) {
+      opts = opts || {};
       var blockEl = el('div', { class: 'ic-textframe-block' + (state.tfOpenBlocks[titleText] ? ' ic-tf-open' : '') });
       var titleEl = el('button', { class: 'ic-textframe-block-title ic-tf-tab', type: 'button' },
         [icon(BLOCK_ICONS[titleText] || 'grid'), el('span', {}, [titleText])]);
       var contentEl = el('div', { class: 'ic-textframe-block-content ic-tf-popup' });
-      var popHead = el('div', { class: 'ic-tf-popup-head' }, [el('span', { class: 'ic-float-grip' }, ['\u2630']), el('span', {}, [titleText])]);
+      var popHead = el('div', { class: 'ic-tf-popup-head' }, [el('span', { class: 'ic-float-grip' }, ['\u2630']), el('span', {}, [opts.head || titleText])]);
       var popClose = el('button', { class: 'ic-float-min', type: 'button', title: S.cancel }, ['\u2715']);
       popHead.appendChild(popClose);
       contentEl.appendChild(popHead);
@@ -5622,6 +5652,7 @@
       function setOpen(open) {
         blockEl.classList.toggle('ic-tf-open', open);
         if (open) { state.tfOpenBlocks[titleText] = true; } else { delete state.tfOpenBlocks[titleText]; }
+        if (opts.onToggle) { opts.onToggle(open); }
       }
       popClose.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
       popClose.addEventListener('click', function () { setOpen(false); });
@@ -5680,6 +5711,69 @@
     // WordArt behält den Formeln-Reiter, damit Formeln aus einem
     // umgewandelten Textfeld weiter bearbeitbar bleiben.
     if (!formulaTab) { blocksWrap.appendChild(makeAccordionBlock(S.tfblock_formulas, openFormulaEditor)); }
+    // Skalieren: Größe des Objekts auf der Pinnwand. Der Editor zeigt das
+    // Objekt immer gleich groß - wird es größer, wird der Hintergrund im
+    // Maßstab entsprechend kleiner (und umgekehrt).
+    if (hasBoardPos && !isSlide) {
+      var blockScale = makeAccordionBlock(S.tfblock_scale, null, { head: S.tfblock_scale_head, onToggle: function () { render(); } });
+      var scaleRect = function () {
+        if (!state.editingPhotoId && state.slidePlacement) { return state.slidePlacement; }
+        if (!state.tfBoardRect) {
+          state.tfBoardRect = { canvasx: editingRec.canvasx || 0, canvasy: editingRec.canvasy || 0, canvasw: editingRec.canvasw };
+        }
+        return state.tfBoardRect;
+      };
+      var pct = function () { return Math.round(scaleRect().canvasw / tf.w * 100); };
+      var setScale = function (newPct) {
+        var r = scaleRect();
+        var w0 = r.canvasw, w1 = Math.max(10, Math.min(400, newPct)) / 100 * tf.w;
+        var h0 = w0 * tf.h / tf.w, h1 = w1 * tf.h / tf.w;
+        r.canvasx = Math.round(r.canvasx + (w0 - w1) / 2);
+        r.canvasy = Math.round(r.canvasy + (h0 - h1) / 2);
+        r.canvasw = Math.round(w1);
+        render();
+      };
+      var scaleRange = el('input', { type: 'range', min: '10', max: '400', step: '5', value: String(pct()), class: 'ic-tf-scale-range' });
+      scaleRange.addEventListener('change', function () { setScale(parseInt(scaleRange.value, 10)); });
+      var scaleMinus = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', title: S.tf_scale_smaller }, ['\u2212']);
+      scaleMinus.addEventListener('click', function () { setScale(pct() / 1.25); });
+      var scalePlus = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', title: S.tf_scale_larger }, ['+']);
+      scalePlus.addEventListener('click', function () { setScale(pct() * 1.25); });
+      blockScale.content.appendChild(el('div', { class: 'ic-tf-scale-row' }, [scaleMinus, scaleRange, scalePlus]));
+      // Verschieben: das Objekt folgt dem Zeiger über dem stehenden
+      // Hintergrund; beim Loslassen wird die neue Board-Position übernommen
+      // und der Editor zentriert das Objekt wieder.
+      if (tfScaleMode) {
+        var TF_SCALE_ZOOM = 0.6;
+        frame.style.scale = String(TF_SCALE_ZOOM);
+        var moveCap = el('div', { class: 'ic-tf-move-capture', title: S.tf_move_hint });
+        frame.appendChild(moveCap);
+        var mv = null;
+        moveCap.addEventListener('pointerdown', function (ev) {
+          mv = { sx: ev.clientX, sy: ev.clientY, dx: 0, dy: 0 };
+          try { moveCap.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+          ev.preventDefault(); ev.stopPropagation();
+        });
+        moveCap.addEventListener('pointermove', function (ev) {
+          if (!mv) { return; }
+          mv.dx = ev.clientX - mv.sx; mv.dy = ev.clientY - mv.sy;
+          frame.style.translate = mv.dx + 'px ' + mv.dy + 'px';
+          if (neighborsLayer) { neighborsLayer.style.translate = (-mv.dx / TF_SCALE_ZOOM) + 'px ' + (-mv.dy / TF_SCALE_ZOOM) + 'px'; }
+        });
+        var endMove = function () {
+          if (!mv) { return; }
+          var d = mv; mv = null;
+          if (Math.abs(d.dx) + Math.abs(d.dy) < 2) { frame.style.translate = ''; return; }
+          var r = scaleRect();
+          r.canvasx = Math.round(r.canvasx + d.dx / (TF_SCALE_ZOOM * bgScale));
+          r.canvasy = Math.round(r.canvasy + d.dy / (TF_SCALE_ZOOM * bgScale));
+          render();
+        };
+        moveCap.addEventListener('pointerup', endMove);
+        moveCap.addEventListener('pointercancel', endMove);
+      }
+      blocksWrap.appendChild(blockScale);
+    }
     layout.appendChild(tfDock);
 
     // Block 1 "Farben und Formen" - identisch in beiden Editoren (Zettel
@@ -9976,6 +10070,76 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       state.boardPanX = rect.width / 2 - (minX + maxX) / 2 * state.boardZoom;
       state.boardPanY = rect.height / 2 - (minY + maxY) / 2 * state.boardZoom;
       applyBoardTransform();
+    }
+    if (state.placePending) { setupPlacementMode(); }
+    function setupPlacementMode() {
+      var pend = state.placePending;
+      var ov = el('div', { class: 'ic-place-overlay' });
+      var cur = el('div', { class: 'ic-place-cursor' }, [el('span', { class: 'ic-place-plus' }, ['+']), el('span', { class: 'ic-place-label' }, [pend.label])]);
+      var hint = el('div', { class: 'ic-place-hint' }, [S.place_hint]);
+      var cancelBtn = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button' }, [S.cancel]);
+      hint.appendChild(cancelBtn);
+      ov.appendChild(cur);
+      body.appendChild(ov);
+      body.appendChild(hint);
+      function place() {
+        var r = wrap.getBoundingClientRect();
+        ov.style.left = r.left + 'px'; ov.style.top = r.top + 'px';
+        ov.style.width = r.width + 'px'; ov.style.height = r.height + 'px';
+      }
+      function end() {
+        state.placePending = null;
+        ov.remove(); hint.remove();
+        document.removeEventListener('keydown', onKey);
+      }
+      function onKey(ev) { if (ev.key === 'Escape') { end(); } }
+      document.addEventListener('keydown', onKey);
+      cancelBtn.addEventListener('click', end);
+      requestAnimationFrame(function () {
+        place();
+        // Überblick über die ganze Pinnwand.
+        var r = wrap.getBoundingClientRect();
+        if (r.width > 20 && r.height > 20) {
+          state.boardZoom = Math.max(0.1, Math.min(r.width / BOARD_W, r.height / BOARD_H) * 0.95);
+          state.boardPanX = (r.width - BOARD_W * state.boardZoom) / 2;
+          state.boardPanY = (r.height - BOARD_H * state.boardZoom) / 2;
+          applyBoardTransform();
+        }
+      });
+      ov.addEventListener('pointermove', function (ev) {
+        var r = ov.getBoundingClientRect();
+        cur.style.left = (ev.clientX - r.left) + 'px'; cur.style.top = (ev.clientY - r.top) + 'px';
+        cur.style.display = '';
+      });
+      ov.addEventListener('pointerleave', function () { cur.style.display = 'none'; });
+      ov.addEventListener('wheel', function (ev) {
+        ev.preventDefault();
+        zoomBoardBy(Math.exp(-ev.deltaY * 0.0015 * (ev.deltaMode === 1 ? 16 : 1)), ev.clientX, ev.clientY);
+      }, { passive: false });
+      ov.addEventListener('click', function (ev) {
+        var r = wrap.getBoundingClientRect();
+        var z = state.boardZoom || 1;
+        var bx = (ev.clientX - r.left + wrap.scrollLeft - (state.boardPanX || 0)) / z;
+        var by = (ev.clientY - r.top + wrap.scrollTop - (state.boardPanY || 0)) / z;
+        var dims = newTextFrame(pend.wordArt);
+        var w = dims.w, h = dims.h;
+        var maxZ = 0;
+        state.photos.forEach(function (p) {
+          if (p.boardplaced && (p.boardid || 0) === (state.currentBoard || 0)) { maxZ = Math.max(maxZ, p.canvasz || 0); }
+        });
+        var otz = ownThread();
+        (otz ? otz.items : []).forEach(function (o) {
+          if (o.itemtype === 'frame' && (o.boardid || 0) === (state.currentBoard || 0)) { maxZ = Math.max(maxZ, o.framez || 0); }
+        });
+        end();
+        if (pend.prep) { pend.prep(); }
+        state.slidePlacement = {
+          canvasx: Math.round(bx - w / 2), canvasy: Math.round(by - h / 2), canvasw: w,
+          canvasrot: 0, canvasz: maxZ + 1, boardid: state.currentBoard || 0
+        };
+        state.step = 'textframe';
+        render();
+      });
     }
     function fitViewToSelection() {
       if (!state.multiSelect.length) { return; }

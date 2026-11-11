@@ -1982,3 +1982,30 @@ input.ic-stepper-value {
 .ic-anim-delay::-webkit-outer-spin-button, .ic-anim-delay::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .ic-slide-check input[type=checkbox] { width: auto; margin: 0 4px 0 0; }
 .ic-slide-col > .ic-hint { text-align: left; margin: 4px 0; padding: 0; font-size: 11px; }
+
+/* Platzieren-Modus nach "Hinzufügen": Plus mit Beschriftung am Zeiger */
+.ic-place-overlay { position: fixed; z-index: 150; cursor: none; touch-action: none; }
+.ic-place-cursor {
+  position: absolute; display: none; transform: translate(-50%, -22px); pointer-events: none;
+  flex-direction: column; align-items: center; text-align: center;
+}
+.ic-place-overlay:hover .ic-place-cursor { display: flex; }
+.ic-place-plus {
+  display: block; width: 44px; height: 44px; line-height: 40px; border-radius: 50%; margin: 0 auto;
+  background: var(--ic-accent); color: #fff; font-size: 2rem; font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0,0,0,.45);
+}
+.ic-place-label {
+  display: block; margin-top: 6px; padding: 3px 10px; border-radius: 10px; white-space: nowrap;
+  background: rgba(20,21,24,.85); color: #fff; font-size: .85rem; font-weight: 600;
+}
+.ic-place-hint {
+  position: fixed; z-index: 151; top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border-radius: 12px;
+  background: rgba(20,21,24,.9); color: #fff; font-size: .9rem; box-shadow: 0 6px 20px rgba(0,0,0,.4);
+}
+/* Skalieren im Zettel-Editor */
+.ic-tf-scale-row { display: flex; align-items: center; gap: 8px; min-width: 260px; }
+.ic-tf-scale-row .ic-btn { flex: 0 0 auto; width: 36px; height: 36px; padding: 0; font-size: 1.2rem; }
+.ic-tf-scale-range { flex: 1 1 auto; min-width: 100px; }
+.ic-tf-move-capture { position: absolute; inset: 0; z-index: 60; cursor: move; touch-action: none; }
