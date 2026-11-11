@@ -2005,7 +2005,7 @@ input.ic-stepper-value {
   background: rgba(20,21,24,.9); color: #fff; font-size: .9rem; box-shadow: 0 6px 20px rgba(0,0,0,.4);
 }
 /* Skalieren im Zettel-Editor */
-.ic-tf-scale-row { display: flex; align-items: center; gap: 8px; }
+.ic-tf-scale-row { display: flex; align-items: center; gap: 8px; min-width: 260px; }
 .ic-tf-scale-row .ic-btn { flex: 0 0 auto; width: 36px; height: 36px; padding: 0; font-size: 1.2rem; }
 .ic-tf-scale-range { flex: 1 1 auto; min-width: 100px; }
-.ic-tf-scale-val { flex: 0 0 auto; min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
+.ic-tf-move-capture { position: absolute; inset: 0; z-index: 60; cursor: move; touch-action: none; }

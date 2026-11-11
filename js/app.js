@@ -5019,6 +5019,11 @@
     }
     if (isSlide) { stage.classList.add('ic-tf-stage-slide'); }
     var hasBoardPos = editingRec && editingRec.canvasw;
+    // Reiter "Größe und Position" offen: Editor zoomt etwas heraus, der
+    // Pinnwand-Hintergrund ist immer sichtbar, das Objekt lässt sich
+    // verschieben (siehe unten).
+    var tfScaleMode = !!(hasBoardPos && !isSlide && state.tfOpenBlocks && state.tfOpenBlocks[S.tfblock_scale]);
+    if (tfScaleMode && !tfShowBg) { tfShowBg = true; stage.classList.add('ic-tf-stage-boardbg'); }
     // Folieneditor: Ansichts-Zoom (Rahmen und alles darin wird skaliert).
     var tfZ = function () { return (editFrameIt && hasBoardPos && state.tfZoom) || 1; };
     var bgScale = hasBoardPos ? (tf.w / editingRec.canvasw) : 1;
@@ -5633,12 +5638,13 @@
       if (!pos || window.matchMedia('(max-width: 640px)').matches) { contentEl.style.translate = ''; return; }
       contentEl.style.translate = pos.dx + 'px ' + pos.dy + 'px';
     }
-    function makeAccordionBlock(titleText, onTabClick) {
+    function makeAccordionBlock(titleText, onTabClick, opts) {
+      opts = opts || {};
       var blockEl = el('div', { class: 'ic-textframe-block' + (state.tfOpenBlocks[titleText] ? ' ic-tf-open' : '') });
       var titleEl = el('button', { class: 'ic-textframe-block-title ic-tf-tab', type: 'button' },
         [icon(BLOCK_ICONS[titleText] || 'grid'), el('span', {}, [titleText])]);
       var contentEl = el('div', { class: 'ic-textframe-block-content ic-tf-popup' });
-      var popHead = el('div', { class: 'ic-tf-popup-head' }, [el('span', { class: 'ic-float-grip' }, ['\u2630']), el('span', {}, [titleText])]);
+      var popHead = el('div', { class: 'ic-tf-popup-head' }, [el('span', { class: 'ic-float-grip' }, ['\u2630']), el('span', {}, [opts.head || titleText])]);
       var popClose = el('button', { class: 'ic-float-min', type: 'button', title: S.cancel }, ['\u2715']);
       popHead.appendChild(popClose);
       contentEl.appendChild(popHead);
@@ -5646,6 +5652,7 @@
       function setOpen(open) {
         blockEl.classList.toggle('ic-tf-open', open);
         if (open) { state.tfOpenBlocks[titleText] = true; } else { delete state.tfOpenBlocks[titleText]; }
+        if (opts.onToggle) { opts.onToggle(open); }
       }
       popClose.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
       popClose.addEventListener('click', function () { setOpen(false); });
@@ -5708,7 +5715,7 @@
     // Objekt immer gleich groß - wird es größer, wird der Hintergrund im
     // Maßstab entsprechend kleiner (und umgekehrt).
     if (hasBoardPos && !isSlide) {
-      var blockScale = makeAccordionBlock(S.tfblock_scale);
+      var blockScale = makeAccordionBlock(S.tfblock_scale, null, { head: S.tfblock_scale_head, onToggle: function () { render(); } });
       var scaleRect = function () {
         if (!state.editingPhotoId && state.slidePlacement) { return state.slidePlacement; }
         if (!state.tfBoardRect) {
@@ -5726,16 +5733,45 @@
         r.canvasw = Math.round(w1);
         render();
       };
-      var scaleVal = el('span', { class: 'ic-tf-scale-val' }, [pct() + ' %']);
       var scaleRange = el('input', { type: 'range', min: '10', max: '400', step: '5', value: String(pct()), class: 'ic-tf-scale-range' });
-      scaleRange.addEventListener('input', function () { scaleVal.textContent = scaleRange.value + ' %'; });
       scaleRange.addEventListener('change', function () { setScale(parseInt(scaleRange.value, 10)); });
       var scaleMinus = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', title: S.tf_scale_smaller }, ['\u2212']);
       scaleMinus.addEventListener('click', function () { setScale(pct() / 1.25); });
       var scalePlus = el('button', { class: 'ic-btn ic-btn-ghost', type: 'button', title: S.tf_scale_larger }, ['+']);
       scalePlus.addEventListener('click', function () { setScale(pct() * 1.25); });
-      blockScale.content.appendChild(el('p', { class: 'ic-hint' }, [S.tf_scale_hint]));
-      blockScale.content.appendChild(el('div', { class: 'ic-tf-scale-row' }, [scaleMinus, scaleRange, scalePlus, scaleVal]));
+      blockScale.content.appendChild(el('div', { class: 'ic-tf-scale-row' }, [scaleMinus, scaleRange, scalePlus]));
+      // Verschieben: das Objekt folgt dem Zeiger über dem stehenden
+      // Hintergrund; beim Loslassen wird die neue Board-Position übernommen
+      // und der Editor zentriert das Objekt wieder.
+      if (tfScaleMode) {
+        var TF_SCALE_ZOOM = 0.6;
+        frame.style.scale = String(TF_SCALE_ZOOM);
+        var moveCap = el('div', { class: 'ic-tf-move-capture', title: S.tf_move_hint });
+        frame.appendChild(moveCap);
+        var mv = null;
+        moveCap.addEventListener('pointerdown', function (ev) {
+          mv = { sx: ev.clientX, sy: ev.clientY, dx: 0, dy: 0 };
+          try { moveCap.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+          ev.preventDefault(); ev.stopPropagation();
+        });
+        moveCap.addEventListener('pointermove', function (ev) {
+          if (!mv) { return; }
+          mv.dx = ev.clientX - mv.sx; mv.dy = ev.clientY - mv.sy;
+          frame.style.translate = mv.dx + 'px ' + mv.dy + 'px';
+          if (neighborsLayer) { neighborsLayer.style.translate = (-mv.dx / TF_SCALE_ZOOM) + 'px ' + (-mv.dy / TF_SCALE_ZOOM) + 'px'; }
+        });
+        var endMove = function () {
+          if (!mv) { return; }
+          var d = mv; mv = null;
+          if (Math.abs(d.dx) + Math.abs(d.dy) < 2) { frame.style.translate = ''; return; }
+          var r = scaleRect();
+          r.canvasx = Math.round(r.canvasx + d.dx / (TF_SCALE_ZOOM * bgScale));
+          r.canvasy = Math.round(r.canvasy + d.dy / (TF_SCALE_ZOOM * bgScale));
+          render();
+        };
+        moveCap.addEventListener('pointerup', endMove);
+        moveCap.addEventListener('pointercancel', endMove);
+      }
       blocksWrap.appendChild(blockScale);
     }
     layout.appendChild(tfDock);
