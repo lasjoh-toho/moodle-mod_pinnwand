@@ -263,6 +263,7 @@ $string['stream_pin_hint'] = 'Place centered on the pinboard';
 $string['stream_own_label'] = 'Own photo';
 $string['addtextframe'] = 'Text frame';
 $string['addwordart'] = 'WordArt';
+$string['addformula'] = 'Formula';
 $string['textframe_title'] = 'Word field';
 $string['preset_none'] = 'No background';
 $string['preset_paper'] = 'Virtual note';

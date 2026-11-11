@@ -742,8 +742,15 @@
         openFrameSlideEditor(it);
       }).catch(function (e) { slideBtn.disabled = false; alert(S.error_save + ' (' + e.message + ')'); });
     });
+    // Formel: neuer Zettel, in dem sich sofort der Formeleditor öffnet
+    // (siehe state.tfAutoFormula in renderTextFrame).
+    var formulaBtn = el('button', { class: 'ic-choice-btn' }, [icon('formula'), el('span', {}, [S.addformula])]);
+    formulaBtn.addEventListener('click', function () {
+      closeAndGo('textframe', function () { state.textFrame = null; resetTfHistory(); state.wordArtMode = false; state.slidePlacement = null; state.tfAutoFormula = true; });
+    });
     gridText.appendChild(textFrameBtn);
     gridText.appendChild(wordArtBtn);
+    gridText.appendChild(formulaBtn);
     if (state.canusethreads) { gridText.appendChild(slideBtn); }
     panel.appendChild(gridText);
 
@@ -5660,6 +5667,12 @@
       editFormulaIn(objEl, cur, null, range);
     }
     var blockForm = makeAccordionBlock(formulaTab ? S.tfblock_formulas : S.tfblock_form, formulaTab ? openFormulaEditor : null);
+    // Über "Hinzufügen > Formel" angelegt: Formeleditor direkt öffnen,
+    // sobald der Zettel im DOM steht.
+    if (state.tfAutoFormula) {
+      state.tfAutoFormula = false;
+      setTimeout(openFormulaEditor, 0);
+    }
     blocksWrap.appendChild(blockShapes);
     blocksWrap.appendChild(blockTemplates);
     blocksWrap.appendChild(blockFonts);
@@ -8707,6 +8720,12 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   }
 
   function icon(name) {
+    if (name === 'formula') {
+      var f = document.createElement('span');
+      f.textContent = '\u221a';
+      f.style.fontWeight = '700';
+      return f;
+    }
     if (name === 'text') {
       var t = document.createElement('span');
       t.textContent = 'T';
