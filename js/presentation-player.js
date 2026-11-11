@@ -35,7 +35,10 @@
     '[data-pwp-build]{transition:opacity .45s ease,transform .45s ease;}',
     '[data-pwp-exit]{transition:opacity .45s ease;}',
     '.pwp-exit-hidden{opacity:0 !important;pointer-events:none !important;}',
-    '.pwp-bg-off{background:transparent !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}',
+    '.pwp-bg-off,.pwp-bg-full{background:transparent !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}',
+    '.pwp-bg-off>.pwp-slide-bgimg,.pwp-bg-full>.pwp-slide-bgimg{display:none;}',
+    '.pwp-slide-bgfull{transition:opacity .5s ease;}',
+    '.pwp-elems-off>:not(.pwp-slide-bgimg){visibility:hidden !important;}',
     '.pwp-build-hidden{opacity:0 !important;pointer-events:none !important;}',
     '[data-pwp-build].pwp-draw{transition:none;}',
     '.pwp-media{transition:left .35s ease,top .35s ease,width .35s ease,height .35s ease,opacity .45s ease;}',
@@ -608,26 +611,31 @@
       // liegt IN der gezoomten Leinwand - nur so können Objekte per
       // mix-blend-mode mit ihr mischen - und hebt die Transformation exakt
       // wieder auf (inverse Matrix: S^-1 R^-1 T^-1).
-      if (screenLayer) {
-        screenLayer.style.width = window.innerWidth + 'px';
-        screenLayer.style.height = window.innerHeight + 'px';
-        screenLayer.style.transform = 'scale(' + (1 / scale) + ') rotate(' + (-(rot || 0)) + 'deg) translate(' + (-tx) + 'px,' + (-ty) + 'px)';
-      }
+      screenLayers.forEach(function (sl) {
+        sl.style.width = window.innerWidth + 'px';
+        sl.style.height = window.innerHeight + 'px';
+        sl.style.transform = 'scale(' + (1 / scale) + ') rotate(' + (-(rot || 0)) + 'deg) translate(' + (-tx) + 'px,' + (-ty) + 'px)';
+      });
     }
 
-    var screenLayer = null;
-    function setScreenLayer(elm) {
-      screenLayer = elm;
+    // Bildschirmfeste Ebenen: der Pinnwand-Hintergrund (ganz unten) und die
+    // bildschirmfüllenden Folien-Hintergründe (direkt unter ihrer Folie).
+    var screenLayers = [];
+    function addScreenLayer(elm, before) {
+      screenLayers.push(elm);
       elm.style.position = 'absolute';
       elm.style.left = '0';
       elm.style.top = '0';
       elm.style.transformOrigin = '0 0';
       elm.style.pointerEvents = 'none';
-      elm.style.zIndex = '-1000000';
-      canvas.insertBefore(elm, canvas.firstChild);
+      canvas.insertBefore(elm, before && before.parentNode === canvas ? before : canvas.firstChild);
       if (currentTransform) {
         applyTransform(currentTransform.scale, currentTransform.cx, currentTransform.cy, currentTransform.rot);
       }
+    }
+    function setScreenLayer(elm) {
+      elm.style.zIndex = '-1000000';
+      addScreenLayer(elm, null);
     }
 
     function easeInOutCubic(x) { return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
@@ -728,14 +736,33 @@
       slides.forEach(function (sel) {
         var isActive = !!active && active.slideEl === sel;
         var showAll = !active || active.overview;
-        var first = -1, last = -1, hideBefore = true, hideAfter = true;
+        var first = -1, last = -1, hideBefore = true, hideAfter = true, elemsBefore = false, elemsAfter = false, fullBg = null;
         steps.forEach(function (st, si) {
           if (st.slideEl !== sel) { return; }
           if (first === -1) { first = si; }
           last = si;
           hideBefore = st.slideBgHideBefore !== false;
           hideAfter = st.slideBgHideAfter !== false;
+          elemsBefore = !!st.slideElemHideBefore;
+          elemsAfter = !!st.slideElemHideAfter;
+          fullBg = st.slideBgFull || null;
         });
+        // Elemente der Folie vorher/nachher ausblenden (Hintergrund bleibt).
+        sel.classList.toggle('pwp-elems-off', !isActive && !showAll && ((idx < first && elemsBefore) || (idx > last && elemsAfter)));
+        // Bildschirmfüllender Hintergrund, solange die Folie aktiv ist: eigene
+        // feststehende Ebene direkt unter der Folie; die Folie selbst zeigt
+        // ihren Hintergrund dann nicht zusätzlich.
+        if (fullBg && !sel._pwpFullBg && slideBgCss(fullBg)) {
+          var fl = div('pwp-slide-bgfull');
+          paintSlideBg(fl, fullBg);
+          fl.style.zIndex = sel.style.zIndex || '0';
+          fl.style.opacity = '0';
+          addScreenLayer(fl, sel);
+          sel._pwpFullBg = fl;
+        }
+        var fullOn = !!sel._pwpFullBg && isActive && !(active && active.overview);
+        if (sel._pwpFullBg) { sel._pwpFullBg.style.opacity = fullOn ? '1' : '0'; }
+        sel.classList.toggle('pwp-bg-full', fullOn);
         // Im Überblick gilt "vorher unsichtbar" ebenfalls: der Effekt erscheint
         // erst, wenn die Folie selbst an der Reihe ist.
         var bgOff = !isActive && (showAll ? hideBefore : ((idx < first && hideBefore) || (idx > last && hideAfter)));
@@ -757,9 +784,24 @@
         }
         var kids = bel.querySelectorAll('[data-pwp-build]');
         var drawQueue = [];
+        var stepNow = idx;
         for (var ki = 0; ki < kids.length; ki++) {
           var kLevel = parseInt(kids[ki].getAttribute('data-pwp-build'), 10);
           var kHide = kLevel > level;
+          // Automatisch nach dem Klick (mit Verzögerung in Sekunden): erst
+          // sichtbar, wenn die Zeit um ist und der Schritt noch läuft.
+          var kDelay = parseFloat(kids[ki].getAttribute('data-pwp-delay') || '0') || 0;
+          if (kids[ki]._pwpDelayT) { clearTimeout(kids[ki]._pwpDelayT); kids[ki]._pwpDelayT = null; }
+          if (!kHide && kDelay > 0 && active && active.buildEl === bel && kLevel === level &&
+              !kids[ki].classList.contains('pwp-draw') && kids[ki].classList.contains('pwp-build-hidden')) {
+            (function (kid) {
+              kid._pwpDelayT = setTimeout(function () {
+                kid._pwpDelayT = null;
+                if (idx === stepNow) { kid.classList.remove('pwp-build-hidden'); syncMedia(slides, steps[idx]); }
+              }, kDelay * 1000);
+            })(kids[ki]);
+            continue;
+          }
           // Folien-Zeichnungen: werden sie genau in diesem Schritt sichtbar,
           // zeichnen sie sich nach; sonst (zurückblättern, Überblick)
           // erscheinen sie sofort vollständig.
@@ -842,6 +884,7 @@
     function playDraw(paths) {
       var delay = 0;
       paths.forEach(function (path) {
+        delay = Math.max(delay, parseFloat(path.getAttribute('data-pwp-delay') || '0') || 0);
         var len = 0;
         try { len = path.getTotalLength(); } catch (e) { len = 0; }
         if (!len) { resetDraw(path); return; }
@@ -1131,6 +1174,15 @@
     function rgba(hex, a) { var c = rgb(hex); return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + (Math.round(a * 1000) / 1000) + ')'; }
     var fill = bg.fill || {};
     var background, size = '';
+    // Bild als Hintergrund: liegt als eigene Ebene (paintSlideBg) mit der
+    // Deckkraft als opacity in der Folie; die Fläche selbst bleibt frei.
+    if (bg.image) {
+      return {
+        background: 'transparent', size: '', image: String(bg.image), imageOpacity: op,
+        imageFilter: [bright !== 100 ? 'brightness(' + bright + '%)' : '', bg.invert ? 'invert(' + bg.invert + '%)' : ''].filter(Boolean).join(' '),
+        filter: bg.blur ? 'blur(' + bg.blur + 'px)' : ''
+      };
+    }
     // box = {w, h, ox, oy}: Verlauf/Mesh hängt an einem Bezugsrechteck (Board
     // bzw. Bildbereich) und darf weit darüber hinausgehen; ox/oy = Abstand des
     // Rechtecks von der Ebenen-Ecke (die Ebene muss um das Rechteck zentriert sein).
@@ -1190,6 +1242,31 @@
     };
   }
 
+  // Folien-Hintergrund auf ein Element malen (Editor, Pinnwand, Präsentation,
+  // Export): Fläche, Weichzeichnen des Dahinterliegenden und ggf. Bild.
+  function paintSlideBg(elm, bg) {
+    var css = slideBgCss(bg);
+    elm.style.background = css ? css.background : '';
+    elm.style.backgroundSize = css && css.size ? css.size : '';
+    elm.style.backdropFilter = css ? css.filter : '';
+    elm.style.webkitBackdropFilter = css ? css.filter : '';
+    var img = elm.querySelector(':scope > .pwp-slide-bgimg');
+    if (!css || !css.image) { if (img) { img.remove(); } return css; }
+    if (!img) {
+      img = document.createElement('div');
+      img.className = 'pwp-slide-bgimg';
+      elm.insertBefore(img, elm.firstChild);
+    }
+    img.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:-1;border-radius:inherit;' +
+      'background:center / cover no-repeat;';
+    img.style.backgroundImage = 'url("' + css.image.replace(/["\\]/g, '') + '")';
+    img.style.opacity = String(css.imageOpacity);
+    img.style.filter = css.imageFilter || '';
+    // Eigener Stapelkontext, damit das Bild (z-index -1) in der Folie bleibt.
+    elm.style.isolation = 'isolate';
+    return css;
+  }
+
   // Verlauf/Mesh als Pinnwand-Hintergrund. anchored = am Board (1400x1000)
   // verankert und weit über dessen Rand hinaus gemalt (eigene Füllebene, die
   // das Board in alle Richtungen um FILL_MARGIN überragt); sonst bildschirmfüllend.
@@ -1220,5 +1297,5 @@
     return true;
   }
 
-  global.PinnwandPresentation = { create: create,slideBgCss: slideBgCss, applyFxFill: applyFxFill,  expandBuildSteps: expandBuildSteps, shapePoints: shapePoints, SHAPE_KINDS: SHAPE_KINDS, SHAPE_SVG: SHAPE_SVG, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk, inkBounds: inkBounds };
+  global.PinnwandPresentation = { create: create, slideBgCss: slideBgCss, paintSlideBg: paintSlideBg, applyFxFill: applyFxFill,  expandBuildSteps: expandBuildSteps, shapePoints: shapePoints, SHAPE_KINDS: SHAPE_KINDS, SHAPE_SVG: SHAPE_SVG, drawInk: drawInk, inkLayer: inkLayer, attachInk: attachInk, inkBounds: inkBounds };
 })(window);

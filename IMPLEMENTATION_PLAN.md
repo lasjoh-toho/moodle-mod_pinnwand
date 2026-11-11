@@ -4372,3 +4372,28 @@ Shipped als Version `2026083153` / `0.155.0`.
   liefert (veralteter Sprach-Cache).
 
 Shipped als Version `2026083154` / `0.156.0`.
+
+## Folien-Editor überarbeitet (0.167.0)
+
+- Popups (`makeAccordionBlock`): Lage als Versatz per CSS `translate`
+  (`state.tfPopupPos` = {dx, dy}), weil das Menüband transformiert ist und
+  `position: fixed` sich darauf bezog (Popups sprangen beim Ziehen aus dem
+  Bild). Zurückgesetzt in `resetTfHistory()` (nur solange der Editor offen ist).
+- Elemente-Liste (`buildElemList`): Schritte per Klick mit Nummer, automatisch
+  folgende Einträge eingerückt mit `anim[i].delay` (Sekunden nach dem Klick,
+  `data-pwp-delay`, Player blendet verzögert ein bzw. zeichnet später).
+  Zeichnungen (aufeinanderfolgende verknüpfte Linien) eingeklappt
+  (`state.slideInkOpen`), ausgeklappt mit Nummern auf der Folie
+  (`.ic-ink-num`), Hover hebt Nummer und Linie hervor.
+- Doppelklick auf Zeile oder Element (`state.slideActiveKey`): Eigenschaften
+  (`elemDetails`: URL/Abschnitt/Autoplay bei Medien, Farbe/Stärke bei Linien,
+  Löschen); sonst verborgen. Die frühere Medienliste entfällt.
+- Folie-Popup zweispaltig: Hintergrund (Farbe oder Bild `slideBg.image`
+  {file|url}, Deckkraft, Weichzeichnen, Invertieren, Helligkeit,
+  `slideBg.full`) und Sichtbarkeit (Hintergrund `bgShowBefore`/`bgPersist`,
+  Elemente `elemHideBefore`/`elemHideAfter` -> `.pwp-elems-off`).
+- Player: `paintSlideBg()` (Fläche + Bildebene `.pwp-slide-bgimg`),
+  mehrere bildschirmfeste Ebenen (`addScreenLayer`); `step.slideBgFull` legt
+  den Folien-Hintergrund bildschirmfüllend unter die aktive Folie.
+- Export: `slidebg.image`, `bgfull`, `elemhidebefore`/`elemhideafter`;
+  `pinnwand_export_anim_steps` zählt auch Zeichnungen und Medien.
