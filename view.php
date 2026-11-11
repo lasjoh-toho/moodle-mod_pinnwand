@@ -447,6 +447,7 @@ $config = [
         'stream_own_label' => get_string('stream_own_label', 'pinnwand'),
         'addtextframe' => get_string('addtextframe', 'pinnwand'),
         'addwordart' => get_string('addwordart', 'pinnwand'),
+        'addformula' => get_string('addformula', 'pinnwand'),
         'textframe_title' => get_string('textframe_title', 'pinnwand'),
         'preset_none' => get_string('preset_none', 'pinnwand'),
         'preset_paper' => get_string('preset_paper', 'pinnwand'),

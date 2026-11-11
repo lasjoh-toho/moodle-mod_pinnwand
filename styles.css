@@ -192,6 +192,11 @@
 }
 .ic-add-modal-category:first-of-type { margin-top: 6px; padding-top: 0; border-top: none; }
 .ic-add-modal .ic-url-row { display: flex; padding: 0; margin-top: -2px; }
+/* Kompaktere Einträge im Hinzufügen-Modal */
+.ic-add-modal .ic-add-modal-grid { gap: 6px; margin-top: 6px; }
+.ic-add-modal .ic-choice-btn { padding: 11px 16px; }
+.ic-add-modal .ic-add-modal-category { margin-top: 12px; padding-top: 8px; }
+.ic-add-modal .ic-add-modal-category:first-of-type { margin-top: 6px; padding-top: 0; }
 .ic-modal-close { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; }
 
 /* Home / Galerie */

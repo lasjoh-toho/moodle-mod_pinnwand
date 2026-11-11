@@ -248,6 +248,7 @@ $string['stream_pin_hint'] = 'Mittig auf die Pinnwand legen';
 $string['stream_own_label'] = 'Eigenes Foto';
 $string['addtextframe'] = 'Textrahmen';
 $string['addwordart'] = 'WordArt';
+$string['addformula'] = 'Formel';
 $string['textframe_title'] = 'Wortfeld';
 $string['preset_none'] = 'Kein Hintergrund';
 $string['preset_paper'] = 'Virtueller Zettel';
