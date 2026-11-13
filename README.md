@@ -27,6 +27,12 @@ konfigurierbares Maximum an Bildern pro Lernender/m.
   eingebundenes Skript geschrieben (kein AMD/RequireJS), das über Moodles
   Standard-AJAX-Endpunkt (`lib/ajax/service.php`) mit den in
   `classes/external.php` definierten Web-Services kommuniziert.
+- **Einbettung in andere Werkzeuge** (seit 0.169.0, für Collegare): Setzt die
+  Gastgeberseite `window.pinnwandConfig.transport = { name, call(methodname,
+  args), slidemedia(fields) }`, gehen alle Web-Service-Aufrufe und das
+  Hochladen von Folienmedien dorthin statt an Moodle. Methodennamen,
+  Argumente und Antworten bleiben dieselben. Ohne `transport` ändert sich in
+  Moodle nichts; so bleibt ein Quellstand für beide.
 - **Perspektivkorrektur**: projektive Entzerrung (Heckbert-Methode, Abbildung
   Einheitsquadrat → Viereck, pixelweise mit bilinearer Interpolation). Läuft
   vollständig im Browser über `<canvas>`.

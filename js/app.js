@@ -106,7 +106,15 @@
   // ohne RequireJS/AMD core/ajax – dadurch ist app.js ein simples
   // statisches Script ohne Build-Schritt).
   // ------------------------------------------------------------------
+  // Eingebettet in ein anderes Werkzeug (z. B. Collegare) setzt die Gastgeberseite cfg.transport:
+  // { name, call(methodname, args) -> Promise<data>, slidemedia(fields) -> Promise<json> }. Dann gehen alle
+  // Aufrufe dorthin statt an Moodle; Methoden und Antworten bleiben dieselben wie bei den Web-Services.
+  var transport = (cfg.transport && typeof cfg.transport.call === 'function') ? cfg.transport : null;
+
   function callAjax(methodname, args) {
+    if (transport) {
+      return Promise.resolve().then(function () { return transport.call(methodname, args); });
+    }
     var url = cfg.wwwroot + '/lib/ajax/service.php?info=' + encodeURIComponent(methodname) +
       '&sesskey=' + encodeURIComponent(cfg.sesskey);
     return fetch(url, {
@@ -3397,6 +3405,9 @@
   var SLIDE_AUDIO_EMBED_MAX = 5 * 1024 * 1024;
   // Datei hochladen bzw. von einer Adresse übernehmen (slidemedia.php).
   function slideMediaRequest(fields) {
+    if (transport && typeof transport.slidemedia === 'function') {
+      return Promise.resolve().then(function () { return transport.slidemedia(fields); });
+    }
     var fd = new FormData();
     fd.append('cmid', cfg.cmid);
     fd.append('sesskey', cfg.sesskey);
