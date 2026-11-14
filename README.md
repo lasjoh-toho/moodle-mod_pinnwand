@@ -32,7 +32,11 @@ konfigurierbares Maximum an Bildern pro Lernender/m.
   args), slidemedia(fields) }`, gehen alle Web-Service-Aufrufe und das
   Hochladen von Folienmedien dorthin statt an Moodle. Methodennamen,
   Argumente und Antworten bleiben dieselben. Ohne `transport` ändert sich in
-  Moodle nichts; so bleibt ein Quellstand für beide.
+  Moodle nichts; so bleibt ein Quellstand für beide. Seit 0.170.0 kann der
+  Transport zusätzlich `subscribe(callback)` anbieten: Meldet er darüber
+  Änderungen anderer, lädt die Pinnwand Objekte, Fäden, Board-Namen und
+  Notizen neu, sobald gerade niemand zieht, tippt oder einen Dialog offen hat
+  (gemeinsames Bearbeiten in Echtzeit).
 - **Perspektivkorrektur**: projektive Entzerrung (Heckbert-Methode, Abbildung
   Einheitsquadrat → Viereck, pixelweise mit bilinearer Interpolation). Läuft
   vollständig im Browser über `<canvas>`.
