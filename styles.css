@@ -767,7 +767,7 @@ svg.ic-board-ink-layer { overflow: visible; }
 .ic-wordart-cat-tile-sample, .ic-wordart-font-tile-sample { font-size: 1.4rem; line-height: 1.1; }
 .ic-wordart-cat-tile-label, .ic-wordart-font-tile-label { font-size: .68rem; color: var(--ic-muted); text-align: center; }
 .ic-wordart-font-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 8px; max-height: 55vh; overflow-y: auto; }
-.ic-wordart-arc-row { display: flex; gap: 8px; margin: 8px 0; }
+.ic-wordart-arc-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; margin: 8px 0; }
 .ic-wordart-arc-tile {
   flex: 1 1 0; aspect-ratio: 5/3; border-radius: 8px; border: 2px solid transparent; background: #24262c;
   color: var(--ic-text); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 6px;
@@ -1365,7 +1365,7 @@ input.ic-stepper-value {
 .ic-w3d-icon svg { width: 20px; height: 20px; display: block; color: var(--ic-text, #f2f3f5); }
 .ic-w3d-caption { font-size: .68rem; color: var(--ic-muted); white-space: nowrap; }
 .ic-w3d-swatch { width: 16px; height: 16px; margin-left: 2px; border-radius: 4px; border-width: 1px; }
-.ic-wordart-arc-row { gap: 4px; margin: 4px 0; }
+.ic-wordart-arc-row { gap: 4px; margin: 4px 0; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); }
 .ic-wordart-arc-tile { padding: 3px; aspect-ratio: 2/1; }
 /* Textobjekte im Editor liegen über der Kartenfläche (.ic-textframe-inner,
    z-index 1) - ohne eigenen z-index verschwand der Text auf Zetteln mit
@@ -2009,3 +2009,12 @@ input.ic-stepper-value {
 .ic-tf-scale-row .ic-btn { flex: 0 0 auto; width: 36px; height: 36px; padding: 0; font-size: 1.2rem; }
 .ic-tf-scale-range { flex: 1 1 auto; min-width: 100px; }
 .ic-tf-move-capture { position: absolute; inset: 0; z-index: 60; cursor: move; touch-action: none; }
+
+/* Eingebetteter Einzel-Editor (cfg.editorOnly, z. B. Folien in Collegare): ohne Kopfzeile der Pinnwand,
+   der Formel-Dialog füllt das ganze Fenster */
+.ic-editor-only .ic-body { padding-top: 0; }
+.ic-editor-only-formula .ic-formula-modal {
+  left: 0 !important; top: 0 !important; width: 100% !important; height: 100%; max-width: none; max-height: none;
+  border-radius: 0; resize: none; box-sizing: border-box;
+}
+.ic-editor-only-formula .ic-formula-head .ic-float-grip { display: none; }

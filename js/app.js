@@ -255,7 +255,7 @@
     // Oberfläche (Titel/Untertitel nur ab einer Mindestbreite sichtbar,
     // s. CSS), rechts die vier Haupt-Oberflächen als Navigations-Buttons.
     // Bewusst in einer Zeile gehalten (auch mobil) - siehe .ic-topbar CSS.
-    root.appendChild(renderTopBar());
+    if (!cfg.editorOnly) { root.appendChild(renderTopBar()); }
 
     switch (state.step) {
       case 'home': renderHome(body); break;
@@ -2153,6 +2153,7 @@
       class: 'ic-btn ic-btn-ghost ic-btn-icon ic-cancel-btn', title: S.cancel, 'aria-label': S.cancel
     }, ['\u2715']);
     b.addEventListener('click', function () {
+      if (cfg.editorOnly) { cfg.editorOnly.onCancel(); return; }
       // Folien werden aus der Pinnwand heraus bearbeitet - dorthin zurück.
       // Der Texteditor kehrt immer in die Pinnwand-Ansicht zurück.
       if (state.slideImport && state.step !== 'textframe') { reopenSlideImport(null); return; }
@@ -2539,8 +2540,135 @@
     { id: 'starburst', base: 'star', label: 'Explosion', defaults: { points: 14, inner: 0.72 } },
     { id: 'bubble', label: 'Sprechblase', defaults: { bubble: 'round', tailAngle: 125, tailLen: 0.35 } },
     { id: 'bubblerect', base: 'bubble', label: 'Sprechblase eckig', defaults: { bubble: 'rect', tailAngle: 125, tailLen: 0.35 } },
-    { id: 'thought', base: 'bubble', label: 'Gedankenblase', defaults: { bubble: 'thought', tailAngle: 125, tailLen: 0.4 } }
+    { id: 'thought', base: 'bubble', label: 'Gedankenblase', defaults: { bubble: 'thought', tailAngle: 125, tailLen: 0.4 } },
+    // Einstellbare Grundformen (nach dem Vorbild der Anfasser in LibreOffice/PowerPoint): Eckenrundung,
+    // Pfeilspitze und Schaftbreite, Ring- und Rahmenstärke, Eckenzahl, Winkel usw. als Regler.
+    { id: 'roundrect', label: 'Rechteck, Ecken einstellbar', defaults: { radius: 0.25 } },
+    { id: 'polygon', label: 'Vieleck', defaults: { sides: 6 } },
+    { id: 'parrow', label: 'Pfeil, einstellbar', defaults: { head: 0.4, shaft: 0.4 } },
+    { id: 'parrow2', base: 'parrow', label: 'Doppelpfeil', defaults: { head: 0.3, shaft: 0.4, both: true } },
+    { id: 'chevron', label: 'Winkelpfeil', defaults: { depth: 0.35 } },
+    { id: 'pentarrow', base: 'chevron', label: 'Fünfeckpfeil', defaults: { depth: 0.35, flat: true } },
+    { id: 'pring', label: 'Ring, Stärke einstellbar', defaults: { thick: 0.3 } },
+    { id: 'pframe', label: 'Rahmen', defaults: { thick: 0.15 } },
+    { id: 'pcross', label: 'Plus', defaults: { thick: 0.34 } },
+    { id: 'pie', label: 'Kreisausschnitt', defaults: { angle: 270 } },
+    { id: 'blockarc', base: 'pie', label: 'Bogenband', defaults: { angle: 180, thick: 0.3 } },
+    { id: 'ptrapezoid', label: 'Trapez, einstellbar', defaults: { inset: 0.25 } },
+    { id: 'pparallelogram', label: 'Parallelogramm, einstellbar', defaults: { slant: 0.25 } },
+    { id: 'can', label: 'Zylinder', defaults: { cap: 0.15 } },
+    { id: 'cube', label: 'Würfel', defaults: { depth: 0.25 } },
+    { id: 'plaque', label: 'Plakette', defaults: { radius: 0.2 } },
+    { id: 'pbanner', label: 'Banner', defaults: { fold: 0.2 } }
   ];
+  // Regler je Grundtyp: [Symbol, Bezeichnung, Schlüssel, min, max, Schritt, Nachkommastellen]
+  var PARAM_UI = {
+    star: [['\u2736', 'Zacken', 'points', 3, 24, 1, 0], ['\u25CE', 'Innenradius', 'inner', 0.1, 0.95, 0.05, 2]],
+    roundrect: [['\u25A2', 'Eckenrundung', 'radius', 0, 0.5, 0.05, 2]],
+    polygon: [['\u2B22', 'Ecken', 'sides', 3, 16, 1, 0]],
+    parrow: [['\u25B6', 'Länge der Spitze', 'head', 0.1, 0.9, 0.05, 2], ['\u2550', 'Breite des Schafts', 'shaft', 0.1, 1, 0.05, 2]],
+    chevron: [['\u276F', 'Tiefe der Spitze', 'depth', 0, 0.8, 0.05, 2]],
+    pring: [['\u25CE', 'Ringstärke', 'thick', 0.05, 0.95, 0.05, 2]],
+    pframe: [['\u25A3', 'Rahmenstärke', 'thick', 0.05, 0.45, 0.05, 2]],
+    pcross: [['\u271A', 'Balkenstärke', 'thick', 0.1, 0.9, 0.05, 2]],
+    pie: [['\u25D4', 'Winkel (Grad)', 'angle', 10, 355, 5, 0], ['\u25CE', 'Stärke (0 = gefüllt)', 'thick', 0, 0.9, 0.05, 2]],
+    ptrapezoid: [['\u23E2', 'Einzug oben', 'inset', 0, 0.49, 0.05, 2]],
+    pparallelogram: [['\u25B1', 'Neigung', 'slant', 0, 0.8, 0.05, 2]],
+    can: [['\u2B2D', 'Höhe des Deckels', 'cap', 0.05, 0.45, 0.05, 2]],
+    cube: [['\u2B1B', 'Tiefe', 'depth', 0.05, 0.6, 0.05, 2]],
+    plaque: [['\u25A2', 'Einbuchtung', 'radius', 0.05, 0.45, 0.05, 2]],
+    pbanner: [['\u2691', 'Falz', 'fold', 0.05, 0.4, 0.05, 2]]
+  };
+  function clamp01(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  // Pfad (0..100) einer einstellbaren Grundform aus ihren Reglern.
+  function paramShapePath(base, s, dfl) {
+    function v(k) { return s[k] != null ? s[k] : dfl[k]; }
+    var P = function (x, y) { return r2(x) + ' ' + r2(y); };
+    if (base === 'roundrect' || base === 'plaque') {
+      var rr = clamp01(v('radius'), 0, 0.5) * 90;
+      if (base === 'plaque') {
+        // Ecken nach innen gewölbt
+        return { d: 'M' + P(5 + rr, 5) + ' L' + P(95 - rr, 5) + ' A' + r2(rr) + ' ' + r2(rr) + ' 0 0 0 ' + P(95, 5 + rr) +
+          ' L' + P(95, 95 - rr) + ' A' + r2(rr) + ' ' + r2(rr) + ' 0 0 0 ' + P(95 - rr, 95) + ' L' + P(5 + rr, 95) +
+          ' A' + r2(rr) + ' ' + r2(rr) + ' 0 0 0 ' + P(5, 95 - rr) + ' L' + P(5, 5 + rr) + ' A' + r2(rr) + ' ' + r2(rr) + ' 0 0 0 ' + P(5 + rr, 5) + ' Z' };
+      }
+      return { d: 'M' + P(5 + rr, 5) + ' L' + P(95 - rr, 5) + ' A' + r2(rr) + ' ' + r2(rr) + ' 0 0 1 ' + P(95, 5 + rr) +
+        ' L' + P(95, 95 - rr) + ' A' + r2(rr) + ' ' + r2(rr) + ' 0 0 1 ' + P(95 - rr, 95) + ' L' + P(5 + rr, 95) +
+        ' A' + r2(rr) + ' ' + r2(rr) + ' 0 0 1 ' + P(5, 95 - rr) + ' L' + P(5, 5 + rr) + ' A' + r2(rr) + ' ' + r2(rr) + ' 0 0 1 ' + P(5 + rr, 5) + ' Z' };
+    }
+    if (base === 'polygon') {
+      var n = Math.max(3, Math.min(16, Math.round(v('sides')))), d = '';
+      for (var i = 0; i < n; i++) {
+        var a = -Math.PI / 2 + i * 2 * Math.PI / n;
+        d += (i ? ' L' : 'M') + P(50 + 45 * Math.cos(a), 50 + 45 * Math.sin(a));
+      }
+      return { d: d + ' Z' };
+    }
+    if (base === 'parrow') {
+      var head = clamp01(v('head'), 0.1, 0.9) * 90, sh = clamp01(v('shaft'), 0.1, 1) * 45, both = !!v('both');
+      if (both) {
+        var hh = Math.min(head, 44);
+        return { d: 'M' + P(5, 50) + ' L' + P(5 + hh, 5) + ' L' + P(5 + hh, 50 - sh) + ' L' + P(95 - hh, 50 - sh) + ' L' + P(95 - hh, 5) +
+          ' L' + P(95, 50) + ' L' + P(95 - hh, 95) + ' L' + P(95 - hh, 50 + sh) + ' L' + P(5 + hh, 50 + sh) + ' L' + P(5 + hh, 95) + ' Z' };
+      }
+      return { d: 'M' + P(5, 50 - sh) + ' L' + P(95 - head, 50 - sh) + ' L' + P(95 - head, 5) + ' L' + P(95, 50) + ' L' + P(95 - head, 95) +
+        ' L' + P(95 - head, 50 + sh) + ' L' + P(5, 50 + sh) + ' Z' };
+    }
+    if (base === 'chevron') {
+      var dp = clamp01(v('depth'), 0, 0.8) * 90;
+      var tail = v('flat') ? P(5, 5) + ' L' + P(95 - dp, 5) : P(5, 5) + ' L' + P(95 - dp, 5);
+      var back = v('flat') ? ' L' + P(5, 95) + ' Z' : ' L' + P(5, 95) + ' L' + P(5 + dp, 50) + ' Z';
+      return { d: 'M' + tail + ' L' + P(95, 50) + ' L' + P(95 - dp, 95) + back };
+    }
+    if (base === 'pring') {
+      var ri = 45 * (1 - clamp01(v('thick'), 0.05, 0.95));
+      return { d: 'M5 50 A45 45 0 1 1 95 50 A45 45 0 1 1 5 50 Z M' + P(50 - ri, 50) + ' A' + r2(ri) + ' ' + r2(ri) + ' 0 1 0 ' + P(50 + ri, 50) +
+        ' A' + r2(ri) + ' ' + r2(ri) + ' 0 1 0 ' + P(50 - ri, 50) + ' Z', fillRule: 'evenodd' };
+    }
+    if (base === 'pframe') {
+      var t = clamp01(v('thick'), 0.05, 0.45) * 90;
+      return { d: 'M5 5 L95 5 L95 95 L5 95 Z M' + P(5 + t, 5 + t) + ' L' + P(5 + t, 95 - t) + ' L' + P(95 - t, 95 - t) + ' L' + P(95 - t, 5 + t) + ' Z', fillRule: 'evenodd' };
+    }
+    if (base === 'pcross') {
+      var c = clamp01(v('thick'), 0.1, 0.9) * 45, lo = 50 - c, hi = 50 + c;
+      return { d: 'M' + P(lo, 5) + ' L' + P(hi, 5) + ' L' + P(hi, lo) + ' L' + P(95, lo) + ' L' + P(95, hi) + ' L' + P(hi, hi) + ' L' + P(hi, 95) +
+        ' L' + P(lo, 95) + ' L' + P(lo, hi) + ' L' + P(5, hi) + ' L' + P(5, lo) + ' L' + P(lo, lo) + ' Z' };
+    }
+    if (base === 'pie') {
+      var ang = clamp01(v('angle'), 10, 355), th = clamp01(v('thick') || 0, 0, 0.9);
+      var a0 = -Math.PI / 2, a1 = a0 + ang * Math.PI / 180, large = ang > 180 ? 1 : 0;
+      var pt = function (r, a) { return P(50 + r * Math.cos(a), 50 + r * Math.sin(a)); };
+      if (!th) { return { d: 'M50 50 L' + pt(45, a0) + ' A45 45 0 ' + large + ' 1 ' + pt(45, a1) + ' Z' }; }
+      var r1 = 45 * (1 - th);
+      return { d: 'M' + pt(45, a0) + ' A45 45 0 ' + large + ' 1 ' + pt(45, a1) + ' L' + pt(r1, a1) + ' A' + r2(r1) + ' ' + r2(r1) + ' 0 ' + large + ' 0 ' + pt(r1, a0) + ' Z' };
+    }
+    if (base === 'ptrapezoid') {
+      var ins = clamp01(v('inset'), 0, 0.49) * 90;
+      return { d: 'M' + P(5 + ins, 5) + ' L' + P(95 - ins, 5) + ' L95 95 L5 95 Z' };
+    }
+    if (base === 'pparallelogram') {
+      var sl = clamp01(v('slant'), 0, 0.8) * 90;
+      return { d: 'M' + P(5 + sl, 5) + ' L95 5 L' + P(95 - sl, 95) + ' L5 95 Z' };
+    }
+    if (base === 'can') {
+      var cp = clamp01(v('cap'), 0.05, 0.45) * 90, ry = cp / 2;
+      // Körper als Umriss, oben die sichtbare Deckel-Ellipse als eigener Teilpfad (Kontur)
+      return { d: 'M5 ' + r2(5 + ry) + ' A45 ' + r2(ry) + ' 0 0 1 95 ' + r2(5 + ry) + ' L95 ' + r2(95 - ry) + ' A45 ' + r2(ry) + ' 0 0 1 5 ' + r2(95 - ry) + ' Z' +
+        ' M5 ' + r2(5 + ry) + ' A45 ' + r2(ry) + ' 0 0 0 95 ' + r2(5 + ry) };
+    }
+    if (base === 'cube') {
+      var dd = clamp01(v('depth'), 0.05, 0.6) * 90;
+      return { d: 'M5 ' + r2(5 + dd) + ' L' + P(5 + dd, 5) + ' L95 5 L95 ' + r2(95 - dd) + ' L' + P(95 - dd, 95) + ' L5 95 Z' +
+        ' M5 ' + r2(5 + dd) + ' L' + P(95 - dd, 5 + dd) + ' L95 5 M' + P(95 - dd, 5 + dd) + ' L' + P(95 - dd, 95) };
+    }
+    if (base === 'pbanner') {
+      var f = clamp01(v('fold'), 0.05, 0.4) * 90, top = 25, bot = 75;
+      return { d: 'M5 ' + top + ' L' + P(5 + f, top) + ' L' + P(5 + f, 15) + ' L' + P(95 - f, 15) + ' L' + P(95 - f, top) + ' L95 ' + top +
+        ' L' + P(95 - f * 0.6, 50) + ' L95 ' + bot + ' L' + P(95 - f, bot) + ' L' + P(95 - f, 85) + ' L' + P(5 + f, 85) + ' L' + P(5 + f, bot) +
+        ' L5 ' + bot + ' L' + P(5 + f * 0.6, 50) + ' Z' };
+    }
+    return null;
+  }
   function r2(v) { return Math.round(v * 100) / 100; }
   function starPathD(points, inner) {
     points = Math.max(3, Math.min(24, Math.round(points || 5)));
@@ -2617,6 +2745,7 @@
       if (pinfo.base === 'star') {
         return { d: starPathD(s.points != null ? s.points : dfl.points, s.inner != null ? s.inner : dfl.inner) };
       }
+      if (pinfo.base !== 'bubble') { return paramShapePath(pinfo.base, s, dfl); }
       return { d: bubblePathD(s.bubble || dfl.bubble, s.tailAngle != null ? s.tailAngle : dfl.tailAngle, s.tailLen != null ? s.tailLen : dfl.tailLen) };
     }
     return [].concat.apply([], Object.keys(FG_SHAPE_CATEGORIES).map(function (c) { return FG_SHAPE_CATEGORIES[c]; }))
@@ -3802,6 +3931,18 @@
       return 'M 5,' + midY + ' Q ' + (w * 0.25) + ',' + (midY - amt) + ' ' + (w / 2) + ',' + midY +
         ' Q ' + (w * 0.75) + ',' + (midY + amt) + ' ' + (w - 5) + ',' + midY;
     }
+    if (style === 'wave2') {
+      return 'M 5,' + midY + ' Q ' + (w * 0.125) + ',' + (midY - amt) + ' ' + (w * 0.25) + ',' + midY +
+        ' T ' + (w / 2) + ',' + midY + ' T ' + (w * 0.75) + ',' + midY + ' T ' + (w - 5) + ',' + midY;
+    }
+    if (style === 'archup' || style === 'archdown') {
+      // Halbkreis-Bogen (wie „Bogen oben“/„Bogen unten“ in LibreOffice Fontwork), Krümmung = Radius
+      var ra = (w / 2 - 5) * (1.6 - (amount != null ? amount : 50) / 100);
+      var sweep = style === 'archup' ? 1 : 0;
+      var yy = style === 'archup' ? h * 0.85 : h * 0.2;
+      return 'M 5,' + yy + ' A ' + ra + ',' + ra + ' 0 0,' + sweep + ' ' + (w - 5) + ',' + yy;
+    }
+    if (style === 'slant') { return 'M 5,' + (midY + amt) + ' L ' + (w - 5) + ',' + (midY - amt); }
     if (style === 'circle') {
       var r = Math.min(w, h) * 0.42;
       return 'M ' + (w / 2 - r) + ',' + (h / 2) + ' A ' + r + ',' + r + ' 0 1,1 ' + (w / 2 + r) + ',' + (h / 2) +
@@ -3942,7 +4083,57 @@
   var WORDART_GRADIENT_SVG_RADIAL = { 'sunburst-yellow': true };
   var WORDART_GRADIENT_SVG_HORIZ = { 'rainbow': true, 'rainbow-spectrum': true };
 
+  // Verformte Buchstaben (Fontwork-Hüllen wie Aufblähen, Stauchen, Perspektive, Dreieck): jedes Zeichen
+  // ein eigenes <text>, vertikal skaliert nach seiner Lage im Wort. scale(u) für u = 0..1 (Wortanfang..-ende),
+  // anchor 'mid' skaliert um die Mittellinie, 'base' von der Grundlinie aus nach oben.
+  var WARP_STYLES = {
+    inflate: { anchor: 'mid', f: function (u, a) { return 1 + a * Math.sin(Math.PI * u); } },
+    deflate: { anchor: 'mid', f: function (u, a) { return 1 + a * (1 - Math.sin(Math.PI * u)); } },
+    growright: { anchor: 'mid', f: function (u, a) { return 1 + a * 1.4 * u; } },
+    growleft: { anchor: 'mid', f: function (u, a) { return 1 + a * 1.4 * (1 - u); } },
+    peak: { anchor: 'base', f: function (u, a) { return 1 + a * 1.2 * (1 - Math.abs(2 * u - 1)); } },
+    valley: { anchor: 'base', f: function (u, a) { return 1 + a * 1.2 * Math.abs(2 * u - 1); } },
+    ripple: { anchor: 'mid', f: function (u, a) { return 1 + a * 0.6 * Math.sin(2 * Math.PI * u); } }
+  };
+  function warpPreviewD(style) {
+    // Umriss der Hülle für die Auswahl-Kacheln (100 x 60)
+    var wv = WARP_STYLES[style], top = '', bot = '', n = 12;
+    for (var i = 0; i <= n; i++) {
+      var u = i / n, sc = wv.f(u, 0.5), x = 8 + u * 84;
+      var hgt = 14 * sc, yT = wv.anchor === 'base' ? 44 - 2 * hgt : 30 - hgt, yB = wv.anchor === 'base' ? 44 : 30 + hgt;
+      top += (i ? ' L' : 'M') + r2(x) + ' ' + r2(yT);
+      bot = ' L' + r2(x) + ' ' + r2(yB) + bot;
+    }
+    return top + bot + ' Z';
+  }
+  function buildWarpTextSvg(t, plainText, fontCss, color) {
+    var wv = WARP_STYLES[t.arcStyle];
+    var text = String(plainText || '').replace(/\s+/g, ' ').trim();
+    if (!wv || !text) { return null; }
+    var a = (t.arcAmount != null ? t.arcAmount : 50) / 100;
+    var fs = Math.round(t.size * 0.55), weight = t.fontWeight || 700;
+    fitCtx.font = weight + ' ' + fs + 'px ' + fontCss;
+    var chars = Array.from(text), widths = chars.map(function (c) { return fitCtx.measureText(c).width; });
+    var total = widths.reduce(function (x, y) { return x + y; }, 0) || 1;
+    var squeeze = Math.min(1, 290 / total), x0 = (300 - total * squeeze) / 2, x = x0, span = total * squeeze, out = '';
+    var base = wv.anchor === 'base' ? 100 : 60 + fs * 0.35;
+    chars.forEach(function (c, i) {
+      var cw = widths[i] * squeeze, u = (x + cw / 2 - x0) / span; // Lage im Wort selbst, 0..1
+      var sc = wv.f(Math.max(0, Math.min(1, u)), a);
+      // 'mid': um die optische Mitte des Zeichens (ca. 0,35 em über der Grundlinie) skalieren
+      var ty = wv.anchor === 'base' ? base : base + fs * 0.35 * (sc - 1);
+      if (c !== ' ') {
+        out += '<text x="0" y="0" transform="translate(' + r2(x + cw / 2) + ' ' + r2(ty) + ') scale(' + r2(squeeze) + ' ' + r2(sc) + ')"' +
+          ' text-anchor="middle">' + escapeXml(c) + '</text>';
+      }
+      x += cw;
+    });
+    return '<svg viewBox="0 0 300 120" width="100%" height="100%" style="overflow:visible;display:block">' +
+      '<g font-family="' + fontCss + '" font-size="' + fs + '" font-weight="' + weight + '" fill="' + color + '">' + out + '</g></svg>';
+  }
+
   function buildArcTextSvg(t, plainText, fontCss, color) {
+    if (WARP_STYLES[t.arcStyle]) { return buildWarpTextSvg(t, plainText, fontCss, color); }
     var d = arcSvgPathD(t.arcStyle, t.arcAmount, 300, 120);
     if (!d) { return null; }
     var pid = 'arcpath' + (arcIdCounter++);
@@ -4366,6 +4557,11 @@
   // Innenbereich je Form (Anteile der Formbox, cx/cy = Mittelpunkt), in
   // den Text passt, ohne über den Umriss zu ragen.
   var SHAPE_SAFE = {
+    roundrect: { w: 0.86, h: 0.86 }, plaque: { w: 0.8, h: 0.8 }, polygon: { w: 0.7, h: 0.7 }, parrow: { w: 0.55, h: 0.36, cx: 0.42 },
+    parrow2: { w: 0.5, h: 0.36 }, chevron: { w: 0.5, h: 0.6, cx: 0.48 }, pentarrow: { w: 0.6, h: 0.8, cx: 0.42 },
+    pring: { w: 0.4, h: 0.4 }, pframe: { w: 0.66, h: 0.66 }, pcross: { w: 0.3, h: 0.3 }, pie: { w: 0.5, h: 0.5 },
+    blockarc: { w: 0.5, h: 0.3, cy: 0.3 }, ptrapezoid: { w: 0.66, h: 0.7 }, pparallelogram: { w: 0.6, h: 0.8 },
+    can: { w: 0.86, h: 0.6, cy: 0.58 }, cube: { w: 0.62, h: 0.62, cx: 0.42, cy: 0.58 }, pbanner: { w: 0.6, h: 0.6 },
     rect: { w: 0.9, h: 0.9 }, rounded: { w: 0.86, h: 0.86 }, circle: { w: 0.66, h: 0.66 }, ellipse: { w: 0.68, h: 0.44 },
     bubble: { w: 0.64, h: 0.44 }, bubblerect: { w: 0.74, h: 0.46 }, thought: { w: 0.58, h: 0.4 },
     heart: { w: 0.56, h: 0.4, cy: 0.42 }, cloud: { w: 0.56, h: 0.34, cy: 0.54 }, triangle: { w: 0.42, h: 0.34, cy: 0.66 },
@@ -4644,10 +4840,13 @@
     // (SVG-<text> unterstützt weder automatischen Umbruch noch Inline-HTML).
     var textEls = tf.texts.map(function (t, idx) {
       var fontCss = resolveFontCss(t.font);
-      var arcSvg = (idx !== 0 && t.arcStyle && t.arcStyle !== 'none') ? buildArcTextSvg(t, t.text, fontCss, t.fillColor || preset.text) : null;
+      // Bögen und Verformungen: bei WordArt auch für den Haupttext (dann über die ganze Breite, mittig)
+      var arcOk = idx !== 0 || wordfieldIsWordart(tf);
+      var arcSvg = (arcOk && t.arcStyle && t.arcStyle !== 'none') ? buildArcTextSvg(t, t.text, fontCss, t.fillColor || preset.text) : null;
       if (arcSvg) {
-        var arcW = Math.max(120, t.size * 6), arcH = arcW * 0.4;
-        return '<foreignObject x="' + (t.x * tf.w - arcW / 2) + '" y="' + (t.y * tf.h - arcH / 2) + '" width="' + arcW + '" height="' + arcH + '">' +
+        var arcW = idx === 0 ? tf.w : Math.max(120, t.size * 6), arcH = arcW * 0.4;
+        var acx = idx === 0 ? tf.w / 2 : t.x * tf.w, acy = idx === 0 ? tf.h / 2 : t.y * tf.h;
+        return '<foreignObject x="' + (acx - arcW / 2) + '" y="' + (acy - arcH / 2) + '" width="' + arcW + '" height="' + arcH + '">' +
           '<div xmlns="http://www.w3.org/1999/xhtml">' + arcSvg + '</div></foreignObject>';
       }
       var wordartParts = buildWordartGradientParts(t, t.text, fontCss);
@@ -4836,6 +5035,16 @@
   }
 
   function saveTextFrame(tf, saveBtn, sendDirect) {
+    if (cfg.editorOnly) {
+      // Eingebetteter Editor (z. B. Folien in Collegare): Ergebnis an den Gastgeber statt in die Pinnwand
+      saveBtn.disabled = true;
+      var eoSvg;
+      try { eoSvg = buildTextFrameSVG(tf); } catch (e) { alert(S.error_save + ' (' + e.message + ')'); saveBtn.disabled = false; return; }
+      embedFontsInSVG(eoSvg, tf).then(function (finalSvg) {
+        cfg.editorOnly.onDone({ svg: finalSvg, data: JSON.stringify(tf) });
+      }).catch(function (e) { alert(S.error_save + ' (' + e.message + ')'); saveBtn.disabled = false; });
+      return;
+    }
     if (state.editingFrameItemId) { saveFrameSlide(tf, saveBtn); return; }
     saveBtn.disabled = true;
     var svg, label, wordfielddata, isEditingExisting;
@@ -5557,20 +5766,34 @@
           sizeHandle.addEventListener('mousedown', function () { selectText(t.id); });
         }
       }
-      if (!isPrimary && t.arcStyle && t.arcStyle !== 'none' && t.id !== activeId) {
+      if ((!isPrimary || state.wordArtMode) && t.arcStyle && t.arcStyle !== 'none' && state.tfArcEditId !== t.id) {
         // Bogen-Ansicht: SVG mit pfadfolgendem Text statt des editierbaren
         // Feldes, solange NICHT gerade bearbeitet wird (Bearbeitung selbst
         // bleibt einfacher Text - siehe Klick unten, der wieder zurück auf
         // den normalen editierbaren Zustand wechselt).
+        // Vorschau bleibt auch beim ausgewählten Text sichtbar; erst ein Klick darauf schaltet zum Tippen um,
+        // beim Verlassen des Feldes erscheint der Bogen wieder.
         var arcWrap = el('div', {
-          class: 'ic-textframe-obj ic-textframe-arc-obj', 'data-previewid': String(t.id),
-          style: 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + Math.max(120, t.size * 6) + 'px;'
+          class: 'ic-textframe-obj ic-textframe-arc-obj' + (t.id === activeId ? ' active' : ''), 'data-previewid': String(t.id),
+          style: isPrimary
+            ? 'left:50%;top:50%;width:' + tf.w + 'px;'
+            : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + Math.max(120, t.size * 6) + 'px;'
         });
         arcWrap.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text)) || '';
         arcWrap.addEventListener('click', function (ev) {
-          ev.stopPropagation(); selectText(t.id); render();
+          ev.stopPropagation(); state.tfArcEditId = t.id; selectText(t.id); render();
           var freshEl = body.querySelector('[data-textid="' + t.id + '"]');
-          if (freshEl) { freshEl.focus(); }
+          if (freshEl) {
+            freshEl.focus();
+            freshEl.addEventListener('blur', function () {
+              setTimeout(function () {
+                if (state.tfArcEditId !== t.id || state.step !== 'textframe') { return; }
+                var ae = document.activeElement;
+                if (ae && ae.closest && ae.closest('[data-textid="' + t.id + '"]')) { return; }
+                state.tfArcEditId = null; render();
+              }, 200);
+            });
+          }
         });
         return arcWrap;
       }
@@ -5857,7 +6080,7 @@
         noneBtn.addEventListener('click', function () { onPick('none'); });
         content.appendChild(noneBtn);
       }
-      var paramCells = PARAM_SHAPES.map(function (p) { return { id: p.id, label: p.label, d: shapeDefFor({ type: p.id }).d }; });
+      var paramCells = PARAM_SHAPES.map(function (p) { var sd = shapeDefFor({ type: p.id }); return { id: p.id, label: p.label, d: sd.d, fillRule: sd.fillRule }; });
       var allCats = Object.assign({ grundformen_basic: BASIC_SHAPES, sterne_blasen: paramCells }, FG_SHAPE_CATEGORIES);
       Object.keys(allCats).forEach(function (cat) {
         var grid = el('div', { class: 'ic-shape-grid' });
@@ -6076,9 +6299,11 @@
           }));
           paramRow.appendChild(cell);
         }
-        if (selInfo.base === 'star') {
-          paramStepper('✶', S.tf_star_points || 'Zacken', 'points', 3, 24, 1, 0);
-          paramStepper('◎', S.tf_star_inner || 'Innenradius', 'inner', 0.1, 0.95, 0.05, 2);
+        if (PARAM_UI[selInfo.base]) {
+          PARAM_UI[selInfo.base].forEach(function (u) {
+            var lbl = u[2] === 'points' ? (S.tf_star_points || u[1]) : u[2] === 'inner' ? (S.tf_star_inner || u[1]) : u[1];
+            paramStepper(u[0], lbl, u[2], u[3], u[4], u[5], u[6]);
+          });
         } else {
           var styleSel = el('select', { class: 'ic-mini-select', title: S.tf_bubble_style || 'Blasenform' });
           [['round', S.tf_bubble_round || 'Rund'], ['rect', S.tf_bubble_rect || 'Eckig'], ['thought', S.tf_bubble_thought || 'Gedanke']].forEach(function (o) {
@@ -6824,12 +7049,18 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         var arcRow = el('div', { class: 'ic-wordart-arc-row' });
         [
           ['none', S.wordart_arc_none], ['up', S.wordart_arc_up],
-          ['down', S.wordart_arc_down], ['wave', S.wordart_arc_wave], ['circle', S.wordart_arc_circle]
+          ['down', S.wordart_arc_down], ['wave', S.wordart_arc_wave], ['circle', S.wordart_arc_circle],
+          ['archup', 'Halbbogen oben'], ['archdown', 'Halbbogen unten'], ['wave2', 'Doppelwelle'], ['slant', 'Schräg'],
+          ['inflate', 'Aufblähen'], ['deflate', 'Stauchen'], ['growright', 'Perspektive nach rechts'],
+          ['growleft', 'Perspektive nach links'], ['peak', 'Dreieck'], ['valley', 'Dreieck umgekehrt'], ['ripple', 'Wellenhöhe']
         ].forEach(function (arc) {
           var tile = el('button', {
             class: 'ic-wordart-arc-tile' + ((active.arcStyle || 'none') === arc[0] ? ' active' : ''), title: arc[1]
           });
-          if (arc[0] !== 'none') {
+          if (WARP_STYLES[arc[0]]) {
+            tile.innerHTML = '<svg viewBox="0 0 100 60" width="100%" height="100%"><path d="' + warpPreviewD(arc[0]) +
+              '" fill="currentColor" fill-opacity=".35" stroke="currentColor" stroke-width="3"/></svg>';
+          } else if (arc[0] !== 'none') {
             var previewD = arcSvgPathD(arc[0], 50, 100, 60);
             tile.innerHTML = '<svg viewBox="0 0 100 60" width="100%" height="100%"><path d="' + previewD +
               '" fill="none" stroke="currentColor" stroke-width="4"/></svg>';
@@ -8091,7 +8322,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       title: S.tf_show_board_bg
     }, [icon('eye')]);
     boardBgBtn.addEventListener('click', function () { state.tfShowBoardBg = state.tfShowBoardBg === false ? true : false; render(); });
-    tfHeaderRight.appendChild(boardBgBtn);
+    if (!cfg.editorOnly) { tfHeaderRight.appendChild(boardBgBtn); }
     // Textfeld <-> WordArt umwandeln: Inhalt, Formeln und Position bleiben,
     // nur Editor-Modus und Kartenhintergrund wechseln.
     if (!tf.isSlide) {
@@ -8167,18 +8398,19 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       if (!confirm(S.tf_discard_confirm)) { return; }
       leave();
     });
-    tfHeaderRight.appendChild(tfTrashBtn);
+    if (!cfg.editorOnly) { tfHeaderRight.appendChild(tfTrashBtn); }
     tfHeaderRight.appendChild(cancelWizardBtn(true));
     // Direkt senden: speichert UND schickt das Objekt sofort in den
     // Post-Stream der Masterpinnwand (hiddenfromboard=0), statt erst über
     // "Meine Bilder" gesendet werden zu müssen. Nur sichtbar, wenn Senden
     // überhaupt erlaubt ist (konsistent mit dem Senden-Button dort).
-    if (state.studentcansend && !state.editingFrameItemId) {
+    if (state.studentcansend && !state.editingFrameItemId && !cfg.editorOnly) {
       var sendDirectBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon', title: S.tf_send_direct, 'aria-label': S.tf_send_direct }, [icon('send')]);
       sendDirectBtn.addEventListener('click', function () { saveTextFrame(tf, sendDirectBtn, true); });
       tfHeaderRight.appendChild(sendDirectBtn);
     }
-    var saveBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: S.savephoto, 'aria-label': S.savephoto }, [icon('check')]);
+    var saveTitle = cfg.editorOnly ? (cfg.editorOnly.edit ? 'Übernehmen' : 'Einfügen') : S.savephoto;
+    var saveBtn = el('button', { class: 'ic-btn ic-btn-primary ic-btn-icon', title: saveTitle, 'aria-label': saveTitle }, [icon('check')]);
     saveBtn.addEventListener('click', function () { saveTextFrame(tf, saveBtn, false); });
     tfHeaderRight.appendChild(saveBtn);
     tfHeader.appendChild(tfHeaderRight);
@@ -8303,7 +8535,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
   // Handles im contenteditable-Feld gehören nicht zum gespeicherten Text.
   // Formel-Dialog: lädt den Formeleditor erst beim Öffnen und übergibt
   // das LaTeX beim Bestätigen an onDone.
-  function openFormulaDialog(initialTex, onDone) {
+  function openFormulaDialog(initialTex, onDone, onCancel) {
     var overlay = el('div', { class: 'ic-formula-overlay' });
     var panel = el('div', { class: 'ic-add-modal ic-formula-modal' });
     var head = el('div', { class: 'ic-formula-head' }, [el('span', { class: 'ic-float-grip' }, ['\u2630']), el('span', {}, [S.formula_title])]);
@@ -8324,7 +8556,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     panel.style.top = Math.max(8, window.innerHeight * 0.12) + 'px';
     var editor = null, value = initialTex || '';
     function close() { if (editor && editor.destroy) { editor.destroy(); } overlay.remove(); }
-    cancelBtn.addEventListener('click', close);
+    cancelBtn.addEventListener('click', function () { close(); if (onCancel) { onCancel(); } });
     // Verschiebbar über die Titelleiste, skalierbar über die Ecke unten rechts (CSS resize).
     var drag = null;
     head.addEventListener('pointerdown', function (ev) {
@@ -8344,12 +8576,19 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     okBtn.addEventListener('click', function () {
       var tex = (editor ? editor.getValue() : value).trim();
       close();
-      if (tex) { onDone(tex); }
+      if (tex) { onDone(tex); } else if (onCancel) { onCancel(); }
     });
+    // Strg/⌘+Eingabe übernimmt, Escape bricht ab (wie in den anderen Dialogen)
+    panel.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey) && !okBtn.disabled) { ev.preventDefault(); okBtn.click(); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); cancelBtn.click(); }
+    });
+    okBtn.title = (initialTex ? S.formula_apply : S.formula_insert) + ' (Strg+Eingabe)';
     loadFormelEditor().then(function () {
       host.textContent = '';
       editor = window.FormelEditor.mount(host, { value: value, transform: state.canmoderate || !!cfg.formulatransform, calculate: state.canmoderate || !!cfg.formulacalc, onChange: function (v) { value = v; } });
       okBtn.disabled = !editor;
+      if (cfg.editorOnly) { var src = host.querySelector('textarea'); if (src) { src.focus(); } }
     }).catch(function () {
       host.textContent = '';
       host.appendChild(el('p', { class: 'ic-hint' }, [S.formula_loaderror]));
@@ -14093,6 +14332,47 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       remote.pending = true;
       remoteSchedule(300);
     });
+  }
+
+  // ==================================================================
+  // Eingebetteter Einzel-Editor (cfg.editorOnly, z. B. „Einfügen“ in den Folien von Collegare):
+  // { kind: 'wordart' | 'shape' | 'formula', data?: gespeicherter Zettel (JSON) bzw. LaTeX,
+  //   onDone({svg, data} | {tex}), onCancel() } - ohne Pinnwand, ohne Server.
+  // ==================================================================
+  if (cfg.editorOnly) {
+    var eo = cfg.editorOnly;
+    root.classList.add('ic-editor-only');
+    if (eo.kind === 'formula') { root.classList.add('ic-editor-only-formula'); }
+    state.photos = [];
+    state.background = { type: 'color', color: '#2b2d33', url: null, brightness: 100, saturation: 100 };
+    state.canmoderate = !!eo.teacher;
+    if (eo.kind === 'formula') {
+      root.innerHTML = '';
+      openFormulaDialog(eo.data || '', function (tex) { eo.onDone({ tex: tex }); }, function () { eo.onCancel(); });
+      return;
+    }
+    var eoTf = null;
+    try { eoTf = eo.data ? JSON.parse(eo.data) : null; } catch (e) { eoTf = null; }
+    if (!eoTf) {
+      eoTf = newTextFrame(eo.kind === 'wordart');
+      if (eo.kind === 'wordart') {
+        eoTf.texts[0].text = eo.text || 'WordArt';
+        eoTf.texts[0].size = 56;
+      } else {
+        // Form mit Text: durchsichtiger Zettel, die Hauptform ist die Kartenform
+        eoTf.preset = 'none'; eoTf.w = 320; eoTf.h = 220;
+        eoTf.shapes = [{ id: 1, type: 'roundrect', main: true, x: 0.5, y: 0.5, size: 0.4, radius: 0.25, fillColor: '#3f74c9', outlineWidth: 0 }];
+        eoTf.cardStyle = { fillColor: '#3f74c9' };
+        eoTf.texts[0].fillColor = '#ffffff';
+        eoTf.texts[0].text = eo.text || 'Text';
+      }
+    }
+    state.textFrame = eoTf;
+    state.wordArtMode = eoTf.isWordArt != null ? !!eoTf.isWordArt : eo.kind === 'wordart';
+    resetTfHistory();
+    state.step = 'textframe';
+    render();
+    return;
   }
 
   // ==================================================================

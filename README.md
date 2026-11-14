@@ -37,6 +37,23 @@ konfigurierbares Maximum an Bildern pro Lernender/m.
   Änderungen anderer, lädt die Pinnwand Objekte, Fäden, Board-Namen und
   Notizen neu, sobald gerade niemand zieht, tippt oder einen Dialog offen hat
   (gemeinsames Bearbeiten in Echtzeit).
+- **Einzel-Editor zum Einbetten** (seit 0.171.0): Mit `pinnwandConfig.editorOnly =
+  { kind: 'wordart' | 'shape' | 'formula', data?, onDone(result), onCancel() }`
+  startet `js/app.js` ohne Pinnwand und ohne Server nur den WordArt-Editor, den
+  Formen-Editor (Zettel mit Kartenform) oder den Formel-Editor. `onDone` bekommt
+  `{svg, data}` (SVG mit eingebetteten Schriften, `data` = Zettel als JSON zum
+  späteren Weiterbearbeiten) bzw. `{tex}`. Collegare nutzt das für „Einfügen“ in
+  den Folien.
+- **WordArt und Formen** (0.171.0): Neben Bogen, Welle und Kreis gibt es
+  Halbbögen, Doppelwelle und Schräg sowie Verformungen der Buchstaben wie in
+  LibreOffice Fontwork (Aufblähen, Stauchen, Perspektive nach rechts/links,
+  Dreieck, Dreieck umgekehrt, Wellenhöhe); Bögen wirken bei WordArt jetzt auch
+  auf den Haupttext und bleiben im Editor sichtbar, bis man hineinklickt. 19
+  einstellbare Formen (Eckenrundung, Pfeilspitze und Schaft, Doppelpfeil,
+  Winkelpfeil, Ring- und Rahmenstärke, Plus, Kreisausschnitt, Bogenband,
+  Trapez, Parallelogramm, Vieleck, Zylinder, Würfel, Plakette, Banner) mit
+  Reglern wie bei Stern und Sprechblase. Formel-Dialog: Strg+Eingabe übernimmt,
+  Escape bricht ab.
 - **Perspektivkorrektur**: projektive Entzerrung (Heckbert-Methode, Abbildung
   Einheitsquadrat → Viereck, pixelweise mit bilinearer Interpolation). Läuft
   vollständig im Browser über `<canvas>`.
