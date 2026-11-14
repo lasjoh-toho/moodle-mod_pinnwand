@@ -107,8 +107,9 @@
   // statisches Script ohne Build-Schritt).
   // ------------------------------------------------------------------
   // Eingebettet in ein anderes Werkzeug (z. B. Collegare) setzt die Gastgeberseite cfg.transport:
-  // { name, call(methodname, args) -> Promise<data>, slidemedia(fields) -> Promise<json> }. Dann gehen alle
-  // Aufrufe dorthin statt an Moodle; Methoden und Antworten bleiben dieselben wie bei den Web-Services.
+  // { name, call(methodname, args) -> Promise<data>, slidemedia(fields) -> Promise<json>, subscribe(cb)? }. Dann
+  // gehen alle Aufrufe dorthin statt an Moodle; Methoden und Antworten bleiben dieselben wie bei den Web-Services.
+  // subscribe (optional) meldet Änderungen anderer, siehe "Gemeinsam bearbeiten" unten.
   var transport = (cfg.transport && typeof cfg.transport.call === 'function') ? cfg.transport : null;
 
   function callAjax(methodname, args) {
@@ -14025,6 +14026,73 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       if (existing._icResizeHandler) { window.removeEventListener('resize', existing._icResizeHandler); }
       existing.remove();
     }
+  }
+
+  // ==================================================================
+  // Gemeinsam bearbeiten (Einbettung, z. B. Collegare): Bietet der Transport
+  // subscribe(callback) an, meldet er darüber Änderungen anderer an derselben
+  // Pinnwand. Dann lädt die Pinnwand Objekte, Fäden, Board-Namen, Notizen und
+  // weitere Platzierungen neu und zeichnet neu - aber erst, wenn gerade
+  // niemand zieht, tippt oder einen Dialog/Editor/die Präsentation offen hat,
+  // damit nichts unter den Händen verschwindet. In Moodle ohne Transport
+  // ändert sich nichts.
+  // ==================================================================
+  var remote = { pending: false, timer: null, pointer: false, loading: false };
+  var REMOTE_BUSY = '.ic-modal-overlay, .ic-present-overlay, .ic-place-overlay, .ic-lightbox, .ic-formula-overlay,' +
+    ' .ic-draggable-modal, .ic-zoom-popup, .ic-sort-menu, .ic-dropdown-menu, .ic-slide-pick, .ic-slide-cam,' +
+    ' .ic-slide-add-menu, .ic-tf-editor-bg';
+  function remoteBusy() {
+    if (remote.pointer || remote.loading) { return true; }
+    if (state.step !== 'arrange' && state.step !== 'home' && state.step !== 'moderate') { return true; }
+    if (document.querySelector(REMOTE_BUSY)) { return true; }
+    var ae = document.activeElement;
+    return !!(ae && ae !== document.body && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable));
+  }
+  function remoteSchedule(delay) {
+    if (remote.timer) { clearTimeout(remote.timer); }
+    remote.timer = setTimeout(function () {
+      remote.timer = null;
+      if (!remote.pending) { return; }
+      if (remoteBusy()) { remoteSchedule(1500); return; }
+      remoteRefresh();
+    }, delay);
+  }
+  function remoteRefresh() {
+    remote.pending = false;
+    remote.loading = true;
+    var inkClean = JSON.stringify(state.boardInkStrokes || []) === (state.boardInkSnapshot || '[]');
+    Promise.all([
+      callAjax('mod_pinnwand_get_photos', { cmid: cfg.cmid }).then(function (res) {
+        state.photos = res.photos;
+        state.maxpictures = res.max;
+        if (res.background) { state.background = res.background; }
+      }),
+      callAjax('mod_pinnwand_get_threads', { cmid: cfg.cmid }).then(function (res) {
+        state.threads = res.threads || [];
+      }).catch(function () {}),
+      callAjax('mod_pinnwand_get_board_names', { cmid: cfg.cmid }).then(function (res) {
+        state.boardNames = {};
+        (res.names || []).forEach(function (n) { state.boardNames[n.boardid] = n.name; });
+      }).catch(function () {})
+    ]).then(function () {
+      remote.loading = false;
+      // Erst jetzt prüfen: Hat die Person inzwischen etwas angefangen, später zeichnen.
+      if (remoteBusy()) { remote.pending = true; remoteSchedule(1500); return; }
+      // Notizen nur neu laden, wenn hier nichts Ungespeichertes gezeichnet ist;
+      // Platzierungen immer (renderArrange lädt beides nach, wenn das Board "neu" ist).
+      if (inkClean) { state.boardInkBoard = null; }
+      state.extraPlacementsBoard = null;
+      render();
+    }).catch(function () { remote.loading = false; });
+  }
+  if (transport && typeof transport.subscribe === 'function') {
+    document.addEventListener('pointerdown', function () { remote.pointer = true; }, true);
+    window.addEventListener('pointerup', function () { remote.pointer = false; if (remote.pending) { remoteSchedule(400); } }, true);
+    window.addEventListener('pointercancel', function () { remote.pointer = false; }, true);
+    transport.subscribe(function () {
+      remote.pending = true;
+      remoteSchedule(300);
+    });
   }
 
   // ==================================================================
