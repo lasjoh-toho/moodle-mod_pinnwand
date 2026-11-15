@@ -287,6 +287,8 @@ class mod_pinnwand_external extends external_api {
                 'wordfielddata' => (string) ($r->wordfielddata ?? ''),
                 'blendmode' => (string) ($r->blendmode ?? ''),
                 'origurl' => self::photo_area_url($context, 'photoorig', $r->id),
+                'thumburl' => \mod_pinnwand\local\media::thumb_url($context, (int) $r->id, $file),
+                'fullurl' => \mod_pinnwand\local\media::url($context, 'photofull', (int) $r->id),
                 'maskurl' => self::photo_area_url($context, 'photomask', $r->id),
                 'editdata' => (string) ($r->editdata ?? ''),
                 'otherboardcount' => $placementcounts[$r->id] ?? 0,
@@ -500,6 +502,8 @@ class mod_pinnwand_external extends external_api {
                 'wordfielddata' => new external_value(PARAM_RAW, 'Strukturierte Wortfeld-Daten (JSON) oder leer'),
                 'blendmode' => new external_value(PARAM_ALPHAEXT, 'Mischmodus mit dem Hintergrund', VALUE_DEFAULT, ''),
                 'origurl' => new external_value(PARAM_RAW, 'Originalbild (nicht-destruktive Bearbeitung)', VALUE_DEFAULT, ''),
+                'thumburl' => new external_value(PARAM_RAW, 'Vorschau (klein)', VALUE_OPTIONAL),
+                'fullurl' => new external_value(PARAM_RAW, 'Volle Auflösung (leer = keine)', VALUE_OPTIONAL),
                 'maskurl' => new external_value(PARAM_RAW, 'Freistellmaske', VALUE_DEFAULT, ''),
                 'editdata' => new external_value(PARAM_RAW, 'Bearbeitungseinstellungen (JSON)', VALUE_DEFAULT, ''),
                 'otherboardcount' => new external_value(PARAM_INT, 'Anzahl zusätzlicher aktiver Platzierungen auf anderen Boards'),
@@ -1637,6 +1641,8 @@ class mod_pinnwand_external extends external_api {
         $fs->delete_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id);
         $fs->delete_area_files($context->id, 'mod_pinnwand', 'photoorig', $photo->id);
         $fs->delete_area_files($context->id, 'mod_pinnwand', 'photomask', $photo->id);
+        $fs->delete_area_files($context->id, 'mod_pinnwand', 'photofull', $photo->id);
+        $fs->delete_area_files($context->id, 'mod_pinnwand', 'photothumb', $photo->id);
         $DB->delete_records('pinnwand_photos', ['id' => $photo->id]);
         $DB->delete_records('pinnwand_object_placements', ['photoid' => $photo->id]);
 
@@ -1759,6 +1765,8 @@ class mod_pinnwand_external extends external_api {
                 'userid' => (int) $r->userid,
                 'userfullname' => fullname($r),
                 'url' => self::photo_url($context->id, $r->id, $file->get_filename(), $r->timemodified),
+                'thumburl' => \mod_pinnwand\local\media::thumb_url($context, (int) $r->id, $file),
+                'fullurl' => \mod_pinnwand\local\media::url($context, 'photofull', (int) $r->id),
                 'sourcetitle' => (string) $r->sourcetitle,
                 'sourceauthor' => (string) $r->sourceauthor,
                 'sourceyear' => (string) $r->sourceyear,
@@ -1789,6 +1797,8 @@ class mod_pinnwand_external extends external_api {
                 'userid' => new external_value(PARAM_INT, 'Nutzer-ID'),
                 'userfullname' => new external_value(PARAM_TEXT, 'Voller Name'),
                 'url' => new external_value(PARAM_RAW, 'URL'),
+                'thumburl' => new external_value(PARAM_RAW, 'Vorschau (klein)', VALUE_OPTIONAL),
+                'fullurl' => new external_value(PARAM_RAW, 'Volle Auflösung (leer = keine)', VALUE_OPTIONAL),
                 'sourcetitle' => new external_value(PARAM_TEXT, 'Titel'),
                 'sourceauthor' => new external_value(PARAM_TEXT, 'Autor*in'),
                 'sourceyear' => new external_value(PARAM_TEXT, 'Jahr'),
@@ -1986,6 +1996,9 @@ class mod_pinnwand_external extends external_api {
 
         $fs = get_file_storage();
         $fs->delete_area_files($context->id, 'mod_pinnwand', 'photo', $photo->id);
+        // Die volle Auflösung passt nicht mehr zur neuen Fassung; der Browser schickt sie
+        // danach gegebenenfalls neu (save_photo_hires).
+        $fs->delete_area_files($context->id, 'mod_pinnwand', 'photofull', $photo->id);
         $filerecord = [
             'contextid' => $context->id,
             'component' => 'mod_pinnwand',
@@ -2007,6 +2020,58 @@ class mod_pinnwand_external extends external_api {
         return new external_single_structure([
             'success' => new external_value(PARAM_BOOL, 'OK'),
             'url' => new external_value(PARAM_RAW, 'Neue Bild-URL'),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // save_photo_hires: volle Auflösung (und Original in voller Auflösung)
+    // eines Objekts nachreichen. Eigener Aufruf nach save_photo/update_photo,
+    // damit eine einzelne Anfrage klein bleibt (Grenzen für POST-Größe auf
+    // Schulservern) und ein Fehler hier das Speichern nicht verhindert.
+    // ---------------------------------------------------------------
+    public static function save_photo_hires_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+            'imagedata' => new external_value(PARAM_RAW, 'Data-URL (JPEG/PNG) in voller Auflösung'),
+            'targets' => new external_value(PARAM_ALPHAEXT, 'full, orig oder full,orig', VALUE_DEFAULT, 'full'),
+        ]);
+    }
+
+    public static function save_photo_hires($cmid, $photoid, $imagedata, $targets = 'full') {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::save_photo_hires_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'imagedata' => $imagedata, 'targets' => $targets,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->pinnwandid != $instance->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'save_photo_hires');
+        }
+        $isown = $photo->userid == $USER->id;
+        if (!has_capability('mod/pinnwand:manage', $context) && !($isown && has_capability('mod/pinnwand:submit', $context))) {
+            throw new moodle_exception('nopermissions', 'error', '', 'save_photo_hires');
+        }
+        $targets = array_intersect(explode(',', $params['targets']), ['full', 'orig']);
+        $stored = [];
+        foreach ($targets as $t) {
+            $f = \mod_pinnwand\local\media::store_dataurl($context, $t === 'full' ? 'photofull' : 'photoorig', (int) $photo->id,
+                $params['imagedata']);
+            if (!$f) {
+                throw new moodle_exception('error_save', 'pinnwand');
+            }
+            $stored[] = $t;
+        }
+        return [
+            'success' => (bool) $stored,
+            'fullurl' => \mod_pinnwand\local\media::url($context, 'photofull', (int) $photo->id),
+        ];
+    }
+
+    public static function save_photo_hires_returns() {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'OK'),
+            'fullurl' => new external_value(PARAM_RAW, 'URL der vollen Auflösung'),
         ]);
     }
 
@@ -2497,6 +2562,7 @@ class mod_pinnwand_external extends external_api {
                 'userfullname' => fullname($r),
                 'mine' => $mine,
                 'url' => self::photo_url($context->id, $r->id, $file->get_filename(), $r->timemodified),
+                'thumburl' => \mod_pinnwand\local\media::thumb_url($context, (int) $r->id, $file),
                 'sourcetitle' => (string) $r->sourcetitle,
                 'sourceauthor' => (string) ($r->sourceauthor ?? ''),
                 'sourceyear' => (string) ($r->sourceyear ?? ''),
@@ -2546,6 +2612,7 @@ class mod_pinnwand_external extends external_api {
                 'userfullname' => new external_value(PARAM_TEXT, 'Voller Name'),
                 'mine' => new external_value(PARAM_BOOL, 'Eigenes Foto (sonst: fremde Einreichung für die Lehrkraft)'),
                 'url' => new external_value(PARAM_RAW, 'URL'),
+                'thumburl' => new external_value(PARAM_RAW, 'Vorschau (klein)', VALUE_OPTIONAL),
                 'sourcetitle' => new external_value(PARAM_TEXT, 'Titel'),
                 'sourceauthor' => new external_value(PARAM_TEXT, 'Autor der Vorlage'),
                 'sourceyear' => new external_value(PARAM_TEXT, 'Jahr'),
@@ -2608,6 +2675,8 @@ class mod_pinnwand_external extends external_api {
                 'itemid' => $newid, 'filepath' => '/', 'filename' => $file->get_filename(),
             ], $file);
             $url = self::photo_url($context->id, $newid, $newfile->get_filename(), time());
+            \mod_pinnwand\local\media::copy_photo_files($context, (int) $source->id, (int) $newid,
+                ['photoorig', 'photomask', 'photofull']);
         }
 
         return ['id' => (int) $newid, 'url' => (string) $url];

@@ -39,6 +39,13 @@ function pinnwand_delete_instance($id) {
     }
     // Zugehörige Foto-Datensätze entfernen (Dateien werden über den Kontext
     // beim Löschen des Kurskontexts durch Moodle mitentfernt).
+    $threadids = $DB->get_fieldset_select('pinnwand_threads', 'id', 'pinnwandid = ?', [$id]);
+    if ($threadids) {
+        $DB->delete_records_list('pinnwand_thread_items', 'threadid', $threadids);
+    }
+    foreach (['pinnwand_object_placements', 'pinnwand_threads', 'pinnwand_board_ink', 'pinnwand_board_names'] as $table) {
+        $DB->delete_records($table, ['pinnwandid' => $id]);
+    }
     $DB->delete_records('pinnwand_photos', ['pinnwandid' => $id]);
     $DB->delete_records('pinnwand', ['id' => $id]);
     return true;
@@ -89,7 +96,7 @@ function pinnwand_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
         return;
     }
 
-    if ($filearea !== 'photo' && $filearea !== 'photoorig' && $filearea !== 'photomask') {
+    if (!in_array($filearea, ['photo', 'photoorig', 'photomask', 'photofull', 'photothumb'], true)) {
         return false;
     }
 
@@ -106,10 +113,32 @@ function pinnwand_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
     $filepath = $args ? '/' . implode('/', $args) . '/' : '/';
 
     $fs = get_file_storage();
+    if ($filearea === 'photothumb') {
+        // Vorschau entsteht bei Bedarf aus dem Anzeigebild (und neu, wenn es sich geändert hat).
+        $file = \mod_pinnwand\local\media::thumbnail($context, $photoid);
+        if (!$file) {
+            return false;
+        }
+        send_stored_file($file, 86400, 0, $forcedownload, $options);
+        return;
+    }
     $file = $fs->get_file($context->id, 'mod_pinnwand', $filearea, $itemid, $filepath, $filename);
     if (!$file || $file->is_directory()) {
         return false;
     }
 
     send_stored_file($file, 86400, 0, $forcedownload, $options);
+}
+
+/**
+ * Eintrag „Schichten“ im Menü der Aktivität (Export/Import einzelner Schichten).
+ */
+function pinnwand_extend_settings_navigation(settings_navigation $settingsnav, navigation_node $node) {
+    global $PAGE;
+    $cm = $PAGE->cm;
+    if (!$cm || !has_capability('mod/pinnwand:manage', $cm->context)) {
+        return;
+    }
+    $node->add(get_string('layers_title', 'pinnwand'), new moodle_url('/mod/pinnwand/layers.php', ['id' => $cm->id]),
+        navigation_node::TYPE_SETTING, null, 'pinnwandlayers', new pix_icon('i/backup', ''));
 }

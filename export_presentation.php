@@ -22,6 +22,9 @@ $boardid = optional_param('boardid', 0, PARAM_INT);
 // nicht enthalten.
 $includeannot = optional_param('annot', 0, PARAM_BOOL);
 $includeink = optional_param('ink', 0, PARAM_BOOL);
+// Optional: Bilder in voller Auflösung einbetten (photofull, falls vorhanden).
+// Ohne Angabe die Anzeigegröße - die Datei bleibt so deutlich kleiner.
+$GLOBALS['pinnwandexportfull'] = optional_param('full', 0, PARAM_BOOL);
 
 $cm = get_coursemodule_from_id('pinnwand', $id, 0, false, MUST_EXIST);
 $course = get_course($cm->course);
@@ -102,8 +105,15 @@ function pinnwand_export_photo_data($photoid, $context, $fs, &$photocache, $incl
     if (!$photo) {
         return $photocache[$photoid] = null;
     }
-    $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $photoid, 'itemid', false);
-    $file = reset($files);
+    $file = null;
+    if (!empty($GLOBALS['pinnwandexportfull'])) {
+        $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photofull', $photoid, 'itemid', false);
+        $file = reset($files) ?: null;
+    }
+    if (!$file) {
+        $files = $fs->get_area_files($context->id, 'mod_pinnwand', 'photo', $photoid, 'itemid', false);
+        $file = reset($files);
+    }
     if (!$file) {
         return $photocache[$photoid] = null;
     }
