@@ -2034,7 +2034,7 @@ class mod_pinnwand_external extends external_api {
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
             'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
             'imagedata' => new external_value(PARAM_RAW, 'Data-URL (JPEG/PNG) in voller Auflösung'),
-            'targets' => new external_value(PARAM_ALPHAEXT, 'full, orig oder full,orig', VALUE_DEFAULT, 'full'),
+            'targets' => new external_value(PARAM_TEXT, 'full, orig, full,orig oder thumb (thumb erzeugt Moodle selbst, wird ignoriert)', VALUE_DEFAULT, 'full'),
         ]);
     }
 
@@ -2052,7 +2052,12 @@ class mod_pinnwand_external extends external_api {
         if (!has_capability('mod/pinnwand:manage', $context) && !($isown && has_capability('mod/pinnwand:submit', $context))) {
             throw new moodle_exception('nopermissions', 'error', '', 'save_photo_hires');
         }
-        $targets = array_intersect(explode(',', $params['targets']), ['full', 'orig']);
+        $wanted = array_map('trim', explode(',', $params['targets']));
+        if ($wanted === ['thumb']) {
+            // Vorschau erzeugt Moodle bei Bedarf selbst (media::thumbnail).
+            return ['success' => true, 'fullurl' => \mod_pinnwand\local\media::url($context, 'photofull', (int) $photo->id)];
+        }
+        $targets = array_intersect($wanted, ['full', 'orig']);
         $stored = [];
         foreach ($targets as $t) {
             $f = \mod_pinnwand\local\media::store_dataurl($context, $t === 'full' ? 'photofull' : 'photoorig', (int) $photo->id,

@@ -270,8 +270,11 @@
   // Volle Auflösung (und Original in voller Auflösung) nach dem Speichern
   // nachreichen - je Datei eine eigene Anfrage, damit keine zu groß wird.
   // Schlägt das fehl, bleibt das Objekt in Anzeigegröße erhalten.
-  function sendHires(photoid, fullData, origData, both) {
+  function sendHires(photoid, fullData, origData, both, thumbData) {
     var jobs = [];
+    // Vorschau: in Moodle erzeugt der Server sie selbst, eingebettet (z. B.
+    // Collegare, cfg.clientthumbs) schickt der Browser sie mit.
+    if (thumbData) { jobs.push({ data: thumbData, targets: 'thumb' }); }
     if (fullData) { jobs.push({ data: fullData, targets: both ? 'full,orig' : 'full' }); }
     if (origData) { jobs.push({ data: origData, targets: 'orig' }); }
     var chain = Promise.resolve();
@@ -1005,7 +1008,7 @@
             try { full = canvasDataUrl(scaledCanvas(img, w, h, FULL_MAX), 0.85); } catch (eFull) { full = ''; }
           }
           URL.revokeObjectURL(url);
-          resolve({ display: canvasDataUrl(c, 0.85), full: full });
+          resolve({ display: canvasDataUrl(c, 0.85), full: full, thumb: thumbData(c) });
         };
         img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('image')); };
         img.src = url;
@@ -1014,9 +1017,10 @@
     function worker() {
       if (next >= total) { return Promise.resolve(); }
       var file = files[next++];
-      var fullData = '';
+      var fullData = '', thumbSmall = '';
       return shrink(file).then(function (shr) {
         fullData = shr.full;
+        thumbSmall = shr.thumb;
         return callAjax('mod_pinnwand_save_photo', {
           cmid: cfg.cmid, imagedata: shr.display, gridtype: 'none', gridvalue: 0, consent: false,
           sourcetitle: file.name.replace(/\.[^.]+$/, ''), sourceauthor: '', sourceyear: '', sourceepoch: '',
@@ -1026,6 +1030,11 @@
         done++;
         if (res && res.photoid) {
           return callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: res.photoid, hidden: false }).catch(function () { return null; })
+            .then(function () {
+              if (!thumbSmall) { return null; }
+              return callAjax('mod_pinnwand_save_photo_hires', { cmid: cfg.cmid, photoid: res.photoid, imagedata: thumbSmall, targets: 'thumb' })
+                .catch(function () { return null; });
+            })
             .then(function () {
               if (!fullData) { return null; }
               // Volle Auflösung, zugleich Original für späteres Bearbeiten.
@@ -1205,9 +1214,14 @@
   }
   // Datenpaket für sendHires(): volle Fassung und (bei neuem Original) das
   // Original in voller Auflösung.
+  function thumbData(c) {
+    if (!cfg.clientthumbs || !c) { return ''; }
+    try { return canvasDataUrl(scaledCanvas(c, c.width, c.height, 400), 0.82); } catch (e) { return ''; }
+  }
   function imgHiresPayload() {
     var full = imgFinalFull();
     return {
+      thumb: thumbData(imgFinal()),
       full: full ? canvasDataUrl(full, 0.85) : '',
       orig: (!state.imgOrigStored && state.fullSource) ? canvasDataUrl(state.fullSource, 0.9) : ''
     };
@@ -1301,7 +1315,7 @@
       cmid: cfg.cmid, photoid: photoId, imagedata: canvasDataUrl(imgFinal(), 0.88),
       origdata: payload.origdata, maskdata: payload.maskdata, editdata: payload.editdata
     }).then(function (res) {
-      if (hires.full || hires.orig) { sendHires(photoId, hires.full, hires.orig); } else { refreshPhotos(); }
+      if (hires.full || hires.orig || hires.thumb) { sendHires(photoId, hires.full, hires.orig, false, hires.thumb); } else { refreshPhotos(); }
       var existing = state.photos.filter(function (p) { return p.id === photoId; })[0];
       if (existing) { existing.url = res.url; }
       resetCaptureState();
@@ -2199,7 +2213,7 @@
         sourceorigauthor: info.sourceorigauthor,
         boardid: state.currentBoard || 0
       }).then(function (res) {
-        if (res && res.photoid && (hires.full || hires.orig)) { sendHires(res.photoid, hires.full, hires.orig); }
+        if (res && res.photoid && (hires.full || hires.orig || hires.thumb)) { sendHires(res.photoid, hires.full, hires.orig, false, hires.thumb); }
         if (state.slideImport && res && res.photoid) { finishSlideImport(res.photoid, finalCanvas.width, finalCanvas.height); return; }
         var maxreached = !!res.maxreached;
         refreshPhotos().then(function () {
