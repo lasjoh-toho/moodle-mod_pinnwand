@@ -210,6 +210,14 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/pinnwand:view',
     ],
+    'mod_pinnwand_save_photo_hires' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'save_photo_hires',
+        'description' => 'Volle Auflösung (und Original) eines Fotos nachreichen (tiefes Zoomen)',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:view',
+    ],
     'mod_pinnwand_get_threads' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'get_threads',

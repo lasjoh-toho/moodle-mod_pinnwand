@@ -80,6 +80,7 @@ $config = [
     'currentuserfullname' => fullname($USER),
     'managerurl' => $canmanage ? (new moodle_url('/mod/pinnwand/manage.php', ['id' => $cm->id]))->out(false) : null,
     'exportpresentationurl' => $canmanage ? (new moodle_url('/mod/pinnwand/export_presentation.php', ['id' => $cm->id]))->out(false) : null,
+    'layersurl' => has_capability('mod/pinnwand:manage', $context) ? (new moodle_url('/mod/pinnwand/layers.php', ['id' => $cm->id]))->out(false) : null,
     'courseurl' => (new moodle_url('/course/view.php', ['id' => $course->id]))->out(false),
     'isediting' => $isediting,
     'settingsurl' => ($isediting && has_capability('moodle/course:manageactivities', $context))
@@ -419,6 +420,8 @@ $config = [
         'present_hide' => get_string('present_hide', 'pinnwand'),
         'export_include_annot' => get_string('export_include_annot', 'pinnwand'),
         'export_include_ink' => get_string('export_include_ink', 'pinnwand'),
+        'export_include_full' => get_string('export_include_full', 'pinnwand'),
+        'layers_open' => get_string('layers_open', 'pinnwand'),
         'export_start' => get_string('export_start', 'pinnwand'),
         'present_toggle_ink' => get_string('present_toggle_ink', 'pinnwand'),
         'present_toggle_annot' => get_string('present_toggle_annot', 'pinnwand'),
