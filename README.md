@@ -69,6 +69,33 @@ konfigurierbares Maximum an Bildern pro Lernender/m.
   Übersicht `manage.php`, Post-Stream, Fotos anderer auf eigenes Board
   übernehmen), `mod/pinnwand:manage`.
 
+## Schichten, Sicherung und Bildgrößen (0.172.0)
+
+- **Schichten**: Alles, was einer Person gehört (Objekte mit weiteren
+  Platzierungen, Roter Faden, Stift auf dem Board, eigene Board-Titel,
+  Hintergrund), ist ihre Schicht (`classes/local/layers.php`). Die Seite
+  `layers.php` (Menü „Schichten“, Knopf in der Klassenansicht) exportiert
+  ausgewählte Schichten als ZIP (`layers.json` + Dateien) und importiert
+  sie wieder, auch in andere Kurse oder Moodle-Seiten. Beim Import wird
+  jede Schicht einer Person zugeordnet; hat sie schon Inhalte, wird
+  zusammengeführt (Boards außer 0 bekommen neue Nummern hinter den
+  vorhandenen, Stationen hängen am vorhandenen Faden, Stift auf demselben
+  Board wird ergänzt, ein gesetzter Hintergrund bleibt).
+- **Moodle-Sicherung**: mit Nutzerdaten alle Schichten, ohne Nutzerdaten
+  die Schichten der Lehrkräfte (`mod/pinnwand:viewall`); sie gehören beim
+  Wiederherstellen ohne zugeordnete Person der wiederherstellenden Person.
+  Neu mitgesichert: weitere Platzierungen, Hintergrund-Einstellung,
+  alle Spalten (auch künftige). Hintergrundbilder werden über die Schicht
+  der richtigen Person zugeordnet, Vorlage und Rückseite umgemappt.
+- **Bildgrößen**: `photothumb` (400 px, entsteht bei Bedarf auf dem
+  Server), `photo` (Anzeige wie bisher), `photofull` (bis 4096 px). Der
+  Browser schickt die volle Auflösung nach dem Speichern in eigenen
+  Anfragen (`save_photo_hires`), das Original (`photoorig`) ebenfalls in
+  voller Auflösung; bearbeitet wird weiter in Arbeitsgröße. Die volle
+  Auflösung lädt erst, wenn ein Bild größer angezeigt wird, als die
+  Anzeigegröße hergibt. Der Präsentations-Export bettet wahlweise die
+  volle Auflösung ein.
+
 ## Änderungen in dieser Version
 
 - Fix: verschachtelte Flex-Container hatten kein `min-height:0`, wodurch der
@@ -1984,12 +2011,6 @@ Details und Scoping-Entscheidungen. In Kurzform:
 - Der Stylus liegt in einer hohen Z-Ebene über den Fotos (Striche bleiben
   dadurch auch über Objekten sichtbar) - beim aktiven Zeichnen sind Fotos
   darunter währenddessen nicht per Klick bedienbar.
-- Persönliche Hintergrundbilder werden beim Kurs-Restore ohne Nutzer-ID-
-  Remapping wiederhergestellt (funktioniert nur korrekt, wenn Nutzer-IDs
-  zwischen Quelle und Ziel gleich bleiben) - siehe `backup/moodle2/*`.
-- `sourcephotoid` (Post-Stream-Herkunft) und `backphotoid` (Rückseite)
-  werden beim Restore ebenfalls nicht umgemappt - rein informationelle
-  Felder ohne Auswirkung auf Anzeige oder Berechtigungen.
 - Post-Stream ist ein 15-Sekunden-Poll, kein Echtzeit-Push.
 - Textobjekte im Wortfeld sind verschiebbar, aber nicht einzeln drehbar.
   "Laufweite" wirkt auf den ganzen Textblock, nicht auf einzeln

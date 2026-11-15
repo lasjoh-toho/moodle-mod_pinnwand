@@ -222,6 +222,72 @@
     return e;
   }
 
+  // ==================================================================
+  // Bildgrößen: Vorschau (thumburl) für Listen, Anzeigegröße (url) und
+  // volle Auflösung (fullurl), die erst geladen wird, wenn ein Bild größer
+  // angezeigt wird, als die Anzeigegröße hergibt (tiefes Zoomen auf dem
+  // Board, in der Präsentation oder in der Lightbox).
+  // ==================================================================
+  var HIRES_LOADED = {};
+  function thumbSrc(p) { return (p && (p.thumburl || p.url)) || ''; }
+  function boardImgAttrs(p, extra) {
+    var a = extra || {};
+    var full = p && p.fullurl;
+    a.src = full && HIRES_LOADED[full] ? full : (p ? p.url : '');
+    if (full && !HIRES_LOADED[full]) { a['data-full'] = full; }
+    a.alt = a.alt || '';
+    return a;
+  }
+  function hiresCheck() {
+    var imgs = document.querySelectorAll('img[data-full]');
+    if (!imgs.length) { return; }
+    var dpr = window.devicePixelRatio || 1;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    for (var i = 0; i < imgs.length; i++) {
+      var im = imgs[i];
+      var full = im.getAttribute('data-full');
+      if (HIRES_LOADED[full]) { im.removeAttribute('data-full'); im.src = full; continue; }
+      if (!im.complete || !im.naturalWidth || HIRES_LOADED[full] === false) { continue; }
+      var r = im.getBoundingClientRect();
+      if (!r.width || r.right < 0 || r.bottom < 0 || r.left > vw || r.top > vh) { continue; }
+      if (r.width * dpr <= im.naturalWidth * 1.2 && r.height * dpr <= im.naturalHeight * 1.2) { continue; }
+      HIRES_LOADED[full] = false; // wird geladen
+      (function (url) {
+        var pre = new Image();
+        pre.onload = function () {
+          HIRES_LOADED[url] = true;
+          document.querySelectorAll('img[data-full]').forEach(function (o) {
+            if (o.getAttribute('data-full') === url) { o.removeAttribute('data-full'); o.src = url; }
+          });
+        };
+        pre.onerror = function () { delete HIRES_LOADED[url]; };
+        pre.src = url;
+      })(full);
+    }
+  }
+  setInterval(hiresCheck, 700);
+
+  // Volle Auflösung (und Original in voller Auflösung) nach dem Speichern
+  // nachreichen - je Datei eine eigene Anfrage, damit keine zu groß wird.
+  // Schlägt das fehl, bleibt das Objekt in Anzeigegröße erhalten.
+  function sendHires(photoid, fullData, origData, both, thumbData) {
+    var jobs = [];
+    // Vorschau: in Moodle erzeugt der Server sie selbst, eingebettet (z. B.
+    // Collegare, cfg.clientthumbs) schickt der Browser sie mit.
+    if (thumbData) { jobs.push({ data: thumbData, targets: 'thumb' }); }
+    if (fullData) { jobs.push({ data: fullData, targets: both ? 'full,orig' : 'full' }); }
+    if (origData) { jobs.push({ data: origData, targets: 'orig' }); }
+    var chain = Promise.resolve();
+    jobs.forEach(function (j) {
+      chain = chain.then(function () {
+        return callAjax('mod_pinnwand_save_photo_hires', { cmid: cfg.cmid, photoid: photoid, imagedata: j.data, targets: j.targets });
+      });
+    });
+    return chain.then(function () { return refreshPhotos(); }).catch(function (e) {
+      if (window.console) { console.warn('Volle Auflösung nicht gespeichert:', e && e.message); }
+    });
+  }
+
   function stopStream() {
     if (state.stream) {
       state.stream.getTracks().forEach(function (t) { t.stop(); });
@@ -495,7 +561,7 @@
           console.error('Live-Darstellung in Meine Bilder fehlgeschlagen, Rückfall auf gespeichertes Bild:', thumbErr);
         }
       }
-      if (!thumbLiveRendered) { imgWrap.appendChild(el('img', { src: p.url, alt: '' })); }
+      if (!thumbLiveRendered) { imgWrap.appendChild(el('img', { src: thumbSrc(p), alt: '' })); }
       imgWrap.addEventListener('click', function () {
         if (p.wordfielddata) {
           openWordfieldEditorDirectly(p, function () { openLightbox(idx); });
@@ -867,7 +933,8 @@
     body.appendChild(bar);
 
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+      // Hohe Auflösung erbitten (sonst liefern viele Geräte nur 640x480) - für tiefes Zoomen.
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 4032 }, height: { ideal: 3024 } }, audio: false })
         .then(function (stream) {
           state.stream = stream;
           video.srcObject = stream;
@@ -934,13 +1001,14 @@
         var url = URL.createObjectURL(file);
         var img = new Image();
         img.onload = function () {
-          var max = 1800, sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
-          var c = document.createElement('canvas');
-          c.width = Math.max(1, Math.round(img.naturalWidth * sc));
-          c.height = Math.max(1, Math.round(img.naturalHeight * sc));
-          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          var w = img.naturalWidth, h = img.naturalHeight;
+          var c = scaledCanvas(img, w, h, WORK_MAX);
+          var full = '';
+          if (Math.max(w, h) >= FULL_MIN) {
+            try { full = canvasDataUrl(scaledCanvas(img, w, h, FULL_MAX), 0.85); } catch (eFull) { full = ''; }
+          }
           URL.revokeObjectURL(url);
-          resolve(canvasDataUrl(c, 0.85));
+          resolve({ display: canvasDataUrl(c, 0.85), full: full, thumb: thumbData(c) });
         };
         img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('image')); };
         img.src = url;
@@ -949,16 +1017,30 @@
     function worker() {
       if (next >= total) { return Promise.resolve(); }
       var file = files[next++];
-      return shrink(file).then(function (dataUrl) {
+      var fullData = '', thumbSmall = '';
+      return shrink(file).then(function (shr) {
+        fullData = shr.full;
+        thumbSmall = shr.thumb;
         return callAjax('mod_pinnwand_save_photo', {
-          cmid: cfg.cmid, imagedata: dataUrl, gridtype: 'none', gridvalue: 0, consent: false,
+          cmid: cfg.cmid, imagedata: shr.display, gridtype: 'none', gridvalue: 0, consent: false,
           sourcetitle: file.name.replace(/\.[^.]+$/, ''), sourceauthor: '', sourceyear: '', sourceepoch: '',
           sourceplace: '', sourceorigauthor: '', boardid: state.currentBoard || 0
         });
       }).then(function (res) {
         done++;
         if (res && res.photoid) {
-          return callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: res.photoid, hidden: false }).catch(function () { return null; });
+          return callAjax('mod_pinnwand_set_photo_hidden', { cmid: cfg.cmid, photoid: res.photoid, hidden: false }).catch(function () { return null; })
+            .then(function () {
+              if (!thumbSmall) { return null; }
+              return callAjax('mod_pinnwand_save_photo_hires', { cmid: cfg.cmid, photoid: res.photoid, imagedata: thumbSmall, targets: 'thumb' })
+                .catch(function () { return null; });
+            })
+            .then(function () {
+              if (!fullData) { return null; }
+              // Volle Auflösung, zugleich Original für späteres Bearbeiten.
+              return callAjax('mod_pinnwand_save_photo_hires', { cmid: cfg.cmid, photoid: res.photoid, imagedata: fullData, targets: 'full,orig' })
+                .catch(function () { return null; });
+            });
         }
       }).catch(function () { failed++; }).then(function () { update(); return worker(); });
     }
@@ -975,17 +1057,29 @@
     });
   }
 
-  function loadCapturedImage(img) {
-    // Auf sinnvolle Maximalgröße begrenzen (Performance der Pixel-Operationen).
-    var maxdim = 1800;
-    var scale = Math.min(1, maxdim / Math.max(img.width, img.height));
+  // Arbeitsgröße der Bearbeitung (Performance der Pixel-Operationen) und
+  // Obergrenze der vollen Auflösung; ab FULL_MIN lohnt sich eine eigene
+  // Datei in voller Auflösung.
+  var WORK_MAX = 1800, FULL_MAX = 4096, FULL_MIN = 2070;
+  function scaledCanvas(img, w, h, maxdim) {
+    var scale = Math.min(1, maxdim / Math.max(w, h));
     var c = document.createElement('canvas');
-    c.width = Math.round(img.width * scale);
-    c.height = Math.round(img.height * scale);
+    c.width = Math.max(1, Math.round(w * scale));
+    c.height = Math.max(1, Math.round(h * scale));
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c;
+  }
+  function loadCapturedImage(img) {
+    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    var c = scaledCanvas(img, w, h, WORK_MAX);
+    var full = null;
+    if (Math.max(w, h) >= FULL_MIN) {
+      try { full = scaledCanvas(img, w, h, FULL_MAX); } catch (eFull) { full = null; }
+    }
     state.sourceCanvas = c;
     state.corners = null;
     imgResetPipeline();
+    state.fullSource = full;
     state.cutoutUndo = [];
     state.step = 'perspective';
     render();
@@ -1080,6 +1174,59 @@
     return out;
   }
 
+  // Dieselbe Bearbeitung in voller Auflösung (Entzerren, Drehen, Farbe,
+  // Freistellmaske hochskaliert). null, wenn es keine größere Quelle gibt
+  // oder der Browser so große Bilder nicht schafft.
+  function imgFinalFull() {
+    var full = state.fullSource, src = state.sourceCanvas;
+    if (!full || !src) { return null; }
+    try {
+      var k = full.width / src.width;
+      var corners = state.cornersSrc || imgFullCorners();
+      var c = imgCornersAreFull(corners) ? imgCopy(full)
+        : applyPerspectiveCorrection(full, corners.map(function (pt) { return { x: pt.x * k, y: pt.y * k }; }), Math.round(1600 * k));
+      var geo = state.imgGeo || { rot: 0, mirror: false };
+      for (var r = 0; r < geo.rot; r++) { c = rotateCanvas90(c); }
+      if (geo.mirror) { c = mirrorCanvas(c); }
+      if (!imgColorNeutral(state.colorSettings)) {
+        var ctx = c.getContext('2d');
+        var d = ctx.getImageData(0, 0, c.width, c.height);
+        var o = ctx.createImageData(c.width, c.height);
+        applyColorAdjust(d, o, state.colorSettings);
+        ctx.putImageData(o, 0, 0);
+      }
+      var mask = imgMaskFor(imgColored());
+      if (mask) {
+        var out = imgCopy(c);
+        var octx = out.getContext('2d');
+        octx.globalCompositeOperation = 'destination-in';
+        octx.imageSmoothingQuality = 'high';
+        octx.drawImage(mask, 0, 0, out.width, out.height);
+        c = out;
+      }
+      var work = imgColored();
+      if (Math.max(c.width, c.height) < Math.max(work.width, work.height) * 1.15) { return null; }
+      return c;
+    } catch (e) {
+      if (window.console) { console.warn('Volle Auflösung nicht berechnet:', e && e.message); }
+      return null;
+    }
+  }
+  // Datenpaket für sendHires(): volle Fassung und (bei neuem Original) das
+  // Original in voller Auflösung.
+  function thumbData(c) {
+    if (!cfg.clientthumbs || !c) { return ''; }
+    try { return canvasDataUrl(scaledCanvas(c, c.width, c.height, 400), 0.82); } catch (e) { return ''; }
+  }
+  function imgHiresPayload() {
+    var full = imgFinalFull();
+    return {
+      thumb: thumbData(imgFinal()),
+      full: full ? canvasDataUrl(full, 0.85) : '',
+      orig: (!state.imgOrigStored && state.fullSource) ? canvasDataUrl(state.fullSource, 0.9) : ''
+    };
+  }
+
   // PNG, sobald das Bild (z. B. nach dem Freistellen) durchsichtige Pixel
   // hat - sonst JPEG (deutlich kleiner).
   function canvasHasAlpha(c) {
@@ -1120,12 +1267,17 @@
     }
     Promise.all([loadImageEl(p.origurl), p.maskurl ? loadImageEl(p.maskurl) : Promise.resolve(null)]).then(function (res) {
       var im = res[0];
-      var c = document.createElement('canvas');
-      c.width = im.naturalWidth; c.height = im.naturalHeight;
-      c.getContext('2d').drawImage(im, 0, 0);
+      // Original in voller Auflösung: zum Bearbeiten auf die Arbeitsgröße
+      // verkleinern (wie bei der Aufnahme), die volle Fassung für das
+      // Speichern behalten.
+      var big = Math.max(im.naturalWidth, im.naturalHeight) > WORK_MAX;
+      var c = scaledCanvas(im, im.naturalWidth, im.naturalHeight, WORK_MAX);
+      var full = null;
+      if (big) { try { full = scaledCanvas(im, im.naturalWidth, im.naturalHeight, FULL_MAX); } catch (eFull) { full = null; } }
       state.sourceCanvas = c;
       state.corners = null;
       imgResetPipeline();
+      state.fullSource = full;
       state.cutoutUndo = [];
       var ed = null;
       try { ed = p.editdata ? JSON.parse(p.editdata) : null; } catch (e) { ed = null; }
@@ -1158,11 +1310,12 @@
     var photoId = state.editingPhotoId;
     btn.disabled = true;
     var payload = imgEditPayload(true);
+    var hires = imgHiresPayload();
     callAjax('mod_pinnwand_update_photo', {
       cmid: cfg.cmid, photoid: photoId, imagedata: canvasDataUrl(imgFinal(), 0.88),
       origdata: payload.origdata, maskdata: payload.maskdata, editdata: payload.editdata
     }).then(function (res) {
-      refreshPhotos();
+      if (hires.full || hires.orig || hires.thumb) { sendHires(photoId, hires.full, hires.orig, false, hires.thumb); } else { refreshPhotos(); }
       var existing = state.photos.filter(function (p) { return p.id === photoId; })[0];
       if (existing) { existing.url = res.url; }
       resetCaptureState();
@@ -1434,7 +1587,7 @@
     };
   }
 
-  function applyPerspectiveCorrection(srcCanvas, corners) {
+  function applyPerspectiveCorrection(srcCanvas, corners, maxdimOpt) {
     // corners: [TL, TR, BR, BL] in Quellbild-Pixelkoordinaten.
     var wTop = dist(corners[0], corners[1]);
     var wBot = dist(corners[3], corners[2]);
@@ -1442,7 +1595,7 @@
     var hRight = dist(corners[1], corners[2]);
     var outW = Math.round(Math.max(wTop, wBot));
     var outH = Math.round(Math.max(hLeft, hRight));
-    var maxdim = 1600;
+    var maxdim = maxdimOpt || 1600;
     var scale = Math.min(1, maxdim / Math.max(outW, outH));
     outW = Math.max(20, Math.round(outW * scale));
     outH = Math.max(20, Math.round(outH * scale));
@@ -2042,6 +2195,7 @@
       // erst später pro Foto in der Galerieansicht (Lightbox).
       var dataUrl = canvasDataUrl(finalCanvas, 0.88);
       var editPayload = imgEditPayload(false);
+      var hires = imgHiresPayload();
       callAjax('mod_pinnwand_save_photo', {
         cmid: cfg.cmid,
         imagedata: dataUrl,
@@ -2059,6 +2213,7 @@
         sourceorigauthor: info.sourceorigauthor,
         boardid: state.currentBoard || 0
       }).then(function (res) {
+        if (res && res.photoid && (hires.full || hires.orig || hires.thumb)) { sendHires(res.photoid, hires.full, hires.orig, false, hires.thumb); }
         if (state.slideImport && res && res.photoid) { finishSlideImport(res.photoid, finalCanvas.width, finalCanvas.height); return; }
         var maxreached = !!res.maxreached;
         refreshPhotos().then(function () {
@@ -2118,6 +2273,7 @@
   function resetCaptureState() {
     imgResetPipeline();
     state.sourceCanvas = null;
+    state.fullSource = null;
     state.corners = null;
     state.workCanvas = null;
     state.cropRect = null;
@@ -5302,7 +5458,7 @@
             style: 'position:absolute;left:' + nx + 'px;top:' + ny + 'px;width:' + nw + 'px;' +
               'transform:rotate(' + (p.canvasrot || 0) + 'deg);pointer-events:none;' +
               blendModeCss(p.blendmode)
-          }, [nEl || el('img', { src: p.url, alt: '', style: 'width:100%;display:block;' })]);
+          }, [nEl || el('img', boardImgAttrs(p, { style: 'width:100%;display:block;' }))]);
           neighborsLayer.appendChild(nWrap);
         });
         // Andere Folien des eigenen Fadens (bis zur eigenen Ebene) ebenfalls.
@@ -5360,7 +5516,7 @@
         aboveLayer.appendChild(el('div', {
           style: 'position:absolute;left:' + (p.canvasx * bgScale) + 'px;top:' + (p.canvasy * bgScale) + 'px;width:' + (p.canvasw * bgScale) + 'px;' +
             'transform:rotate(' + (p.canvasrot || 0) + 'deg);pointer-events:none;' + blendModeCss(p.blendmode)
-        }, [lEl || el('img', { src: p.url, alt: '', style: 'width:100%;display:block;' })]));
+        }, [lEl || el('img', boardImgAttrs(p, { style: 'width:100%;display:block;' }))]));
       });
       frame.appendChild(aboveLayer);
     }
@@ -7381,7 +7537,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         var grid = el('div', { class: 'ic-slide-pick-grid' });
         cands.forEach(function (p) {
           var cap = itemCaptionText(p);
-          var item = el('button', { class: 'ic-slide-pick-item', type: 'button', title: cap }, [el('img', { src: p.url, alt: cap, loading: 'lazy' })]);
+          var item = el('button', { class: 'ic-slide-pick-item', type: 'button', title: cap }, [el('img', { src: thumbSrc(p), alt: cap, loading: 'lazy' })]);
           item.addEventListener('click', function () {
             dlg.remove();
             var abs = p.url;
@@ -7660,7 +7816,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
               render();
             });
             lab.appendChild(cb);
-            lab.appendChild(el('img', { src: p.url, alt: '' }));
+            lab.appendChild(el('img', { src: thumbSrc(p), alt: '' }));
             linkList.appendChild(lab);
           });
           slideColR.appendChild(linkList);
@@ -9431,11 +9587,15 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     inkCb.addEventListener('change', function () { state.exportInk = inkCb.checked; });
     panel.appendChild(el('label', { class: 'ic-export-option' }, [annotCb, el('span', {}, [S.export_include_annot])]));
     panel.appendChild(el('label', { class: 'ic-export-option' }, [inkCb, el('span', {}, [S.export_include_ink])]));
+    var fullCb = el('input', { type: 'checkbox' });
+    fullCb.checked = !!state.exportFull;
+    fullCb.addEventListener('change', function () { state.exportFull = fullCb.checked; });
+    panel.appendChild(el('label', { class: 'ic-export-option' }, [fullCb, el('span', {}, [S.export_include_full || 'Full resolution'])]));
     var goBtn = el('button', { class: 'ic-btn ic-btn-primary ic-export-go' }, [icon('download'), el('span', {}, [S.export_start])]);
     goBtn.addEventListener('click', function () {
       overlay.remove();
       window.location.href = cfg.exportpresentationurl + '&boardid=' + chosenBoard +
-        '&annot=' + (annotCb.checked ? 1 : 0) + '&ink=' + (inkCb.checked ? 1 : 0);
+        '&annot=' + (annotCb.checked ? 1 : 0) + '&ink=' + (inkCb.checked ? 1 : 0) + '&full=' + (fullCb.checked ? 1 : 0);
     });
     panel.appendChild(goBtn);
     var closeBtn = el('button', { class: 'ic-btn ic-btn-ghost ic-btn-icon ic-modal-close', title: S.cancel }, ['\u2715']);
@@ -9929,10 +10089,10 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           }
         } catch (e) {
           itemBounds = null;
-          item.appendChild(el('img', { src: p.url, alt: '' }));
+          item.appendChild(el('img', boardImgAttrs(p)));
         }
       } else {
-        var img = el('img', { src: (p.showingback && backPhoto) ? backPhoto.url : p.url, alt: '' });
+        var img = el('img', boardImgAttrs((p.showingback && backPhoto) ? backPhoto : p));
         img.addEventListener('load', function () { if (img.naturalWidth) { p._ratio = img.naturalHeight / img.naturalWidth; } });
         item.appendChild(img);
       }
@@ -11336,7 +11496,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           bottomOffset = FULL_H * 2 + GAP * 2 + (idx - 2) * (COLLAPSED_H + GAP);
         }
         card.style.bottom = bottomOffset + 'px';
-        var cardImg = el('img', { src: p.url, alt: '' });
+        var cardImg = el('img', { src: thumbSrc(p), alt: '' });
         // Bildmaße kommen nicht vom Server - nach dem Laden clientseitig
         // prüfen, ob es sich um ein Hochformat-Bild handelt, und dann
         // vollständig (statt ausschnittsweise) sowie etwas schmaler und
@@ -11729,7 +11889,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         ? state.photos.filter(function (p) { return p.id === item.photoid; })[0] : null;
       var rowSlideTf = frameSlideTf(item);
       if (photo) {
-        row.appendChild(el('img', { src: photo.url, alt: '' }));
+        row.appendChild(el('img', { src: thumbSrc(photo), alt: '' }));
       } else if (rowSlideTf) {
         // Folie: kleine Live-Vorschau des Inhalts.
         var miniSlide = el('div', { class: 'ic-thread-frame-thumb ic-thread-slide-thumb' });
@@ -11852,7 +12012,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         if (ev.target.closest('.ic-me-check')) { return; }
         selectItem(key);
       });
-      row.appendChild(el('img', { src: p.url, alt: '' }));
+      row.appendChild(el('img', { src: thumbSrc(p), alt: '' }));
       row.appendChild(el('span', { class: 'ic-thread-item-label' }, [p.sourcetitle || itemCaptionText(p)]));
       var toggle = el('label', { class: 'ic-me-check', title: S.not_in_presentation });
       var check = el('input', { type: 'checkbox' });
@@ -12190,7 +12350,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       if (tf) {
         try { live = buildTextFrameLiveDom(tf, { noGuide: true }); } catch (e2) { live = null; tf = null; }
       }
-      pEl.appendChild(live || el('img', { src: p.url, alt: '' }));
+      pEl.appendChild(live || el('img', boardImgAttrs(p)));
       if (!inThreadIds[p.id]) {
         pEl.classList.add('ic-present-addable');
         pEl.title = S.stream_pin_hint;
@@ -12415,6 +12575,11 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       exportBtn.addEventListener('click', function () { startPresentationExport(); });
       toolbar.appendChild(exportBtn);
     }
+    if (cfg.layersurl) {
+      var layersBtn = toolBtn('layers', S.layers_open);
+      layersBtn.addEventListener('click', function () { window.location.href = cfg.layersurl; });
+      toolbar.appendChild(layersBtn);
+    }
 
     body.appendChild(toolbar);
 
@@ -12452,7 +12617,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         modBox.appendChild(modLive);
         thumbWrap.appendChild(modBox);
       } else {
-        thumbWrap.appendChild(el('img', { src: p.url, alt: '' }));
+        thumbWrap.appendChild(el('img', { src: thumbSrc(p), alt: '' }));
       }
 
       // Kompakte Overlay-Steuerung direkt auf dem Thumbnail - der Pin sitzt
@@ -13225,7 +13390,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       colL.appendChild(el('label', {}, [S.bg_image]));
       var row = el('div', { class: 'ic-bg-thumbs' });
       state.photos.forEach(function (p) {
-        var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' + (bg().photoid === p.id ? ' active' : '') });
+        var t = el('img', { src: thumbSrc(p), alt: '', class: 'ic-bg-thumb' + (bg().photoid === p.id ? ' active' : '') });
         t.addEventListener('click', function () { chooseImage(p); });
         row.appendChild(t);
       });
@@ -13350,7 +13515,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       classSlot.appendChild(el('label', {}, [S.bg_image_class]));
       var classRow = el('div', { class: 'ic-bg-thumbs' });
       classPhotos.forEach(function (p) {
-        var t = el('img', { src: p.url, alt: '', class: 'ic-bg-thumb' + (bg().photoid === p.id ? ' active' : '') });
+        var t = el('img', { src: thumbSrc(p), alt: '', class: 'ic-bg-thumb' + (bg().photoid === p.id ? ' active' : '') });
         t.addEventListener('click', function () { chooseImage(p); });
         classRow.appendChild(t);
       });
@@ -13560,7 +13725,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     var viewport = el('div', { class: 'ic-lb-viewport' });
     var transform = el('div', { class: 'ic-lb-transform' });
     var imgbox = el('div', { class: 'ic-imgbox' });
-    var img = el('img', { src: state.photos[index].url, alt: '' });
+    var img = el('img', boardImgAttrs(state.photos[index]));
     imgbox.appendChild(img);
     transform.appendChild(imgbox);
     viewport.appendChild(transform);
@@ -13773,7 +13938,9 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       var pos = Math.max(0, list.indexOf(state.lightboxIndex));
       state.lightboxIndex = list[(pos + dir + n) % n];
       var p = state.photos[state.lightboxIndex];
-      img.src = p.url;
+      var la = boardImgAttrs(p);
+      img.src = la.src;
+      if (la['data-full']) { img.setAttribute('data-full', la['data-full']); } else { img.removeAttribute('data-full'); }
       setZoom(1);
       sizeLightboxImage();
       refreshOverlays();
