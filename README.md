@@ -69,6 +69,26 @@ konfigurierbares Maximum an Bildern pro Lernender/m.
   Übersicht `manage.php`, Post-Stream, Fotos anderer auf eigenes Board
   übernehmen), `mod/pinnwand:manage`.
 
+## Bilder zum Untersuchen und WordArt (0.174.0)
+
+- **Bilder zum Untersuchen**: Die Lehrkraft setzt in der Bildansicht eines eigenen Bildes das Häkchen „Zum
+  Untersuchen freigeben“ (Lupe links). Vorher prüft die Pinnwand die Größe der vorhandenen Fassung (volle
+  Auflösung oder Anzeigegröße): unter 2000 px an der längeren Seite gibt es den Hinweis mit „Größere Vorlage
+  hochladen“ (wird als volle Auflösung gespeichert) oder „Trotzdem freigeben“. Lernende finden die Bilder über
+  die Lupe in der Board-Leiste, sehen sie groß an (zoomen, blättern) und öffnen dazu „Eigene Pinnwand“: ein
+  neues Board mit dem Bildtitel, dessen Hintergrund eine Kopie des Bildes in voller Auflösung ist
+  (Tabelle `pinnwand_board_bg`, Dateibereich `boardbg`). Ein zweiter Klick führt zum schon geöffneten Board.
+  Freigegebene Bilder dürfen alle mit Leserecht abrufen (pluginfile); die Kopie gehört der Person.
+- **WordArt mit Bögen**: Vorlagen (Verlauf, Kontur, Extrusion, Leuchten, 3D-Regler) wirken jetzt auch auf
+  Bogen- und Verformungstext.
+- **WordArt auf ein Feld anwenden**: Ist ein Zettel ausgewählt, fragt „Hinzufügen › WordArt“ nach „Auf dieses
+  Feld anwenden“; im Zettel-Editor macht der Knopf „WordArt“ dasselbe (mit markiertem Text nur für diesen).
+  Gespeichert ersetzt das WordArt den Zettel an derselben Stelle. Für eingebettete Editoren nimmt
+  `pinnwandConfig.editorOnly.text` den Anfangstext.
+- **Rückgängig in der umgebenden Seite**: Bietet der Transport `undo` (`report(stand)`, `listen(fn)`), blendet
+  die Pinnwand ihre Pfeile aus und meldet Stand und Verlauf (mit Bezeichnung je Schritt) an die Seite, die
+  `undo`, `redo` oder `go` mit Schrittzahl zurückschickt (Collegare 0.7.5).
+
 ## Schichten, Sicherung und Bildgrößen (0.172.0)
 
 - **Schichten**: Alles, was einer Person gehört (Objekte mit weiteren

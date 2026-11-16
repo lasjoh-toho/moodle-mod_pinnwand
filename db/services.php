@@ -2,6 +2,30 @@
 defined('MOODLE_INTERNAL') || die();
 
 $functions = [
+    'mod_pinnwand_set_photo_studyable' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'set_photo_studyable',
+        'description' => 'Gibt ein eigenes Bild der Lehrkraft zum Untersuchen frei',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:viewall',
+    ],
+    'mod_pinnwand_get_study_photos' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'get_study_photos',
+        'description' => 'Bilder der Lehrkraft, die zum Untersuchen freigegeben sind',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:view',
+    ],
+    'mod_pinnwand_open_study_board' => [
+        'classname'   => 'mod_pinnwand_external',
+        'methodname'  => 'open_study_board',
+        'description' => 'Öffnet eine eigene Pinnwand mit einem freigegebenen Bild als Hintergrund',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/pinnwand:submit',
+    ],
     'mod_pinnwand_save_photo' => [
         'classname'   => 'mod_pinnwand_external',
         'methodname'  => 'save_photo',

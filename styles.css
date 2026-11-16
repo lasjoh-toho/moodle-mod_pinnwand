@@ -2018,3 +2018,22 @@ input.ic-stepper-value {
   border-radius: 0; resize: none; box-sizing: border-box;
 }
 .ic-editor-only-formula .ic-formula-head .ic-float-grip { display: none; }
+
+/* Bilder zum Untersuchen (0.174.0) */
+.ic-study-toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 100050; background: rgba(20, 22, 26, .94); color: #f2f3f5; padding: 10px 16px; border-radius: 10px; max-width: min(560px, calc(100vw - 32px)); box-shadow: 0 6px 24px rgba(0,0,0,.35); font-size: 14px; line-height: 1.4; }
+.ic-study-check { z-index: 100040; }
+.ic-study-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ic-study-modal { width: min(760px, calc(100vw - 32px)); }
+.ic-study-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; max-height: 60vh; overflow: auto; }
+.ic-study-tile { display: flex; flex-direction: column; gap: 6px; padding: 6px; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; background: rgba(255,255,255,.04); color: inherit; cursor: pointer; text-align: left; }
+.ic-study-tile:hover { border-color: var(--ic-accent, #4f8cff); }
+.ic-study-tile.has-board { border-color: rgba(79,140,255,.6); }
+.ic-study-tile img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; background: #000; }
+.ic-study-tile-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ic-study-viewer { position: fixed; inset: 0; z-index: 100030; background: rgba(10, 11, 13, .96); display: flex; flex-direction: column; }
+.ic-study-stage { flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: grab; touch-action: none; }
+.ic-study-img { max-width: 100%; max-height: 100%; transform-origin: center center; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+.ic-study-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: rgba(0,0,0,.5); color: #f2f3f5; flex-wrap: wrap; }
+.ic-study-title { flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ic-study-close { position: absolute; top: 12px; right: 12px; }
+.ic-study-bgnote { margin: 0 0 8px; }

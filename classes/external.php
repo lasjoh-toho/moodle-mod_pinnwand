@@ -293,10 +293,12 @@ class mod_pinnwand_external extends external_api {
                 'editdata' => (string) ($r->editdata ?? ''),
                 'otherboardcount' => $placementcounts[$r->id] ?? 0,
                 'userfullname' => fullname($USER),
+                'studyable' => !empty($r->studyable),
             ];
         }
         return [
             'photos' => $out,
+            'boardbgs' => self::board_backgrounds($instance, $context),
             'max' => self::get_effective_max($instance, $context),
             'background' => self::get_background_data($instance, $context),
             'candelete' => has_capability('mod/pinnwand:manage', $context),
@@ -508,7 +510,200 @@ class mod_pinnwand_external extends external_api {
                 'editdata' => new external_value(PARAM_RAW, 'Bearbeitungseinstellungen (JSON)', VALUE_DEFAULT, ''),
                 'otherboardcount' => new external_value(PARAM_INT, 'Anzahl zusätzlicher aktiver Platzierungen auf anderen Boards'),
                 'userfullname' => new external_value(PARAM_TEXT, 'Name der hochladenden Person (auf dem eigenen Board immer man selbst)'),
+                'studyable' => new external_value(PARAM_BOOL, 'Zum Untersuchen freigegeben', VALUE_DEFAULT, false),
             ])),
+            'boardbgs' => new external_multiple_structure(self::board_bg_structure(), 'Eigene Hintergründe einzelner Boards', VALUE_DEFAULT, []),
+        ]);
+    }
+
+    // ---------------------------------------------------------------
+    // Bilder zum Untersuchen: Die Lehrkraft gibt ein Bild frei, Lernende
+    // sehen es an und öffnen dazu eine eigene Pinnwand (ein neues Board), auf
+    // der eine Kopie des Bildes in voller Auflösung der Hintergrund ist.
+    // ---------------------------------------------------------------
+
+    protected static function board_bg_structure() {
+        return new external_single_structure([
+            'boardid' => new external_value(PARAM_INT, 'Board'),
+            'url' => new external_value(PARAM_RAW, 'Hintergrundbild'),
+            'sourcephotoid' => new external_value(PARAM_INT, 'Bild der Lehrkraft'),
+        ]);
+    }
+
+    /** Eigene Board-Hintergründe der aktuellen Person. */
+    protected static function board_backgrounds($instance, $context) {
+        global $DB, $USER;
+        $out = [];
+        foreach ($DB->get_records('pinnwand_board_bg', ['pinnwandid' => $instance->id, 'userid' => $USER->id], 'boardid ASC') as $r) {
+            $url = \mod_pinnwand\local\media::url($context, 'boardbg', (int) $r->id);
+            if ($url !== '') {
+                $out[] = ['boardid' => (int) $r->boardid, 'url' => $url, 'sourcephotoid' => (int) $r->sourcephotoid];
+            }
+        }
+        return $out;
+    }
+
+    /** Größte vorhandene Fassung eines Bildes (volle Auflösung, Original oder Anzeige). */
+    protected static function largest_photo_file($context, $photoid) {
+        $best = null;
+        foreach (['photofull', 'photo'] as $area) {
+            $f = \mod_pinnwand\local\media::first($context, $area, (int) $photoid);
+            if ($f && (!$best || $f->get_filesize() > $best->get_filesize())) {
+                $best = $f;
+            }
+        }
+        return $best;
+    }
+
+    public static function set_photo_studyable_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Foto-ID'),
+            'studyable' => new external_value(PARAM_BOOL, 'Zum Untersuchen freigeben'),
+        ]);
+    }
+
+    public static function set_photo_studyable($cmid, $photoid, $studyable) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::set_photo_studyable_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'studyable' => $studyable,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:viewall');
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid']], '*', MUST_EXIST);
+        if ($photo->pinnwandid != $instance->id || (int) $photo->userid !== (int) $USER->id) {
+            throw new moodle_exception('nopermissions', 'error', '', 'set_photo_studyable');
+        }
+        $DB->set_field('pinnwand_photos', 'studyable', $params['studyable'] ? 1 : 0, ['id' => $photo->id]);
+        return ['success' => true, 'studyable' => (bool) $params['studyable']];
+    }
+
+    public static function set_photo_studyable_returns() {
+        return new external_single_structure([
+            'success' => new external_value(PARAM_BOOL, 'OK'),
+            'studyable' => new external_value(PARAM_BOOL, 'Neuer Stand'),
+        ]);
+    }
+
+    public static function get_study_photos_parameters() {
+        return new external_function_parameters(['cmid' => new external_value(PARAM_INT, 'Course module id')]);
+    }
+
+    public static function get_study_photos($cmid) {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::get_study_photos_parameters(), ['cmid' => $cmid]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:view');
+        $teacherids = array_keys(get_users_by_capability($context, 'mod/pinnwand:viewall', 'u.id'));
+        $out = [];
+        if (!$teacherids) {
+            return ['photos' => $out];
+        }
+        $mine = [];
+        foreach ($DB->get_records('pinnwand_board_bg', ['pinnwandid' => $instance->id, 'userid' => $USER->id]) as $b) {
+            $mine[(int) $b->sourcephotoid] = (int) $b->boardid;
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal($teacherids);
+        $records = $DB->get_records_select('pinnwand_photos',
+            "pinnwandid = ? AND studyable = 1 AND status = 'active' AND userid $insql",
+            array_merge([$instance->id], $inparams), 'sortorder ASC, id ASC');
+        foreach ($records as $r) {
+            $file = \mod_pinnwand\local\media::first($context, 'photo', (int) $r->id);
+            if (!$file) {
+                continue;
+            }
+            $out[] = [
+                'id' => (int) $r->id,
+                'title' => (string) $r->sourcetitle,
+                'url' => self::photo_url($context->id, $r->id, $file->get_filename(), $r->timemodified ?? 0),
+                'thumburl' => \mod_pinnwand\local\media::thumb_url($context, (int) $r->id, $file),
+                'fullurl' => \mod_pinnwand\local\media::url($context, 'photofull', (int) $r->id),
+                'boardid' => $mine[(int) $r->id] ?? -1,
+            ];
+        }
+        return ['photos' => $out];
+    }
+
+    public static function get_study_photos_returns() {
+        return new external_single_structure([
+            'photos' => new external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Foto-ID'),
+                'title' => new external_value(PARAM_TEXT, 'Titel'),
+                'url' => new external_value(PARAM_RAW, 'Anzeigegröße'),
+                'thumburl' => new external_value(PARAM_RAW, 'Vorschau'),
+                'fullurl' => new external_value(PARAM_RAW, 'Volle Auflösung (leer = keine)'),
+                'boardid' => new external_value(PARAM_INT, 'Eigenes Board dazu (-1 = noch keins)'),
+            ])),
+        ]);
+    }
+
+    public static function open_study_board_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'photoid' => new external_value(PARAM_INT, 'Freigegebenes Bild der Lehrkraft'),
+            'name' => new external_value(PARAM_TEXT, 'Titel des neuen Boards', VALUE_DEFAULT, ''),
+        ]);
+    }
+
+    public static function open_study_board($cmid, $photoid, $name = '') {
+        global $DB, $USER;
+        $params = self::validate_parameters(self::open_study_board_parameters(), [
+            'cmid' => $cmid, 'photoid' => $photoid, 'name' => $name,
+        ]);
+        [$cm, $context, $instance] = self::get_context_instance($params['cmid'], 'mod/pinnwand:submit');
+        $photo = $DB->get_record('pinnwand_photos', ['id' => $params['photoid'], 'pinnwandid' => $instance->id]);
+        if (!$photo || empty($photo->studyable) || $photo->status !== 'active'
+                || !has_capability('mod/pinnwand:viewall', $context, (int) $photo->userid)) {
+            throw new moodle_exception('nopermissions', 'error', '', 'open_study_board');
+        }
+        $existing = $DB->get_record('pinnwand_board_bg',
+            ['pinnwandid' => $instance->id, 'userid' => $USER->id, 'sourcephotoid' => $photo->id], '*', IGNORE_MULTIPLE);
+        if ($existing && \mod_pinnwand\local\media::first($context, 'boardbg', (int) $existing->id)) {
+            return ['boardid' => (int) $existing->boardid, 'created' => false, 'boardbgs' => self::board_backgrounds($instance, $context)];
+        }
+        $source = self::largest_photo_file($context, $photo->id);
+        if (!$source) {
+            throw new moodle_exception('error_save', 'pinnwand');
+        }
+        // Nächstes freies Board der Person (über alles, was einem Board gehören kann).
+        $max = -1;
+        $sqls = [
+            "SELECT MAX(boardid) FROM {pinnwand_photos} WHERE pinnwandid = ? AND userid = ?",
+            "SELECT MAX(boardid) FROM {pinnwand_board_names} WHERE pinnwandid = ? AND userid = ?",
+            "SELECT MAX(boardid) FROM {pinnwand_board_ink} WHERE pinnwandid = ? AND userid = ?",
+            "SELECT MAX(boardid) FROM {pinnwand_board_bg} WHERE pinnwandid = ? AND userid = ?",
+            "SELECT MAX(pl.boardid) FROM {pinnwand_object_placements} pl JOIN {pinnwand_photos} p ON p.id = pl.photoid
+              WHERE pl.pinnwandid = ? AND p.userid = ?",
+        ];
+        foreach ($sqls as $sql) {
+            $v = $DB->get_field_sql($sql, [$instance->id, $USER->id]);
+            if ($v !== null && $v !== false) {
+                $max = max($max, (int) $v);
+            }
+        }
+        $boardid = $max + 1;
+        if ($existing) {
+            $DB->delete_records('pinnwand_board_bg', ['id' => $existing->id]);
+        }
+        $recid = $DB->insert_record('pinnwand_board_bg', (object) [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $boardid,
+            'sourcephotoid' => $photo->id, 'timecreated' => time(),
+        ]);
+        get_file_storage()->create_file_from_storedfile([
+            'contextid' => $context->id, 'component' => 'mod_pinnwand', 'filearea' => 'boardbg',
+            'itemid' => $recid, 'filepath' => '/', 'filename' => 'boardbg_' . $recid . '_' . $source->get_filename(),
+        ], $source);
+        $title = trim($params['name']) !== '' ? $params['name'] : ((string) $photo->sourcetitle !== '' ? $photo->sourcetitle : get_string('study_boardname', 'pinnwand'));
+        $DB->insert_record('pinnwand_board_names', (object) [
+            'pinnwandid' => $instance->id, 'userid' => $USER->id, 'boardid' => $boardid,
+            'name' => core_text::substr($title, 0, 255), 'hidden' => 0, 'timemodified' => time(),
+        ]);
+        return ['boardid' => $boardid, 'created' => true, 'boardbgs' => self::board_backgrounds($instance, $context)];
+    }
+
+    public static function open_study_board_returns() {
+        return new external_single_structure([
+            'boardid' => new external_value(PARAM_INT, 'Board mit dem Bild als Hintergrund'),
+            'created' => new external_value(PARAM_BOOL, 'Neu angelegt'),
+            'boardbgs' => new external_multiple_structure(self::board_bg_structure()),
         ]);
     }
 

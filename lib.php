@@ -43,7 +43,7 @@ function pinnwand_delete_instance($id) {
     if ($threadids) {
         $DB->delete_records_list('pinnwand_thread_items', 'threadid', $threadids);
     }
-    foreach (['pinnwand_object_placements', 'pinnwand_threads', 'pinnwand_board_ink', 'pinnwand_board_names'] as $table) {
+    foreach (['pinnwand_object_placements', 'pinnwand_threads', 'pinnwand_board_ink', 'pinnwand_board_names', 'pinnwand_board_bg'] as $table) {
         $DB->delete_records($table, ['pinnwandid' => $id]);
     }
     $DB->delete_records('pinnwand_photos', ['pinnwandid' => $id]);
@@ -80,6 +80,24 @@ function pinnwand_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
         return;
     }
 
+    if ($filearea === 'boardbg') {
+        // Hintergrund eines Untersuchungs-Boards (Kopie eines Bildes der
+        // Lehrkraft): für die besitzende Person und die Lehrkraft.
+        $itemid = (int) array_shift($args);
+        $rec = $DB->get_record('pinnwand_board_bg', ['id' => $itemid]);
+        if (!$rec || ((int) $rec->userid !== (int) $USER->id && !has_capability('mod/pinnwand:viewall', $context))) {
+            return false;
+        }
+        $filename = array_pop($args);
+        $filepath = $args ? '/' . implode('/', $args) . '/' : '/';
+        $file = get_file_storage()->get_file($context->id, 'mod_pinnwand', 'boardbg', $itemid, $filepath, $filename);
+        if (!$file || $file->is_directory()) {
+            return false;
+        }
+        send_stored_file($file, 86400, 0, $forcedownload, $options);
+        return;
+    }
+
     if ($filearea === 'slidemedia') {
         // Medien von Folien (Bild/Audio/Video): wer die Aktivität sehen
         // darf, darf sie abspielen (Präsentation).
@@ -103,8 +121,10 @@ function pinnwand_pluginfile($course, $cm, $context, $filearea, $args, $forcedow
     $photoid = (int) array_shift($args);
     $photo = $DB->get_record('pinnwand_photos', ['id' => $photoid], '*', MUST_EXIST);
 
-    // Eigene Fotos darf jede/r sehen, fremde nur mit viewall-Recht.
-    if ($photo->userid != $USER->id && !has_capability('mod/pinnwand:viewall', $context)) {
+    // Eigene Fotos darf jede/r sehen, fremde nur mit viewall-Recht - außer
+    // die Lehrkraft hat das Bild zum Untersuchen freigegeben.
+    if ($photo->userid != $USER->id && !has_capability('mod/pinnwand:viewall', $context)
+            && !(!empty($photo->studyable) && $photo->status === 'active' && in_array($filearea, ['photo', 'photofull', 'photothumb'], true))) {
         return false;
     }
 

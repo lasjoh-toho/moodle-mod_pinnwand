@@ -472,5 +472,28 @@ function xmldb_pinnwand_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026101703, 'pinnwand');
     }
 
+    if ($oldversion < 2026111600) {
+        // Bilder zum Untersuchen: Freigabe je Bild und eigener Hintergrund je Board.
+        $table = new xmldb_table('pinnwand_photos');
+        $field = new xmldb_field('studyable', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'status');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $table = new xmldb_table('pinnwand_board_bg');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('pinnwandid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('boardid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('sourcephotoid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('pinnwandid', XMLDB_KEY_FOREIGN, ['pinnwandid'], 'pinnwand', ['id']);
+            $table->add_index('userboard', XMLDB_INDEX_UNIQUE, ['pinnwandid', 'userid', 'boardid']);
+            $dbman->create_table($table);
+        }
+        upgrade_mod_savepoint(true, 2026111600, 'pinnwand');
+    }
+
     return true;
 }
