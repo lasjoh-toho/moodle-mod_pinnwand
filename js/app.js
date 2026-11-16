@@ -39,6 +39,8 @@
       if (!steps) { syncUndoRedoButtons(); }
     });
   }
+  // gleich melden, damit die Pfeile in der Kopfzeile von Anfang an stehen
+  if (hostUndo) { setTimeout(syncUndoRedoButtons, 0); }
   function pushUndo(entry) {
     if (!entry.at) { entry.at = Date.now(); }
     undoStack.push(entry);
