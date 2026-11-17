@@ -3922,7 +3922,7 @@
   function newTextFrame(wordArtMode) {
     return {
       w: wordArtMode ? 320 : 220, h: wordArtMode ? 220 : 320, preset: wordArtMode ? 'none' : 'paper',
-      isWordArt: !!wordArtMode,
+      isWordArt: !!wordArtMode, waFit: wordArtMode ? 1 : undefined,
       texts: [{ id: 1, text: '', font: 'sans', size: 32, x: 0.5, y: 0.5 }]
     };
   }
@@ -4600,7 +4600,10 @@
     var animMap = tf.isSlide ? slideAnimMap(tf).map : {};
     var outer = el('div', {
       class: 'ic-tf-live', style: 'position:relative;box-sizing:border-box;width:100%;aspect-ratio:' + tf.w + '/' + tf.h + ';container-type:inline-size;' +
-        (hasWordart || cardShape ? '' : (tf.isSlide ? 'overflow:hidden;' : 'overflow:hidden;border-radius:16px;')) +
+        // WordArt (auch ohne Vorlage, z. B. nur Bogen oder schlichte Schrift)
+        // nie am Rahmen abschneiden - vorher wurde normale Schrift in einer
+        // WordArt auf der Pinnwand oft gekappt.
+        (hasWordart || wordfieldIsWordart(tf) || cardShape ? '' : (tf.isSlide ? 'overflow:hidden;' : 'overflow:hidden;border-radius:16px;')) +
         (preset.shadow && !cardShape ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') +
         (preset.bg || opts.noGuide || cardShape ? '' : 'border:2px dashed rgba(255,255,255,.3);')
     });
@@ -4672,7 +4675,8 @@
               'width:' + (tbox.w / tf.w * 100) + '%;height:' + (tbox.h / tf.h * 100) + '%;padding:' + (tbox.pad / tf.w * 100) + 'cqw;' +
               'display:flex;flex-direction:column;justify-content:center;overflow:hidden;'
             : 'position:absolute;box-sizing:border-box;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
-              'padding:' + (4 / tf.w * 100) + 'cqw ' + (8 / tf.w * 100) + 'cqw;' + (t.boxW ? 'width:' + (t.boxW * 100) + '%;' : 'width:max-content;max-width:94%;')) + 'white-space:pre-wrap;text-align:center;z-index:1;' +
+              'padding:' + (4 / tf.w * 100) + 'cqw ' + (8 / tf.w * 100) + 'cqw;' + (t.boxW ? 'width:' + (t.boxW * 100) + '%;' : (tf.waFit ? 'width:max-content;max-width:none;' : 'width:max-content;max-width:94%;'))) +
+            (tf.waFit && !t.boxW && !fillCard ? 'white-space:pre;' : 'white-space:pre-wrap;') + 'text-align:center;z-index:1;' +
             'font-family:' + fontCss + ';font-size:' + (fitSize / tf.w * 100) + 'cqw;font-weight:' + (t.fontWeight || 700) +
             ';line-height:' + (t.lineHeight || 1.2) + ';letter-spacing:' + ((t.letterSpacing || 0) / tf.w * 100) + 'cqw;' +
             (wordartCssFor(t, preset.text, false, 100 / tf.w) || computeStyle1Css(t, preset.text))
@@ -4807,6 +4811,121 @@
   // "Form um den Text legen". Das Eingabefeld im Editor bricht Text anders
   // um als die fertige WordArt und taugt deshalb nicht als Maß.
   var textBoundsCache = {};
+
+  // ------------------------------------------------------------------
+  // WordArt: Rahmen = Inhalt (0.175.0, Wunsch Jo). Vorher blieb der Rahmen
+  // einer WordArt bei seiner Startgröße (320 x 220), während die Schrift weit
+  // darüber hinausragen konnte - auf der Pinnwand saß der Auswahlrahmen dann
+  // woanders als die WordArt, und die Präsentation zoomte auf den Rahmen (nur
+  // ein Zipfel zu sehen). Jetzt legt sich der Rahmen bei jeder Änderung um
+  // das, was tatsächlich zu sehen ist (Text mit Effekten, Bögen, Hauptform).
+  // WordArt bricht nicht automatisch um (wie in Office): neue Zeilen nur mit
+  // Enter - dadurch gibt es keine Wechselwirkung zwischen Rahmenbreite und
+  // Zeilenumbruch mehr (Grund für die Rücknahme in Phase 130).
+  // ------------------------------------------------------------------
+  var WA_FIT_PAD = 10;
+  function wordArtAutoFitApplies(tf) {
+    if (!tf || tf.isSlide) { return false; }
+    if (!(tf.isWordArt === true || (tf.isWordArt == null && wordfieldHasWordart(tf)))) { return false; }
+    // Freie Zusatzformen hängen in ihrer Größe am Rahmen - dort bleibt der
+    // Rahmen von Hand einstellbar.
+    if ((tf.shapes || []).some(function (sh) { return !sh.main; })) { return false; }
+    return tf.texts.some(function (t) { return (t.text || '').trim(); });
+  }
+  // Sichtbare Ausdehnung des Inhalts in Rahmen-Koordinaten (unsichtbar
+  // ausgemessen wie auf der Pinnwand).
+  function measureWordArtInk(tf) {
+    var host = el('div', { style: 'position:fixed;left:-100000px;top:0;width:' + tf.w + 'px;visibility:hidden;pointer-events:none;' });
+    var res = null;
+    try {
+      var live = buildTextFrameLiveDom(tf, { noGuide: true });
+      host.appendChild(live);
+      document.body.appendChild(host);
+      var base = live.getBoundingClientRect();
+      if (base.width > 0) {
+        var k = tf.w / base.width;
+        var b = null;
+        var add = function (r) {
+          if (!r || (r.width <= 0 && r.height <= 0)) { return; }
+          if (!b) { b = { x1: r.left, y1: r.top, x2: r.right, y2: r.bottom }; return; }
+          b.x1 = Math.min(b.x1, r.left); b.y1 = Math.min(b.y1, r.top); b.x2 = Math.max(b.x2, r.right); b.y2 = Math.max(b.y2, r.bottom);
+        };
+        Array.prototype.forEach.call(live.querySelectorAll('.ic-tf-live-text'), function (tEl) {
+          // SVG (Verlauf, Bogen): die gezeichneten Zeichen, nicht die Box;
+          // HTML-Text: die Box ohne Innenabstand reicht.
+          var parts = tEl.querySelectorAll('svg text, svg textPath');
+          if (parts.length) { Array.prototype.forEach.call(parts, function (pt) { add(pt.getBoundingClientRect()); }); } else { add(tEl.getBoundingClientRect()); }
+        });
+        Array.prototype.forEach.call(live.querySelectorAll('.ic-tf-live-text-wrap > div, .ic-tf-live-shape'), function (sEl) { add(sEl.getBoundingClientRect()); });
+        if (b) { res = { x1: (b.x1 - base.left) * k, y1: (b.y1 - base.top) * k, x2: (b.x2 - base.left) * k, y2: (b.y2 - base.top) * k }; }
+      }
+    } catch (e) { res = null; }
+    if (host.parentNode) { host.parentNode.removeChild(host); }
+    return res;
+  }
+  // Passt tf.w/tf.h und die Lage der Texte an den Inhalt an. Rückgabe: die
+  // Verschiebung des Rahmens (ox/oy, alte Rahmen-Koordinaten) und die alte
+  // Größe - oder null, wenn der Rahmen schon passt.
+  function fitWordArtFrame(tf) {
+    if (!wordArtAutoFitApplies(tf)) { return null; }
+    var ink = measureWordArtInk(tf);
+    if (!ink || ink.x2 - ink.x1 < 4 || ink.y2 - ink.y1 < 4) { return null; }
+    // Schatten/Extrusion/Leuchten erfasst getBoundingClientRect() nicht.
+    var pad = WA_FIT_PAD + wordfieldEffectPad(tf);
+    var W = Math.max(40, Math.ceil(ink.x2 - ink.x1 + 2 * pad));
+    var H = Math.max(30, Math.ceil(ink.y2 - ink.y1 + 2 * pad));
+    var ox = (ink.x1 + ink.x2) / 2 - W / 2, oy = (ink.y1 + ink.y2) / 2 - H / 2;
+    if (Math.abs(W - tf.w) < 2 && Math.abs(H - tf.h) < 2 && Math.abs(ox) < 1.5 && Math.abs(oy) < 1.5) { return null; }
+    var oldW = tf.w, oldH = tf.h;
+    tf.texts.forEach(function (t) {
+      t.x = ((t.x != null ? t.x : 0.5) * oldW - ox) / W;
+      t.y = ((t.y != null ? t.y : 0.5) * oldH - oy) / H;
+    });
+    tf.w = W; tf.h = H;
+    return { ox: ox, oy: oy, oldW: oldW, oldH: oldH, newW: W, newH: H };
+  }
+  // Lage auf der Pinnwand mitführen, damit die WordArt beim Anpassen des
+  // Rahmens an derselben Stelle und gleich groß bleibt (auch gedreht).
+  // k = Pinnwand-Pixel je Rahmen-Pixel.
+  // Rahmen anpassen und die Lage auf der Pinnwand mitführen (Editor: bei
+  // jedem Neuaufbau, beim Speichern noch einmal).
+  function applyWordArtFit(tf) {
+    if (!wordArtAutoFitApplies(tf)) { return; }
+    tf.waFit = 1;
+    var fitPlace = null, fitRot = 0;
+    if (state.editingPhotoId) {
+      var fpRec = state.photos.filter(function (p) { return p.id === state.editingPhotoId; })[0];
+      if (fpRec && fpRec.canvasw) {
+        if (!state.tfBoardRect) { state.tfBoardRect = { canvasx: fpRec.canvasx || 0, canvasy: fpRec.canvasy || 0, canvasw: fpRec.canvasw }; }
+        fitPlace = state.tfBoardRect; fitRot = fpRec.canvasrot || 0;
+      }
+    } else if (state.slidePlacement) {
+      fitPlace = state.slidePlacement; fitRot = state.slidePlacement.canvasrot || 0;
+    }
+    if (fitPlace) {
+      if (!state.tfFitK) { state.tfFitK = fitPlace.canvasw / tf.w; }
+      // Nach Rückgängig/Wiederholen: gleicher Maßstab, gleiche Mitte.
+      var wantCw = Math.round(tf.w * state.tfFitK);
+      if (Math.abs(wantCw - fitPlace.canvasw) > 1) {
+        fitPlace.canvasx = Math.round(fitPlace.canvasx + (fitPlace.canvasw - wantCw) / 2);
+        fitPlace.canvasw = wantCw;
+      }
+    }
+    var waFit = fitWordArtFrame(tf);
+    if (waFit && fitPlace) { shiftPlaceForFit(fitPlace, waFit, state.tfFitK, fitRot); }
+  }
+
+  function shiftPlaceForFit(place, fit, k, rot) {
+    if (!place || !fit) { return; }
+    var cx0 = place.canvasx + fit.oldW * k / 2, cy0 = place.canvasy + fit.oldH * k / 2;
+    var a = (rot || 0) * Math.PI / 180;
+    // Neue Mitte relativ zur alten Mitte (Rahmen-Koordinaten, dann gedreht).
+    var mx = (fit.ox + fit.newW / 2 - fit.oldW / 2) * k, my = (fit.oy + fit.newH / 2 - fit.oldH / 2) * k;
+    var rx = mx * Math.cos(a) - my * Math.sin(a), ry = mx * Math.sin(a) + my * Math.cos(a);
+    place.canvasw = Math.round(fit.newW * k);
+    place.canvasx = Math.round(cx0 + rx - fit.newW * k / 2);
+    place.canvasy = Math.round(cy0 + ry - fit.newH * k / 2);
+  }
   function measureTextObjectBounds(tf, idx) {
     var ckey = JSON.stringify({ w: tf.w, h: tf.h, t: tf.texts, p: tf.preset, i: idx });
     if (textBoundsCache[ckey]) { return textBoundsCache[ckey]; }
@@ -5321,6 +5440,7 @@
 
   function saveTextFrame(tf, saveBtn, sendDirect) {
     if (cfg.editorOnly) {
+      applyWordArtFit(tf);
       // Eingebetteter Editor (z. B. Folien in Collegare): Ergebnis an den Gastgeber statt in die Pinnwand
       saveBtn.disabled = true;
       var eoSvg;
@@ -5331,6 +5451,8 @@
       return;
     }
     if (state.editingFrameItemId) { saveFrameSlide(tf, saveBtn); return; }
+    // Letzte Änderungen (z. B. gerade getippt) ebenfalls einpassen.
+    applyWordArtFit(tf);
     saveBtn.disabled = true;
     var svg, label, wordfielddata, isEditingExisting;
     try {
@@ -5421,6 +5543,7 @@
 
   function resetTfHistory() {
     state.tfUndoStack = []; state.tfRedoStack = []; state.tfLastSnapshot = null; state.tfSuppressSnapshot = false;
+    state.tfFitK = null; state.tfWaPickerOpen = false;
     // Verschobene Popups gelten nur, solange der Editor offen ist.
     state.tfPopupPos = {};
   }
@@ -5432,6 +5555,11 @@
     // Umwandeln Textfeld <-> WordArt.
     if (tf.isWordArt != null && !tf.isSlide) { state.wordArtMode = !!tf.isWordArt; }
     TEXTFRAME_FONTS.forEach(function (f) { if (f.webfont) { ensureWebfont(f.webfont); } });
+
+    // WordArt: Rahmen an den Inhalt anpassen (siehe fitWordArtFrame) - vor
+    // dem Rückgängig-Schnappschuss, damit Änderung und Anpassung ein Schritt
+    // sind. Die Lage auf der Pinnwand wandert mit (gleicher Maßstab k).
+    applyWordArtFit(tf);
 
     // Zurückgenommen (Wunsch des Nutzers, Phase 130): der automatische
     // tf.w/tf.h-Rahmen aus wordartAutoExtent() bei JEDEM Rendern im
@@ -5611,7 +5739,7 @@
     // Hintergrund/Schatten mehr, nur eine dünne Hilfslinie für den Rahmen).
     var editorCardShape = !state.wordArtMode ? mainShapeOf(tf) : null;
     var frame = el('div', {
-      class: 'ic-textframe-preview',
+      class: 'ic-textframe-preview' + (tf.waFit && wordArtAutoFitApplies(tf) ? ' ic-tf-autofit' : ''),
       style: 'width:' + tf.w + 'px;height:' + tf.h + 'px;' +
         (preset.shadow && !editorCardShape ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') +
         (preset.bg && !editorCardShape ? '' : 'border:2px dashed rgba(255,255,255,.3);')
@@ -5752,6 +5880,25 @@
     }
     layout.appendChild(stage);
     body.appendChild(layout);
+
+    // WordArt: Viele Regler ändern den Text direkt im DOM ohne Neuaufbau.
+    // Danach (und beim Verlassen des Textes) kurz prüfen, ob der Rahmen noch
+    // zum Inhalt passt, und nur dann neu aufbauen - nie während getippt wird.
+    if (wordArtAutoFitApplies(tf) || (tf.isWordArt && !tf.isSlide)) {
+      var scheduleWaFit = function () {
+        clearTimeout(state.tfFitTimer);
+        state.tfFitTimer = setTimeout(function () {
+          if (state.step !== 'textframe' || state.textFrame !== tf || !frame.isConnected) { return; }
+          var ae = document.activeElement;
+          if (ae && (ae.isContentEditable || (ae.tagName === 'INPUT' && (ae.type === 'text' || ae.type === 'search')))) { return; }
+          var probe = JSON.parse(JSON.stringify(tf));
+          if (fitWordArtFrame(probe) || (wordArtAutoFitApplies(tf) && !tf.waFit)) { render(); }
+        }, 350);
+      };
+      layout.addEventListener('change', scheduleWaFit, true);
+      layout.addEventListener('click', function (ev) { if (!frame.contains(ev.target)) { scheduleWaFit(); } }, true);
+      layout.addEventListener('focusout', scheduleWaFit);
+    }
 
     // Hauptrahmen-Griff unten-rechts: erweitert den Rahmen OHNE dass
     // sich Text/WordArt dabei bewegt oder mitskaliert - die absolute
@@ -5973,7 +6120,10 @@
       var edSize = useFillCentering ? fitTextSize(t, edBox, fontCss) : t.size;
       var elStyle = (useFillCentering
         ? (edBox.pad ? '' : 'inset:auto;left:' + edBox.x + 'px;top:' + edBox.y + 'px;width:' + edBox.w + 'px;height:' + edBox.h + 'px;padding:0;')
-        : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;' + (t.boxW ? 'width:' + (t.boxW * 100) + '%;max-width:none;' : 'width:max-content;max-width:94%;')) +
+        : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;' + (t.boxW ? 'width:' + (t.boxW * 100) + '%;max-width:none;'
+          // WordArt mit angepasstem Rahmen: kein automatischer Umbruch
+          // (neue Zeile mit Enter), siehe fitWordArtFrame.
+          : (tf.waFit ? 'width:max-content;max-width:none;white-space:pre;' : 'width:max-content;max-width:94%;'))) +
         'font-family:' + fontCss + ';font-size:' + edSize + 'px;font-weight:' + t.fontWeight +
         ';line-height:' + t.lineHeight + ';letter-spacing:' + t.letterSpacing + 'px;' +
         (wordartCssFor(t, preset.text, useFillCentering) || computeStyle1Css(t, preset.text));
@@ -6155,30 +6305,52 @@
     // selbst transformiert, "position: fixed" würde sich darauf beziehen.
     function applyPopupPos(contentEl, key) {
       var pos = state.tfPopupPos[key];
-      if (!pos || window.matchMedia('(max-width: 640px)').matches) { contentEl.style.translate = ''; return; }
+      if (!pos || tfSide || window.matchMedia('(max-width: 640px)').matches) { contentEl.style.translate = ''; return; }
       contentEl.style.translate = pos.dx + 'px ' + pos.dy + 'px';
+    }
+    // Seitenleiste (Wunsch Jo, 0.175.0): Auf breiten Bildschirmen öffnen
+    // sich die Reiter nicht mehr als schwebende Popups (die sich gegenseitig
+    // und das Objekt verdeckten), sondern als Abschnitte einer festen
+    // Seitenleiste rechts - wie die Seitenleiste in LibreOffice. Die
+    // Arbeitsfläche wird dafür schmaler, das Objekt bleibt immer frei.
+    var tfSideMode = window.matchMedia('(min-width: 901px)').matches;
+    var tfSide = tfSideMode ? el('aside', { class: 'ic-tf-side' }) : null;
+    function syncSide() {
+      if (!tfSide) { return; }
+      layout.classList.toggle('ic-tf-has-side', !!tfSide.querySelector('.ic-tf-popup.ic-tf-open'));
     }
     function makeAccordionBlock(titleText, onTabClick, opts) {
       opts = opts || {};
       var blockEl = el('div', { class: 'ic-textframe-block' + (state.tfOpenBlocks[titleText] ? ' ic-tf-open' : '') });
       var titleEl = el('button', { class: 'ic-textframe-block-title ic-tf-tab', type: 'button' },
         [icon(BLOCK_ICONS[titleText] || 'grid'), el('span', {}, [titleText])]);
-      var contentEl = el('div', { class: 'ic-textframe-block-content ic-tf-popup' });
+      var contentEl = el('div', { class: 'ic-textframe-block-content ic-tf-popup' + (tfSide && state.tfOpenBlocks[titleText] ? ' ic-tf-open' : '') });
       var popHead = el('div', { class: 'ic-tf-popup-head' }, [el('span', { class: 'ic-float-grip' }, ['\u2630']), el('span', {}, [opts.head || titleText])]);
       var popClose = el('button', { class: 'ic-float-min', type: 'button', title: S.cancel }, ['\u2715']);
       popHead.appendChild(popClose);
       contentEl.appendChild(popHead);
       applyPopupPos(contentEl, titleText);
       function setOpen(open) {
+        // Ohne Seitenleiste (Handy, schmale Fenster) ist immer nur ein
+        // Reiter offen - mehrere lagen sonst übereinander.
+        if (open && !tfSide) {
+          Array.prototype.forEach.call(blocksWrap.querySelectorAll('.ic-textframe-block.ic-tf-open'), function (b) {
+            if (b !== blockEl && b.closeBlock) { b.closeBlock(); }
+          });
+        }
         blockEl.classList.toggle('ic-tf-open', open);
+        contentEl.classList.toggle('ic-tf-open', open);
         if (open) { state.tfOpenBlocks[titleText] = true; } else { delete state.tfOpenBlocks[titleText]; }
+        syncSide();
+        if (open && tfSide) { contentEl.scrollIntoView({ block: 'nearest' }); }
         if (opts.onToggle) { opts.onToggle(open); }
       }
+      blockEl.closeBlock = function () { setOpen(false); };
       popClose.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
       popClose.addEventListener('click', function () { setOpen(false); });
       var pdrag = null;
       popHead.addEventListener('pointerdown', function (ev) {
-        if (ev.target === popClose || window.matchMedia('(max-width: 640px)').matches) { return; }
+        if (ev.target === popClose || tfSide || window.matchMedia('(max-width: 640px)').matches) { return; }
         var cur = state.tfPopupPos[titleText] || { dx: 0, dy: 0 };
         var r = contentEl.getBoundingClientRect();
         pdrag = { sx: ev.clientX, sy: ev.clientY, dx: cur.dx, dy: cur.dy, l: r.left, t: r.top, w: r.width };
@@ -6201,7 +6373,7 @@
         setOpen(!blockEl.classList.contains('ic-tf-open'));
       });
       blockEl.appendChild(titleEl);
-      blockEl.appendChild(contentEl);
+      if (tfSide) { tfSide.appendChild(contentEl); } else { blockEl.appendChild(contentEl); }
       blockEl.content = contentEl;
       return blockEl;
     }
@@ -6251,6 +6423,7 @@
         r.canvasx = Math.round(r.canvasx + (w0 - w1) / 2);
         r.canvasy = Math.round(r.canvasy + (h0 - h1) / 2);
         r.canvasw = Math.round(w1);
+        state.tfFitK = null;
         render();
       };
       var scaleRange = el('input', { type: 'range', min: '10', max: '400', step: '5', value: String(pct()), class: 'ic-tf-scale-range' });
@@ -6295,6 +6468,7 @@
       blocksWrap.appendChild(blockScale);
     }
     layout.appendChild(tfDock);
+    if (tfSide) { layout.appendChild(tfSide); syncSide(); }
 
     // Block 1 "Farben und Formen" - identisch in beiden Editoren (Zettel
     // und WordArt). Enthält: Form der Kartenfläche selbst (Hintergrund),
@@ -7237,8 +7411,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         } else {
           currentBtn.appendChild(document.createTextNode(S.wordart_pick_template));
         }
-        function openWordartPicker() {
-          openDraggableModal(S.wordart_pick_template, currentBtn, function (content) {
+        function buildWordartPicker(content) {
             var wordartRow = el('div', { class: 'ic-textframe-wordart-row' });
             WORDART_STYLES.forEach(function (w) {
               var previewSvg = buildWordartGradientSvg({ wordartStyle: w.id, size: 28 }, w.label, resolveFontCss('sans'), true);
@@ -7269,11 +7442,21 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
               wordartRow.appendChild(wb);
             });
             content.appendChild(wordartRow);
-          });
+        }
+        function openWordartPicker() {
+          // In der Seitenleiste klappt die Auswahl direkt darunter auf statt
+          // als weiteres schwebendes Fenster über dem Objekt.
+          if (tfSide) { state.tfWaPickerOpen = !state.tfWaPickerOpen; refreshControls(); return; }
+          openDraggableModal(S.wordart_pick_template, currentBtn, buildWordartPicker);
         }
         currentBtn.addEventListener('click', openWordartPicker);
         pickerRow.appendChild(currentBtn);
         formBox.appendChild(pickerRow);
+        if (tfSide && state.tfWaPickerOpen) {
+          var inlinePicker = el('div', { class: 'ic-wordart-inline-picker' });
+          buildWordartPicker(inlinePicker);
+          formBox.appendChild(inlinePicker);
+        }
 
         if (active.wordartStyle && active.wordartStyle !== 'none') {
           var activeWStyle = WORDART_STYLES.filter(function (w) { return w.id === active.wordartStyle; })[0] || {};
@@ -8646,6 +8829,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
           });
         }
         tf.isWordArt = toWordArt;
+        if (!toWordArt) { delete tf.waFit; }
         state.wordArtMode = toWordArt;
         render();
       });

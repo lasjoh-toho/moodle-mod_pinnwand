@@ -1553,7 +1553,7 @@ input.ic-stepper-value {
 }
 .ic-resize.ic-hidden-handle { display: none; }
 @media (max-width: 640px) {
-  .ic-tf-ribbon .ic-textframe-block-title.ic-tf-tab span { display: none; }
+  .ic-tf-ribbon .ic-textframe-block-title.ic-tf-tab span:not(.ic-icon) { display: none; }
 }
 
 /* Bildeditor: Schritt-Reiter in einer Leiste unten (wie das Menüband der
@@ -1857,7 +1857,7 @@ input.ic-stepper-value {
 
 .ic-font-loading { opacity: .3; transition: opacity .2s; }
 .ic-tf-convert { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; height: 36px; padding: 0 12px; box-sizing: border-box; }
-@media (max-width: 640px) { .ic-tf-convert span { display: none; } }
+@media (max-width: 640px) { .ic-tf-convert span:not(.ic-tf-convert-letter) { display: none; } }
 /* Verlaufsfüllung (background-clip:text) erreicht die verschachtelten,
    positionierten KaTeX-Spans nicht von selbst - jeder erbt sie einzeln. */
 .ic-textframe-obj .ic-math, .ic-textframe-obj .ic-math *, .ic-tf-live-text .ic-math, .ic-tf-live-text .ic-math * { background-image: inherit; -webkit-background-clip: text; background-clip: text; }
@@ -2037,3 +2037,45 @@ input.ic-stepper-value {
 .ic-study-title { flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ic-study-close { position: absolute; top: 12px; right: 12px; }
 .ic-study-bgnote { margin: 0 0 8px; }
+
+/* Texteditoren: Seitenleiste statt schwebender Popups (0.175.0, Wunsch Jo).
+   Ab 901 px Breite stehen offene Reiter als Abschnitte untereinander in einer
+   festen Leiste rechts; die Arbeitsfläche wird schmaler, nichts verdeckt das
+   Objekt oder einen anderen Abschnitt. */
+.ic-tf-side { display: none; }
+.ic-textframe-layout.ic-tf-has-side { flex-direction: row; gap: 0; }
+.ic-textframe-layout.ic-tf-has-side > .ic-tf-stage { flex: 1 1 auto; min-width: 0; }
+.ic-textframe-layout.ic-tf-has-side > .ic-tf-side {
+  display: flex; flex-direction: column; gap: 10px; flex: 0 0 360px; width: 360px; box-sizing: border-box;
+  padding: 104px 12px 12px; overflow-y: auto; background: var(--ic-panel); border-left: 1px solid rgba(255,255,255,.08);
+}
+.ic-textframe-layout.ic-tf-has-side > .ic-tf-dock { right: 360px; max-width: calc(100% - 384px); }
+/* Menüband ohne transform zentrieren: ein transformiertes Band wäre der
+   Bezugsrahmen der festen Popups auf dem Handy (die rutschten nach rechts). */
+.ic-textframe-layout > .ic-tf-dock { left: 0; right: 0; margin-inline: auto; width: fit-content; transform: none; }
+/* Reitersymbole auf dem Handy zeigen (die Regel für die Beschriftung blendete sie mit aus). */
+.ic-tf-ribbon .ic-textframe-block-title.ic-tf-tab .ic-icon { display: inline-flex; flex: 0 0 auto; }
+@media (max-width: 640px) {
+  .ic-tf-ribbon .ic-textframe-block-title.ic-tf-tab { padding: 8px 10px; }
+}
+.ic-tf-side > .ic-tf-popup { display: none; }
+.ic-tf-side > .ic-tf-popup.ic-tf-open {
+  display: block; position: static; transform: none; translate: none; width: auto; min-width: 0; max-width: none; max-height: none;
+  overflow: visible; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.07); border-radius: 10px;
+  padding: 10px 12px; box-shadow: none; flex: 0 0 auto;
+}
+.ic-tf-side .ic-tf-popup-head { cursor: default; }
+.ic-wordart-inline-picker { margin: 6px 0 10px; max-height: 320px; overflow-y: auto; }
+.ic-wordart-inline-picker .ic-textframe-wordart-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+/* Rahmen, mit dem eine WordArt auf der Pinnwand liegt (Vorschau im Editor). */
+.ic-tf-fitbox {
+  position: absolute; pointer-events: none; z-index: 30; box-sizing: border-box;
+  outline: 1.5px dashed rgba(79,140,255,.9); outline-offset: 0;
+}
+.ic-tf-fitbox span {
+  position: absolute; left: 0; bottom: 100%; margin-bottom: 3px; white-space: nowrap; font-size: .7rem;
+  color: #9fc0ff; background: rgba(20,21,24,.8); padding: 1px 6px; border-radius: 4px;
+}
+/* WordArt mit angepasstem Rahmen: nur der rote Griff (Schrift größer/kleiner)
+   bleibt, die blauen Rahmengriffe entfallen - der Rahmen folgt dem Inhalt. */
+.ic-tf-autofit > .ic-resize:not(.ic-resize-tr), .ic-tf-autofit > .ic-resize-edge { display: none; }

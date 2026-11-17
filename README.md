@@ -69,6 +69,27 @@ konfigurierbares Maximum an Bildern pro Lernender/m.
   Übersicht `manage.php`, Post-Stream, Fotos anderer auf eigenes Board
   übernehmen), `mod/pinnwand:manage`.
 
+## WordArt-Editor: Seitenleiste und Rahmen = WordArt (0.175.0)
+
+- **Seitenleiste statt schwebender Fenster**: Ab 901 px Breite öffnen sich die Reiter der Texteditoren (Formen,
+  Farbe, Schriften, Wordart, Größe …) als Abschnitte einer festen Leiste rechts, untereinander, wie die
+  Seitenleiste in LibreOffice. Die Arbeitsfläche wird dafür schmaler, nichts verdeckt mehr das Objekt oder einen
+  anderen Abschnitt. Die Vorlagen-Auswahl der WordArt klappt dort direkt unter dem Knopf auf statt als weiteres
+  Fenster. Auf schmaleren Bildschirmen ist immer nur ein Reiter offen (vorher lagen mehrere übereinander).
+- **Rahmen = WordArt**: Der Rahmen einer WordArt legt sich bei jeder Änderung um das, was zu sehen ist (Text mit
+  Effekten, Bögen, Hauptform); die Lage auf der Pinnwand wandert mit, die WordArt bleibt an ihrer Stelle und gleich
+  groß. Damit stimmen Auswahlrahmen, Vorschaubild und Präsentationszoom mit der WordArt überein (vorher blieb der
+  Rahmen bei 320 × 220, die Präsentation zeigte bei langer Schrift nur einen Ausschnitt). Die blauen Rahmengriffe
+  entfallen dafür, der rote Griff ändert weiter die Schriftgröße.
+- **Kein automatischer Umbruch in WordArt** (neue Zeile mit Enter, wie in Office): Die Vorlagen mit Verlauf
+  zeichnen ohnehin einzeilig; der Editor brach den Text dagegen am Rahmen um, sodass Bearbeitung und Ergebnis
+  nicht übereinstimmten. Ältere WordArts behalten ihren Umbruch, bis sie im Editor geöffnet werden (Kennzeichen
+  `waFit` im Wortfeld).
+- **Schrift wird nicht mehr gekappt**: WordArts ohne Vorlage (nur schlichte Schrift oder nur Bogen) wurden auf der
+  Pinnwand am Rahmen abgeschnitten; WordArt ragt jetzt nie abgeschnitten über den Rahmen.
+- Handy: Die Reitersymbole im Menüband und der Umwandeln-Knopf (T/W) waren leer, das offene Fenster rutschte nach
+  rechts; behoben.
+
 ## Bilder zum Untersuchen und WordArt (0.174.0)
 
 - **Bilder zum Untersuchen**: Die Lehrkraft setzt in der Bildansicht eines eigenen Bildes das Häkchen „Zum
