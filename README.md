@@ -69,6 +69,29 @@ konfigurierbares Maximum an Bildern pro Lernender/m.
   Übersicht `manage.php`, Post-Stream, Fotos anderer auf eigenes Board
   übernehmen), `mod/pinnwand:manage`.
 
+## WordArt: Auswählen statt Tippen, Text in der Seitenleiste, gemeinsame Farben (0.176.0)
+
+- **Auswählen ist nicht Tippen** (Wunsch Jo): Ein Klick auf eine WordArt im Editor wählt sie nur aus; Bogen,
+  Verformung und Verlauf bleiben dabei zu sehen. Getippt wird im Objekt erst nach einem zweiten Klick auf die
+  Buchstaben (oder per Doppelklick); beim Verlassen erscheint die Vorschau wieder. Vorher sprang schon der erste
+  Klick in die Kurve in das gerade Eingabefeld.
+- **Text oben in der Seitenleiste**: Ein Textfeld ändert den Text der ausgewählten WordArt, die Wirkung ist sofort
+  am Objekt zu sehen (auch mehrzeilig). Auf schmalen Bildschirmen steht es über der Arbeitsfläche.
+- **Rahmen verbindlich**: Der Rahmen aus dem Editor ist jetzt auch der Auswahlrahmen auf der Pinnwand, der Rahmen
+  des gespeicherten Bildes und der Vorschaubilder und das Zoom-Ziel der Präsentation (vorher wurde dort neu
+  gemessen, bei Bogentext samt der viel größeren Bogenfläche). Im Editor bleibt der Inhalt beim Anpassen des
+  Rahmens an seiner Stelle; eine WordArt mit nur einem Text lässt sich im Rahmen nicht mehr verschieben (verschoben
+  wird sie auf der Pinnwand).
+- **Bogentext**: Im Editor dieselbe Lage und Breite wie auf der Pinnwand (vorher schrumpfte er nach jedem Anpassen
+  des Rahmens weiter). Für WordArt mit angepasstem Rahmen (`waFit`) hat Bogen- und Verformungsschrift die
+  eingestellte Größe und der Pfad ist so lang wie der Text (vorher wuchs die Schrift quadratisch mit der Größe, langer
+  Text wurde am Pfadende abgeschnitten). Ältere WordArts bleiben unverändert.
+- **Gemeinsame Gestaltung mit Collegare, erster Schritt**: Farben, Rahmenlinien, Schrift und Schriftgrößen der
+  Bedienoberfläche folgen `collegare/docs/gestaltung.md` (gemeinsame Farbnamen `--ui-*`, Werte des Nachtmodus,
+  neutrales Grau statt Blaugrau, Akzent `#8fb0dc` mit dunkler Schrift, Schrift Inter bzw. Systemschrift,
+  Schriftgrößen 11/12/13 px). Inhalte (Zettel, WordArt, Paletten, Fadenfarben, Pinnwand-Hintergrund) bleiben
+  unverändert. Ein Tagmodus folgt später.
+
 ## WordArt-Editor: Seitenleiste und Rahmen = WordArt (0.175.0)
 
 - **Seitenleiste statt schwebender Fenster**: Ab 901 px Breite öffnen sich die Reiter der Texteditoren (Formen,
