@@ -2079,3 +2079,28 @@ input.ic-stepper-value {
 /* WordArt mit angepasstem Rahmen: nur der rote Griff (Schrift größer/kleiner)
    bleibt, die blauen Rahmengriffe entfallen - der Rahmen folgt dem Inhalt. */
 .ic-tf-autofit > .ic-resize:not(.ic-resize-tr), .ic-tf-autofit > .ic-resize-edge { display: none; }
+/* WordArt (0.176.0): Text oben in der Seitenleiste, Vorschau statt
+   Eingabefeld im Objekt. Ein Klick wählt aus, Tippen im Objekt erst nach
+   einem zweiten Klick auf den Text. */
+.ic-tf-side > .ic-tf-popup.ic-tf-textbox { display: block; }
+.ic-tf-textbox-input {
+  display: block; width: 100%; box-sizing: border-box; min-height: 56px; resize: vertical; margin: 6px 0 4px;
+  font: inherit; font-size: 1rem; line-height: 1.35; color: inherit; background: rgba(0,0,0,.25);
+  border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: 8px 10px;
+}
+.ic-tf-textbox-input:focus { outline: 2px solid var(--ic-accent, #4f8cff); outline-offset: 0; border-color: transparent; }
+.ic-tf-textbox-hint { font-size: .75rem; opacity: .65; line-height: 1.35; }
+.ic-tf-textbox-float {
+  position: absolute; top: 112px; left: 50%; transform: translateX(-50%); z-index: 60; width: min(92vw, 420px);
+  background: var(--ic-panel, #1c1d21); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 8px 10px; box-sizing: border-box;
+}
+.ic-tf-textbox-float .ic-tf-textbox-hint { display: none; }
+.ic-tf-preview-obj { cursor: pointer; }
+.ic-tf-preview-obj svg text, .ic-tf-preview-obj svg textPath { cursor: text; }
+.ic-tf-preview-obj.ic-tf-nomove, .ic-textframe-obj.ic-tf-nomove { cursor: default; }
+.ic-textframe-obj.ic-tf-nomove > .ic-textframe-move-handle { display: none; }
+.ic-textframe-arc-obj.active, .ic-tf-preview-obj.active { outline: 1px solid var(--ic-accent, #4f8cff); outline-offset: 2px; box-shadow: none; }
+/* Ausgewählter Bogen/Verlauf: Leuchten an der Schrift statt eines großen
+   Kastens um die (viel größere) Bogenfläche. */
+.ic-textframe-arc-obj.active, .ic-tf-preview-obj.active:not(.ic-textframe-obj[contenteditable]) { outline: none; }
+.ic-tf-preview-obj.active svg { filter: drop-shadow(0 0 2px rgba(79,140,255,.85)); }

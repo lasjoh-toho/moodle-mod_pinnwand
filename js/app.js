@@ -4268,14 +4268,19 @@
     var fontFamily = fontCss;
     var fontSize = t.size;
     fitCtx.font = fontFamily === fontCss ? (fontSize + 'px ' + fontCss) : ('700 ' + fontSize + 'px ' + fontFamily);
-    var textWidth = Math.max(10, fitCtx.measureText(plainText || '').width);
+    // Mehrzeilig (Enter im Text): jede Zeile eine eigene, mittig gesetzte
+    // Textzeile - vorher stand alles in einer Zeile.
+    var waLines = String(plainText || '').split('\n');
+    var waLh = fontSize * (t.lineHeight || 1.2);
+    var textWidth = Math.max(10, Math.max.apply(null, waLines.map(function (ln) { return fitCtx.measureText(ln).width; })));
+    var extraH = (waLines.length - 1) * waLh;
     var extrudeOffset = extrudeSteps * 0.8;
     // Exakte Ausdehnung inkl. Extrusion+Rotation+Skalierung+Schrägstellung
     // statt der früheren Näherung, die "rotate" komplett ausließ - die
     // <g>-Transformationskette unten (translate/skewY/scale/rotate/
     // translate) wendet die Funktionen in genau der Reihenfolge an, die
     // wordartHalfExtent() nachbildet.
-    var ext = wordartHalfExtent(textWidth / 2, fontSize * 1.5 / 2, extrudeOffset, rotate, scaleX, scaleY, skewY + skewFromRotY);
+    var ext = wordartHalfExtent(textWidth / 2, (fontSize * 1.5 + extraH) / 2, extrudeOffset, rotate, scaleX, scaleY, skewY + skewFromRotY);
     var edgePad = fontSize * 0.15 + 4;
     var w = ext.halfW * 2 + edgePad * 2, h = ext.halfH * 2 + edgePad * 2;
     var gid = 'wagrad' + (arcIdCounter++);
@@ -4287,17 +4292,18 @@
       : '<linearGradient id="' + gid + '" x1="0" y1="0" x2="' + (WORDART_GRADIENT_SVG_HORIZ[t.wordartStyle] ? '1' : '0') + '" y2="' + (WORDART_GRADIENT_SVG_HORIZ[t.wordartStyle] ? '0' : '1') + '">' + gStops + '</linearGradient>');
     var strokeAttr = style.stroke ? ' stroke="' + style.stroke + '" stroke-width="' + (style.strokeWidth || 1) + '"' : '';
     var extrudeText = '';
+    var waLineTexts = function (dx, attrs) {
+      return waLines.map(function (ln, li) {
+        return '<text x="' + (w / 2 + dx) + '" y="' + (h / 2 + dx - extraH / 2 + li * waLh) + '"' + attrs + '>' + escapeXml(ln) + '</text>';
+      }).join('');
+    };
     for (var i = extrudeSteps; i >= 1; i--) {
-      extrudeText += '<text x="' + (w / 2 + i * 0.8) + '" y="' + (h / 2 + i * 0.8) + '" font-family="' + fontFamily +
-        '" font-size="' + fontSize + '" font-weight="800" fill="' + extrudeColor + '" text-anchor="middle" dominant-baseline="central">' +
-        escapeXml(plainText || '') + '</text>';
+      extrudeText += waLineTexts(i * 0.8, ' font-family="' + fontFamily + '" font-size="' + fontSize + '" font-weight="800" fill="' + extrudeColor + '" text-anchor="middle" dominant-baseline="central"');
     }
     var inner = '<defs>' + gradTag + '</defs>' +
       '<g transform="translate(' + (w / 2) + ',' + (h / 2) + ') skewY(' + (skewY + skewFromRotY).toFixed(2) + ') scale(' + scaleX.toFixed(3) + ',' + scaleY + ') rotate(' + rotate + ') translate(' + (-w / 2) + ',' + (-h / 2) + ')">' +
       extrudeText +
-      '<text x="' + (w / 2) + '" y="' + (h / 2) + '" font-family="' + fontFamily + '" font-size="' + fontSize +
-      '" font-weight="800" fill="url(#' + gid + ')"' + strokeAttr + ' paint-order="stroke fill" text-anchor="middle" dominant-baseline="central">' +
-      escapeXml(plainText || '') + '</text></g>';
+      waLineTexts(0, ' font-family="' + fontFamily + '" font-size="' + fontSize + '" font-weight="800" fill="url(#' + gid + ')"' + strokeAttr + ' paint-order="stroke fill" text-anchor="middle" dominant-baseline="central"') + '</g>';
     return { inner: inner, w: w, h: h };
   }
   function buildWordartGradientSvg(t, plainText, fontCss, isPrimary) {
@@ -4353,12 +4359,29 @@
     }
     return top + bot + ' Z';
   }
-  function buildWarpTextSvg(t, plainText, fontCss, color) {
+  // Breite (Rahmen-Pixel) und Schriftgröße (im 300er-viewBox) von Bogen-
+  // und Verformungstext. Bisher: Breite = Größe x 6, Schrift = 0,55 x Größe
+  // - dadurch wuchs die Schrift quadratisch mit der Größe (32 → 11 px,
+  // 100 → 110 px) und langer Text lief über den Pfad hinaus (abgeschnitten).
+  // WordArt mit angepasstem Rahmen (tf.waFit, 0.176.0): die Schrift ist so
+  // groß wie eingestellt, der Pfad so lang wie der Text. Ältere WordArts
+  // bleiben unverändert.
+  function arcLayout(t, plainText, fontCss, fit) {
+    if (!fit) { return { w: Math.max(120, t.size * 6), fs: Math.round(t.size * 0.55) }; }
+    var weight = t.fontWeight || 700;
+    fitCtx.font = weight + ' ' + t.size + 'px ' + fontCss;
+    var text = String(plainText || '').replace(/\s+/g, ' ').trim();
+    var L = fitCtx.measureText(text).width + (t.letterSpacing || 0) * Array.from(text).length;
+    var k = t.arcStyle === 'circle' ? 1.08 : (t.arcStyle === 'archup' || t.arcStyle === 'archdown' ? 1.0 : 1.12);
+    var w = Math.max(120, Math.round(L * k + 24));
+    return { w: w, fs: Math.round(t.size * 300 / w * 100) / 100 };
+  }
+  function buildWarpTextSvg(t, plainText, fontCss, color, fit) {
     var wv = WARP_STYLES[t.arcStyle];
     var text = String(plainText || '').replace(/\s+/g, ' ').trim();
     if (!wv || !text) { return null; }
     var a = (t.arcAmount != null ? t.arcAmount : 50) / 100;
-    var fs = Math.round(t.size * 0.55), weight = t.fontWeight || 700;
+    var fs = arcLayout(t, plainText, fontCss, fit).fs, weight = t.fontWeight || 700;
     fitCtx.font = weight + ' ' + fs + 'px ' + fontCss;
     var chars = Array.from(text), widths = chars.map(function (c) { return fitCtx.measureText(c).width; });
     var total = widths.reduce(function (x, y) { return x + y; }, 0) || 1;
@@ -4419,13 +4442,13 @@
       '<g' + tf + glowAttr + '>' + extrude + groupOpen + ' fill="' + fill + '"' + stroke + '>' + body + '</g></g></svg>';
   }
 
-  function buildArcTextSvg(t, plainText, fontCss, color) {
-    if (WARP_STYLES[t.arcStyle]) { return buildWarpTextSvg(t, plainText, fontCss, color); }
+  function buildArcTextSvg(t, plainText, fontCss, color, fit) {
+    if (WARP_STYLES[t.arcStyle]) { return buildWarpTextSvg(t, plainText, fontCss, color, fit); }
     var d = arcSvgPathD(t.arcStyle, t.arcAmount, 300, 120);
     if (!d) { return null; }
     var pid = 'arcpath' + (arcIdCounter++);
     var body = '<text text-anchor="middle"><textPath href="#' + pid + '" startOffset="50%">' + escapeXml(plainText || '') + '</textPath></text>';
-    return wordartArcSvg(t, color, '<g font-family="' + fontCss + '" font-size="' + Math.round(t.size * 0.55) + '" font-weight="' + (t.fontWeight || 700) + '"', body,
+    return wordartArcSvg(t, color, '<g font-family="' + fontCss + '" font-size="' + arcLayout(t, plainText, fontCss, fit).fs + '" font-weight="' + (t.fontWeight || 700) + '"', body,
       '<path id="' + pid + '" d="' + d + '" fill="none" stroke="none"/>');
   }
 
@@ -4647,9 +4670,9 @@
         textEl2 = el('div', {
           class: 'ic-tf-live-text',
           style: 'position:absolute;box-sizing:border-box;left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;transform:translate(-50%,-50%);' +
-            'width:' + (Math.max(120, t.size * 6) / tf.w * 100) + '%;z-index:1;'
+            'width:' + (arcLayout(t, t.text, fontCss, tf.waFit).w / tf.w * 100) + '%;z-index:1;'
         });
-        textEl2.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text)) || '';
+        textEl2.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text), tf.waFit) || '';
       } else if (wordartSvg) {
         textEl2 = el('div', {
           class: 'ic-tf-live-text',
@@ -4754,6 +4777,13 @@
   function measureWordfieldBounds(tf) {
     // Folie: der Rahmen selbst ist die Ausdehnung (Inhalt wird beschnitten).
     if (tf.isSlide) { return { x1: 0, y1: 0, x2: tf.w, y2: tf.h }; }
+    // WordArt mit angepasstem Rahmen (0.176.0, Wunsch Jo: Rahmen verbindlich):
+    // der Rahmen liegt schon um alles Sichtbare (fitWordArtFrame) - genau er
+    // gilt auf der Pinnwand (Auswahl, Griffe), im gespeicherten Bild, in den
+    // Vorschaubildern und als Zoom-Ziel der Präsentation. Vorher wurde hier
+    // neu gemessen, bei Bogentext samt der viel größeren Bogenfläche - der
+    // Auswahlrahmen saß dann weit neben der Schrift.
+    if (tf.waFit && wordArtAutoFitApplies(tf)) { return { x1: 0, y1: 0, x2: tf.w, y2: tf.h }; }
     var key = JSON.stringify(tf);
     var cached = wordfieldBoundsCache[key];
     if (cached) { return { x1: cached.x1, y1: cached.y1, x2: cached.x2, y2: cached.y2 }; }
@@ -4913,6 +4943,13 @@
     }
     var waFit = fitWordArtFrame(tf);
     if (waFit && fitPlace) { shiftPlaceForFit(fitPlace, waFit, state.tfFitK, fitRot); }
+    if (waFit && state.step === 'textframe') {
+      // Im Editor bleibt der Inhalt beim Anpassen an seiner Stelle auf dem
+      // Bildschirm, nur der Rahmen legt sich neu darum (vorher wurde der neue
+      // Rahmen wieder mittig gesetzt, der Inhalt sprang).
+      var sh = state.tfStageShift || { dx: 0, dy: 0 };
+      state.tfStageShift = { dx: sh.dx + waFit.ox + (waFit.newW - waFit.oldW) / 2, dy: sh.dy + waFit.oy + (waFit.newH - waFit.oldH) / 2 };
+    }
   }
 
   function shiftPlaceForFit(place, fit, k, rot) {
@@ -5246,10 +5283,12 @@
       var fontCss = resolveFontCss(t.font);
       // Bögen und Verformungen: bei WordArt auch für den Haupttext (dann über die ganze Breite, mittig)
       var arcOk = idx !== 0 || wordfieldIsWordart(tf);
-      var arcSvg = (arcOk && t.arcStyle && t.arcStyle !== 'none') ? buildArcTextSvg(t, t.text, fontCss, t.fillColor || preset.text) : null;
+      var arcSvg = (arcOk && t.arcStyle && t.arcStyle !== 'none') ? buildArcTextSvg(t, t.text, fontCss, t.fillColor || preset.text, tf.waFit) : null;
       if (arcSvg) {
-        var arcW = idx === 0 ? tf.w : Math.max(120, t.size * 6), arcH = arcW * 0.4;
-        var acx = idx === 0 ? tf.w / 2 : t.x * tf.w, acy = idx === 0 ? tf.h / 2 : t.y * tf.h;
+        // Wie buildTextFrameLiveDom (Lage t.x/t.y, Breite aus arcLayout) -
+        // vorher Rahmenmitte/Rahmenbreite für den ersten Text.
+        var arcW = arcLayout(t, t.text, fontCss, tf.waFit).w, arcH = arcW * 0.4;
+        var acx = (t.x != null ? t.x : 0.5) * tf.w, acy = (t.y != null ? t.y : 0.5) * tf.h;
         return '<foreignObject x="' + (acx - arcW / 2) + '" y="' + (acy - arcH / 2) + '" width="' + arcW + '" height="' + arcH + '">' +
           '<div xmlns="http://www.w3.org/1999/xhtml">' + arcSvg + '</div></foreignObject>';
       }
@@ -5544,6 +5583,7 @@
   function resetTfHistory() {
     state.tfUndoStack = []; state.tfRedoStack = []; state.tfLastSnapshot = null; state.tfSuppressSnapshot = false;
     state.tfFitK = null; state.tfWaPickerOpen = false;
+    state.tfStageShift = null; state.tfArcEditId = null; state.tfSelTextId = null; state.tfTextInputAutofocus = true;
     // Verschobene Popups gelten nur, solange der Editor offen ist.
     state.tfPopupPos = {};
   }
@@ -5555,6 +5595,7 @@
     // Umwandeln Textfeld <-> WordArt.
     if (tf.isWordArt != null && !tf.isSlide) { state.wordArtMode = !!tf.isWordArt; }
     TEXTFRAME_FONTS.forEach(function (f) { if (f.webfont) { ensureWebfont(f.webfont); } });
+    tfWinUnlistenAll();
 
     // WordArt: Rahmen an den Inhalt anpassen (siehe fitWordArtFrame) - vor
     // dem Rückgängig-Schnappschuss, damit Änderung und Anpassung ein Schritt
@@ -5744,6 +5785,9 @@
         (preset.shadow && !editorCardShape ? 'box-shadow:0 8px 24px rgba(0,0,0,.4);' : '') +
         (preset.bg && !editorCardShape ? '' : 'border:2px dashed rgba(255,255,255,.3);')
     });
+    if (state.wordArtMode && !isSlide && state.tfStageShift) {
+      frame.style.translate = Math.round(state.tfStageShift.dx) + 'px ' + Math.round(state.tfStageShift.dy) + 'px';
+    }
     if (typeof neighborsLayer !== 'undefined' && neighborsLayer) { frame.appendChild(neighborsLayer); }
     // Innerer Container trägt Hintergrundfarbe UND die Formbeschneidung
     // (Kreis/Oval/Rundung) - overflow:hidden bleibt bewusst HIER und nicht
@@ -6088,16 +6132,39 @@
         state.tfResizeTrListeners = null;
       }
     }
-    var activeId = null;
+    // WordArt (0.176.0): Auswählen und Tippen sind getrennt - die Auswahl
+    // übersteht das Neu-Aufbauen (state.tfSelTextId), getippt wird oben in
+    // der Seitenleiste oder nach einem zweiten Klick auf den Text.
+    var waPreviewMode = state.wordArtMode && !isSlide;
+    var activeId = waPreviewMode && tf.texts.some(function (x) { return x.id === state.tfSelTextId; }) ? state.tfSelTextId : null;
     function selectText(id) {
       activeId = id;
+      if (waPreviewMode) { state.tfSelTextId = id; }
       if (id != null) { state.tfLastTextId = id; state.styleTargetMode = 'text'; }
       frame.querySelectorAll('.ic-textframe-obj').forEach(function (o) {
-        o.classList.toggle('active', o.dataset.textid === String(id));
+        o.classList.toggle('active', o.dataset.textid === String(id) || o.dataset.previewid === String(id));
       });
       refreshControls();
+      if (waPreviewMode && state.tfSyncTextInput) { state.tfSyncTextInput(); }
     }
+    // WordArt mit nur einem Text: der Rahmen IST die WordArt - den Text darin
+    // zu verschieben, ließe den Rahmen nur hinterherspringen.
+    var waSingleFit = waPreviewMode && tf.texts.length === 1 && wordArtAutoFitApplies(tf);
+    var waMoveOpts = {
+      noMove: waSingleFit,
+      onDone: function () { if (waPreviewMode) { setTimeout(render, 0); } }
+    };
 
+    function startTextInlineEdit(t) {
+      state.tfArcEditId = t.id; selectText(t.id); render();
+      // render() baut den Editor neu auf - das neue Feld im Dokument suchen.
+      var freshEl = document.querySelector('.ic-textframe-preview [data-textid="' + t.id + '"]');
+      if (freshEl) {
+        freshEl.focus();
+        var rg = document.createRange(); rg.selectNodeContents(freshEl); rg.collapse(false);
+        var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg);
+      }
+    }
     function textEl(t, idx) {
       var isPrimary = idx === 0;
       // Nur für normale (Nicht-WordArt) Textfelder soll das primäre Objekt
@@ -6130,9 +6197,22 @@
       var el2 = el('div', {
         class: 'ic-textframe-obj' + (useFillCentering ? ' primary' : '') + (t.id === activeId ? ' active' : ''),
         'data-textid': String(t.id),
-        contenteditable: 'true',
+        contenteditable: waPreviewMode && state.tfArcEditId !== t.id && (t.text || '').trim() ? 'false' : 'true',
         style: elStyle
       });
+      if (waPreviewMode && el2.getAttribute('contenteditable') === 'false') {
+        el2.classList.add('ic-tf-preview-obj');
+        var elWasSelected = false;
+        el2.addEventListener('mousedown', function () { elWasSelected = activeId === t.id; });
+        el2.addEventListener('click', function (ev) {
+          if (ev.target.closest && ev.target.closest('.ic-tf-handle')) { return; }
+          ev.stopPropagation();
+          if (el2._moved) { el2._moved = false; return; }
+          if (elWasSelected) { startTextInlineEdit(t); return; }
+          selectText(t.id);
+        });
+        el2.addEventListener('dblclick', function (ev) { ev.stopPropagation(); startTextInlineEdit(t); });
+      }
       // innerHTML statt textContent: so bleiben Fett/Kursiv/Unterstrichen/
       // Durchgestrichen/Aufzählungen (siehe Formatierungswerkzeuge) beim
       // Zwischenspeichern erhalten statt auf reinen Text reduziert zu werden.
@@ -6167,11 +6247,21 @@
         if (t.wordartStyle && t.wordartStyle !== 'none') { el2.style.transform = useFillCentering ? 'none' : 'translate(-50%, -50%)'; }
       });
       el2.addEventListener('blur', function () {
-        if (activeId === t.id) {
+        if (activeId === t.id && !waPreviewMode) {
           activeId = null;
           el2.classList.remove('active');
         }
         if (t.wordartStyle && t.wordartStyle !== 'none') { el2.style.cssText = elStyle; }
+        // Tippen im Feld beendet: zurück zur Vorschau (Bogen, Verlauf,
+        // Verzerrung wieder sichtbar), außer der Fokus bleibt im Feld.
+        if (state.tfArcEditId === t.id) {
+          setTimeout(function () {
+            if (state.tfArcEditId !== t.id || state.step !== 'textframe') { return; }
+            var ae = document.activeElement;
+            if (ae && ae.closest && ae.closest('[data-textid="' + t.id + '"]')) { return; }
+            state.tfArcEditId = null; render();
+          }, 200);
+        }
       });
       if (useFillCentering) {
         // Primäres Textobjekt (nur normale Textfelder): füllt den ganzen
@@ -6197,58 +6287,55 @@
             widthHandle = el('div', { class: 'ic-textframe-width-handle ic-tf-handle', title: S.tf_text_width, contenteditable: 'false' });
             el2.appendChild(widthHandle);
           }
-          makeTextObjectMovable(el2, frame, t, sizeHandle, moveHandle, widthHandle);
+          if (waSingleFit) { el2.classList.add('ic-tf-nomove'); }
+          makeTextObjectMovable(el2, frame, t, sizeHandle, moveHandle, widthHandle, waMoveOpts);
           sizeHandle.addEventListener('mousedown', function () { selectText(t.id); });
         }
       }
-      if ((!isPrimary || state.wordArtMode) && t.arcStyle && t.arcStyle !== 'none' && state.tfArcEditId !== t.id) {
-        // Bogen-Ansicht: SVG mit pfadfolgendem Text statt des editierbaren
-        // Feldes, solange NICHT gerade bearbeitet wird (Bearbeitung selbst
-        // bleibt einfacher Text - siehe Klick unten, der wieder zurück auf
-        // den normalen editierbaren Zustand wechselt).
-        // Vorschau bleibt auch beim ausgewählten Text sichtbar; erst ein Klick darauf schaltet zum Tippen um,
-        // beim Verlassen des Feldes erscheint der Bogen wieder.
-        var arcWrap = el('div', {
-          class: 'ic-textframe-obj ic-textframe-arc-obj' + (t.id === activeId ? ' active' : ''), 'data-previewid': String(t.id),
-          style: isPrimary
-            ? 'left:50%;top:50%;width:' + tf.w + 'px;'
-            : 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + Math.max(120, t.size * 6) + 'px;'
+      // Vorschau statt Eingabefeld (Bogen, Verformung, Verlauf): dieselbe
+      // Darstellung wie auf der Pinnwand. Wunsch Jo (0.176.0): Ein Klick
+      // wählt nur aus - die Vorschau bleibt stehen, der Text lässt sich
+      // oben in der Seitenleiste ändern und man sieht die Wirkung sofort.
+      // Erst ein Klick auf die Buchstaben eines schon ausgewählten Textes
+      // (oder ein Doppelklick) schaltet zum Tippen im Feld selbst um.
+      var arcPreview = (!isPrimary || state.wordArtMode) && t.arcStyle && t.arcStyle !== 'none';
+      var wordartSvgPreview = !arcPreview && t.text ? buildWordartGradientSvg(t, t.text, fontCss, isPrimary) : null;
+      if ((arcPreview || wordartSvgPreview) && state.tfArcEditId !== t.id) {
+        var pvWrap;
+        if (arcPreview) {
+          // Gleiche Lage und Breite wie buildTextFrameLiveDom (t.x/t.y,
+          // max(120, Größe x 6)) - vorher saß der Bogen im Editor in der
+          // Rahmenmitte und war so breit wie der Rahmen; nach dem Anpassen
+          // des Rahmens an den Inhalt schrumpfte er dadurch bei jedem
+          // Neuaufbau weiter und der Rahmen sprang.
+          pvWrap = el('div', {
+            class: 'ic-textframe-obj ic-textframe-arc-obj ic-tf-preview-obj' + (t.id === activeId ? ' active' : ''), 'data-previewid': String(t.id),
+            style: 'left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + arcLayout(t, t.text, fontCss, tf.waFit).w + 'px;padding:0;box-sizing:border-box;'
+          });
+          pvWrap.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text), tf.waFit) || '';
+        } else {
+          pvWrap = el('div', {
+            class: 'ic-textframe-obj ic-tf-preview-obj' + (useFillCentering ? ' primary' : '') + (t.id === activeId ? ' active' : ''), 'data-previewid': String(t.id),
+            style: useFillCentering ? 'display:flex;flex-direction:column;align-items:center;justify-content:center;' :
+              ('left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + (wordartSvgPreview.w) + 'px;padding:0;box-sizing:border-box;')
+          });
+          pvWrap.innerHTML = wordartSvgPreview.svg;
+        }
+        var onGlyph = function (ev) { return !!(ev.target && ev.target.closest && ev.target.closest('text, textPath, tspan')); };
+        var wasSelected = false;
+        pvWrap.addEventListener('mousedown', function () { wasSelected = activeId === t.id; });
+        pvWrap.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          if (pvWrap._moved) { pvWrap._moved = false; return; }
+          if (wasSelected && onGlyph(ev)) { startTextInlineEdit(t); return; }
+          selectText(t.id);
         });
-        arcWrap.innerHTML = buildArcTextSvg(t, t.text, fontCss, (t.fillColor || preset.text)) || '';
-        arcWrap.addEventListener('click', function (ev) {
-          ev.stopPropagation(); state.tfArcEditId = t.id; selectText(t.id); render();
-          var freshEl = body.querySelector('[data-textid="' + t.id + '"]');
-          if (freshEl) {
-            freshEl.focus();
-            freshEl.addEventListener('blur', function () {
-              setTimeout(function () {
-                if (state.tfArcEditId !== t.id || state.step !== 'textframe') { return; }
-                var ae = document.activeElement;
-                if (ae && ae.closest && ae.closest('[data-textid="' + t.id + '"]')) { return; }
-                state.tfArcEditId = null; render();
-              }, 200);
-            });
-          }
-        });
-        return arcWrap;
-      }
-      var wordartSvgPreview = (t.id !== activeId && t.text) ? buildWordartGradientSvg(t, t.text, fontCss, isPrimary) : null;
-      if (wordartSvgPreview) {
-        // Verlauf-Vorschau: dieselbe echte SVG-Darstellung wie auf der
-        // Pinnwand/im Export, solange NICHT gerade bearbeitet wird - beim
-        // Fokussieren erscheint wieder die normale editierbare Ansicht.
-        var waWrap = el('div', {
-          class: 'ic-textframe-obj' + (useFillCentering ? ' primary' : ''), 'data-previewid': String(t.id),
-          style: useFillCentering ? 'display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:text;' :
-            ('left:' + (t.x * 100) + '%;top:' + (t.y * 100) + '%;width:' + (wordartSvgPreview.w) + 'px;cursor:text;')
-        });
-        waWrap.innerHTML = wordartSvgPreview.svg;
-        waWrap.addEventListener('click', function (ev) {
-          ev.stopPropagation(); selectText(t.id); render();
-          var freshEl = body.querySelector('[data-textid="' + t.id + '"]');
-          if (freshEl) { freshEl.focus(); }
-        });
-        return waWrap;
+        pvWrap.addEventListener('dblclick', function (ev) { ev.stopPropagation(); startTextInlineEdit(t); });
+        if (!isPrimary || state.wordArtMode) {
+          if (waSingleFit) { pvWrap.classList.add('ic-tf-nomove'); }
+          makeTextObjectMovable(pvWrap, frame, t, null, null, null, waMoveOpts);
+        }
+        return pvWrap;
       }
       return el2;
     }
@@ -6468,6 +6555,56 @@
       blocksWrap.appendChild(blockScale);
     }
     layout.appendChild(tfDock);
+    // WordArt (Wunsch Jo, 0.176.0): Text oben in der Seitenleiste ändern und
+    // die Wirkung (Bogen, Verlauf, Verzerrung) sofort am Objekt sehen - statt
+    // im Objekt selbst zu tippen, wo die Vorschau dabei gerade würde.
+    if (waPreviewMode) {
+      var tbTarget = function () {
+        return tf.texts.filter(function (x) { return x.id === activeId; })[0] ||
+          tf.texts.filter(function (x) { return x.id === state.tfLastTextId; })[0] || tf.texts[0];
+      };
+      var tbBox = el('div', { class: 'ic-tf-popup ic-tf-open ic-tf-textbox' + (tfSide ? '' : ' ic-tf-textbox-float') });
+      var tbHead = el('div', { class: 'ic-tf-popup-head' }, [el('span', {}, [S.tf_text_input])]);
+      var tbArea = el('textarea', { class: 'ic-tf-textbox-input', rows: '2', placeholder: S.textframe_placeholder, spellcheck: 'true' });
+      var tbHint = el('div', { class: 'ic-tf-textbox-hint' }, [S.tf_text_input_hint]);
+      tbBox.appendChild(tbHead); tbBox.appendChild(tbArea); tbBox.appendChild(tbHint);
+      var tbSync = function () {
+        var t0 = tbTarget();
+        if (!t0) { return; }
+        if (document.activeElement !== tbArea) { tbArea.value = t0.text || ''; }
+        tbHead.lastChild.textContent = tf.texts.length > 1
+          ? S.tf_text_input + ' ' + (tf.texts.indexOf(t0) + 1) + '/' + tf.texts.length : S.tf_text_input;
+      };
+      state.tfSyncTextInput = tbSync;
+      tbSync();
+      var tbTimer = null;
+      tbArea.addEventListener('input', function () {
+        var t0 = tbTarget();
+        if (!t0) { return; }
+        t0.text = tbArea.value;
+        t0.html = escapeXml(tbArea.value).replace(/\n/g, '<br>');
+        clearTimeout(tbTimer);
+        tbTimer = setTimeout(function () {
+          if (state.step !== 'textframe') { return; }
+          state.tfTextInputFocus = { s: tbArea.selectionStart, e: tbArea.selectionEnd, id: t0.id };
+          render();
+        }, 140);
+      });
+      // Klicks/Tasten im Feld gehören nicht zur Arbeitsfläche.
+      tbArea.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+      if (tfSide) { tfSide.insertBefore(tbBox, tfSide.firstChild); } else { layout.appendChild(tbBox); }
+      var tbFocus = state.tfTextInputFocus;
+      if (tbFocus || state.tfTextInputAutofocus) {
+        state.tfTextInputFocus = null; state.tfTextInputAutofocus = false;
+        setTimeout(function () {
+          tbArea.focus();
+          var n = tbArea.value.length;
+          try { tbArea.setSelectionRange(tbFocus ? tbFocus.s : n, tbFocus ? tbFocus.e : n); } catch (e) { /* ignore */ }
+        }, 0);
+      }
+    } else {
+      state.tfSyncTextInput = null;
+    }
     if (tfSide) { layout.appendChild(tfSide); syncSide(); }
 
     // Block 1 "Farben und Formen" - identisch in beiden Editoren (Zettel
@@ -9128,10 +9265,29 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
     var c = el2.cloneNode(true);
     [].slice.call(c.querySelectorAll('.ic-tf-handle')).forEach(function (h) { h.remove(); });
     [].slice.call(c.querySelectorAll('.ic-math')).forEach(function (m) { m.textContent = m.getAttribute('data-tex') || ''; });
+    // Zeilenumbrüche erhalten (Enter im Feld erzeugt <br> bzw. <div>) - sonst
+    // stand im Textfeld der Seitenleiste alles in einer Zeile.
+    [].slice.call(c.querySelectorAll('br')).forEach(function (b) { b.replaceWith('\n'); });
+    [].slice.call(c.querySelectorAll('div, p')).forEach(function (d) { if (d.previousSibling) { d.insertBefore(document.createTextNode('\n'), d.firstChild); } });
     return c.textContent;
   }
 
-  function makeTextObjectMovable(el2, frame, t, sizeHandle, moveHandle, widthHandle) {
+  // opts.onDone(moved): nach dem Loslassen (WordArt: Rahmen neu anpassen).
+  // opts.noMove: Text bleibt stehen (WordArt mit nur einem Text - der
+  // Rahmen IST dann die WordArt, verschoben wird sie auf der Pinnwand).
+  // Fenster-Listener landen in state.tfWinListeners und werden beim
+  // nächsten Neuaufbau des Editors entfernt (vorher sammelten sie sich an).
+  function tfWinListen(type, fn, o) {
+    state.tfWinListeners = state.tfWinListeners || [];
+    state.tfWinListeners.push([type, fn, o]);
+    window.addEventListener(type, fn, o);
+  }
+  function tfWinUnlistenAll() {
+    (state.tfWinListeners || []).forEach(function (l) { window.removeEventListener(l[0], l[1], l[2]); });
+    state.tfWinListeners = [];
+  }
+  function makeTextObjectMovable(el2, frame, t, sizeHandle, moveHandle, widthHandle, opts) {
+    opts = opts || {};
     var dragging = false, startX = 0, startY = 0, totalDelta = 0, startTx = 0, startTy = 0, viaHandle = false;
     function point(ev) { var p = ev.touches ? ev.touches[0] : ev; return { x: p.clientX, y: p.clientY }; }
     function down(ev) {
@@ -9140,6 +9296,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       // Während getippt wird, markiert Ziehen am Text Buchstaben - dann nur
       // über den Verschiebegriff.
       if (!viaHandle && document.activeElement === el2) { return; }
+      if (opts.noMove) { return; }
       dragging = true; totalDelta = 0;
       var p = point(ev); startX = p.x; startY = p.y; startTx = t.x; startTy = t.y;
       if (viaHandle) { ev.preventDefault(); ev.stopPropagation(); }
@@ -9174,15 +9331,17 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       guideH.style.display = h ? '' : 'none';
     }
     function up() {
+      var was = dragging;
       dragging = false;
+      if (was && totalDelta >= 6) { el2._moved = true; if (opts.onDone) { opts.onDone(true); } }
       if (guideV) { guideV.remove(); guideH.remove(); guideV = guideH = null; }
     }
     el2.addEventListener('mousedown', down);
     el2.addEventListener('touchstart', down, { passive: false });
-    window.addEventListener('mousemove', move);
-    window.addEventListener('touchmove', move, { passive: false });
-    window.addEventListener('mouseup', up);
-    window.addEventListener('touchend', up);
+    tfWinListen('mousemove', move);
+    tfWinListen('touchmove', move, { passive: false });
+    tfWinListen('mouseup', up);
+    tfWinListen('touchend', up);
 
     // Breitengriff (Folien): Textfeld-Breite als Anteil der Folienbreite,
     // der Text bricht darin um. Die linke Kante bleibt stehen.
@@ -9194,7 +9353,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         wStartW = t.boxW || (el2.getBoundingClientRect().width / rect.width);
         ev.stopPropagation(); ev.preventDefault();
       });
-      window.addEventListener('mousemove', function (ev) {
+      tfWinListen('mousemove', function (ev) {
         if (!wDragging) { return; }
         var rect = frame.getBoundingClientRect();
         var nw = Math.max(0.08, Math.min(1.2, wStartW + (ev.clientX - wStartX) / rect.width));
@@ -9203,7 +9362,7 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
         el2.style.width = (nw * 100) + '%'; el2.style.maxWidth = 'none';
         el2.style.left = (t.x * 100) + '%';
       });
-      window.addEventListener('mouseup', function () { wDragging = false; });
+      tfWinListen('mouseup', function () { wDragging = false; });
     }
 
     // Eck-Handle: Ziehen ändert die Schriftgröße (das ist bei einem
@@ -9220,13 +9379,15 @@ if (isShapeTarget) { render(); } else { applyShapeOrTextChange(); refreshControl
       el2.style.fontSize = t.size + 'px';
       ev.preventDefault();
     }
-    function sUp() { sDragging = false; }
-    sizeHandle.addEventListener('mousedown', sDown);
-    sizeHandle.addEventListener('touchstart', sDown, { passive: false });
-    window.addEventListener('mousemove', sMove);
-    window.addEventListener('touchmove', sMove, { passive: false });
-    window.addEventListener('mouseup', sUp);
-    window.addEventListener('touchend', sUp);
+    function sUp() { var was = sDragging; sDragging = false; if (was && opts.onDone) { opts.onDone(false); } }
+    if (sizeHandle) {
+      sizeHandle.addEventListener('mousedown', sDown);
+      sizeHandle.addEventListener('touchstart', sDown, { passive: false });
+    }
+    tfWinListen('mousemove', sMove);
+    tfWinListen('touchmove', sMove, { passive: false });
+    tfWinListen('mouseup', sUp);
+    tfWinListen('touchend', sUp);
   }
 
   // ------------------------------------------------------------------
